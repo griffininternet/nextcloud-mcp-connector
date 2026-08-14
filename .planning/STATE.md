@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-10-PLAN.md
-last_updated: "2026-08-14T18:41:25.293Z"
+stopped_at: 01-13-PLAN.md vorbereitet, Checkpoint offen (Owner reicht den PR ein)
+last_updated: "2026-08-14T18:52:00.000Z"
 last_activity: 2026-08-14
 progress:
   total_phases: 5
@@ -121,10 +121,13 @@ Recent decisions affecting current work:
 - [Phase 01-server-kern]: providers ist ein kommaseparierter String statt einer Liste: ein Listen-Parameter erzeugt ein anyOf aus array und null im Input-Schema (Schema-Diaet)
 - [Phase 01-server-kern]: pytest laeuft im Import-Modus importlib, weil Unit- und Integrationsebene denselben Testdateinamen tragen duerfen sollen
 - [Phase 01-server-kern]: TOOL-06 bleibt Pending: der provider-parallele Fan-out ist live belegt, der Negativbeweis der Berechtigungstreue mit zwei Konten gehoert in Plan 01-14
+- [Phase 01-server-kern]: Der #227-Fix macht stateless_http konfigurierbar statt hart False: der Default behebt den Bug, MCP_STATELESS_HTTP=1 erhaelt das alte Verhalten; minimaler Diff, hoechste Merge-Wahrscheinlichkeit
+- [Phase 01-server-kern]: Der Regressionstest der #227-Klasse bleibt bei uns (tests/compat/legacy_client_check.py); im fremden CI braeuchte er ein zweites Client-Environment gegen einen laufenden ExApp-Container und erzeugte nur Rauschen
+- [Phase 01-server-kern]: Upstream-Beitraege laufen im Fork ausserhalb unseres Repos, mit lokal gesetzter git-Identitaet street1983nk / k.cherif@outlook.de und git commit -s (DCO); die Einreichung loest immer der Owner aus
 
 ### Pending Todos
 
-None yet.
+- **Owner-Schritt 01-13:** PR an nextcloud/context_agent#227 einreichen. Branch und DCO-Commit liegen im Fork street1983nk/context_agent (fix/stateless-http-session-compat, def1425), der PR-Text in docs/contrib/227-pr-body.md. Kommando und Pruefpunkte stehen in .planning/phases/01-server-kern/01-13-SUMMARY.md. Vorher `git push origin main` im Connector-Repo, damit der verlinkte Regressionstest oeffentlich sichtbar ist. Danach PR-URL nachtragen, ROADMAP 01-13 abhaken, CONTRIB-01 auf Complete.
 
 ### Blockers/Concerns
 
@@ -142,6 +145,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-14T18:41:11.333Z
-Stopped at: Completed 01-10-PLAN.md
-Resume file: None
+Last session: 2026-08-14T18:52:00.000Z
+Stopped at: 01-13-PLAN.md Task 1 fertig, Task 2 ist ein offener Human-Action-Checkpoint (Owner reicht den PR ein), Task 3 nicht ausgefuehrt
+Resume file: .planning/phases/01-server-kern/01-13-SUMMARY.md
