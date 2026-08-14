@@ -8,7 +8,6 @@ production, above all the 421 of pitfall 6.
 
 import json
 
-import pytest
 from starlette.testclient import TestClient
 
 from mcp_connector import __version__, config, entry_http
@@ -31,14 +30,19 @@ INITIALIZE = {
 
 
 def post_mcp(app: object, host: str) -> int:
-    """POST /mcp with an explicit Host header and return the status code."""
+    """POST /mcp with an explicit Host header and return the status code.
+
+    Every test builds its own app: the SDK session manager of one application object may
+    be started exactly once, so a shared app would fail on the second lifespan instead of
+    on the assertion.
+    """
     with TestClient(app, base_url=f"http://{host}") as client:  # type: ignore[arg-type]
         response = client.post("/mcp", headers=MCP_HEADERS, content=json.dumps(INITIALIZE))
     return response.status_code
 
 
 def test_health_answers_200_with_compact_json() -> None:
-    with TestClient(entry_http.app) as client:
+    with TestClient(entry_http.build_app({})) as client:
         response = client.get("/health")
 
     assert response.status_code == 200
@@ -47,7 +51,7 @@ def test_health_answers_200_with_compact_json() -> None:
     assert payload["version"] == __version__
 
 
-def test_health_leaks_no_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_health_leaks_no_configuration() -> None:
     """T-01-29: a public unauthenticated endpoint says that it lives, nothing else."""
     app = entry_http.build_app(
         {
@@ -66,7 +70,7 @@ def test_health_leaks_no_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_a_foreign_host_header_is_rejected_with_421() -> None:
     """Pitfall 6: the check runs before any MCP code, the client only sees a transport error."""
-    assert post_mcp(entry_http.app, "evil.example") == 421
+    assert post_mcp(entry_http.build_app({}), "evil.example") == 421
 
 
 def test_an_allowed_host_is_served() -> None:
@@ -81,7 +85,7 @@ def test_an_allowed_host_is_served_with_a_port() -> None:
 
 
 def test_localhost_is_the_default_allowlist() -> None:
-    assert post_mcp(entry_http.app, "127.0.0.1:8765") != 421
+    assert post_mcp(entry_http.build_app({}), "127.0.0.1:8765") != 421
 
 
 def test_the_protection_can_be_disabled_for_a_reverse_proxy() -> None:
@@ -98,7 +102,7 @@ def test_passthrough_mode_configures_no_sdk_auth_layer() -> None:
     assert mcp.settings.auth is None
 
 
-def test_static_bearer_mode_configures_both_halves(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_static_bearer_mode_configures_both_halves() -> None:
     from mcp_connector import deps
 
     verifier, settings = deps.build_auth({config.ENV_STATIC_BEARER: "a-static-token"})

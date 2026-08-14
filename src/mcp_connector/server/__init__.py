@@ -1,9 +1,14 @@
-"""MCP server layer: the only place in this project that imports ``mcp``.
+"""MCP server layer: the only place in this project that registers tools.
 
 Three things live here and nowhere else: the server object with its tool annotations, the
 compact JSON serialisation, and the graceful wrapper that turns every internal error into
 one honest sentence for the model. Transport arguments are not part of the constructor;
-``entry_stdio`` calls ``mcp.run()`` and plan 04 adds ``streamable_http_app()``.
+``entry_stdio`` calls ``mcp.run()`` and ``entry_http`` builds ``streamable_http_app()``.
+
+The auth wiring is decided once, at process start, from the environment: either the SDK
+bearer layer guards the server (static bearer, single-user deployment) or it stays
+completely unarmed and the Basic credentials of each request are passed through. Mixing
+the two is pitfall 2, and switching modes is a restart, not a request.
 
 Deliberately absent (D-19, D-20, pitfall 1): the v1 server class, the legacy-only
 statelessness switch and ``request_state_security``. In mcp 2.x both protocol eras are
@@ -23,9 +28,14 @@ import httpx
 from mcp.server import MCPServer
 from mcp.types import ToolAnnotations
 
+from .. import deps
 from ..errors import ToolError
 
 __all__ = ["CREATE_ONLY", "READ_ONLY", "compact", "graceful", "mcp"]
+
+# (None, None) unless a static bearer is configured. The SDK rejects one without the
+# other with a ValueError in the constructor, so they are built as a pair.
+_token_verifier, _auth_settings = deps.build_auth()
 
 mcp = MCPServer(
     "MCP Connector",
@@ -34,6 +44,8 @@ mcp = MCPServer(
         "Read and create content in the user's own Nextcloud. "
         "This server can never delete, overwrite or re-share anything."
     ),
+    token_verifier=_token_verifier,
+    auth=_auth_settings,
 )
 
 # Honest annotations (D-16). snake_case in Python, camelCase on the wire.
