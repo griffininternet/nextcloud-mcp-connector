@@ -54,7 +54,8 @@ findings:
   warning: 6
   info: 11
   total: 17
-status: issues_found
+status: fixes_applied
+fixes_applied: 2026-08-14
 ---
 
 # Phase 1: Code Review Report
@@ -62,7 +63,7 @@ status: issues_found
 **Reviewed:** 2026-08-14
 **Depth:** standard
 **Files Reviewed:** 45
-**Status:** issues_found
+**Status:** fixes_applied (alle 6 Warnings gefixt am 2026-08-14, Info-Findings offen)
 
 ## Summary
 
@@ -77,6 +78,7 @@ Kein Critical-Befund. Sechs Warnings betreffen einen unbehandelten Crash-Pfad im
 ### WR-01: StaticBearerVerifier crasht auf nicht-ASCII-Token statt ihn abzulehnen
 
 **File:** `src/mcp_connector/deps.py:94`
+**Status:** fixed (Commit d8044c4)
 **Issue:** `secrets.compare_digest(token, self._token)` wirft `TypeError`, sobald eine der beiden Seiten nicht-ASCII-Zeichen enthaelt (verifiziert unter Python 3.13). Der `token`-Parameter ist Angreifer-kontrollierter Header-Inhalt: ein Bearer-Token mit nicht-ASCII-Zeichen produziert eine unbehandelte Exception in der SDK-Auth-Schicht (500) statt eines sauberen `None` (401). Umgekehrt bricht ein versehentlich nicht-ASCII konfigurierter `NC_MCP_STATIC_BEARER` jede Authentifizierung mit 500ern statt mit einer verstaendlichen Meldung. Kein Auth-Bypass, aber ein Crash-Pfad auf feindlicher Eingabe im Sicherheits-Layer.
 **Fix:**
 ```python
@@ -91,30 +93,35 @@ async def verify_token(self, token: str) -> AccessToken | None:
 ### WR-02: files_search meldet am MAX_SEARCH_FETCH-Deckel stillschweigend Vollstaendigkeit
 
 **File:** `src/mcp_connector/tools/files.py:111-125`
+**Status:** fixed (Commit c8aef12)
 **Issue:** `fetch = min(offset + capped + 1, MAX_SEARCH_FETCH)` klemmt die SEARCH-Anfrage bei 500 Treffern. Sobald `offset + capped + 1 > 500` gilt (z.B. offset=480, limit=25), ist `len(hits) > offset + capped` strukturell falsch bzw. nie erfuellbar: Die Antwort traegt weder `truncated` noch `next`, obwohl auf dem Server weitere Treffer existieren koennen. Eine abgeschnittene Antwort ist damit von einer vollstaendigen nicht unterscheidbar, exakt die Verwechslung, die der eigene Docstring von `build_search_body` verhindern will.
 **Fix:** Wenn `offset + capped + 1` den Deckel erreicht bzw. `len(hits) == MAX_SEARCH_FETCH` zurueckkommt, `truncated: true` plus einen Hinweis setzen (z.B. `"note": "result window capped at 500; narrow the folder or the term"`), statt Vollstaendigkeit zu implizieren.
 
 ### WR-03: files_read-Hint verweist auf einen Parameter, den das Tool nicht hat; fetch scheitert komplett an Dateien ueber 2 MB
 
 **File:** `src/mcp_connector/tools/files.py:62-66,235-242` und `src/mcp_connector/server/reg_files.py:56-63`
+**Status:** fixed (Commit 4b185ae; Hint umformuliert auf offset, Oversize-Refusal entfernt: erste Scheibe mit truncated/next_offset statt Fehler, damit auch fetch grosse Dateien liefert)
 **Issue:** `_SLICE_HINT` und der Fehler bei `size > HARD_MAX_BYTES` sagen dem Modell "pass offset and max_bytes (at most 2097152 bytes)". Das registrierte Tool `files_read` hat aber nur `path` und `offset`; ein `max_bytes`-Argument wird vom Schema abgelehnt. Das Modell wird also in einen garantierten Folgefehler geschickt. Verschaerfend nutzt `chatgpt._fetch_file` (tools/chatgpt.py:133) `files_tools.read` mit `offset=0`, sodass `fetch` fuer eine Textdatei ueber 2 MB gar keinen Inhalt liefern kann, obwohl ein markierter 512-KB-Anfang die nuetzliche Antwort waere.
 **Fix:** Entweder `max_bytes` als Tool-Parameter registrieren oder den Hint auf die real existierenden Parameter umformulieren ("read again with offset ..."). In `_fetch_file` den Fall `size > HARD_MAX_BYTES` abfangen und den ersten Slice mit Truncation-Marker liefern statt den ToolError durchzureichen.
 
 ### WR-04: calendar_create_event ohne calendar-Parameter schreibt in ein nichtdeterministisches Ziel
 
 **File:** `src/mcp_connector/tools/calendar.py:242-243`
+**Status:** fixed (Commit 62c8680; Default-Ziel ist deterministisch die URI `personal`, sonst der einzige Kalender, sonst ToolError mit Auswahlliste; mehrdeutiger Namens-Match wird mit Kandidaten abgelehnt)
 **Issue:** `target = _select(calendars, calendar)[0]` nimmt ohne `calendar`-Parameter schlicht den ersten Eintrag der PROPFIND-Discovery. Die Reihenfolge eines Multi-Status ist protokollseitig nicht garantiert, und die Discovery liefert auch Kalender, die in das Konto hineingeteilt wurden. Ein Event kann damit ohne Absicht in einem geteilten Kalender landen, den andere Personen sehen, und dieser Server kann es per Design nicht wieder loeschen. Auch bei mehrdeutigem Namens-Match (URI vs. Displayname zweier Kalender) waehlt `[0]` stillschweigend.
 **Fix:** Ohne Parameter bevorzugt den Kalender mit URI `personal` waehlen, sonst deterministisch sortieren und die getroffene Wahl in der Antwort benennen; bei mehrdeutigem Match einen ToolError mit den Kandidaten werfen statt still zu waehlen.
 
 ### WR-05: get_range akzeptiert 200 auf einen Range-Request und verfaelscht damit die Slice-Buchfuehrung
 
 **File:** `src/mcp_connector/nextcloud/clients/dav.py:154-174` (mit `_check` 540-546) und `src/mcp_connector/tools/files.py:244-266`
+**Status:** fixed (Commit 0b8d015; 200 auf einen Range-Request wird lokal auf das angefragte Fenster geschnitten)
 **Issue:** `_check` laesst fuer GET sowohl 206 als auch 200 passieren. Ein Server oder Proxy, der den Range-Header ignoriert, antwortet 200 mit dem kompletten Body. `files.read` liefert dann bei `offset > 0` die gesamte Datei (bis zur vollen Dateigroesse, die den 2-MB-Deckel weit ueberschreiten darf, da der Deckel nur bei `offset == 0` greift) in einer Antwort ins Kontextfenster, und `used = len(data)` macht `truncated`/`next_offset` inkonsistent zur angefragten Scheibe.
 **Fix:** In `get_range` nach dem `_check` pruefen: Wenn ein Range-Header gesendet wurde und der Status 200 ist, den Body lokal auf `[offset, offset+limit)` schneiden oder mit einem ToolError ("this server ignores Range requests") ablehnen.
 
 ### WR-06: Test-Nextcloud bindet auf 0.0.0.0, der Kommentar behauptet localhost-only
 
 **File:** `compose.test.yml:18-19`
+**Status:** fixed (Commit 79d4153)
 **Issue:** `ports: - "${NC_TEST_PORT:-8080}:80"` published auf allen Interfaces. Der Kommentar im selben File begruendet die Wegwerf-Credentials damit, dass die Instanz "only ever listens on localhost". Zusammen mit dem Default-Admin-Passwort `admin-test-pw` und dem im Bootstrap deaktivierten Bruteforce-Schutz (bootstrap_test_nc.sh:146) ist die Instanz im LAN des Entwicklers bzw. Runners erreichbar und trivial uebernehmbar.
 **Fix:**
 ```yaml
