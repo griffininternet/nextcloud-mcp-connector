@@ -29,9 +29,16 @@ def files_entries() -> list[dict[str, Any]]:
     return fixture("ocs_search_files.json")["ocs"]["data"]["entries"]
 
 
+def resolved(provider_id: str, entry: dict[str, Any]) -> tuple[str, str, bool]:
+    """:func:`provider_map.extract_id`, with the skip case turned into a clear failure."""
+    result = provider_map.extract_id(provider_id, entry, BASE)
+    assert result is not None, f"the {provider_id} entry produced no id at all"
+    return result
+
+
 def test_a_files_hit_takes_its_id_from_the_attributes() -> None:
     """Only the files provider fills ``attributes.fileId``, and it is the cheapest source."""
-    kind, identifier, canonical = provider_map.extract_id("files", files_entries()[0], BASE)
+    kind, identifier, canonical = resolved("files", files_entries()[0])
 
     assert kind == "file"
     assert identifier == "file:4711"
@@ -40,7 +47,7 @@ def test_a_files_hit_takes_its_id_from_the_attributes() -> None:
 
 def test_a_files_hit_without_attributes_falls_back_to_the_f_segment() -> None:
     """``attributes`` is an empty list on some instances; ``/f/<fileid>`` still resolves."""
-    kind, identifier, canonical = provider_map.extract_id("files", files_entries()[1], BASE)
+    kind, identifier, canonical = resolved("files", files_entries()[1])
 
     assert kind == "file"
     assert identifier == "file:4712"
@@ -58,7 +65,7 @@ def test_a_deck_hit_becomes_the_short_card_form_and_is_not_canonical() -> None:
     """``search-deck-card-board`` only ever delivers the cardId, never board and stack."""
     entry = {"title": "Karte", "resourceUrl": "/apps/deck/card/57"}
 
-    kind, identifier, canonical = provider_map.extract_id("search-deck-card-board", entry, BASE)
+    kind, identifier, canonical = resolved("search-deck-card-board", entry)
 
     assert kind == "card"
     assert identifier == "card:57"
@@ -69,7 +76,7 @@ def test_an_unknown_provider_becomes_a_url_and_is_never_guessed() -> None:
     """An honest boundary beats a wrong resolution (pitfall 10)."""
     entry = {"title": "Talk", "resourceUrl": "/call/abc123#message_42"}
 
-    kind, identifier, canonical = provider_map.extract_id("spreed", entry, BASE)
+    kind, identifier, canonical = resolved("spreed", entry)
 
     assert kind == "url"
     assert identifier == f"url:{BASE}/call/abc123#message_42"
@@ -85,7 +92,7 @@ def test_a_known_provider_with_an_unusable_url_degrades_to_the_url_kind() -> Non
     """A wrong note id would read a different note; the url stays honest instead."""
     entry = {"title": "kaputt", "resourceUrl": "/index.php/apps/notes/"}
 
-    kind, identifier, canonical = provider_map.extract_id("notes", entry, BASE)
+    kind, identifier, canonical = resolved("notes", entry)
 
     assert kind == "url"
     assert identifier == f"url:{BASE}/index.php/apps/notes/"
@@ -103,7 +110,7 @@ def test_a_foreign_resource_url_is_rebuilt_on_the_configured_base_url() -> None:
     """The url is only ever parsed, never fetched, and never left pointing elsewhere."""
     entry = {"title": "geklaut", "resourceUrl": "http://evil.test/index.php/apps/notes/note/5"}
 
-    _, identifier, _ = provider_map.extract_id("notes", entry, BASE)
+    _, identifier, _ = resolved("notes", entry)
     url = provider_map.hit_url(BASE, "note", identifier, entry)
 
     assert identifier == "note:5"
@@ -125,10 +132,7 @@ def test_every_hit_carries_an_absolute_non_empty_url(
     provider_id: str, entry: dict[str, Any]
 ) -> None:
     """ChatGPT only builds a citation when ``url`` is a non-empty, openable string."""
-    resolved = provider_map.extract_id(provider_id, entry, BASE)
-    assert resolved is not None
-
-    kind, identifier, _ = resolved
+    kind, identifier, _ = resolved(provider_id, entry)
     url = provider_map.hit_url(BASE, kind, identifier, entry)
 
     assert url.startswith(f"{BASE}/"), url
