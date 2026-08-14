@@ -186,6 +186,54 @@ async def test_offset_read_sends_a_range_header_and_returns_next_offset(
 
 
 @pytest.mark.anyio
+async def test_a_200_answer_to_a_range_request_is_cut_to_the_requested_window(
+    clients: NcClients,
+) -> None:
+    """WR-05: a server that ignores Range answers 200 with the full body; the slice
+    bookkeeping (content, truncated, next_offset) must still describe the asked window."""
+    body = b"0123456789" * 10  # 100 bytes of full file
+    with respx.mock as mock:
+        mock.route(method="PROPFIND", url=NOTES_URL).mock(
+            return_value=httpx.Response(207, text=_propfind_body(length=len(body)))
+        )
+        get = mock.route(method="GET", url=NOTES_URL).mock(
+            return_value=httpx.Response(200, content=body)
+        )
+        result = await files_tools.read(clients, path="/Docs/notes.md", offset=20, max_bytes=30)
+
+    assert get.calls[0].request.headers["range"] == "bytes=20-49"
+    assert result["content"] == body[20:50].decode()
+    assert result["truncated"] is True
+    assert result["next_offset"] == 50
+    assert result["size"] == len(body)
+
+
+@pytest.mark.anyio
+async def test_get_range_with_an_open_end_cuts_a_200_answer_at_the_offset(
+    clients: NcClients,
+) -> None:
+    body = b"abcdefghij"
+    with respx.mock as mock:
+        mock.route(method="GET", url=NOTES_URL).mock(return_value=httpx.Response(200, content=body))
+        data = await dav.get_range(clients.client, clients.creds, "/Docs/notes.md", offset=4)
+
+    assert data == b"efghij", "an open-ended range on a 200 keeps only the tail"
+
+
+@pytest.mark.anyio
+async def test_a_206_answer_is_taken_as_the_slice_it_already_is(clients: NcClients) -> None:
+    with respx.mock as mock:
+        mock.route(method="GET", url=NOTES_URL).mock(
+            return_value=httpx.Response(206, content=b"efgh")
+        )
+        data = await dav.get_range(
+            clients.client, clients.creds, "/Docs/notes.md", offset=4, limit=4
+        )
+
+    assert data == b"efgh", "a 206 body is already the window and must not be cut again"
+
+
+@pytest.mark.anyio
 async def test_offset_beyond_the_end_is_rejected(clients: NcClients) -> None:
     with respx.mock as mock:
         mock.route(method="PROPFIND", url=NOTES_URL).mock(

@@ -158,7 +158,13 @@ async def get_range(
     offset: int = 0,
     limit: int | None = None,
 ) -> bytes:
-    """GET a file, optionally only the byte window ``[offset, offset+limit)``."""
+    """GET a file, optionally only the byte window ``[offset, offset+limit)``.
+
+    A server or proxy may ignore the Range header and answer 200 with the whole body.
+    In that case the window is cut out locally: returning the full body would flood the
+    context window and make the caller's ``truncated``/``next_offset`` bookkeeping lie
+    about the slice it asked for (WR-05).
+    """
     target = safe_path(path)
     headers: dict[str, str] = {}
     if offset > 0 or limit is not None:
@@ -171,6 +177,9 @@ async def get_range(
         auth=httpx.BasicAuth(creds.user, creds.secret),
     )
     _check(response, target)
+    if "Range" in headers and response.status_code == 200:
+        stop = None if limit is None else offset + limit
+        return response.content[offset:stop]
     return response.content
 
 
