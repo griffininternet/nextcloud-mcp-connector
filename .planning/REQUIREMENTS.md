@@ -16,7 +16,7 @@
 ### Werkzeuge (TOOL)
 
 - [ ] **TOOL-01**: Nutzer kann Dateien suchen, Ordner listen, Dateien lesen und neue Dateien hochladen (WebDAV; kein Überschreiben, kein Löschen)
-- [ ] **TOOL-02**: Nutzer kann Termine in einem Zeitraum abfragen und neue Termine anlegen (CalDAV; Timezone-Edge-Cases getestet, Lehren aus Platzhirsch-Bugs #538/#544/#782)
+- [x] **TOOL-02**: Nutzer kann Termine in einem Zeitraum abfragen und neue Termine anlegen (CalDAV; Timezone-Edge-Cases getestet, Lehren aus Platzhirsch-Bugs #538/#544/#782)
 - [x] **TOOL-03**: Nutzer kann Notizen suchen, lesen und anlegen (Notes-REST)
 - [ ] **TOOL-04**: Nutzer kann Deck-Boards und Karten lesen und neue Karten anlegen (Deck-REST)
 - [ ] **TOOL-05**: Nutzer kann Kontakte suchen (CardDAV, lesend)
@@ -86,7 +86,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SRV-04 | Phase 1 | Complete |
 | SRV-05 | Phase 1 | Complete |
 | TOOL-01 | Phase 1 | Pending |
-| TOOL-02 | Phase 1 | Pending |
+| TOOL-02 | Phase 1 | Complete |
 | TOOL-03 | Phase 1 | Complete |
 | TOOL-04 | Phase 1 | Pending |
 | TOOL-05 | Phase 1 | Pending |

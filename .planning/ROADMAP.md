@@ -52,7 +52,7 @@ Plans:
 - [x] 01-03-PLAN.md - Test-Nextcloud per compose plus files_upload create-only (Wave 3)
 - [x] 01-04-PLAN.md - Streamable HTTP, Basic-Passthrough, Client-Matrix und Restart-Beweis (Wave 3)
 - [x] 01-06-PLAN.md - OCS-Schicht, Graceful Degradation und Notes-Tools (Wave 3)
-- [ ] 01-07-PLAN.md - Kalender-Tools mit serverseitiger Expansion (Wave 3)
+- [x] 01-07-PLAN.md - Kalender-Tools mit serverseitiger Expansion (Wave 3)
 - [ ] 01-08-PLAN.md - Kontakte-Suche ueber CardDAV (Wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
@@ -140,7 +140,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Server-Kern | 6/14 | In Progress|  |
+| 1. Server-Kern | 7/14 | In Progress|  |
 | 2. ExApp-Shell | 0/TBD | Not started | - |
 | 3. OAuth 2.1 | 0/TBD | Not started | - |
 | 4. Per-User-Verwaltung und prepare_context | 0/TBD | Not started | - |

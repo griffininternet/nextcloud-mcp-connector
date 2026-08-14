@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-06-PLAN.md
-last_updated: "2026-08-14T16:43:21.541Z"
+stopped_at: Completed 01-07-PLAN.md
+last_updated: "2026-08-14T17:06:58.587Z"
 last_activity: 2026-08-14
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 14
-  completed_plans: 6
+  completed_plans: 7
   percent: 0
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 1 (Server-Kern): EXECUTING
-Plan: 7 of 14
+Plan: 8 of 14
 Status: Ready to execute
 Last activity: 2026-08-14
 
-Progress: [████░░░░░░] 43%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Progress: [████░░░░░░] 43%
 | Phase 01-server-kern P03 | 25 min | 3 tasks | 10 files |
 | Phase 01-server-kern P04 | 20 min | 3 tasks | 12 files |
 | Phase 01-server-kern P06 | 27 min | 2 tasks | 13 files |
+| Phase 01-server-kern PP07 | 34 min | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -94,6 +95,12 @@ Recent decisions affecting current work:
 - [Phase 01-server-kern]: 507 behaelt eine eigene Meldung (Speicher voll) statt im generischen 5xx-Zweig zu verschwinden
 - [Phase 01-server-kern]: AUTH-01 abgehakt: uvicorn ohne Nextcloud-Konto im Environment legt per HTTP mit dem App-Passwort aus dem Request eine Notiz an und liest sie zurueck
 - [Phase 01-server-kern]: Eine per occ deaktivierte App bleibt in /cloud/capabilities sichtbar, bis die Nextcloud neu startet; Degradations-Tests brauchen den Neustart, unser eigener Cache ist nicht die Ursache
+- [Phase 01-server-kern]: Recurrence-Expansion laeuft serverseitig per c:expand; das CalDAV-Modul enthaelt keine RRULE-Iteration und kein recurring-ical-events, ein Grep-Test haelt diese Grenze
+- [Phase 01-server-kern]: Das halboffene Zeitfenster wird nie korrigiert: ein Termin exakt auf end liegt ausserhalb, ein Verschieben der Grenze wuerde zwei Aufrufer mit demselben Fenster unterschiedliche Ergebnisse sehen lassen
+- [Phase 01-server-kern]: Ganztaegige Termine behalten das exklusive Enddatum aus RFC 5545; start gleich end wird auf start plus ein Tag korrigiert, damit kein Termin der Laenge null entsteht
+- [Phase 01-server-kern]: calendar_create_event bekommt einen optionalen timezone-Parameter (Abweichung von der Plan-Signatur), weil ein ISO-Offset keine IANA-Zone ist und ohne Zonennamen kein IANA-VTIMEZONE erzeugbar waere
+- [Phase 01-server-kern]: Nach dem Event-PUT wird einmal per GET nachgelesen; scheitert das Nachlesen, bleibt created true und confirmed false, damit das Modell den Termin nicht ein zweites Mal anlegt
+- [Phase 01-server-kern]: Faellt ein einzelner Kalender aus, erscheint er als degraded-Eintrag; fallen alle aus, ist das ein Fehler und keine leere Terminliste
 
 ### Pending Todos
 
@@ -115,6 +122,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-14T16:43:21.524Z
-Stopped at: Completed 01-06-PLAN.md
+Last session: 2026-08-14T17:06:04.152Z
+Stopped at: Completed 01-07-PLAN.md
 Resume file: None
