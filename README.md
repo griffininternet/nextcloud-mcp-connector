@@ -213,6 +213,28 @@ Deck is one browse tool with a level, not one tool per level:
   checked against the board's own permissions, so a read-only board is explained instead of
   answered with a 403.
 
+### Cloud wide search
+
+`unified_search` asks every search provider the instance offers, at the same time:
+
+```json
+{"query":"budget","count":2,"results":[{"id":"file:4711","title":"Budget 2026.md","subline":"in Dokumente","url":"https://cloud.example.org/index.php/f/4711","provider":"files","kind":"file"},{"id":"url:https://cloud.example.org/index.php/call/abc123","title":"Khaled","url":"https://cloud.example.org/index.php/call/abc123","provider":"spreed","kind":"url","resolvable":false}],"note":"matched on names and metadata; file contents are not indexed","degraded":[{"provider":"search-deck-card-board","reason":"The provider did not answer within 15 seconds."}]}
+```
+
+- The provider list comes from Nextcloud on every call and is never hardcoded, because it follows
+  the installed apps. An app enabled a minute ago is searchable without a restart.
+- Every provider gets its own timeout. One that fails or stalls is named under `degraded` with a
+  reason, so a partial answer is always visibly partial, never a silently shorter list.
+- Permissions are Nextcloud's job: each provider runs as the authenticated user, and this server
+  keeps no index and caches no result.
+- Hits from Files, Notes and Deck carry an id the read tools understand. Everything else gets a
+  `url:` id and `resolvable: false`, because an invented id would resolve to the wrong object.
+  Deck's provider only reports a card id, so its short `card:<cardId>` form is marked the same way.
+- `providers` narrows the fan-out to a comma separated subset, for example `files,notes`. A name
+  the instance does not know is reported under `degraded` instead of silently ignored.
+- `limit` is per provider and is capped again by Nextcloud itself. If a provider paginates, its
+  cursor comes back under `cursors`.
+
 ### Optional apps
 
 Notes and Deck are optional Nextcloud apps. The tool list is the same everywhere: it never depends
