@@ -63,9 +63,11 @@ _TEXT_TYPES = frozenset(
 )
 _TEXT_SUFFIXES = ("+json", "+xml", "+yaml")
 
+# Names only parameters the registered tool actually has (WR-03): ``files_read`` takes
+# ``path`` and ``offset``; ``max_bytes`` exists for Python callers only.
 _SLICE_HINT = (
-    "Read the file in slices: pass offset and max_bytes (at most "
-    f"{HARD_MAX_BYTES} bytes) and continue at the next_offset from each answer."
+    "Large files are served in slices. Read from offset 0 and continue at the "
+    "next_offset from each answer until truncated is no longer set."
 )
 
 DEFAULT_CONTENT_TYPE = "text/markdown"
@@ -242,15 +244,11 @@ async def read(
             message=f"offset {offset} is at or past the end of {target} ({size} bytes).",
             hint="Read from a smaller offset, or stop: the file has no more content.",
         )
-    if offset == 0 and size > HARD_MAX_BYTES:
-        raise ToolError(
-            message=(
-                f"{target} is {size} bytes and too large to read in one call "
-                f"(limit {HARD_MAX_BYTES} bytes)."
-            ),
-            hint=_SLICE_HINT,
-        )
 
+    # A file above HARD_MAX_BYTES is not refused: the answer is the first slice, marked
+    # with ``truncated`` and ``next_offset``. Refusing at offset 0 would send the model
+    # into a dead end, because the registered tool has no way to shrink the window
+    # other than the offset it was just denied (WR-03).
     remaining = size - offset
     if offset > 0 or remaining > max_bytes:
         data = await dav.get_range(

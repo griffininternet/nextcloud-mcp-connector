@@ -27,6 +27,7 @@ from mcp_connector.nextcloud import NcClients, capabilities
 from mcp_connector.nextcloud.credentials import Credentials
 from mcp_connector.server import mcp
 from mcp_connector.tools import chatgpt
+from mcp_connector.tools import files as files_tools
 
 BASE = "http://nc.test"
 USER = "alice"
@@ -222,6 +223,35 @@ async def test_a_long_file_is_cut_and_says_so_in_the_text_and_in_the_metadata(
     metadata = result["metadata"]
     assert metadata["truncated"] == "true"
     assert metadata["next_offset"] == "10"
+
+
+@pytest.mark.anyio
+async def test_a_file_above_the_hard_ceiling_is_fetched_as_a_marked_slice(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """WR-03: fetch on a file above HARD_MAX_BYTES answers with the first slice, marked
+    for continuation over files_read, instead of failing entirely."""
+    monkeypatch.setattr(chatgpt, "MAX_TEXT_BYTES", 10)
+    oversize = files_tools.HARD_MAX_BYTES + 1
+
+    with respx.mock(assert_all_called=True) as mock:
+        mock.route(method="SEARCH", url=DAV_ROOT).mock(
+            return_value=httpx.Response(207, text=search_body())
+        )
+        mock.route(method="PROPFIND", url=f"{FILES_ROOT}{FILE_PATH}").mock(
+            return_value=httpx.Response(207, text=stat_body(length=oversize))
+        )
+        slice_route = mock.route(method="GET", url=f"{FILES_ROOT}{FILE_PATH}").mock(
+            return_value=httpx.Response(206, content=b"0123456789")
+        )
+
+        result = await chatgpt.fetch(clients, "file:4711")
+
+    assert slice_route.calls[0].request.headers["Range"] == "bytes=0-9"
+    assert result["text"].startswith("0123456789")
+    assert "files_read with offset 10" in result["text"]
+    assert result["metadata"]["truncated"] == "true"
+    assert result["metadata"]["next_offset"] == "10"
 
 
 @pytest.mark.anyio

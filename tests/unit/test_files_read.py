@@ -98,17 +98,27 @@ async def test_read_sends_basic_auth_per_request_and_depth_zero(clients: NcClien
 
 
 @pytest.mark.anyio
-async def test_oversize_file_is_rejected_with_an_offset_hint(clients: NcClients) -> None:
+async def test_oversize_file_returns_the_first_slice_instead_of_failing(
+    clients: NcClients,
+) -> None:
+    """WR-03: a file above HARD_MAX_BYTES is answered with a marked slice, not an error."""
+    total = 3_000_000
+    first_slice = files_tools.DEFAULT_MAX_BYTES
     with respx.mock as mock:
         mock.route(method="PROPFIND", url=NOTES_URL).mock(
-            return_value=httpx.Response(207, text=_propfind_body(length=3_000_000))
+            return_value=httpx.Response(207, text=_propfind_body(length=total))
         )
-        get = mock.route(method="GET", url=NOTES_URL)
-        with pytest.raises(ToolError) as excinfo:
-            await files_tools.read(clients, path="/Docs/notes.md")
+        get = mock.route(method="GET", url=NOTES_URL).mock(
+            return_value=httpx.Response(206, content=b"x" * first_slice)
+        )
+        result = await files_tools.read(clients, path="/Docs/notes.md")
 
-    assert "offset" in excinfo.value.hint
-    assert not get.called, "an oversize file must not be downloaded at all"
+    sent = get.calls[0].request.headers["range"]
+    assert sent == f"bytes=0-{first_slice - 1}", "only the slice is downloaded, never the file"
+    assert result["size"] == total
+    assert result["truncated"] is True
+    assert result["next_offset"] == first_slice
+    assert len(result["content"]) == first_slice
 
 
 @pytest.mark.anyio
@@ -192,6 +202,9 @@ async def test_max_bytes_above_the_hard_ceiling_is_rejected(clients: NcClients) 
     with respx.mock, pytest.raises(ToolError) as excinfo:
         await files_tools.read(clients, path="/Docs/notes.md", max_bytes=5_000_000)
     assert str(files_tools.HARD_MAX_BYTES) in excinfo.value.message
+    assert "max_bytes" not in excinfo.value.hint, (
+        "the registered tool has no max_bytes parameter; the hint must not name it (WR-03)"
+    )
 
 
 @pytest.mark.anyio
