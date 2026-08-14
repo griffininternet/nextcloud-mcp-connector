@@ -1,0 +1,26 @@
+{
+  "ocs": {
+    "meta": { "status": "ok", "statuscode": 200, "message": "OK" },
+    "data": {
+      "version": {
+        "major": 34,
+        "minor": 0,
+        "micro": 2,
+        "string": "34.0.2",
+        "edition": "",
+        "extendedSupport": false
+      },
+      "capabilities": {
+        "core": { "pollinterval": 60, "webdav-root": "remote.php/webdav" },
+        "dav": { "chunking": "1.0", "bulkupload": "1.0" },
+        "notes": { "api_version": ["0.2", "1.3"], "version": "6.0.1" },
+        "deck": {
+          "version": "1.18.3",
+          "canCreateBoards": true,
+          "apiVersions": ["1.0", "1.1"]
+        },
+        "files": { "bigfilechunking": true }
+      }
+    }
+  }
+}
