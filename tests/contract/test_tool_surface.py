@@ -187,6 +187,33 @@ async def test_there_is_no_tool_per_deck_level() -> None:
 
 
 @pytest.mark.anyio
+async def test_unified_search_is_listed_as_a_pure_read_over_all_providers() -> None:
+    """D-08 and TOOL-06: one cloud wide read, and the expectation management is in the text."""
+    async with Client(mcp, raise_exceptions=True) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+
+    assert "unified_search" in tools, "the cloud wide search is part of the curated set"
+    tool = tools["unified_search"]
+
+    annotations = tool.annotations
+    assert annotations is not None
+    assert annotations.read_only_hint is True, "unified_search only reads"
+    assert annotations.open_world_hint is False
+    assert tool.output_schema is None, "structured_output=False (schema diet)"
+
+    assert "not file contents" in (tool.description or ""), (
+        "pitfall 5 belongs in the sentence the model reads before it calls the tool"
+    )
+
+    schema = tool.input_schema
+    assert set(schema.get("required", [])) >= {"query"}
+    assert "$defs" not in schema, "no nested models in the input schema (schema diet)"
+    assert schema["properties"]["providers"]["type"] == "string", (
+        "an optional string beats an anyOf of list and null (schema diet)"
+    )
+
+
+@pytest.mark.anyio
 async def test_calendar_create_event_is_annotated_as_create_only() -> None:
     """Not idempotent, and honestly so: If-None-Match refuses the second identical call."""
     async with Client(mcp, raise_exceptions=True) as client:
