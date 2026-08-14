@@ -1,0 +1,7 @@
+* text=auto
+
+# Shell scripts and compose/CI files must keep LF endings: the development host is
+# Windows, and `docker compose exec` fails on CR artifacts.
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf

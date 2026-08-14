@@ -1,0 +1,57 @@
+[project]
+name = "nextcloud-mcp-connector"
+version = "0.1.0"
+description = "Curated MCP server for Nextcloud: files, calendar, notes, deck and contacts as read-first tools"
+requires-python = ">=3.13"
+license = "AGPL-3.0-or-later"
+authors = [{ name = "street1983nk", email = "k.cherif@outlook.de" }]
+keywords = ["mcp", "nextcloud", "webdav", "caldav", "carddav"]
+
+# Dependency policy (see docs/dependency-audit.md):
+# httpx2 is a transitive dependency of mcp only. It is never pinned directly here.
+dependencies = [
+    "mcp[cli]>=2.0,<3",
+    "httpx>=0.28,<0.29",
+    "lxml>=6.1,<7",
+    "icalendar>=7.2,<8",
+    "vobject>=0.9.9,<1",
+    "pydantic>=2.12,<3",
+]
+
+[project.scripts]
+nc-mcp = "mcp_connector.entry_stdio:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mcp_connector"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Default run stays free of Docker: the local Linux Docker engine is not available,
+# integration tests are opt-in via `-m integration`.
+addopts = "-m 'not integration' -q"
+markers = [
+    "integration: needs the Docker test Nextcloud (opt-in via -m integration)",
+    "matrix: starts local subprocesses without Nextcloud",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+# ruff also formats Python blocks inside Markdown. The planning documents contain
+# illustrative snippets that must stay verbatim, so they are out of scope for lint
+# and format. Everything that ships is covered.
+exclude = [".planning"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "respx>=0.23.1",
+    "ruff>=0.16.3",
+]
