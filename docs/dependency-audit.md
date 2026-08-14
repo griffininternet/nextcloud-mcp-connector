@@ -26,6 +26,11 @@ repository owner on 2026-08-14 after independent verification (see "The httpx2 f
 | pytest | PyPI | 9.1.1 | very high | github.com/pytest-dev/pytest | [OK] | Approved (dev) |
 | anyio | PyPI | 4.14.2 | very high | github.com/agronholm/anyio | [OK] | Approved (transitive, also the async test plugin) |
 | ruff | PyPI | 0.16.3 | very high | github.com/astral-sh/ruff | [OK] | Approved (dev) |
+| tzdata | PyPI | 2025.2, IANA data repackaged by the CPython community | very high | github.com/python/tzdata | [OK] | Approved (direct) 2026-08-14, owner sign-off: zoneinfo is used directly and Windows has no system tz database |
+| pyright | PyPI | 1.1.411 | very high | github.com/microsoft/pyright | [OK] | Approved (dev) 2026-08-14, owner sign-off for the quality gate |
+| nodeenv | PyPI | 1.10.0 | very high | github.com/ekalinin/nodeenv | [OK] | Approved (transitive of pyright, never pinned directly) |
+| vulture | PyPI | 2.16 | high | github.com/jendrikseipp/vulture | [OK] | Approved (dev) 2026-08-14, owner sign-off for the quality gate |
+| lxml-stubs | PyPI | 0.5.1, official stubs from the lxml org | high | github.com/lxml/lxml-stubs | [OK] | Approved (dev) 2026-08-14, typing support for pyright |
 
 Packages removed due to a `[SLOP]` verdict: none.
 Packages flagged as suspicious: `httpx2`.

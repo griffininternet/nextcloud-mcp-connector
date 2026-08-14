@@ -22,7 +22,7 @@ async def contacts_search(
     limit: Annotated[
         int, Field(ge=1, le=contacts_tools.MAX_LIMIT, description="Maximum number of contacts")
     ] = contacts_tools.DEFAULT_LIMIT,
-    ctx: Context = None,
+    ctx: Context | None = None,
 ) -> str:
     """Search the user's contacts by name or email address."""
     clients = deps.resolve_clients(ctx)

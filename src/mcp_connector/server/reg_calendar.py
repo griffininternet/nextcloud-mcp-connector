@@ -32,7 +32,7 @@ async def calendar_list_events(
     limit: Annotated[
         int, Field(ge=1, le=calendar_tools.MAX_LIMIT, description="Maximum number of events")
     ] = calendar_tools.DEFAULT_LIMIT,
-    ctx: Context = None,
+    ctx: Context | None = None,
 ) -> str:
     """List calendar events in a time range (start and end are required, both with timezone)."""
     clients = deps.resolve_clients(ctx)
@@ -68,7 +68,7 @@ async def calendar_create_event(
     timezone: Annotated[
         str | None, Field(description="IANA zone to store the event in, e.g. Europe/Berlin")
     ] = None,
-    ctx: Context = None,
+    ctx: Context | None = None,
 ) -> str:
     """Create a calendar event; returns the times the server confirmed, never overwrites."""
     clients = deps.resolve_clients(ctx)

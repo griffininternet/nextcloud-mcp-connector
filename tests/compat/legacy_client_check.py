@@ -39,10 +39,12 @@ def basic_header() -> str:
 
 async def check(url: str) -> int:
     headers = {"Authorization": basic_header()}
-    async with streamablehttp_client(url, headers=headers) as (read, write, _session_id):
-        async with ClientSession(read, write) as session:
-            init = await session.initialize()
-            result = await session.list_tools()
+    async with (
+        streamablehttp_client(url, headers=headers) as (read, write, _session_id),
+        ClientSession(read, write) as session,
+    ):
+        init = await session.initialize()
+        result = await session.list_tools()
 
     count = len(result.tools)
     print(
@@ -66,7 +68,7 @@ def main(argv: list[str]) -> int:
         return 2
     try:
         return asyncio.run(check(argv[1]))
-    except Exception as exc:  # noqa: BLE001 - a check script reports, it does not raise
+    except Exception as exc:
         print(f"legacy client failed: {describe(exc)}", file=sys.stderr)
         return 1
 

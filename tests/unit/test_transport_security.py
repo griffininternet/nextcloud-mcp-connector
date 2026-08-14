@@ -106,4 +106,5 @@ def test_static_bearer_mode_configures_both_halves() -> None:
     from mcp_connector import deps
 
     verifier, settings = deps.build_auth({config.ENV_STATIC_BEARER: "a-static-token"})
-    assert verifier is not None and settings is not None
+    assert verifier is not None
+    assert settings is not None

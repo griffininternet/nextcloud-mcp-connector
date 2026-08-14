@@ -26,7 +26,7 @@ from ..errors import AppMissingError
 from . import NcClients
 from .clients import ocs
 
-__all__ = ["Capabilities", "TTL_SECONDS", "app_missing", "clear_cache", "load", "require_app"]
+__all__ = ["TTL_SECONDS", "Capabilities", "app_missing", "clear_cache", "load", "require_app"]
 
 CAPABILITIES_PATH = "/cloud/capabilities"
 
@@ -41,13 +41,17 @@ _WHAT = "the Nextcloud capabilities"
 _MISSING: dict[str, tuple[str, str]] = {
     "notes": (
         "The Notes app is not installed on this Nextcloud.",
-        "Ask an administrator to install the Notes app, or use files_search for note files "
-        "under /Notes.",
+        (
+            "Ask an administrator to install the Notes app, or use files_search for note files "
+            "under /Notes."
+        ),
     ),
     "deck": (
         "The Deck app is not installed on this Nextcloud.",
-        "Ask an administrator to install the Deck app, or keep the task list in a note "
-        "created with notes_create.",
+        (
+            "Ask an administrator to install the Deck app, or keep the task list in a note "
+            "created with notes_create."
+        ),
     ),
 }
 

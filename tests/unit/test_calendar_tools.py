@@ -544,7 +544,8 @@ async def test_a_summary_with_ics_syntax_cannot_break_the_object(clients: NcClie
     body = written_ics(put)
     starts = [line for line in body.split("\r\n") if line == "BEGIN:VEVENT"]
     assert len(starts) == 1, "the summary must not open a second component"
-    assert "\\n" in body and "\\;" in body, "line breaks and separators are escaped, not raw"
+    assert "\\n" in body, "line breaks are escaped, not raw"
+    assert "\\;" in body, "separators are escaped, not raw"
 
     parsed = IcsCalendar.from_ical(body)
     events = parsed.walk("VEVENT")

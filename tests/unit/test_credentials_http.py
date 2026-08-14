@@ -7,6 +7,7 @@ that ``follow_redirects=True`` would cause.
 import asyncio
 import logging
 import sys
+from dataclasses import FrozenInstanceError
 
 import httpx
 import pytest
@@ -41,7 +42,7 @@ def test_secret_stays_readable_for_the_http_layer() -> None:
 
 def test_credentials_are_immutable() -> None:
     creds = Credentials("http://nc.test", "alice", SECRET)
-    with pytest.raises(Exception):  # noqa: B017 - FrozenInstanceError is a plain Exception
+    with pytest.raises(FrozenInstanceError):
         creds.secret = "other"  # type: ignore[misc]
 
 

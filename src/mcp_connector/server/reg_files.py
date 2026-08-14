@@ -19,7 +19,7 @@ from . import CREATE_ONLY, READ_ONLY, compact, graceful, mcp
 async def files_read(
     path: Annotated[str, Field(description="Path inside the user's files, e.g. /Docs/notes.md")],
     offset: Annotated[int, Field(ge=0, description="Byte offset for a continued read")] = 0,
-    ctx: Context = None,
+    ctx: Context | None = None,
 ) -> str:
     """Read a text file from Nextcloud; large files come back truncated with a next offset."""
     clients = deps.resolve_clients(ctx)
@@ -31,7 +31,7 @@ async def files_read(
 async def files_upload(
     path: Annotated[str, Field(description="Target path; must not exist yet")],
     content: Annotated[str, Field(description="UTF-8 text content")],
-    ctx: Context = None,
+    ctx: Context | None = None,
 ) -> str:
     """Create a new text file. Fails if the target already exists; never overwrites."""
     clients = deps.resolve_clients(ctx)

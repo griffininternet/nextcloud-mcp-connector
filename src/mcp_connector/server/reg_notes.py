@@ -21,7 +21,7 @@ from . import CREATE_ONLY, READ_ONLY, compact, graceful, mcp
 async def notes_search(
     query: Annotated[str, Field(description="Words to look for in note titles and contents")],
     limit: Annotated[int, Field(ge=1, le=100, description="Maximum number of hits")] = 25,
-    ctx: Context = None,
+    ctx: Context | None = None,
 ) -> str:
     """Search the user's Nextcloud notes by title and content."""
     clients = deps.resolve_clients(ctx)
@@ -32,7 +32,7 @@ async def notes_search(
 @graceful
 async def notes_read(
     note_id: Annotated[str, Field(description="Note id from notes_search, e.g. note:12")],
-    ctx: Context = None,
+    ctx: Context | None = None,
 ) -> str:
     """Read one note including its full content."""
     clients = deps.resolve_clients(ctx)
@@ -45,7 +45,7 @@ async def notes_create(
     title: Annotated[str, Field(description="Title of the new note")],
     content: Annotated[str, Field(description="Note text, Markdown is supported")],
     category: Annotated[str | None, Field(description="Optional category folder")] = None,
-    ctx: Context = None,
+    ctx: Context | None = None,
 ) -> str:
     """Create a note; the returned title is the one the server stored, never overwrites."""
     clients = deps.resolve_clients(ctx)

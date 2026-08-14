@@ -54,8 +54,10 @@ _URI_HINT = (
 
 _NO_CALENDAR = (
     "No calendar found for this account.",
-    "Open the Calendar app once in the Nextcloud web interface, or ask an administrator "
-    "to run 'occ dav:create-calendar <user> personal'.",
+    (
+        "Open the Calendar app once in the Nextcloud web interface, or ask an administrator "
+        "to run 'occ dav:create-calendar <user> personal'."
+    ),
 )
 
 _COMPONENT_EVENT = "VEVENT"
@@ -138,12 +140,12 @@ def build_calendar_query(start: datetime, end: datetime) -> bytes:
     prop = etree.SubElement(root, f"{{{xml.DAV}}}prop")
     etree.SubElement(prop, f"{{{xml.DAV}}}getetag")
     calendar_data = etree.SubElement(prop, f"{{{xml.CAL}}}calendar-data")
-    etree.SubElement(calendar_data, f"{{{xml.CAL}}}expand", **window)
+    etree.SubElement(calendar_data, f"{{{xml.CAL}}}expand", attrib=window)
 
     filter_element = etree.SubElement(root, f"{{{xml.CAL}}}filter")
     vcalendar = etree.SubElement(filter_element, f"{{{xml.CAL}}}comp-filter", name="VCALENDAR")
     vevent = etree.SubElement(vcalendar, f"{{{xml.CAL}}}comp-filter", name=_COMPONENT_EVENT)
-    etree.SubElement(vevent, f"{{{xml.CAL}}}time-range", **window)
+    etree.SubElement(vevent, f"{{{xml.CAL}}}time-range", attrib=window)
 
     return etree.tostring(root, xml_declaration=True, encoding="utf-8")
 

@@ -63,7 +63,7 @@ def main(argv: list[str]) -> int:
         return 2
     try:
         return anyio.run(check, argv[1])
-    except Exception as exc:  # noqa: BLE001 - a check script reports, it does not raise
+    except Exception as exc:
         print(f"modern client failed: {describe(exc)}", file=sys.stderr)
         return 1
 

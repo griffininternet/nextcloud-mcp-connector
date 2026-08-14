@@ -32,6 +32,7 @@ import httpx2
 import pytest
 from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
+from mcp.types import TextContent
 
 pytestmark = [pytest.mark.integration, pytest.mark.anyio]
 
@@ -60,7 +61,7 @@ def live(live_env: dict[str, str | None]) -> dict[str, str]:
 def server(live: dict[str, str]) -> Iterator[str]:
     """A uvicorn subprocess in passthrough mode, pointed at the test Nextcloud."""
     port = free_port()
-    env = {key: value for key, value in os.environ.items()}
+    env = dict(os.environ.items())
     # The point of the test: the process itself has no Nextcloud account.
     env.pop("NC_MCP_USER", None)
     env.pop("NC_MCP_APP_PASSWORD", None)
@@ -116,12 +117,12 @@ def server(live: dict[str, str]) -> Iterator[str]:
 async def call_tool(url: str, authorization: str | None, name: str, arguments: dict) -> str:
     """Call one tool over Streamable HTTP and return the text of the answer."""
     headers = {"Authorization": authorization} if authorization else {}
-    async with httpx2.AsyncClient(
-        headers=headers, timeout=httpx2.Timeout(30.0, read=120.0)
-    ) as http:
-        async with Client(streamable_http_client(url, http_client=http)) as client:
-            result = await client.call_tool(name, arguments)
-    texts = [block.text for block in result.content if getattr(block, "text", None)]
+    async with (
+        httpx2.AsyncClient(headers=headers, timeout=httpx2.Timeout(30.0, read=120.0)) as http,
+        Client(streamable_http_client(url, http_client=http)) as client,
+    ):
+        result = await client.call_tool(name, arguments)
+    texts = [b.text for b in result.content if isinstance(b, TextContent) and b.text]
     joined = "\n".join(texts)
     if result.is_error:
         raise AssertionError(f"tool error: {joined}")
@@ -141,7 +142,7 @@ async def call_tool_error(url: str, authorization: str | None, name: str, argume
         answer = await call_tool(url, authorization, name, arguments)
     except AssertionError as exc:
         return str(exc)
-    except Exception as exc:  # noqa: BLE001 - the transport error is the subject here
+    except Exception as exc:
         return describe(exc)
     raise AssertionError(f"expected a failure, got: {answer}")
 

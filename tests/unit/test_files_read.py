@@ -189,9 +189,8 @@ async def test_offset_beyond_the_end_is_rejected(clients: NcClients) -> None:
 
 @pytest.mark.anyio
 async def test_max_bytes_above_the_hard_ceiling_is_rejected(clients: NcClients) -> None:
-    with respx.mock:
-        with pytest.raises(ToolError) as excinfo:
-            await files_tools.read(clients, path="/Docs/notes.md", max_bytes=5_000_000)
+    with respx.mock, pytest.raises(ToolError) as excinfo:
+        await files_tools.read(clients, path="/Docs/notes.md", max_bytes=5_000_000)
     assert str(files_tools.HARD_MAX_BYTES) in excinfo.value.message
 
 

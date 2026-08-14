@@ -16,6 +16,7 @@ dependencies = [
     "icalendar>=7.2,<8",
     "vobject>=0.9.9,<1",
     "pydantic>=2.12,<3",
+    "tzdata>=2025.2",
 ]
 
 [project.scripts]
@@ -48,7 +49,23 @@ target-version = "py313"
 exclude = [".planning"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+select = ["E", "F", "I", "UP", "B", "S", "SIM", "C4", "RUF", "PT", "ASYNC", "RET", "A", "ISC"]
+# ISC001 clashes with the formatter (implicit string concatenation on one line).
+ignore = ["ISC001"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests use bare asserts (pytest) and throwaway credentials on purpose.
+"tests/**" = ["S101", "S105", "S106"]
+
+[tool.pyright]
+include = ["src", "scripts", "tests"]
+# The legacy client check runs in its own environment with mcp 1.29; checking it
+# against the installed mcp 2.x produces false import errors.
+exclude = ["tests/compat/legacy_client_check.py"]
+typeCheckingMode = "standard"
+pythonVersion = "3.13"
+venvPath = "."
+venv = ".venv"
 
 [tool.ruff.lint.isort]
 # Without this, `mcp_connector` is grouped with the third-party `mcp` package,
@@ -57,7 +74,10 @@ known-first-party = ["mcp_connector"]
 
 [dependency-groups]
 dev = [
+    "lxml-stubs>=0.5.1",
+    "pyright>=1.1.411",
     "pytest>=9.1.1",
     "respx>=0.23.1",
     "ruff>=0.16.3",
+    "vulture>=2.16",
 ]

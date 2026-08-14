@@ -62,8 +62,10 @@ _URI_HINT = (
 
 _NO_ADDRESSBOOK = (
     "No address book found for this account.",
-    "Open the Contacts app once in the Nextcloud web interface, or ask an administrator "
-    "to run 'occ dav:create-addressbook <user> contacts'.",
+    (
+        "Open the Contacts app once in the Nextcloud web interface, or ask an administrator "
+        "to run 'occ dav:create-addressbook <user> contacts'."
+    ),
 )
 
 _TERM_HINT = "Give at least one word, for example a last name or a part of a mail address."
@@ -151,8 +153,7 @@ def build_addressbook_query(term: str, limit: int) -> bytes:
         match = etree.SubElement(
             prop_filter,
             f"{{{xml.CARD}}}text-match",
-            collation=COLLATION,
-            **{"match-type": "contains"},
+            attrib={"collation": COLLATION, "match-type": "contains"},
         )
         match.text = needle
 

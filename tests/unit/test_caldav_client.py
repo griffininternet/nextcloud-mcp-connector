@@ -87,7 +87,7 @@ def test_to_caldav_utc_returns_the_icalendar_utc_form() -> None:
 
 def test_to_caldav_utc_refuses_a_naive_datetime() -> None:
     """A naive datetime has no instant, and guessing one is how events move by hours."""
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="timezone aware"):
         caldav.to_caldav_utc(datetime(2026, 9, 15, 14, 0))
 
 

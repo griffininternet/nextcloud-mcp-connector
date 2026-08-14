@@ -26,7 +26,7 @@ from .nextcloud.credentials import Credentials
 
 ENV_URL = "NC_MCP_URL"
 ENV_USER = "NC_MCP_USER"
-ENV_APP_PASSWORD = "NC_MCP_APP_PASSWORD"
+ENV_APP_PASSWORD = "NC_MCP_APP_PASSWORD"  # noqa: S105 - the env var name, not a secret
 
 ENV_ALLOWED_HOSTS = "NC_MCP_ALLOWED_HOSTS"
 ENV_STATIC_BEARER = "NC_MCP_STATIC_BEARER"
