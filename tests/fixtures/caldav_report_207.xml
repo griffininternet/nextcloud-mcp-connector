@@ -1,0 +1,79 @@
+<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/remote.php/dav/calendars/alice/personal/berlin-meeting.ics</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:getetag>&quot;9a1b2c3d&quot;</d:getetag>
+        <cal:calendar-data>BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Sabre//Sabre VObject 4.5.6//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+UID:berlin-meeting-uid
+DTSTAMP:20260901T101500Z
+DTSTART:20260915T120000Z
+DTEND:20260915T130000Z
+SUMMARY:Projektbesprechung
+LOCATION:Hamburg, Stra&#223;e 1
+END:VEVENT
+END:VCALENDAR
+</cal:calendar-data>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/remote.php/dav/calendars/alice/personal/weekly-standup.ics</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:getetag>&quot;44ff0011&quot;</d:getetag>
+        <cal:calendar-data>BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Sabre//Sabre VObject 4.5.6//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+UID:weekly-standup-uid
+DTSTAMP:20260901T101500Z
+DTSTART:20261019T070000Z
+DTEND:20261019T071500Z
+RECURRENCE-ID:20261019T070000Z
+SUMMARY:Standup
+END:VEVENT
+BEGIN:VEVENT
+UID:weekly-standup-uid
+DTSTAMP:20260901T101500Z
+DTSTART:20261026T080000Z
+DTEND:20261026T081500Z
+RECURRENCE-ID:20261026T080000Z
+SUMMARY:Standup
+END:VEVENT
+END:VCALENDAR
+</cal:calendar-data>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/remote.php/dav/calendars/alice/personal/betriebsausflug.ics</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:getetag>&quot;77aa88bb&quot;</d:getetag>
+        <cal:calendar-data>BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Sabre//Sabre VObject 4.5.6//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+UID:betriebsausflug-uid
+DTSTAMP:20260901T101500Z
+DTSTART;VALUE=DATE:20261024
+DTEND;VALUE=DATE:20261025
+SUMMARY:Betriebsausflug
+END:VEVENT
+END:VCALENDAR
+</cal:calendar-data>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+</d:multistatus>
