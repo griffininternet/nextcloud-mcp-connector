@@ -143,7 +143,9 @@ def _check_transport(response: httpx.Response, what: str) -> None:
             message="Nextcloud is rate limiting this server.",
             hint="Wait about a minute before the next call; do not repeat it immediately.",
         )
-    if status >= 500:
+    if status >= 500 and status != 507:
+        # 507 is not a server fault but a full account, and its body carries the app's own
+        # wording, so it belongs to the status mapping below and not into this branch.
         raise ToolError(
             message=f"Nextcloud reported a server error ({status}) while reading {what}.",
             hint="This is a problem on the Nextcloud side. Retry later or check its log.",

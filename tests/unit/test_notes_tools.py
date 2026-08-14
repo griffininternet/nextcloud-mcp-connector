@@ -82,7 +82,8 @@ def mock_capabilities(mock: respx.MockRouter, *, notes: dict | None = NOTES_INST
 @pytest.mark.anyio
 async def test_search_returns_id_title_excerpt_and_url(clients: NcClients) -> None:
     """One request to the unified search provider, no second round trip per hit."""
-    with respx.mock(assert_all_called=True) as mock:
+    # assert_all_called stays off: the notes route below is a guard that must never fire.
+    with respx.mock(assert_all_called=False) as mock:
         mock_capabilities(mock)
         search = mock.get(SEARCH_URL).mock(
             return_value=httpx.Response(200, json=fixture("ocs_search_notes.json"))
@@ -91,6 +92,7 @@ async def test_search_returns_id_title_excerpt_and_url(clients: NcClients) -> No
 
         result = await notes_tools.search(clients, query="protokoll")
 
+    assert search.call_count == 1
     assert notes_api.call_count == 0, "the search must not read every hit a second time"
     assert result["count"] == 2
     assert result["results"][0] == {
