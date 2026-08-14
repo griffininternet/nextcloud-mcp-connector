@@ -20,6 +20,8 @@ BASE = "http://nc.test"
 USER = "alice"
 SECRET = "app-password-test"
 FILES_ROOT = f"{BASE}/remote.php/dav/files/{USER}"
+#: PROPFIND on the home itself keeps the trailing slash of the collection URL.
+ROOT_URL = f"{FILES_ROOT}/"
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 PROPFIND_207 = (FIXTURES / "webdav_propfind_207.xml").read_text(encoding="utf-8")
@@ -103,7 +105,7 @@ async def test_list_returns_the_children_without_the_folder_itself(clients: NcCl
 @pytest.mark.anyio
 async def test_listing_the_root_folder_works(clients: NcClients) -> None:
     with respx.mock as mock:
-        route = mock.route(method="PROPFIND", url=FILES_ROOT).mock(
+        route = mock.route(method="PROPFIND", url=ROOT_URL).mock(
             return_value=httpx.Response(207, text=_folder_207(3))
         )
         result = await files_tools.list_dir(clients, path="/")
@@ -116,7 +118,7 @@ async def test_listing_the_root_folder_works(clients: NcClients) -> None:
 @pytest.mark.anyio
 async def test_an_empty_folder_is_an_empty_list_and_not_an_error(clients: NcClients) -> None:
     with respx.mock as mock:
-        mock.route(method="PROPFIND", url=FILES_ROOT).mock(
+        mock.route(method="PROPFIND", url=ROOT_URL).mock(
             return_value=httpx.Response(207, text=_folder_207(0))
         )
         result = await files_tools.list_dir(clients, path="/")
@@ -154,7 +156,7 @@ async def test_a_file_path_is_explained_instead_of_listed(clients: NcClients) ->
 @pytest.mark.anyio
 async def test_a_truncated_listing_continues_with_its_handle(clients: NcClients) -> None:
     with respx.mock as mock:
-        mock.route(method="PROPFIND", url=FILES_ROOT).mock(
+        mock.route(method="PROPFIND", url=ROOT_URL).mock(
             return_value=httpx.Response(207, text=_folder_207(25))
         )
         first = await files_tools.list_dir(clients, path="/", limit=10)
@@ -172,7 +174,7 @@ async def test_a_truncated_listing_continues_with_its_handle(clients: NcClients)
 @pytest.mark.anyio
 async def test_a_limit_above_the_maximum_is_capped(clients: NcClients) -> None:
     with respx.mock as mock:
-        mock.route(method="PROPFIND", url=FILES_ROOT).mock(
+        mock.route(method="PROPFIND", url=ROOT_URL).mock(
             return_value=httpx.Response(207, text=_folder_207(3))
         )
         result = await files_tools.list_dir(clients, path="/", limit=99_999)
@@ -227,7 +229,7 @@ async def test_a_forbidden_folder_reports_a_permission_hint(clients: NcClients) 
 @pytest.mark.anyio
 async def test_a_server_error_is_reported_without_the_body(clients: NcClients) -> None:
     with respx.mock as mock:
-        mock.route(method="PROPFIND", url=FILES_ROOT).mock(
+        mock.route(method="PROPFIND", url=ROOT_URL).mock(
             return_value=httpx.Response(500, text="<html>stack trace</html>")
         )
         with pytest.raises(ToolError) as excinfo:

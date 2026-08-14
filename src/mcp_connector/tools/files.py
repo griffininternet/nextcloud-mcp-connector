@@ -1,22 +1,51 @@
-"""File tools: reading text files and creating new ones.
+"""File tools: finding, browsing and reading text files, and creating new ones.
 
 Three guards protect the model's context window and the user's data (threat T-01-13):
 the path guard runs before any request, the mimetype check refuses binary content instead
 of shipping base64, and the size cap turns a large file into a marked slice with a
 ``next_offset`` instead of a multi-megabyte answer.
 
+The two list tools add a fourth: every answer that had to stop early says so with
+``truncated`` and hands out a cursor handle, so a folder with ten thousand entries costs
+one page, not one context window (threat T-01-34).
+
 ``upload`` is the only write in this package, and it can only create. Everything that
 could turn it into a replace is refused before the request or by Nextcloud itself.
 """
 
 import re
+from typing import Any
 
+from .. import ids, paging
 from ..errors import ToolError
 from ..nextcloud import NcClients
 from ..nextcloud.clients import dav
 
 DEFAULT_MAX_BYTES = 512 * 1024
 HARD_MAX_BYTES = 2 * 1024 * 1024
+
+DEFAULT_SEARCH_LIMIT = 25
+#: Nextcloud's own default cap for a search without an explicit limit. Going past it would
+#: only make an answer longer, not more useful.
+MAX_SEARCH_LIMIT = 100
+
+DEFAULT_LIST_LIMIT = 100
+MAX_LIST_LIMIT = 200
+
+#: Ceiling for the number of hits fetched to serve one page. WebDAV SEARCH knows a limit
+#: but no offset, so a later page is served by asking for more results and slicing. This
+#: keeps that trick from turning into an unbounded request on page four hundred.
+MAX_SEARCH_FETCH = 500
+
+#: One sentence against a whole class of wrong model statements (pitfall 5). It rides on
+#: every answer, not only on the empty ones: a short hit list is exactly the situation in
+#: which a model concludes "the document does not exist".
+SEARCH_NOTE = "matched on names only; contents are not indexed"
+
+_QUERY_HINT = (
+    "Give part of a file or folder name, for example 'budget'. "
+    "Words that only appear inside a document are not indexed."
+)
 
 _TEXT_TYPES = frozenset(
     {
@@ -45,6 +74,118 @@ _FILE_TARGET_HINT = (
     "Give the full path of the new file, for example /Docs/meeting-notes.md. "
     "This tool writes files; it does not create folders."
 )
+
+
+async def search(
+    clients: NcClients,
+    query: str,
+    folder: str = "/",
+    limit: int = DEFAULT_SEARCH_LIMIT,
+    cursor: str | None = None,
+) -> dict[str, Any]:
+    """Search file and folder names below ``folder`` and return a compact hit list.
+
+    The hits keep the order Nextcloud returns them in. That is deliberate: a later page is
+    fetched by asking the server for more results and skipping the ones already seen, and
+    re-sorting a partial result would make page two repeat entries from page one.
+
+    A limit outside the range is capped instead of refused. The model asked a legitimate
+    question with an unhelpful number, and an error would only cost a round trip.
+    """
+    term = (query or "").strip()
+    if not term:
+        raise ToolError(message="The search term is empty.", hint=_QUERY_HINT)
+
+    target_folder = dav.safe_path(folder)
+    capped = min(max(limit, 1), MAX_SEARCH_LIMIT)
+
+    offset = 0
+    if cursor:
+        state = paging.decode_cursor(cursor)
+        paging.check_scope(state, "q", term, "search")
+        paging.check_scope(state, "f", target_folder, "search")
+        offset = paging.read_offset(state)
+
+    scope = dav.search_scope(clients.creds, target_folder)
+    # One more than the window, so "there is more" is an observation and not a guess.
+    fetch = min(offset + capped + 1, MAX_SEARCH_FETCH)
+    hits = await dav.search(clients.client, clients.creds, scope, term, fetch)
+
+    window = hits[offset : offset + capped]
+    result: dict[str, Any] = {
+        "query": term,
+        "folder": target_folder,
+        "count": len(window),
+        "items": [_as_item(hit) for hit in window],
+        "note": SEARCH_NOTE,
+    }
+    if len(hits) > offset + capped:
+        result["truncated"] = True
+        result["next"] = paging.encode_cursor({"o": offset + capped, "q": term, "f": target_folder})
+    return result
+
+
+async def list_dir(
+    clients: NcClients,
+    path: str = "/",
+    limit: int = DEFAULT_LIST_LIMIT,
+    cursor: str | None = None,
+) -> dict[str, Any]:
+    """List the direct children of one folder, folders first and then names.
+
+    The order is fixed here rather than left to the server, because the pages of a listing
+    are cut out of it: an unstable order would silently drop or repeat entries between two
+    pages.
+    """
+    target = dav.safe_path(path)
+    capped = min(max(limit, 1), MAX_LIST_LIMIT)
+
+    offset = 0
+    if cursor:
+        state = paging.decode_cursor(cursor)
+        paging.check_scope(state, "p", target, "listing")
+        offset = paging.read_offset(state)
+
+    itself, children = await dav.propfind_children(clients.client, clients.creds, target)
+    if not itself["is_collection"]:
+        raise ToolError(
+            message=f"{target} is a file, not a folder.",
+            hint="Use files_read to read a file, or list the folder that contains it.",
+        )
+
+    children.sort(key=lambda entry: (not entry["is_collection"], entry["name"].casefold()))
+    window = children[offset : offset + capped]
+
+    result: dict[str, Any] = {
+        "path": target,
+        "count": len(window),
+        "items": [_as_item(child) for child in window],
+    }
+    if len(children) > offset + capped:
+        result["truncated"] = True
+        result["next"] = paging.encode_cursor({"o": offset + capped, "p": target})
+    return result
+
+
+def _as_item(entry: dict[str, Any]) -> dict[str, Any]:
+    """Project one DAV entry onto the answer shape, without the fields it does not have.
+
+    Every key is paid for in every hit of every answer, so an empty mimetype (folders have
+    none) is left out instead of shipped as an empty string.
+    """
+    item: dict[str, Any] = {
+        "path": entry["path"],
+        "name": entry["name"],
+        "kind": "folder" if entry["is_collection"] else "file",
+        "size": entry["size"],
+    }
+    if entry["content_type"]:
+        item["content_type"] = entry["content_type"]
+    if entry["last_modified"]:
+        item["modified"] = entry["last_modified"]
+    if entry["fileid"]:
+        item["id"] = ids.encode_file(entry["fileid"])
+    return item
 
 
 async def read(

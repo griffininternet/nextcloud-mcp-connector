@@ -16,6 +16,43 @@ from . import CREATE_ONLY, READ_ONLY, compact, graceful, mcp
 
 @mcp.tool(annotations=READ_ONLY, structured_output=False)
 @graceful
+async def files_search(
+    query: Annotated[str, Field(description="Part of a file or folder name, e.g. budget")],
+    folder: Annotated[str, Field(description="Folder to search in, e.g. /Docs")] = "/",
+    limit: Annotated[
+        int, Field(ge=1, le=files_tools.MAX_SEARCH_LIMIT, description="Maximum number of hits")
+    ] = files_tools.DEFAULT_SEARCH_LIMIT,
+    cursor: Annotated[str, Field(description="'next' value of the previous answer")] = "",
+    ctx: Context | None = None,
+) -> str:
+    """Search files and folders by name (matches names, not file contents)."""
+    clients = deps.resolve_clients(ctx)
+    return compact(
+        await files_tools.search(
+            clients, query=query, folder=folder, limit=limit, cursor=cursor or None
+        )
+    )
+
+
+@mcp.tool(annotations=READ_ONLY, structured_output=False)
+@graceful
+async def files_list(
+    path: Annotated[str, Field(description="Folder path, e.g. /Docs")] = "/",
+    limit: Annotated[
+        int, Field(ge=1, le=files_tools.MAX_LIST_LIMIT, description="Maximum number of entries")
+    ] = files_tools.DEFAULT_LIST_LIMIT,
+    cursor: Annotated[str, Field(description="'next' value of the previous answer")] = "",
+    ctx: Context | None = None,
+) -> str:
+    """List the direct children of a folder."""
+    clients = deps.resolve_clients(ctx)
+    return compact(
+        await files_tools.list_dir(clients, path=path, limit=limit, cursor=cursor or None)
+    )
+
+
+@mcp.tool(annotations=READ_ONLY, structured_output=False)
+@graceful
 async def files_read(
     path: Annotated[str, Field(description="Path inside the user's files, e.g. /Docs/notes.md")],
     offset: Annotated[int, Field(ge=0, description="Byte offset for a continued read")] = 0,
