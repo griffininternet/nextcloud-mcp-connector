@@ -1,8 +1,11 @@
-"""WebDAV client, read side only: PROPFIND with Depth 0 and GET with an optional Range.
+"""WebDAV client: PROPFIND with Depth 0, GET with an optional Range, and a create-only PUT.
 
-This module intentionally implements no write and no destructive request. The create-only
-upload (PUT with ``If-None-Match: *``) arrives in plan 03, and a grep test in the contract
-suite keeps every other HTTP method out of this file (TOOL-09).
+This module implements no destructive request. There is no DELETE, no MOVE, no COPY and no
+PROPPATCH, and the single write is a PUT that carries ``If-None-Match: *``. That header is
+the whole overwrite protection (TOOL-09, threat T-01-15): sabre/dav evaluates preconditions
+for every method, and ``*`` means the request only succeeds while nothing exists at the
+target. The check therefore runs on the server, inside the same request, which is why this
+client does no PROPFIND probe before the PUT: a probe would only add a race window.
 
 Status handling follows two rules from the research: never repeat a failed
 authentication (Nextcloud counts failures per source IP and slows down every user of the
@@ -10,13 +13,14 @@ server afterwards), and never let a redirect pass silently (the auth header woul
 foreign host or vanish).
 """
 
+from posixpath import dirname
 from urllib.parse import quote
 
 import httpx
 from lxml import etree
 
 from ... import config
-from ...errors import ToolError
+from ...errors import ConflictError, ToolError
 from ..credentials import Credentials
 from . import xml
 
@@ -141,6 +145,95 @@ async def get_range(
     )
     _check(response, target)
     return response.content
+
+
+async def put_new_file(
+    client: httpx.AsyncClient,
+    creds: Credentials,
+    path: str,
+    data: bytes,
+    content_type: str,
+) -> dict:
+    """PUT a file that must not exist yet and return path, etag and ``created``.
+
+    ``X-NC-WebDAV-AutoMkcol`` is deliberately not set: creating a missing parent folder is
+    a second write that is not part of the tool contract, and a silent one at that.
+    """
+    target = safe_path(path)
+    response = await client.put(
+        files_url(creds, target),
+        content=data,
+        headers={"If-None-Match": "*", "Content-Type": content_type},
+        auth=httpx.BasicAuth(creds.user, creds.secret),
+    )
+    _check_write(response, target)
+    return {
+        "path": target,
+        "etag": response.headers.get("etag", ""),
+        "created": True,
+    }
+
+
+def _check_write(response: httpx.Response, path: str) -> None:
+    """Translate the answer to a create-only PUT. 412 is the expected refusal, not a bug."""
+    status = response.status_code
+    if status == 201:
+        return
+    if status in (200, 204):
+        # sabre answers 204 when a PUT *replaced* an existing file. Reaching this line means
+        # the instance ignored the precondition, so the no-overwrite promise does not hold
+        # there. Say so loudly instead of reporting a successful create.
+        raise ToolError(
+            message=(
+                f"Nextcloud reports that the upload replaced an existing file at {path} "
+                f"(status {status})."
+            ),
+            hint=(
+                "This server sends If-None-Match: * and expects a refusal instead. Report "
+                "this instance: it does not honour the precondition."
+            ),
+        )
+    if status == 412:
+        raise ConflictError(
+            message=f"A file already exists at {path}.",
+            hint="This server never overwrites files. Choose a different name.",
+        )
+    if status == 403:
+        raise ToolError(
+            message=f"No permission to write to {path}.",
+            hint="Check the share permissions of the target folder in Nextcloud.",
+        )
+    if status in (404, 409):
+        parent = dirname(path) or "/"
+        raise ToolError(
+            message=f"The parent folder {parent} of {path} does not exist.",
+            hint="Create the folder in Nextcloud first, or upload into a folder that exists.",
+        )
+    if status == 405:
+        raise ToolError(
+            message=f"{path} cannot be written to; there is already a folder at that path.",
+            hint="Choose a file name that is free, for example inside that folder.",
+        )
+    if status == 413:
+        raise ToolError(
+            message=f"Nextcloud refused the upload of {path} as too large.",
+            hint="Split the content into smaller files.",
+        )
+    if status == 423:
+        raise ToolError(
+            message=f"{path} is locked in Nextcloud.",
+            hint="Wait until the other client releases the lock, or choose another name.",
+        )
+    if status == 507:
+        raise ToolError(
+            message=f"Not enough space in Nextcloud for {path}.",
+            hint="Free up quota in Nextcloud and try again.",
+        )
+    _check(response, path)
+    raise ToolError(
+        message=f"Nextcloud answered the upload of {path} with an unexpected status {status}.",
+        hint="Check the Nextcloud log for that request; the file was probably not created.",
+    )
 
 
 def _check(response: httpx.Response, path: str) -> None:

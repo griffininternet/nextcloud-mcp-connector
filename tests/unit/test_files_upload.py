@@ -73,8 +73,9 @@ async def test_upload_does_not_probe_the_target_first(clients: NcClients) -> Non
     with respx.mock as mock:
         mock.route(method="PUT", url=TARGET_URL).mock(return_value=httpx.Response(201))
         await files_tools.upload(clients, path=TARGET, content=CONTENT)
+        methods = [call.request.method for call in mock.calls]
 
-    assert [call.request.method for call in mock.calls] == ["PUT"]
+    assert methods == ["PUT"], "no PROPFIND probe: the guard is server side and race free"
 
 
 @pytest.mark.anyio
@@ -110,12 +111,13 @@ async def test_missing_parent_folder_is_reported_without_creating_it(clients: Nc
         put = mock.route(method="PUT", url=TARGET_URL).mock(return_value=httpx.Response(404))
         with pytest.raises(ToolError) as excinfo:
             await files_tools.upload(clients, path=TARGET, content=CONTENT)
+        methods = [call.request.method for call in mock.calls]
 
     assert "folder" in excinfo.value.message.lower()
     assert "/Docs" in excinfo.value.message
     headers = put.calls[0].request.headers
     assert "x-nc-webdav-automkcol" not in headers, "creating folders is not part of the contract"
-    assert [call.request.method for call in mock.calls] == ["PUT"], "no MKCOL, ever"
+    assert methods == ["PUT"], "no MKCOL, ever"
 
 
 @pytest.mark.anyio
@@ -211,6 +213,24 @@ async def test_the_caller_can_choose_the_content_type(clients: NcClients) -> Non
         )
 
     assert put.calls[0].request.headers["content-type"] == "application/json"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "content_type",
+    ["text/markdown\r\nX-Injected: 1", "text/markdown; charset=utf-8", "markdown", ""],
+)
+async def test_a_content_type_that_is_not_a_bare_mimetype_is_refused(
+    clients: NcClients, content_type: str
+) -> None:
+    with respx.mock as mock:
+        with pytest.raises(ToolError) as excinfo:
+            await files_tools.upload(
+                clients, path=TARGET, content=CONTENT, content_type=content_type
+            )
+        assert len(mock.calls) == 0, "a header value from the model never reaches httpx unchecked"
+
+    assert "mimetype" in excinfo.value.message.lower()
 
 
 @pytest.mark.anyio

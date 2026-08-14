@@ -1,10 +1,15 @@
-"""File tools. This plan delivers the read side of the walking skeleton.
+"""File tools: reading text files and creating new ones.
 
 Three guards protect the model's context window and the user's data (threat T-01-13):
 the path guard runs before any request, the mimetype check refuses binary content instead
 of shipping base64, and the size cap turns a large file into a marked slice with a
 ``next_offset`` instead of a multi-megabyte answer.
+
+``upload`` is the only write in this package, and it can only create. Everything that
+could turn it into a replace is refused before the request or by Nextcloud itself.
 """
+
+import re
 
 from ..errors import ToolError
 from ..nextcloud import NcClients
@@ -28,6 +33,17 @@ _TEXT_SUFFIXES = ("+json", "+xml", "+yaml")
 _SLICE_HINT = (
     "Read the file in slices: pass offset and max_bytes (at most "
     f"{HARD_MAX_BYTES} bytes) and continue at the next_offset from each answer."
+)
+
+DEFAULT_CONTENT_TYPE = "text/markdown"
+
+# type/subtype with the token characters of RFC 9110. No parameters, no whitespace, and
+# above all no control characters that could split the request header.
+_CONTENT_TYPE_RE = re.compile(r"^[A-Za-z0-9!#$%&'*+.^_`|~-]+/[A-Za-z0-9!#$%&'*+.^_`|~-]+$")
+
+_FILE_TARGET_HINT = (
+    "Give the full path of the new file, for example /Docs/meeting-notes.md. "
+    "This tool writes files; it does not create folders."
 )
 
 
@@ -107,6 +123,48 @@ async def read(
     if result["truncated"]:
         result["next_offset"] = offset + used
     return result
+
+
+async def upload(
+    clients: NcClients,
+    path: str,
+    content: str,
+    content_type: str = DEFAULT_CONTENT_TYPE,
+) -> dict:
+    """Create a new text file and return path, etag and ``created``.
+
+    There is no overwrite mode and no force flag, by design (D-03, TOOL-09). If something
+    already exists at the target, Nextcloud refuses the request and the caller gets a
+    conflict it can act on: pick another name.
+    """
+    if (path or "").strip().endswith("/"):
+        raise ToolError(
+            message=f"{path!r} names a folder, not a file.",
+            hint=_FILE_TARGET_HINT,
+        )
+
+    target = dav.safe_path(path)
+    if target == "/":
+        raise ToolError(
+            message="The upload target is the root folder, not a file.",
+            hint=_FILE_TARGET_HINT,
+        )
+
+    if not _CONTENT_TYPE_RE.match(content_type or ""):
+        raise ToolError(
+            message=f"{content_type!r} is not a plain mimetype.",
+            hint=f"Use a bare type/subtype such as {DEFAULT_CONTENT_TYPE} or text/plain.",
+        )
+
+    try:
+        data = content.encode("utf-8")
+    except UnicodeEncodeError:
+        raise ToolError(
+            message="The content is not valid UTF-8 text.",
+            hint="Send plain text; this tool does not upload binary content.",
+        ) from None
+
+    return await dav.put_new_file(clients.client, clients.creds, target, data, content_type)
 
 
 def _is_text(content_type: str) -> bool:

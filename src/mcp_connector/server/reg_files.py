@@ -11,7 +11,7 @@ from pydantic import Field
 
 from .. import deps
 from ..tools import files as files_tools
-from . import READ_ONLY, compact, graceful, mcp
+from . import CREATE_ONLY, READ_ONLY, compact, graceful, mcp
 
 
 @mcp.tool(annotations=READ_ONLY, structured_output=False)
@@ -24,3 +24,15 @@ async def files_read(
     """Read a text file from Nextcloud; large files come back truncated with a next offset."""
     clients = deps.resolve_clients(ctx)
     return compact(await files_tools.read(clients, path=path, offset=offset))
+
+
+@mcp.tool(annotations=CREATE_ONLY, structured_output=False)
+@graceful
+async def files_upload(
+    path: Annotated[str, Field(description="Target path; must not exist yet")],
+    content: Annotated[str, Field(description="UTF-8 text content")],
+    ctx: Context = None,
+) -> str:
+    """Create a new text file. Fails if the target already exists; never overwrites."""
+    clients = deps.resolve_clients(ctx)
+    return compact(await files_tools.upload(clients, path=path, content=content))
