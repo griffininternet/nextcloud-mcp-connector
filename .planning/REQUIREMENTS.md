@@ -10,14 +10,14 @@
 - [x] **SRV-01**: MCP-Client kann sich per Streamable HTTP verbinden (mcp>=2.0, bedient Session- und Stateless-Clients aus demselben Endpoint; Regressionstest gegen SDK>=1.28-Clients, Lehre aus context_agent#227)
 - [x] **SRV-02**: Nutzer kann denselben Server lokal per stdio betreiben (Entry-Point ohne ExApp, App-Passwort aus Env)
 - [ ] **SRV-03**: Tools tragen korrekte Annotationen (readOnlyHint/destructiveHint/idempotentHint/openWorldHint) und token-schlanke Schemas (Schema-Diät-Pattern aus InfraNode)
-- [ ] **SRV-04**: Tool-Aufrufe gegen nicht installierte Nextcloud-Apps liefern klare Fehlertexte statt Crashes (Graceful Degradation)
+- [x] **SRV-04**: Tool-Aufrufe gegen nicht installierte Nextcloud-Apps liefern klare Fehlertexte statt Crashes (Graceful Degradation)
 - [x] **SRV-05**: Kein In-Memory-Session-State in Tools (Pagination über Handles), Server ist multi-worker-fähig
 
 ### Werkzeuge (TOOL)
 
 - [ ] **TOOL-01**: Nutzer kann Dateien suchen, Ordner listen, Dateien lesen und neue Dateien hochladen (WebDAV; kein Überschreiben, kein Löschen)
 - [ ] **TOOL-02**: Nutzer kann Termine in einem Zeitraum abfragen und neue Termine anlegen (CalDAV; Timezone-Edge-Cases getestet, Lehren aus Platzhirsch-Bugs #538/#544/#782)
-- [ ] **TOOL-03**: Nutzer kann Notizen suchen, lesen und anlegen (Notes-REST)
+- [x] **TOOL-03**: Nutzer kann Notizen suchen, lesen und anlegen (Notes-REST)
 - [ ] **TOOL-04**: Nutzer kann Deck-Boards und Karten lesen und neue Karten anlegen (Deck-REST)
 - [ ] **TOOL-05**: Nutzer kann Kontakte suchen (CardDAV, lesend)
 - [ ] **TOOL-06**: Nutzer kann berechtigungstreu über die ganze Cloud suchen (Unified Search OCS, provider-parallel)
@@ -27,7 +27,7 @@
 
 ### Auth und Berechtigungen (AUTH)
 
-- [ ] **AUTH-01**: Nutzer kann sich mit App-Passwort verbinden (Bearer/Basic, für stdio und Remote)
+- [x] **AUTH-01**: Nutzer kann sich mit App-Passwort verbinden (Bearer/Basic, für stdio und Remote)
 - [ ] **AUTH-02**: Nutzer kann sich per Login Flow v2 onboarden (Browser-Login, Client sieht nie das echte Passwort)
 - [ ] **AUTH-03**: MCP-Client verbindet per OAuth 2.1 nach MCP-Authorization-Spec: Protected Resource Metadata (RFC 9728), Dynamic Client Registration, PKCE S256, Token-Widerruf
 - [ ] **AUTH-04**: Claude.ai-Connector und ChatGPT-Connector verbinden nachweislich plug-and-play gegen eine öffentliche Staging-Instanz (E2E-Erfolgskriterium)
@@ -83,17 +83,17 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SRV-01 | Phase 1 | Complete |
 | SRV-02 | Phase 1 | Complete |
 | SRV-03 | Phase 1 | Pending |
-| SRV-04 | Phase 1 | Pending |
+| SRV-04 | Phase 1 | Complete |
 | SRV-05 | Phase 1 | Complete |
 | TOOL-01 | Phase 1 | Pending |
 | TOOL-02 | Phase 1 | Pending |
-| TOOL-03 | Phase 1 | Pending |
+| TOOL-03 | Phase 1 | Complete |
 | TOOL-04 | Phase 1 | Pending |
 | TOOL-05 | Phase 1 | Pending |
 | TOOL-06 | Phase 1 | Pending |
 | TOOL-07 | Phase 1 | Pending |
 | TOOL-09 | Phase 1 | Pending |
-| AUTH-01 | Phase 1 | Pending |
+| AUTH-01 | Phase 1 | Complete |
 | EXAPP-03 | Phase 1 | Complete |
 | CONTRIB-01 | Phase 1 | Pending |
 | EXAPP-01 | Phase 2 | Pending |
