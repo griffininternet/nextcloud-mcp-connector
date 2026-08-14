@@ -172,6 +172,43 @@ async def test_the_last_page_is_not_marked_as_truncated(clients: NcClients) -> N
 
 
 @pytest.mark.anyio
+async def test_a_page_at_the_fetch_ceiling_is_marked_truncated_without_a_cursor(
+    clients: NcClients,
+) -> None:
+    """WR-02: a fetch clamped at MAX_SEARCH_FETCH that comes back full is not complete."""
+    cursor = encode_cursor({"o": 480, "q": "budget", "f": "/"})
+    with respx.mock as mock:
+        route = mock.route(method="SEARCH", url=SEARCH_URL).mock(
+            return_value=httpx.Response(207, text=_hits_207(files_tools.MAX_SEARCH_FETCH))
+        )
+        result = await files_tools.search(clients, query="budget", limit=25, cursor=cursor)
+
+    requested = route.calls[0].request.content
+    assert f"<d:nresults>{files_tools.MAX_SEARCH_FETCH}</d:nresults>".encode() in requested
+    assert result["count"] == 20, "the window past the ceiling holds only the clamped rest"
+    assert result["truncated"] is True
+    assert "next" not in result, "no cursor: a later page cannot be served past the ceiling"
+    assert files_tools.SEARCH_CAP_NOTE in result["note"]
+    assert "names only" in result["note"], "the cap note must not displace the names-only note"
+
+
+@pytest.mark.anyio
+async def test_a_short_answer_at_the_ceiling_window_stays_complete(clients: NcClients) -> None:
+    """The server returned fewer hits than the clamped fetch: the answer really is all."""
+    cursor = encode_cursor({"o": 480, "q": "budget", "f": "/"})
+    with respx.mock as mock:
+        mock.route(method="SEARCH", url=SEARCH_URL).mock(
+            return_value=httpx.Response(207, text=_hits_207(490))
+        )
+        result = await files_tools.search(clients, query="budget", limit=25, cursor=cursor)
+
+    assert result["count"] == 10
+    assert "truncated" not in result
+    assert "next" not in result
+    assert result["note"] == files_tools.SEARCH_NOTE
+
+
+@pytest.mark.anyio
 async def test_an_invalid_cursor_never_reaches_the_network(clients: NcClients) -> None:
     with respx.mock as mock:
         with pytest.raises(ToolError) as excinfo:

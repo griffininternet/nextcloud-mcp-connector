@@ -42,6 +42,10 @@ MAX_SEARCH_FETCH = 500
 #: which a model concludes "the document does not exist".
 SEARCH_NOTE = "matched on names only; contents are not indexed"
 
+#: Appended to the note when the answer stopped at :data:`MAX_SEARCH_FETCH`. Without it a
+#: capped answer would be indistinguishable from a complete one (WR-02).
+SEARCH_CAP_NOTE = f"result window capped at {MAX_SEARCH_FETCH} hits; narrow the folder or the term"
+
 _QUERY_HINT = (
     "Give part of a file or folder name, for example 'budget'. "
     "Words that only appear inside a document are not indexed."
@@ -122,6 +126,12 @@ async def search(
     if len(hits) > offset + capped:
         result["truncated"] = True
         result["next"] = paging.encode_cursor({"o": offset + capped, "q": term, "f": target_folder})
+    elif offset + capped + 1 > MAX_SEARCH_FETCH and len(hits) == MAX_SEARCH_FETCH:
+        # The sentinel row could not be requested: the fetch was clamped at the ceiling
+        # and the server filled it completely, so more hits may exist. No cursor here,
+        # because a later page cannot be served past the ceiling (WR-02).
+        result["truncated"] = True
+        result["note"] = f"{SEARCH_NOTE}; {SEARCH_CAP_NOTE}"
     return result
 
 
