@@ -1,0 +1,51 @@
+{
+  "ocs": {
+    "meta": { "status": "ok", "statuscode": 200, "message": "OK" },
+    "data": [
+      {
+        "id": "files",
+        "appId": "files",
+        "name": "Files",
+        "icon": "",
+        "order": 5,
+        "isExternalProvider": false,
+        "triggers": [],
+        "filters": { "term": "string", "since": "datetime" },
+        "inAppSearch": false
+      },
+      {
+        "id": "notes",
+        "appId": "notes",
+        "name": "Notes",
+        "icon": "icon-notes",
+        "order": 10,
+        "isExternalProvider": false,
+        "triggers": [],
+        "filters": { "term": "string" },
+        "inAppSearch": false
+      },
+      {
+        "id": "search-deck-card-board",
+        "appId": "deck",
+        "name": "Deck",
+        "icon": "icon-deck",
+        "order": 20,
+        "isExternalProvider": false,
+        "triggers": [],
+        "filters": { "term": "string" },
+        "inAppSearch": false
+      },
+      {
+        "id": "spreed",
+        "appId": "spreed",
+        "name": "Talk-Nachrichten",
+        "icon": "icon-talk",
+        "order": 30,
+        "isExternalProvider": false,
+        "triggers": [],
+        "filters": { "term": "string" },
+        "inAppSearch": false
+      }
+    ]
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "ocs": {
+    "meta": { "status": "ok", "statuscode": 200, "message": "OK" },
+    "data": {
+      "name": "Dateien",
+      "isPaginated": true,
+      "entries": [
+        {
+          "thumbnailUrl": "",
+          "title": "Budget 2026.md",
+          "subline": "in Dokumente",
+          "resourceUrl": "http://nc.test/index.php/f/4711",
+          "icon": "icon-filetype-text",
+          "rounded": false,
+          "attributes": {
+            "fileId": "4711",
+            "path": "Dokumente/Budget 2026.md"
+          }
+        },
+        {
+          "thumbnailUrl": "",
+          "title": "Budgetplan Straßenbau.ods",
+          "subline": "in Tabellen",
+          "resourceUrl": "http://nc.test/index.php/f/4712",
+          "icon": "icon-filetype-spreadsheet",
+          "rounded": false,
+          "attributes": []
+        }
+      ],
+      "cursor": 25
+    }
+  }
+}
