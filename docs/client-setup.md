@@ -1,0 +1,227 @@
+# Client setup
+
+Two ways to connect an assistant to your Nextcloud with this server:
+
+| Transport | Who it is for | Credentials |
+|-----------|---------------|-------------|
+| **stdio** | One person, one machine. Claude Desktop, Claude Code, Cursor and every other client that starts a local process. | App password from the environment |
+| **Streamable HTTP** | A shared or remote deployment. One process can serve several people. | App password per request, in the `Authorization` header |
+
+Both speak the same 15 tools. The only difference is where the credentials come from.
+
+This page covers the two transports that were verified in phase 1. The full client matrix
+(ChatGPT, Cursor, Open WebUI, MUCGPT) follows in a later phase.
+
+## Before you start: get an app password
+
+Never use your login password. In Nextcloud, open **Settings, Security, Devices and
+sessions**, enter a name such as `mcp`, and press **Create new app password**. Nextcloud
+shows the value once. It looks like `xxxxx-xxxxx-xxxxx-xxxxx-xxxxx`.
+
+An app password can be revoked on that same page without touching your account, and it is
+the only credential this server ever accepts. Two factor authentication stays intact,
+because an app password bypasses the second factor by design and only for this one token.
+
+## stdio
+
+### Install
+
+```bash
+uv tool install nextcloud-mcp-connector
+```
+
+This puts the `nc-mcp` command on your PATH. Check it before you configure any client:
+
+```bash
+export NC_MCP_URL=https://cloud.example.com
+export NC_MCP_USER=alice
+export NC_MCP_APP_PASSWORD=xxxxx-xxxxx-xxxxx-xxxxx-xxxxx
+
+nc-mcp
+```
+
+A working server prints nothing and waits on stdin. That silence is correct: stdio is a
+pipe protocol, not a console application. Press Ctrl+C to stop it. If the command exits
+immediately with an error instead, the message names the variable that is missing or the
+URL that could not be reached.
+
+### Claude Desktop
+
+Edit `claude_desktop_config.json`:
+
+* macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+* Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+* Linux: `~/.config/Claude/claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "nextcloud": {
+      "command": "nc-mcp",
+      "env": {
+        "NC_MCP_URL": "https://cloud.example.com",
+        "NC_MCP_USER": "alice",
+        "NC_MCP_APP_PASSWORD": "xxxxx-xxxxx-xxxxx-xxxxx-xxxxx"
+      }
+    }
+  }
+}
+```
+
+Restart Claude Desktop completely, not just the window. The 15 tools then appear in the
+tools menu of a new conversation.
+
+If `nc-mcp` is not found, the desktop app does not see your shell PATH. Use the absolute
+path instead, for example `"command": "/home/alice/.local/bin/nc-mcp"`, or point at the
+checkout with `"command": "uv"` and
+`"args": ["run", "--directory", "/path/to/nextcloud-mcp-connector", "nc-mcp"]`.
+
+### Claude Code
+
+```bash
+claude mcp add nextcloud \
+  --env NC_MCP_URL=https://cloud.example.com \
+  --env NC_MCP_USER=alice \
+  --env NC_MCP_APP_PASSWORD=xxxxx-xxxxx-xxxxx-xxxxx-xxxxx \
+  -- nc-mcp
+```
+
+Verify with `claude mcp list`. The entry has to say `connected`.
+
+### What stdio does not do
+
+stdio has no request headers, so it has no place to put an `Authorization` value. The
+security boundary of this mode is the process that starts the server: whoever can start
+`nc-mcp` can use the credentials in its environment. That is the right model for your own
+laptop and the wrong one for a shared machine. Use HTTP there.
+
+## Streamable HTTP
+
+### Start the server
+
+```bash
+export NC_MCP_URL=https://cloud.example.com
+export NC_MCP_ALLOWED_HOSTS=mcp.example.com
+uv run uvicorn mcp_connector.entry_http:app --host 127.0.0.1 --port 8765
+```
+
+The MCP endpoint is `POST /mcp`. `GET /health` answers `{"status":"ok","version":"..."}`
+without authentication, which is what a reverse proxy or a container health check should
+poll.
+
+Note what is missing from that block: no `NC_MCP_USER` and no `NC_MCP_APP_PASSWORD`. In
+this mode the server holds no Nextcloud account of its own. The target Nextcloud, however,
+always comes from `NC_MCP_URL` and never from the request, because a client that could
+choose the target could point this server and its credentials at a host of its choosing.
+
+### Credentials per request (Basic passthrough)
+
+Every request carries the user's own app password in an ordinary Basic header:
+
+```
+Authorization: Basic base64(alice:xxxxx-xxxxx-xxxxx-xxxxx-xxxxx)
+```
+
+The server forwards it to Nextcloud unchanged and lets Nextcloud decide. It stores nothing,
+caches no credential and never treats the header as an identity claim of its own, so one
+deployment can serve several people without a token store. Every client that lets you add a
+header to a remote MCP server works with this. In Claude Code:
+
+```bash
+claude mcp add --transport http nextcloud https://mcp.example.com/mcp \
+  --header "Authorization: Basic $(printf 'alice:xxxxx-xxxxx-xxxxx-xxxxx-xxxxx' | base64)"
+```
+
+Put the deployment behind TLS. Basic is base64, not encryption, and a proxy on the way sees
+the password in plain text otherwise.
+
+### Single user alternative: a static bearer
+
+If exactly one person uses the deployment, a fixed token is simpler than a Basic header per
+request:
+
+```bash
+export NC_MCP_URL=https://cloud.example.com
+export NC_MCP_USER=alice
+export NC_MCP_APP_PASSWORD=xxxxx-xxxxx-xxxxx-xxxxx-xxxxx
+export NC_MCP_STATIC_BEARER=a-long-random-string
+export NC_MCP_PUBLIC_URL=https://mcp.example.com
+export NC_MCP_ALLOWED_HOSTS=mcp.example.com
+uv run uvicorn mcp_connector.entry_http:app --host 0.0.0.0 --port 8765
+```
+
+Clients then send `Authorization: Bearer a-long-random-string`. The bearer authenticates
+the caller of this server; it does not select a Nextcloud user. The account comes from the
+environment, exactly as in stdio mode. The two HTTP modes are mutually exclusive, and
+starting the server with both configured is an error rather than a silent preference.
+
+### Host allow list
+
+`NC_MCP_ALLOWED_HOSTS` is a comma separated list of the `Host` headers this server accepts.
+It is not the bind address. `--host 0.0.0.0` lets the socket listen everywhere and still
+allows nobody in, because the allow list is checked separately.
+
+Each bare name is expanded into two entries, `example.com` and `example.com:*`, because a
+client that was given a port puts the port into the `Host` header. A name that already
+carries a port or a wildcard is taken exactly as written.
+
+Without the variable, only `127.0.0.1`, `localhost` and `[::1]` are accepted.
+
+Behind a reverse proxy that rewrites `Host` itself, and only there, the check can be turned
+off with `NC_MCP_DISABLE_DNS_REBINDING_PROTECTION=true`.
+
+## Three things that will go wrong
+
+### 1. `421 Misdirected Request`
+
+Symptom: the client cannot connect at all, and the server log shows a 421 before any MCP
+message. `curl` against `/health` from the same host works.
+
+Cause: the `Host` header of the request is not in the allow list. This check runs in the
+transport layer, before any code of this server, so there is no friendly error message.
+
+Fix: set `NC_MCP_ALLOWED_HOSTS` to the name the client actually uses, including the port if
+the client was given one. Verify from outside:
+
+```bash
+curl -i -H 'Host: mcp.example.com' http://127.0.0.1:8765/health
+```
+
+### 2. `Session terminated` or a client that reconnects in a loop
+
+Symptom: an older client connects, works for one call and then reports a terminated
+session, or reconnects on every message.
+
+Cause: this server is stateless by design, and it keeps no session between requests. That
+is what makes a restart survivable, and it is what some clients built against the 2025 spec
+do not expect. It is also the exact bug behind `nextcloud/context_agent#227`.
+
+Fix: update the client, or use stdio. Do not work around it by adding session state to the
+server: a session store would break the restart guarantee for everyone. If the client is
+based on the MCP SDK 1.x, note that both protocol generations are served from the same
+endpoint, so an up to date SDK 1.x client works too.
+
+### 3. `429 Too Many Requests` after a wrong app password
+
+Symptom: you fixed the password, and the server still answers with an error. A minute later
+it works again.
+
+Cause: Nextcloud counts failed logins per source IP and throttles that IP with an
+increasing delay. A remote MCP server is a single IP for all of its users, so a handful of
+wrong attempts can slow down everybody behind it.
+
+Fix: wait, then retry with the correct app password. Create a fresh one instead of guessing.
+On a server you control, an administrator can list and clear the entries with
+`occ security:bruteforce:attempts` and `occ security:bruteforce:reset <ip>`. Do not disable
+the protection on a production instance.
+
+## Checking that it works
+
+Ask the assistant for something that needs exactly one tool, for example "list the files in
+the root of my Nextcloud". A correct answer means credentials, transport and permissions are
+all in place. If the assistant answers with a plausible but invented list, the tool was not
+called at all: check the tool list in the client first.
+
+Remember what the tools cannot do. Nothing here deletes, overwrites, moves or re-shares
+anything, and `files_search` matches names, not the text inside documents. See the
+"What this server cannot do" section of the [README](../README.md).

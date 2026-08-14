@@ -22,8 +22,12 @@ License: AGPL-3.0-or-later. App id, package names and repository name are frozen
 
 ## Status
 
-Version 0.1.0, phase 1 (server core) in progress. The tool table below is the v1 tool set. Tools
-land one plan at a time and the table is verified against the live tool registry before release.
+Version 0.1.0, phase 1 (server core). All 15 tools of the v1 set are implemented, and the tool
+table below is no longer maintained by hand: a contract test reads the live tool registry and
+fails if a name or a permission level in the table disagrees with it.
+
+Step by step setup for Claude Desktop, Claude Code and remote HTTP clients, including the three
+errors that actually happen: **[docs/client-setup.md](docs/client-setup.md)**.
 
 ## Quickstart (stdio)
 
@@ -284,6 +288,22 @@ CalDAV and CardDAV are part of the Nextcloud core.
   installed and configured. Without it, file search matches names and metadata.
 - **No background jobs, no sync, no local copy of your data.** Every call goes to your Nextcloud
   and returns.
+
+## Known limitations
+
+Things that are not defects but will surprise you once. Each of them is a deliberate trade, and
+each one is visible in the answer the tool gives rather than hidden behind an empty result.
+
+| Limitation | What you see | What to do |
+|------------|--------------|------------|
+| **Search matches names, not contents** | Every search answer carries `"note":"matched on names only; contents are not indexed"` | Install and configure the Nextcloud Full text search app, or search by file name |
+| **An account created with `occ user:add` has no calendar** | `calendar_list_events` returns an error that names the missing calendar | `occ dav:create-calendar <user> personal`, or log in to Nextcloud once through the web UI, which creates it |
+| **The same is true for the address book** | `contacts_search` names the way out instead of returning nothing | `occ dav:create-addressbook <user> contacts` |
+| **Notes and Deck are optional apps** | The tools stay in `tools/list` everywhere and answer "The Notes app is not installed on this Nextcloud." | Install the app, or ignore those five tools |
+| **Nothing can be deleted or overwritten** | `files_upload` refuses an existing path with a conflict, and there is no update or delete tool at all | Pick another name. This is the design constraint, not a missing feature |
+| **No session, so no server side paging state** | A long list hands back a `next` handle you pass in again | Nothing. The handle survives a restart, which is the point |
+| **Calendars need an explicit time window with a zone** | A `start` or `end` without a zone is refused | Send `2026-09-01T00:00:00+02:00` or `...Z`. A guessed zone is a confidently wrong answer |
+| **One IP for many users triggers the brute force guard** | `429` after a wrong app password, for everyone behind the same deployment | Wait and use a correct app password; see the troubleshooting section in the client setup |
 
 ## Development
 
