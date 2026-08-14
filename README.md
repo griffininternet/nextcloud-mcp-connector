@@ -107,8 +107,8 @@ new objects but can never modify or remove existing ones.
 
 | Tool | Permission | What it does |
 |------|------------|--------------|
-| `files_search` | read | Search files by name and metadata via WebDAV search |
-| `files_list` | read | List a directory with names, sizes and modification times |
+| `files_search` | read | Search files and folders by name via WebDAV search; contents are not indexed |
+| `files_list` | read | List the direct children of a folder, with sizes and modification times |
 | `files_read` | read | Read the content of a single file |
 | `files_upload` | create-only | Upload a new file; an existing path is refused, never overwritten |
 | `calendar_list_events` | read | List events in an explicit time range, with an explicit time zone |
@@ -125,6 +125,38 @@ new objects but can never modify or remove existing ones.
 
 `search` and `fetch` exist because the ChatGPT connector profile requires exactly these two names
 and schemas. They are thin wrappers over the tools above, not a second implementation.
+
+### Files: what the search actually matches
+
+`files_search` uses WebDAV search, which matches **names**, not file contents. A word that only
+appears inside a document produces no hit, and that is the behaviour of the protocol, not a defect
+of this server. Every search answer therefore carries the same note:
+
+```json
+{"query":"budget","folder":"/","count":1,"items":[{"path":"/Docs/budget-2026.md","name":"budget-2026.md","kind":"file","size":2048,"content_type":"text/markdown","modified":"Thu, 14 Aug 2026 10:00:00 GMT","id":"file:4711"}],"note":"matched on names only; contents are not indexed"}
+```
+
+Full text search would need a separately installed Nextcloud app, so the honest answer is the note
+above rather than a silent empty result.
+
+`files_list` returns the direct children of a folder, folders first and then names. The folder
+itself is never part of its own listing, and a path that points at a file gets an explanation
+instead of an empty list.
+
+### Long lists: cursor handles instead of sessions
+
+A list that had to stop early says so and hands out a handle:
+
+```json
+{"items": ["..."], "truncated": true, "next": "eyJmIjoiLyIsIm8iOjI1LCJxIjoiYnVkZ2V0In0"}
+```
+
+Pass that value back as the `cursor` parameter to continue. The handle is base64url of compact
+JSON and holds the whole position, so the server keeps no session: a handle still works after the
+server was restarted, and it works against a different process of the same server. It is not
+signed on purpose, because it carries no secret and no permission. The credentials come from the
+auth channel on every single call, so an edited handle can only page through the caller's own data
+differently. A handle from another query is refused instead of quietly returning the wrong page.
 
 ### Calendar times
 
