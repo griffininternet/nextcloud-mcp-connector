@@ -46,7 +46,7 @@ Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick install
 
 **Nextcloud-API-Matrix (recherchiert):** WebDAV (Dateien + SEARCH), CalDAV, CardDAV, Notes-REST, Deck-REST, Unified Search OCS (berechtigungstreu, parallelisierbar über Provider). OCS immer mit OCS-APIRequest: true + Accept: application/json.
 
-**MCP-Spec-Lage:** Spec 2026-07-28 (stateless core) ist frisch, SDKs dafür Beta. Entscheidung: stabiler SDK-Stand mcp[cli] ~1.27 (wie InfraNode), Architektur upgradefähig halten (Pagination über Handles, kein Session-State in Tools).
+**MCP-Spec-Lage (korrigiert 14.08. nach Stack-Research):** mcp 2.0.0 ist seit 28.07.2026 GA (stabil), 1.x ist Maintenance-only. Entscheidung: mcp>=2.0,<3 (bedient 2025er- und 2026er-Stateless-Clients aus demselben Endpoint), dokumentierter Fallback-Pin >=1.29,<2. Kein Session-State in Tools (Pagination über Handles).
 
 **Strategisches Umfeld:** Termin Dataport/Brandmann 21.08. (MCP-These), DFKI/Porta ab 25.08., MUCGPT 2.0 kann MCP (Abnehmer-Story München/Stuttgart), ZenDiS/openDesk als Phase-3-Ziel. Nextcloud Conference September 2026 = Launch-Anker.
 
@@ -67,7 +67,7 @@ Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick install
 | MCP-only-ExApp statt Standalone-Server oder context_agent-Konkurrenz | Explizit nachgefragte, unbesetzte Nische (context_agent#203); Store-Distribution = Zugänglichkeits-Vorsprung | - Pending |
 | OAuth 2.1 nach MCP-Authorization-Spec als Kern-Differenzierer | Meistgefordertes Feature im Ökosystem (context_agent#74); niemand hat es | - Pending |
 | Kuratiert schlank (~15-20 Tools) statt Tool-Flut | Client-Tool-Limits real; Platzhirsch hat Breite schon; Schema-Diät-Patterns vorhanden | - Pending |
-| Stabiler SDK-Stand 1.27 statt 2.0-Beta | Deadline September; Beta-APIs beweglich; Architektur bleibt upgradefähig | - Pending |
+| mcp>=2.0,<3 statt 1.x (revidiert 14.08., vorher "1.27 statt 2.0-Beta") | 2.0.0 ist seit 28.07. GA, 1.x Maintenance-only; v2 bedient alte und neue Clients; Fallback-Pin >=1.29,<2 dokumentiert | - Pending |
 | Contribution-Fix an context_agent#227 als Flanke | Sichtbarkeit + Goodwill beim Nextcloud-Team vor der Conference | - Pending |
 | AGPL-3.0 | Ökosystem-Kultur; Übernahme-Chance durch Nextcloud wichtiger als maximale Wiederverwendbarkeit | - Pending |
 | Risikoarme Writes, destruktive Ops ausgeschlossen | "Kann nichts zerstören" ist Verkaufsargument, kein Mangel | - Pending |
