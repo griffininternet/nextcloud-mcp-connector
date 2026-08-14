@@ -1432,7 +1432,7 @@ Zusaetzliche Umgebungsnotiz: Entwicklungshost ist Windows 11 mit Git Bash. Zeile
 | A7 | `occ app:install notes` und `occ app:install deck` funktionieren im offiziellen Image ohne weitere Vorbereitung (Appstore-Zugriff, Schreibrechte auf custom_apps) | Bootstrap | Fallback: Apps als Volume vorab entpacken oder `app:enable` nach manuellem Download. In Wave 0 pruefen |
 | A8 | Ein einzelner Worker genuegt fuer Phase 1, Sticky Sessions sind Betriebssache | Statelessness | Falls doch Multi-Worker gefordert wird, ist es ein Ein-Zeilen-Schalter plus Test, kein Umbau |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Deck-Karte per ID aufloesen: Sweep oder interne Route?**
    - Was wir wissen: Die oeffentliche API adressiert Karten nur als `boards/{b}/stacks/{s}/cards/{c}`. Der Unified-Search-Provider `search-deck-card-board` liefert nur `cardId`. Eine interne Route `GET /apps/deck/cards/{cardId}` existiert (`card#read`).
