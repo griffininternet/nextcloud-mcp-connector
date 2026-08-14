@@ -72,3 +72,25 @@ async def test_the_three_notes_tools_are_listed_with_honest_annotations() -> Non
     assert create.destructive_hint is False, "it can only create, never replace or delete"
     assert create.idempotent_hint is False, "a second call creates a second note"
     assert create.open_world_hint is False
+
+
+@pytest.mark.anyio
+async def test_calendar_list_events_demands_a_window_with_a_timezone() -> None:
+    """D-04: the window is not optional, and the model must see that in the schema."""
+    async with Client(mcp, raise_exceptions=True) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+
+    assert "calendar_list_events" in tools, "the calendar read tool is part of the set"
+    tool = tools["calendar_list_events"]
+
+    annotations = tool.annotations
+    assert annotations is not None
+    assert annotations.read_only_hint is True, "calendar_list_events only reads"
+    assert annotations.open_world_hint is False
+    assert tool.output_schema is None, "structured_output=False (schema diet)"
+
+    schema = tool.input_schema
+    assert set(schema.get("required", [])) >= {"start", "end"}
+    assert "+02:00" in schema["properties"]["start"]["description"], (
+        "the example value keeps the model from guessing the format"
+    )
