@@ -97,6 +97,25 @@ async def test_calendar_list_events_demands_a_window_with_a_timezone() -> None:
 
 
 @pytest.mark.anyio
+async def test_contacts_search_is_listed_as_a_pure_read() -> None:
+    """D-07: the contacts vertical is read only, and the annotation has to say so."""
+    async with Client(mcp, raise_exceptions=True) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+
+    assert "contacts_search" in tools, "the contacts read tool is part of the curated set"
+    tool = tools["contacts_search"]
+
+    annotations = tool.annotations
+    assert annotations is not None
+    assert annotations.read_only_hint is True, "contacts_search only reads"
+    assert annotations.open_world_hint is False
+    assert tool.output_schema is None, "structured_output=False (schema diet)"
+
+    schema = tool.input_schema
+    assert set(schema.get("required", [])) >= {"query"}
+
+
+@pytest.mark.anyio
 async def test_calendar_create_event_is_annotated_as_create_only() -> None:
     """Not idempotent, and honestly so: If-None-Match refuses the second identical call."""
     async with Client(mcp, raise_exceptions=True) as client:
