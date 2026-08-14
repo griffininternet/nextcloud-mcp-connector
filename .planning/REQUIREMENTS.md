@@ -54,6 +54,7 @@
 - **TOOL-11**: MCP-Prompts als Slash-Commands (2-4 kuratierte, orchestrieren prepare_context)
 - **TOOL-12**: Response-Format-Parameter (kompakt/voll) für die großen Lesetools
 - **TOOL-13**: Talk-, Tables-, Mail-Tools (kuratiert, nach nachgewiesener Nachfrage)
+- **TOOL-14**: files_read_as_markdown, MarkItDown-artige Konvertierung (DOCX/PDF/XLSX zu Markdown) als optionales Extra `[markdown]`, damit die Basis-Installation schlank bleibt; reines Read-Tool, MIT-Lizenz AGPL-kompatibel; Parser-Angriffsfläche gehört in die Hardening-Betrachtung (Owner-Entscheidung 14.08.2026: v2, nicht v1)
 
 ### Betrieb
 
