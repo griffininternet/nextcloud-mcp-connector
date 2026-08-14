@@ -51,6 +51,37 @@ async def test_files_upload_is_annotated_as_create_only() -> None:
 
 
 @pytest.mark.anyio
+async def test_the_four_file_tools_are_complete_and_read_first() -> None:
+    """D-03: search, list, read and upload, and only the last one writes."""
+    async with Client(mcp, raise_exceptions=True) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+
+    for name in ("files_search", "files_list", "files_read", "files_upload"):
+        assert name in tools, f"{name} is part of the curated file set (D-03)"
+        assert tools[name].output_schema is None, "structured_output=False (schema diet)"
+
+    for name in ("files_search", "files_list"):
+        annotations = tools[name].annotations
+        assert annotations is not None
+        assert annotations.read_only_hint is True, f"{name} only reads"
+        assert annotations.open_world_hint is False
+
+
+@pytest.mark.anyio
+async def test_files_search_says_in_its_description_that_contents_are_not_matched() -> None:
+    """Pitfall 5 belongs in the one sentence the model reads before it calls the tool."""
+    async with Client(mcp, raise_exceptions=True) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+
+    description = tools["files_search"].description or ""
+    assert "not file contents" in description
+
+    schema = tools["files_search"].input_schema
+    assert set(schema.get("required", [])) >= {"query"}
+    assert "$defs" not in schema, "no nested models in the input schema (schema diet)"
+
+
+@pytest.mark.anyio
 async def test_the_three_notes_tools_are_listed_with_honest_annotations() -> None:
     """``tools/list`` stays static: Notes appears here even where the app is not installed."""
     async with Client(mcp, raise_exceptions=True) as client:
