@@ -59,7 +59,7 @@ Plans:
 
 - [x] 01-05-PLAN.md - files_search und files_list mit zustandsloser Pagination (Wave 4)
 - [x] 01-09-PLAN.md - Deck-Tools: deck_browse und deck_create_card (Wave 4)
-- [ ] 01-10-PLAN.md - unified_search mit parallelem Provider-Fan-out (Wave 4)
+- [x] 01-10-PLAN.md - unified_search mit parallelem Provider-Fan-out (Wave 4)
 - [ ] 01-13-PLAN.md - Contribution-PR an nextcloud/context_agent#227 (Wave 4)
 
 **Wave 5** *(blocked on Wave 4 completion)*
@@ -140,7 +140,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Server-Kern | 10/14 | In Progress|  |
+| 1. Server-Kern | 11/14 | In Progress|  |
 | 2. ExApp-Shell | 0/TBD | Not started | - |
 | 3. OAuth 2.1 | 0/TBD | Not started | - |
 | 4. Per-User-Verwaltung und prepare_context | 0/TBD | Not started | - |

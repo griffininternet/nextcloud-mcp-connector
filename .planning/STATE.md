@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-09-PLAN.md
-last_updated: "2026-08-14T18:03:20.771Z"
+stopped_at: Completed 01-10-PLAN.md
+last_updated: "2026-08-14T18:41:25.293Z"
 last_activity: 2026-08-14
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 14
-  completed_plans: 10
+  completed_plans: 11
   percent: 0
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 1 (Server-Kern): EXECUTING
-Plan: 10 of 14
+Plan: 11 of 14
 Status: Ready to execute
 Last activity: 2026-08-14
 
-Progress: [███████░░░] 71%
+Progress: [████████░░] 79%
 
 ## Performance Metrics
 
@@ -62,6 +62,7 @@ Progress: [███████░░░] 71%
 | Phase 01-server-kern P08 | 25 min | 2 tasks | 10 files |
 | Phase 01-server-kern P05 | 16 min | 2 tasks | 13 files |
 | Phase 01-server-kern P09 | 13 min | 2 tasks | 10 files |
+| Phase 01-server-kern P10 | 15 min | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -114,6 +115,12 @@ Recent decisions affecting current work:
 - [Phase 01-server-kern]: canCreateBoards false beendet deck_create_card nicht sofort, sondern loest eine Pruefung der Board-Rechte aus; canCreateBoards regelt in Deck nur neue Boards; ein Nutzer ohne dieses Recht kann Schreibrechte auf einem geteilten Board haben, eine woertliche Ablehnung waere falsch negativ
 - [Phase 01-server-kern]: deck_browse ist ein Tool mit Literal-Enum level statt drei Tools; level=cards kostet genau einen Request; D-06 plus Token-Budget und Client-Slots; GET /boards/{id}/stacks liefert die Karten bereits mit, ein Request pro Stack waere N+1
 - [Phase 01-server-kern]: Deck-API-Version 1.0 statt 1.1 und numerische Pflicht fuer alle Pfad-Ids; 1.1 bringt nur Attachment-Typen, 1.0 laeuft auf mehr Instanzen; nicht numerische Ids kaemen aus Modell-Eingaben direkt in den URL-Pfad (T-01-63)
+- [Phase 01-server-kern]: unified_search liest die Provider-Liste bei jedem Aufruf frisch von der Instanz und cacht sie nicht: die Provider-Landschaft haengt an installierten Apps, eine hardgecodete Liste wuerde eine App verpassen oder eine erfinden
+- [Phase 01-server-kern]: Unbekannte Provider und unbrauchbare resourceUrls ergeben kind url plus resolvable false statt einer geratenen Zuordnung; der Kalender-Provider bleibt bewusst draussen, weil seine resourceUrl keinen DAV-Objektnamen traegt
+- [Phase 01-server-kern]: Ausgefallene, zu langsame und unbekannt angefragte Provider erscheinen namentlich im degraded-Feld; null Provider auf der Instanz ist dagegen ein Fehler mit Ausweg, weil eine leere Trefferliste dort eine Luege waere
+- [Phase 01-server-kern]: providers ist ein kommaseparierter String statt einer Liste: ein Listen-Parameter erzeugt ein anyOf aus array und null im Input-Schema (Schema-Diaet)
+- [Phase 01-server-kern]: pytest laeuft im Import-Modus importlib, weil Unit- und Integrationsebene denselben Testdateinamen tragen duerfen sollen
+- [Phase 01-server-kern]: TOOL-06 bleibt Pending: der provider-parallele Fan-out ist live belegt, der Negativbeweis der Berechtigungstreue mit zwei Konten gehoert in Plan 01-14
 
 ### Pending Todos
 
@@ -135,6 +142,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-14T18:03:05.629Z
-Stopped at: Completed 01-09-PLAN.md
+Last session: 2026-08-14T18:41:11.333Z
+Stopped at: Completed 01-10-PLAN.md
 Resume file: None
