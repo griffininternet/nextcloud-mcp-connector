@@ -1,0 +1,215 @@
+"""OCS requests and the two response formats Nextcloud actually uses.
+
+Two headers go out with every OCS request, always (D-18): ``OCS-APIRequest: true`` marks
+the call as an API call, and ``Accept: application/json`` asks for JSON instead of XML.
+Without the first one Nextcloud answers a browser login page with status 200, which is the
+single most confusing failure in this whole API family, so :func:`_json_payload` names it
+explicitly instead of dying in ``response.json()``.
+
+Two parsers, not one, and that is the point of this module (pitfall 9):
+
+``parse_ocs``
+    for everything under ``/ocs/v2.php``: the payload sits in ``ocs.data`` and the real
+    status in ``ocs.meta.statuscode``.
+``parse_app_json``
+    for Notes and Deck, which are ordinary app routes and answer with the bare object, or
+    with ``{"status": 4xx, "message": "..."}`` on failure. Letting an ``ocs.meta`` parser
+    loose on that produces a ``KeyError`` where an actionable message belongs.
+
+Status handling is the same everywhere in this project: never repeat a failed
+authentication (Nextcloud counts failures per source IP and then throttles every user of
+this server), never follow a redirect, and turn a 5xx into a degraded answer rather than a
+stack trace.
+"""
+
+import json
+from collections.abc import Mapping
+from typing import Any
+
+import httpx
+
+from ... import config
+from ...errors import ToolError
+from ..credentials import Credentials
+
+#: OCS v2 lives under this prefix; v1 is not used anywhere in this project.
+OCS_PREFIX = "/ocs/v2.php"
+
+#: The two mandatory headers of D-18. Copied per request, never mutated in place.
+OCS_HEADERS: Mapping[str, str] = {
+    "OCS-APIRequest": "true",
+    "Accept": "application/json",
+}
+
+#: ``100`` is the OCS v1 success code, ``200`` the v2 one. Instances answer with either.
+_OK_STATUS = frozenset({100, 200})
+
+_HTML_HINT = (
+    "That is the Nextcloud login page. Check the app password and that the configured URL "
+    "points at the Nextcloud root, not at a portal or a proxy error page."
+)
+
+
+def ocs_url(creds: Credentials, path: str) -> str:
+    """Build ``<base>/ocs/v2.php<path>``; ``path`` always starts with a slash."""
+    if not path.startswith("/"):
+        raise ValueError(f"an OCS path must start with a slash (got {path!r})")
+    return f"{creds.base_url}{OCS_PREFIX}{path}"
+
+
+async def ocs_get(
+    client: httpx.AsyncClient,
+    creds: Credentials,
+    path: str,
+    params: Mapping[str, Any] | None = None,
+) -> httpx.Response:
+    """GET an OCS endpoint with both mandatory headers and per request Basic auth.
+
+    Authentication is passed per request and not on the client, because the HTTP
+    passthrough mode changes credentials from call to call. Redirects are not followed:
+    the client is built that way, and a redirecting base URL is a configuration error.
+    """
+    return await client.get(
+        ocs_url(creds, path),
+        params=dict(params) if params else None,
+        headers=dict(OCS_HEADERS),
+        auth=httpx.BasicAuth(creds.user, creds.secret),
+    )
+
+
+def parse_ocs(response: httpx.Response, what: str) -> Any:
+    """Return ``ocs.data`` of an OCS envelope, or raise with message plus hint."""
+    _check_transport(response, what)
+    payload = _json_payload(response, what)
+
+    envelope = payload.get("ocs") if isinstance(payload, dict) else None
+    if not isinstance(envelope, dict):
+        raise ToolError(
+            message=f"Nextcloud answered {what} without an OCS envelope.",
+            hint=(
+                "Check that the configured URL points at a Nextcloud; an OCS answer always "
+                "carries an ocs.meta section."
+            ),
+        )
+
+    meta = envelope.get("meta")
+    meta = meta if isinstance(meta, dict) else {}
+    raw_status = meta.get("statuscode")
+    status = raw_status if isinstance(raw_status, int) else response.status_code
+    if status not in _OK_STATUS:
+        raise _status_error(status, str(meta.get("message") or ""), what)
+    return envelope.get("data")
+
+
+def parse_app_json(response: httpx.Response, what: str) -> Any:
+    """Return the payload of a Notes or Deck answer, or raise with message plus hint.
+
+    Both apps report failures as ``{"status": 4xx, "message": "..."}`` with the matching
+    HTTP status, so the body is inspected as well as the status line: an instance behind a
+    proxy that rewrites the status still gets read correctly.
+    """
+    _check_transport(response, what)
+    payload = _json_payload(response, what)
+
+    if isinstance(payload, dict):
+        embedded = payload.get("status")
+        if isinstance(embedded, int) and embedded >= 400:
+            raise _status_error(embedded, str(payload.get("message") or ""), what)
+
+    if response.status_code >= 400:
+        detail = payload.get("message") if isinstance(payload, dict) else None
+        raise _status_error(response.status_code, str(detail or ""), what)
+    return payload
+
+
+def _check_transport(response: httpx.Response, what: str) -> None:
+    """Handle the statuses whose body never carries a better explanation."""
+    status = response.status_code
+    if 300 <= status < 400:
+        raise ToolError(
+            message=f"Nextcloud answered the request for {what} with a redirect ({status}).",
+            hint=config.REDIRECT_HINT,
+        )
+    if status == 401:
+        raise ToolError(
+            message="Nextcloud rejected the app password.",
+            hint=(
+                "Generate a new app password in Nextcloud under Settings, Security, "
+                "Devices and sessions, then restart the MCP server."
+            ),
+        )
+    if status == 429:
+        raise ToolError(
+            message="Nextcloud is rate limiting this server.",
+            hint="Wait about a minute before the next call; do not repeat it immediately.",
+        )
+    if status >= 500:
+        raise ToolError(
+            message=f"Nextcloud reported a server error ({status}) while reading {what}.",
+            hint="This is a problem on the Nextcloud side. Retry later or check its log.",
+        )
+
+
+def _json_payload(response: httpx.Response, what: str) -> Any:
+    """Decode the body as JSON, naming an HTML login page for what it is."""
+    content_type = response.headers.get("content-type", "").lower()
+    body = response.text.lstrip()
+    if "html" in content_type or body.startswith("<"):
+        raise ToolError(
+            message=f"Nextcloud answered {what} with an HTML page instead of JSON.",
+            hint=_HTML_HINT,
+        )
+    try:
+        return json.loads(body) if body else None
+    except json.JSONDecodeError:
+        raise ToolError(
+            message=f"Nextcloud answered {what} with a body that is not JSON.",
+            hint="Check the Nextcloud log for that request; the answer was not an API answer.",
+        ) from None
+
+
+def _status_error(status: int, detail: str, what: str) -> ToolError:
+    """One place that turns a Nextcloud status into a sentence the model can act on."""
+    suffix = f" Nextcloud says: {detail}" if detail else ""
+    if status == 400:
+        return ToolError(
+            message=f"Nextcloud rejected the request for {what} as invalid.{suffix}",
+            hint="Correct the arguments and call the tool again.",
+        )
+    if status == 401:
+        return ToolError(
+            message="Nextcloud rejected the app password.",
+            hint=(
+                "Generate a new app password in Nextcloud under Settings, Security, "
+                "Devices and sessions, then restart the MCP server."
+            ),
+        )
+    if status == 403:
+        return ToolError(
+            message=f"No permission for {what}.{suffix}",
+            hint="Ask the owner in Nextcloud for the missing permission.",
+        )
+    if status in (404, 998):
+        return ToolError(
+            message=f"Nextcloud did not find {what}.{suffix}",
+            hint="Search for it first; the id or the name is unknown to this instance.",
+        )
+    if status == 429:
+        return ToolError(
+            message="Nextcloud is rate limiting this server.",
+            hint="Wait about a minute before the next call; do not repeat it immediately.",
+        )
+    if status == 507:
+        return ToolError(
+            message=f"Nextcloud has no storage space left for {what}.{suffix}",
+            hint="Free up quota in Nextcloud, then try again.",
+        )
+    if status >= 500:
+        return ToolError(
+            message=f"Nextcloud reported a server error ({status}) for {what}.{suffix}",
+            hint="This is a problem on the Nextcloud side. Retry later or check its log.",
+        )
+    return ToolError(
+        message=f"Nextcloud answered {what} with an unexpected status {status}.{suffix}",
+        hint="Retry once; if it persists, check the Nextcloud log for that request.",
+    )
