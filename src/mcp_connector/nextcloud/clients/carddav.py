@@ -50,6 +50,11 @@ COLLATION = "i;unicode-casemap"
 #: The properties a search term is matched against. Order is the order in the body.
 SEARCH_PROPERTIES = ("FN", "EMAIL")
 
+#: URI prefixes of the address books Nextcloud generates for every account: the system
+#: directory of all accounts and the "recently contacted" collection of the Contacts
+#: interaction app. Neither is a book the user created (see :func:`parse_addressbook_home`).
+GENERATED_PREFIXES = ("z-server-generated--", "z-app-generated--")
+
 _URI_HINT = (
     "Use an address book exactly as contacts_search reports it, for example 'contacts'. "
     "An address book name is one path segment, never a path."
@@ -191,6 +196,16 @@ def parse_addressbook_home(body: str | bytes, home_path: str = "") -> list[Addre
     Dropped: the home collection itself and every collection whose resource type does not
     carry ``card:addressbook``. A plain folder below the home is not an address book, and
     querying it would answer 415 instead of a useful error.
+
+    Also dropped: the generated collections. Every account that has ever authenticated
+    carries ``z-server-generated--system`` (the directory of all accounts of the instance)
+    and ``z-app-generated--contactsinteraction--recent`` (whoever the user wrote to
+    lately). Both are address books to sabre, and neither is a book the user keeps. Two
+    reasons to leave them out here: they would make the "this account has no address book"
+    case unreachable on every real server, and the account directory of a whole
+    organisation is not something an assistant should receive as a side effect of a name
+    search (threat T-01-56). Reading the directory on purpose is a separate decision with
+    its own parameter, not a default.
     """
     root = xml.parse_root(body)
     if root.tag != f"{{{xml.DAV}}}multistatus":
@@ -213,7 +228,7 @@ def parse_addressbook_home(body: str | bytes, home_path: str = "") -> list[Addre
             continue
 
         uri = unquote(path.rsplit("/", 1)[-1])
-        if not uri:
+        if not uri or uri.startswith(GENERATED_PREFIXES):
             continue
         name_element = props.find(f"{{{xml.DAV}}}displayname")
         display_name = (name_element.text or "").strip() if name_element is not None else ""

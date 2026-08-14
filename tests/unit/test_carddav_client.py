@@ -102,6 +102,53 @@ async def test_discovery_asks_the_addressbook_home_under_the_users_segment(
 
 
 @pytest.mark.anyio
+async def test_discovery_drops_the_generated_addressbooks(
+    client: httpx.AsyncClient, creds: Credentials
+) -> None:
+    """Verified against a running Nextcloud 34, not assumed.
+
+    Every account that has ever authenticated owns ``z-server-generated--system`` (the
+    directory of all accounts) and ``z-app-generated--contactsinteraction--recent``. Both
+    are address books to sabre. Keeping them would put the account directory of the whole
+    instance into a name search and would make "this account has no address book"
+    unreachable on any real server.
+    """
+    with respx.mock(assert_all_called=True) as mock:
+        mock.route(method="PROPFIND", url=ADDRESSBOOK_HOME).mock(
+            return_value=addressbooks_response()
+        )
+        books = await carddav.discover_addressbooks(client, creds)
+
+    uris = {book.uri for book in books}
+    assert uris == {"contacts", "team alpha"}
+    assert not any(uri.startswith(carddav.GENERATED_PREFIXES) for uri in uris)
+
+
+@pytest.mark.anyio
+async def test_an_account_with_only_generated_addressbooks_counts_as_having_none(
+    client: httpx.AsyncClient, creds: Credentials
+) -> None:
+    """The live shape of a user created by ``occ user:add`` who then authenticated once."""
+    body = (
+        '<?xml version="1.0"?>'
+        '<d:multistatus xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">'
+        "<d:response>"
+        "<d:href>/remote.php/dav/addressbooks/users/alice/z-server-generated--system/</d:href>"
+        "<d:propstat><d:prop><d:resourcetype><d:collection/><card:addressbook/>"
+        "</d:resourcetype></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat>"
+        "</d:response></d:multistatus>"
+    )
+    with respx.mock(assert_all_called=True) as mock:
+        mock.route(method="PROPFIND", url=ADDRESSBOOK_HOME).mock(
+            return_value=httpx.Response(207, text=body)
+        )
+        with pytest.raises(ToolError) as excinfo:
+            await carddav.discover_addressbooks(client, creds)
+
+    assert "dav:create-addressbook" in excinfo.value.hint
+
+
+@pytest.mark.anyio
 async def test_discovery_unquotes_the_uri_and_quotes_it_again_for_the_url(
     client: httpx.AsyncClient, creds: Credentials
 ) -> None:

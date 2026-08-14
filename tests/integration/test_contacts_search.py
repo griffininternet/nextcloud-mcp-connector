@@ -1,9 +1,10 @@
 """Contacts against a real Nextcloud 34 with CardDAV (opt-in, read only).
 
-This phase has no CardDAV write path, so these tests create nothing. They check the two
+This phase has no CardDAV write path, so these tests create nothing. They check the three
 things a recorded fixture cannot answer: does the real address book path
-(``addressbooks/users/<uid>/``) hold on a running instance, and does an account without an
-address book really produce the error with the way out instead of an empty result.
+(``addressbooks/users/<uid>/``) hold on a running instance, does the server really hand
+out the two generated collections to every account, and does an account without an address
+book of its own produce the error with the way out instead of an empty result.
 
 The bootstrap prepares exactly that pair: ``occ dav:create-addressbook alice contacts``
 runs for alice and never for bob.
@@ -52,7 +53,11 @@ def clients(live_env: dict[str, str | None]) -> NcClients:
 
 @pytest.fixture
 def clients_without_addressbook(live_env: dict[str, str | None]) -> NcClients:
-    """bob: a user created by ``occ user:add`` and never logged in, so he has no book."""
+    """bob: created by ``occ user:add``, so the bootstrap gives him no address book.
+
+    He does own the two generated collections, because they appear as soon as an account
+    authenticates once. They are not his address books, and the tool says so.
+    """
     base_url = live_env["base_url"]
     user = os.environ.get("NC_MCP_TEST_USER2")
     secret = os.environ.get("NC_MCP_TEST_APP_PASSWORD2")
@@ -90,6 +95,25 @@ async def test_the_addressbook_url_carries_the_users_segment(clients: NcClients)
         auth=httpx.BasicAuth(clients.creds.user, clients.creds.secret),
     )
     assert response.status_code == 207
+
+
+async def test_the_generated_addressbooks_are_on_the_wire_but_not_in_the_result(
+    clients: NcClients,
+) -> None:
+    """The filter has to earn its place: the server really does send these two."""
+    response = await clients.client.request(
+        "PROPFIND",
+        carddav.addressbooks_home_url(clients.creds),
+        headers={"Depth": "1", "Content-Type": "application/xml"},
+        content=carddav.build_discovery_body(),
+        auth=httpx.BasicAuth(clients.creds.user, clients.creds.secret),
+    )
+    assert response.status_code == 207
+    assert "z-server-generated--system" in response.text
+    assert "z-app-generated--contactsinteraction--recent" in response.text
+
+    books = await carddav.discover_addressbooks(clients.client, clients.creds)
+    assert not any(book.uri.startswith(carddav.GENERATED_PREFIXES) for book in books)
 
 
 async def test_a_term_without_a_hit_returns_an_empty_list(clients: NcClients) -> None:
