@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-07-PLAN.md
-last_updated: "2026-08-14T17:06:58.587Z"
+stopped_at: Completed 01-08-PLAN.md
+last_updated: "2026-08-14T17:23:04.750Z"
 last_activity: 2026-08-14
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 14
-  completed_plans: 7
+  completed_plans: 8
   percent: 0
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 1 (Server-Kern): EXECUTING
-Plan: 8 of 14
+Plan: 9 of 14
 Status: Ready to execute
 Last activity: 2026-08-14
 
-Progress: [█████░░░░░] 50%
+Progress: [██████░░░░] 57%
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Progress: [█████░░░░░] 50%
 | Phase 01-server-kern P04 | 20 min | 3 tasks | 12 files |
 | Phase 01-server-kern P06 | 27 min | 2 tasks | 13 files |
 | Phase 01-server-kern PP07 | 34 min | 3 tasks | 13 files |
+| Phase 01-server-kern P08 | 25 min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -101,6 +102,8 @@ Recent decisions affecting current work:
 - [Phase 01-server-kern]: calendar_create_event bekommt einen optionalen timezone-Parameter (Abweichung von der Plan-Signatur), weil ein ISO-Offset keine IANA-Zone ist und ohne Zonennamen kein IANA-VTIMEZONE erzeugbar waere
 - [Phase 01-server-kern]: Nach dem Event-PUT wird einmal per GET nachgelesen; scheitert das Nachlesen, bleibt created true und confirmed false, damit das Modell den Termin nicht ein zweites Mal anlegt
 - [Phase 01-server-kern]: Faellt ein einzelner Kalender aus, erscheint er als degraded-Eintrag; fallen alle aus, ist das ein Fehler und keine leere Terminliste
+- [Phase 01-server-kern]: Generierte Adressbuecher (z-server-generated--, z-app-generated--) zaehlen nicht als Adressbuecher des Nutzers; sonst waere 'kein Adressbuch' auf jedem echten Server unerreichbar und eine Namenssuche wuerde das Kontenverzeichnis der Instanz mitliefern
+- [Phase 01-server-kern]: contacts_search bleibt rein lesend, es gibt keinen CardDAV-Schreibpfad in Phase 1; D-07 plus T-01-57; ein Grep-Test haelt das Modul frei von schreibenden Methoden
 
 ### Pending Todos
 
@@ -122,6 +125,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-14T17:06:04.152Z
-Stopped at: Completed 01-07-PLAN.md
+Last session: 2026-08-14T17:23:04.736Z
+Stopped at: Completed 01-08-PLAN.md
 Resume file: None
