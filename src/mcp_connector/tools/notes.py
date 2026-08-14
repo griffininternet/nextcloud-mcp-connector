@@ -9,11 +9,12 @@ trip instead of twenty one.
 
     GET /ocs/v2.php/search/providers/notes/search?term=...&limit=...
 
-Documented fallback, deliberately not the default: if the Notes app is installed but the
-provider is missing, ``GET /notes?exclude=content`` plus a client side title match would
-still find something. That path matches titles only, so it is a degraded answer and would
-have to be marked as one; :func:`mcp_connector.nextcloud.clients.notes.list_notes` is the
-piece it would need.
+Documented fallback, deliberately not built: if the Notes app is installed but the provider
+is missing, ``GET /notes?exclude=content`` plus a client side title match would still find
+something. That path matches titles only, so it is a degraded answer and would have to be
+marked as one. The list helper it would need was written and then removed again, because an
+untested branch nobody reaches is a liability, not a spare part. It is twenty lines and can
+come back the day an instance without the provider actually turns up.
 
 Two details keep the ids honest. The unified search entry has no ``id`` field, so the note
 id is parsed out of ``resourceUrl``, and an entry whose URL does not end in a numeric note

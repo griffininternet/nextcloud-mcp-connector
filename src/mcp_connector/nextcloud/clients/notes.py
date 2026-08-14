@@ -67,30 +67,6 @@ def check_api_version(versions: tuple[str, ...]) -> None:
     )
 
 
-async def list_notes(
-    client: httpx.AsyncClient,
-    creds: Credentials,
-    *,
-    exclude_content: bool = True,
-    category: str | None = None,
-) -> list[dict[str, Any]]:
-    """List notes, without their content by default (data minimisation, threat T-01-43)."""
-    params: dict[str, str] = {}
-    if exclude_content:
-        params["exclude"] = "content"
-    if category is not None:
-        params["category"] = category
-
-    response = await client.get(
-        api_url(creds, "/notes"),
-        params=params or None,
-        headers=dict(_HEADERS),
-        auth=httpx.BasicAuth(creds.user, creds.secret),
-    )
-    payload = ocs.parse_app_json(response, what="the note list")
-    return [item for item in payload if isinstance(item, dict)] if isinstance(payload, list) else []
-
-
 async def get_note(client: httpx.AsyncClient, creds: Credentials, note_id: str) -> dict[str, Any]:
     """Read one note including its content."""
     response = await client.get(

@@ -37,14 +37,15 @@ from ...errors import ToolError
 from ..credentials import Credentials
 from . import ocs
 
+#: The API generation this client speaks. 1.0 instead of 1.1 on purpose: 1.1 only adds
+#: attachment types we do not use, and 1.0 is available on more instances.
+SUPPORTED_API_VERSION = "1.0"
+
 #: Base path of the Deck REST API. ``index.php`` is not optional on every instance.
-DECK_API_PREFIX = "/index.php/apps/deck/api/v1.0"
+DECK_API_PREFIX = f"/index.php/apps/deck/api/v{SUPPORTED_API_VERSION}"
 
 #: Web route of a single card (``deck.page.redirectToCard``), used for the ``url`` field.
 DECK_WEB_PREFIX = "/index.php/apps/deck/card"
-
-#: The API generation this client speaks.
-SUPPORTED_API_VERSION = "1.0"
 
 #: Deck rejects a longer title with a 400. The limit is checked before the request.
 MAX_TITLE_LENGTH = 255

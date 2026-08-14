@@ -14,16 +14,23 @@ jobs:
           enable-cache: true
       - name: Install locked environment
         run: uv sync --frozen
+      # ruff runs over the whole repository, not over src: a lint gate that only sees the
+      # package lets scripts, tests and the whitelist rot.
       - name: Lint
         run: uv run ruff check .
       - name: Format check
         run: uv run ruff format --check .
       - name: Type check
         run: uv run pyright
+      # Full confidence plus an annotated whitelist, instead of --min-confidence 80. At 80
+      # this step reported nothing at all and could not fail; every remaining finding is
+      # justified by one line in vulture_whitelist.py.
       - name: Dead code check
-        run: uv run vulture src scripts --min-confidence 80
+        run: uv run vulture src scripts vulture_whitelist.py
       - name: Unit and contract tests
         run: uv run pytest tests/unit tests/contract
+      # Armed at the measured size plus 15 percent (see the comment in the script), so a
+      # sixteenth tool or a description that grows into a paragraph fails here.
       - name: Tool budget gate
         run: uv run python scripts/check_tool_budget.py
       - name: Transport matrix (no Docker, no Nextcloud)

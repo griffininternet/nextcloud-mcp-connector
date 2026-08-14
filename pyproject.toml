@@ -59,6 +59,10 @@ ignore = ["ISC001"]
 [tool.ruff.lint.per-file-ignores]
 # Tests use bare asserts (pytest) and throwaway credentials on purpose.
 "tests/**" = ["S101", "S105", "S106"]
+# The vulture whitelist is parsed by vulture, never imported: bare undefined names are
+# its documented format. pyright never sees it, because `include` lists src, scripts
+# and tests only.
+"vulture_whitelist.py" = ["F821", "B018"]
 
 [tool.pyright]
 include = ["src", "scripts", "tests"]

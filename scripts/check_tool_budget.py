@@ -13,9 +13,18 @@ from mcp import Client
 
 from mcp_connector.server import mcp
 
-# Starting value, to be fixed at "measured plus 15 percent" in plan 01-14 once all 15
-# tools exist. ~24 kB is roughly 6k tokens at ~4 bytes per token.
-BUDGET_BYTES = 24_000
+# Armed value, not a decorative one. A budget far above the measurement never fails and
+# therefore never protects anything, which was the state until the end of phase 1.
+#
+#   Measurement 2026-08-14, all 15 curated tools registered: 10643 bytes
+#   Budget      10643 + 15 percent = 12239, rounded up to the next 500 = 12500 bytes
+#
+# The headroom is for wording, not for a new tool: at ~4 bytes per token the whole surface
+# costs roughly 2.7k tokens in every single session of every client. A sixteenth tool or a
+# description that grows into a paragraph is supposed to trip this gate, so the decision
+# gets made on purpose instead of by accident. Raising the number is allowed, but only
+# together with a new measurement line above, so a regression stays attributable.
+BUDGET_BYTES = 12_500
 
 
 async def main() -> int:
