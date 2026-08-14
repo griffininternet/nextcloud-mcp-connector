@@ -63,7 +63,7 @@ def compact(payload: object) -> str:
     return json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
 
 
-def graceful(fn: Callable[..., Awaitable[str]]) -> Callable[..., Awaitable[str]]:
+def graceful[T](fn: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
     """Translate internal failures into an ordinary tool error the model can act on.
 
     ``from None`` is not cosmetic: an httpx traceback can contain the request URL, and a
@@ -71,10 +71,14 @@ def graceful(fn: Callable[..., Awaitable[str]]) -> Callable[..., Awaitable[str]]
     guard rejection reaches the model as text so it can correct itself; only situations no
     model could fix (missing credentials in HTTP mode) become an ``MCPError``, which plan
     04 adds where it belongs.
+
+    Generic in the return type, because thirteen tools answer with a compact JSON string
+    and the two tools of the ChatGPT profile answer with a Pydantic model. Pinning this to
+    ``str`` would erase exactly the annotation the SDK builds their output schema from.
     """
 
     @functools.wraps(fn)
-    async def wrapper(*args: Any, **kwargs: Any) -> str:
+    async def wrapper(*args: Any, **kwargs: Any) -> T:
         try:
             return await fn(*args, **kwargs)
         except ToolError as exc:
