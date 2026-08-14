@@ -37,12 +37,12 @@ def hardened_parser() -> etree.XMLParser:
     )
 
 
-def parse_multistatus(body: str | bytes) -> list[tuple[str, dict[str, str]]]:
-    """Return ``[(href, {qualified-prop-name: text})]`` for every ``d:response``.
+def parse_root(body: str | bytes) -> etree._Element:
+    """Parse a DAV body with every hardening on and return its root element.
 
-    Only ``d:propstat`` blocks with a 2xx status contribute properties; a 404 propstat
-    (the usual answer for a property the file does not have) is skipped instead of
-    landing in the result as an empty value.
+    Clients that need more structure than ``parse_multistatus`` exposes (the CalDAV
+    component set carries its meaning in attributes, not in text) start here, so the XXE
+    and DTD guards stay in one place for every response this project reads.
     """
     payload = body.encode("utf-8") if isinstance(body, str) else body
     try:
@@ -59,6 +59,17 @@ def parse_multistatus(body: str | bytes) -> list[tuple[str, dict[str, str]]]:
             message="Nextcloud response contained a document type declaration and was rejected.",
             hint="A DAV response never needs a DTD; check for a proxy rewriting responses.",
         )
+    return root
+
+
+def parse_multistatus(body: str | bytes) -> list[tuple[str, dict[str, str]]]:
+    """Return ``[(href, {qualified-prop-name: text})]`` for every ``d:response``.
+
+    Only ``d:propstat`` blocks with a 2xx status contribute properties; a 404 propstat
+    (the usual answer for a property the file does not have) is skipped instead of
+    landing in the result as an empty value.
+    """
+    root = parse_root(body)
 
     if root.tag != f"{{{DAV}}}multistatus":
         raise ToolError(

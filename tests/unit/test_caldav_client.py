@@ -13,8 +13,7 @@ datetime, an end at or before the start, a calendar URI with a path separator, a
 collection without a single VEVENT calendar.
 """
 
-from datetime import date, datetime, timedelta
-from datetime import timezone as dt_timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -38,7 +37,6 @@ PERSONAL = f"{CALENDAR_HOME}personal/"
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
 BERLIN = ZoneInfo("Europe/Berlin")
-UTC = dt_timezone.utc
 
 
 def fixture(name: str) -> str:
@@ -439,9 +437,7 @@ async def test_a_server_error_during_the_query_is_reported_with_its_status(
 
 
 @pytest.mark.anyio
-async def test_a_redirect_is_never_followed(
-    client: httpx.AsyncClient, creds: Credentials
-) -> None:
+async def test_a_redirect_is_never_followed(client: httpx.AsyncClient, creds: Credentials) -> None:
     """A redirect would carry the Authorization header to a foreign host (T-01-08)."""
     start = datetime(2026, 9, 1, 0, 0, tzinfo=UTC)
     end = datetime(2026, 9, 30, 0, 0, tzinfo=UTC)
