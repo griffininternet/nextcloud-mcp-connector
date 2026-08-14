@@ -190,6 +190,29 @@ path at all.
   `occ dav:create-addressbook <user> contacts`, never an empty result: "no address book" and "no
   matching contact" are different answers.
 
+### Deck
+
+Deck is one browse tool with a level, not one tool per level:
+
+```json
+{"level":"cards","count":2,"results":[{"id":"card:2:11:101","title":"Deck-Client bauen","stack":"To Do","url":"https://cloud.example.org/index.php/apps/deck/card/101"}]}
+```
+
+- `deck_browse(level="boards")` lists the boards with `can_edit`, `level="stacks"` needs a
+  `board_id` and reports how many cards a stack holds, `level="cards"` returns the cards
+  themselves. An invalid level is rejected by the schema, and a missing `board_id` names the
+  parameter instead of guessing one.
+- `level="cards"` costs exactly **one** HTTP request per board, because Nextcloud already sends
+  the cards inside the stacks answer. A test counts the requests, against the mock and against a
+  real instance.
+- A card id is the canonical long form `card:<board>:<stack>:<card>`, which addresses the card
+  through the public Deck API without a lookup.
+- `deck_create_card` only creates. There is no update, no delete and no board or stack creation
+  anywhere in the Deck code path. A title longer than 255 characters or a due date that is not
+  ISO-8601 is refused before the request, and an account whose Nextcloud forbids board creation is
+  checked against the board's own permissions, so a read-only board is explained instead of
+  answered with a 403.
+
 ### Optional apps
 
 Notes and Deck are optional Nextcloud apps. The tool list is the same everywhere: it never depends
