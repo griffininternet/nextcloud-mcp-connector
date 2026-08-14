@@ -90,6 +90,22 @@ curl -s -o /dev/null -w "%{http_code}" https://api.github.com/repos/street1983nk
 404          (checked before the repository was created on 2026-08-14)
 ```
 
+## Trademark review (2026-08-14, owner-approved)
+
+Checked against the [Nextcloud trademark policy](https://nextcloud.com/trademarks/) and the App
+Store rule that an app must not use "Nextcloud" in its name:
+
+- **App id, display name, Python package, CLI**: compliant, none of them carries the mark.
+  This is the surface the App Store review actually checks.
+- **Git repository `nextcloud-mcp-connector`**: kept. The policy explicitly permits the mark in
+  file, folder, directory and path names; a repository name is such a path, and the pattern is
+  established community practice (for example `nextcloud-mcp-server`).
+- **PyPI distribution `nextcloud-mcp-connector`**: kept deliberately. A distribution name is a
+  search term rather than a store-facing product name, and the long-published community
+  distribution `nextcloud-mcp-server` sets the precedent. Should Nextcloud GmbH ever object, the
+  fallback name is `mcp-connector-for-nextcloud` ("X for Nextcloud" is the tolerated descriptive
+  form); as long as nothing is published on PyPI that rename stays free of cost.
+
 ## Cost of a later rename
 
 A rename is cheap only until the certificate signing request (CSR) is merged into
