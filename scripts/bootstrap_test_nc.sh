@@ -15,8 +15,10 @@ cd "$(dirname "$0")/.."
 COMPOSE_FILE="${COMPOSE_FILE:-compose.test.yml}"
 SERVICE="nextcloud"
 HOST_PORT="${NC_TEST_PORT:-8080}"
-ALICE_PASSWORD="${NC_TEST_ALICE_PASSWORD:-alice-pw}"
-BOB_PASSWORD="${NC_TEST_BOB_PASSWORD:-bob-pw}"
+# At least ten characters: Nextcloud's password policy rejects anything shorter with
+# "Password needs to be at least 10 characters long." and occ exits 1.
+ALICE_PASSWORD="${NC_TEST_ALICE_PASSWORD:-alice-test-pw-01}"
+BOB_PASSWORD="${NC_TEST_BOB_PASSWORD:-bob-test-pw-01}"
 TOKEN_NAME="mcp-test"
 ENV_FILE="${ENV_FILE:-.env.test}"
 
@@ -69,12 +71,18 @@ ensure_app() {
 }
 
 ensure_user() {
-  local uid="$1" password="$2"
+  local uid="$1" password="$2" output
   if occ user:info "$uid" >/dev/null 2>&1; then
     echo "user ${uid}: exists"
     return 0
   fi
-  occ_pw "$password" user:add --password-from-env "$uid" >/dev/null
+  # occ reports a rejected password on stdout, so the output is captured and only shown
+  # when it matters. Swallowing it would turn a policy violation into a silent exit 1.
+  if ! output="$(occ_pw "$password" user:add --password-from-env "$uid" 2>&1)"; then
+    echo "ERROR: could not create user ${uid}:" >&2
+    echo "${output}" >&2
+    return 1
+  fi
   echo "user ${uid}: created"
 }
 
