@@ -1,0 +1,85 @@
+[
+  {
+    "id": 11,
+    "title": "To Do",
+    "boardId": 2,
+    "deletedAt": 0,
+    "lastModified": 1755180000,
+    "order": 0,
+    "cards": [
+      {
+        "id": 101,
+        "title": "Deck-Client bauen",
+        "description": "REST v1.0 mit Pflichtheadern",
+        "stackId": 11,
+        "type": "plain",
+        "lastModified": 1755180000,
+        "createdAt": 1755100000,
+        "labels": [],
+        "assignedUsers": [],
+        "attachments": null,
+        "attachmentCount": 0,
+        "owner": "alice",
+        "order": 0,
+        "archived": false,
+        "duedate": null,
+        "deletedAt": 0,
+        "commentsUnread": 0,
+        "commentsCount": 0,
+        "overdue": 0
+      },
+      {
+        "id": 102,
+        "title": "Fixtures schreiben",
+        "description": "",
+        "stackId": 11,
+        "type": "plain",
+        "lastModified": 1755181000,
+        "createdAt": 1755101000,
+        "labels": [],
+        "assignedUsers": [],
+        "attachments": null,
+        "attachmentCount": 0,
+        "owner": "alice",
+        "order": 1,
+        "archived": false,
+        "duedate": "2026-09-01T10:00:00+00:00",
+        "deletedAt": 0,
+        "commentsUnread": 0,
+        "commentsCount": 0,
+        "overdue": 0
+      }
+    ]
+  },
+  {
+    "id": 12,
+    "title": "Erledigt",
+    "boardId": 2,
+    "deletedAt": 0,
+    "lastModified": 1755182000,
+    "order": 1,
+    "cards": [
+      {
+        "id": 103,
+        "title": "Recherche Übergabe",
+        "description": null,
+        "stackId": 12,
+        "type": "plain",
+        "lastModified": 1755182000,
+        "createdAt": 1755102000,
+        "labels": [],
+        "assignedUsers": [],
+        "attachments": null,
+        "attachmentCount": 0,
+        "owner": "alice",
+        "order": 0,
+        "archived": false,
+        "duedate": null,
+        "deletedAt": 0,
+        "commentsUnread": 0,
+        "commentsCount": 0,
+        "overdue": 0
+      }
+    ]
+  }
+]

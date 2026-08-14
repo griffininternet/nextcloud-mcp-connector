@@ -1,0 +1,67 @@
+[
+  {
+    "id": 2,
+    "title": "Projekt MCP",
+    "owner": {
+      "primaryKey": "alice",
+      "uid": "alice",
+      "displayname": "Alice Beispiel",
+      "type": 0
+    },
+    "color": "0082c9",
+    "archived": false,
+    "labels": [
+      {
+        "id": 7,
+        "title": "Dringend",
+        "color": "31CC7C",
+        "boardId": 2,
+        "cardId": null,
+        "lastModified": 1755100000
+      }
+    ],
+    "acl": [],
+    "permissions": {
+      "PERMISSION_READ": true,
+      "PERMISSION_EDIT": true,
+      "PERMISSION_MANAGE": true,
+      "PERMISSION_SHARE": true
+    },
+    "users": [],
+    "shared": 0,
+    "deletedAt": 0,
+    "lastModified": 1755180000,
+    "settings": {
+      "notify-due": "off",
+      "calendar": true
+    }
+  },
+  {
+    "id": 5,
+    "title": "Urlaubsplanung Straßenbau",
+    "owner": {
+      "primaryKey": "bob",
+      "uid": "bob",
+      "displayname": "Bob Beispiel",
+      "type": 0
+    },
+    "color": "e9322d",
+    "archived": false,
+    "labels": [],
+    "acl": [],
+    "permissions": {
+      "PERMISSION_READ": true,
+      "PERMISSION_EDIT": false,
+      "PERMISSION_MANAGE": false,
+      "PERMISSION_SHARE": false
+    },
+    "users": [],
+    "shared": 1,
+    "deletedAt": 0,
+    "lastModified": 1755190000,
+    "settings": {
+      "notify-due": "off",
+      "calendar": true
+    }
+  }
+]
