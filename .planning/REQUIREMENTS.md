@@ -79,13 +79,38 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (wird von der Roadmap befüllt) | | |
+| SRV-01 | Phase 1 | Pending |
+| SRV-02 | Phase 1 | Pending |
+| SRV-03 | Phase 1 | Pending |
+| SRV-04 | Phase 1 | Pending |
+| SRV-05 | Phase 1 | Pending |
+| TOOL-01 | Phase 1 | Pending |
+| TOOL-02 | Phase 1 | Pending |
+| TOOL-03 | Phase 1 | Pending |
+| TOOL-04 | Phase 1 | Pending |
+| TOOL-05 | Phase 1 | Pending |
+| TOOL-06 | Phase 1 | Pending |
+| TOOL-07 | Phase 1 | Pending |
+| TOOL-09 | Phase 1 | Pending |
+| AUTH-01 | Phase 1 | Pending |
+| EXAPP-03 | Phase 1 | Pending |
+| CONTRIB-01 | Phase 1 | Pending |
+| EXAPP-01 | Phase 2 | Pending |
+| AUTH-05 | Phase 2 | Pending |
+| AUTH-06 | Phase 2 | Pending |
+| AUTH-02 | Phase 3 | Pending |
+| AUTH-03 | Phase 3 | Pending |
+| AUTH-04 | Phase 3 | Pending |
+| EXAPP-02 | Phase 4 | Pending |
+| TOOL-08 | Phase 4 | Pending |
+| EXAPP-04 | Phase 5 | Pending |
+| EXAPP-05 | Phase 5 | Pending |
 
 **Coverage:**
 - v1 requirements: 26 total
-- Mapped to phases: 0
-- Unmapped: 26 (Roadmap ausstehend)
+- Mapped to phases: 26
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-08-14*
-*Last updated: 2026-08-14 after initial definition*
+*Last updated: 2026-08-14 after roadmap creation (traceability filled)*
