@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 01-14-PLAN.md
-last_updated: "2026-08-14T19:51:43.810Z"
+status: ready_to_plan
+stopped_at: Phase 1 complete (14/14) — ready to discuss Phase 2
+last_updated: 2026-08-14T20:28:59.972Z
 last_activity: 2026-08-14
 progress:
   total_phases: 5
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-14)
 
 **Core value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Current focus:** Phase 1: Server-Kern
+**Current focus:** Phase 2 — exapp shell
 
 ## Current Position
 
-Phase: 1 (Server-Kern): EXECUTING
-Plan: 14 of 14 (alle Plaene ausgefuehrt; Review-Gates und Phasenabschluss stehen aus)
-Status: Ready to execute
+Phase: 2
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-08-14
 
 Progress: [██████████] 100%
@@ -36,7 +36,7 @@ Progress: [██████████] 100%
 
 **Velocity:**
 
-- Total plans completed: 0
+- Total plans completed: 14
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -44,7 +44,7 @@ Progress: [██████████] 100%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 1 | 14 | - | - |
 
 **Recent Trend:**
 

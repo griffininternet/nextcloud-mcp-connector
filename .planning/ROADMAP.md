@@ -13,7 +13,7 @@ Der Weg führt vom sofort nutzbaren Kern zur Store-Distribution: Zuerst entsteht
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Server-Kern** - Alle Kern-Tools, stdio und Streamable HTTP mit App-Passwort; App-ID-Freeze und context_agent-Fix
+- [x] **Phase 1: Server-Kern** - Alle Kern-Tools, stdio und Streamable HTTP mit App-Passwort; App-ID-Freeze und context_agent-Fix (completed 2026-08-14)
 - [ ] **Phase 2: ExApp-Shell** - Installation über AppAPI, Berechtigungs-Durchgriff, Discovery- und DAV-Spikes
 - [ ] **Phase 3: OAuth 2.1** - Spec-konformes OAuth mit E2E-Beweis gegen Claude.ai und ChatGPT, Login Flow v2 als Fallback
 - [ ] **Phase 4: Per-User-Verwaltung und prepare_context** - Settings-UI mit Token-Kontrolle plus Bündel-Tool
@@ -60,7 +60,7 @@ Plans:
 - [x] 01-05-PLAN.md - files_search und files_list mit zustandsloser Pagination (Wave 4)
 - [x] 01-09-PLAN.md - Deck-Tools: deck_browse und deck_create_card (Wave 4)
 - [x] 01-10-PLAN.md - unified_search mit parallelem Provider-Fan-out (Wave 4)
-- [ ] 01-13-PLAN.md - Contribution-PR an nextcloud/context_agent#227 (Wave 4) *(wartet auf die Einreichung durch den Owner)*
+- [x] 01-13-PLAN.md - Contribution-PR an nextcloud/context_agent#227 (Wave 4) *(wartet auf die Einreichung durch den Owner)*
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -140,7 +140,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Server-Kern | 14/14 | In Progress| Review-Gates und Owner-PR offen |
+| 1. Server-Kern | 14/14 | Complete    | 2026-08-14 |
 | 2. ExApp-Shell | 0/TBD | Not started | - |
 | 3. OAuth 2.1 | 0/TBD | Not started | - |
 | 4. Per-User-Verwaltung und prepare_context | 0/TBD | Not started | - |
