@@ -31,7 +31,23 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. tools/list zeigt korrekte Annotationen, token-schlanke Schemas (CI-Token-Budget-Check besteht) und ein dokumentiertes, sichtbares Permission-Level pro Tool; kein Tool kann löschen, überschreiben oder Freigaben ändern
   4. Ein Tool-Aufruf gegen eine nicht installierte Nextcloud-App liefert einen klaren, handlungsfähigen Fehlertext statt eines Crashes
   5. Die App-ID (ohne "nextcloud" im Namen) ist in Woche 1 eingefroren und dokumentiert, und der Fix-PR an nextcloud/context_agent#227 ist eingereicht
-**Plans**: TBD
+**Plans**: 14 plans in 6 waves
+
+Plans:
+- [ ] 01-01-PLAN.md - Scaffold, Toolchain, CI und roter Contract-Test (Wave 1)
+- [ ] 01-02-PLAN.md - Walking Skeleton: files_read per stdio (Wave 2)
+- [ ] 01-12-PLAN.md - App-ID-Freeze, README mit Permission-Tabelle, GitHub-Repo (Wave 2)
+- [ ] 01-03-PLAN.md - Test-Nextcloud per compose plus files_upload create-only (Wave 3)
+- [ ] 01-04-PLAN.md - Streamable HTTP, Basic-Passthrough, Client-Matrix und Restart-Beweis (Wave 3)
+- [ ] 01-06-PLAN.md - OCS-Schicht, Graceful Degradation und Notes-Tools (Wave 3)
+- [ ] 01-07-PLAN.md - Kalender-Tools mit serverseitiger Expansion (Wave 3)
+- [ ] 01-08-PLAN.md - Kontakte-Suche ueber CardDAV (Wave 3)
+- [ ] 01-05-PLAN.md - files_search und files_list mit zustandsloser Pagination (Wave 4)
+- [ ] 01-09-PLAN.md - Deck-Tools: deck_browse und deck_create_card (Wave 4)
+- [ ] 01-10-PLAN.md - unified_search mit parallelem Provider-Fan-out (Wave 4)
+- [ ] 01-13-PLAN.md - Contribution-PR an nextcloud/context_agent#227 (Wave 4)
+- [ ] 01-11-PLAN.md - ChatGPT-Profil: search und fetch (Wave 5)
+- [ ] 01-14-PLAN.md - Phasenabschluss: Schreibgrenzen-Beweis, Budget-Gate, Doku, Abnahme (Wave 6)
 
 ### Phase 2: ExApp-Shell
 **Goal**: Admins können die App als ExApp über AppAPI installieren, jede Anfrage läuft unter der Identität des angemeldeten Nutzers, und die OAuth-Topologie ist per Spike entschieden
@@ -91,7 +107,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Server-Kern | 0/TBD | Not started | - |
+| 1. Server-Kern | 0/14 | Planned | - |
 | 2. ExApp-Shell | 0/TBD | Not started | - |
 | 3. OAuth 2.1 | 0/TBD | Not started | - |
 | 4. Per-User-Verwaltung und prepare_context | 0/TBD | Not started | - |
