@@ -1,0 +1,56 @@
+<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns" xmlns:card="urn:ietf:params:xml:ns:carddav">
+  <d:response>
+    <d:href>/remote.php/dav/addressbooks/users/alice/contacts/maria-meier.vcf</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:getetag>&quot;11aa22bb&quot;</d:getetag>
+        <card:address-data>BEGIN:VCARD
+VERSION:3.0
+UID:maria-meier-uid
+FN:Maria Meier
+N:Meier;Maria;;;
+ORG:Beispiel GmbH;Vertrieb
+EMAIL;TYPE=WORK:maria.meier@beispiel.de
+EMAIL;TYPE=HOME:m.meier@example.org
+TEL;TYPE=WORK,VOICE:+49 40 1234567
+TEL;TYPE=CELL:+49 170 7654321
+END:VCARD
+</card:address-data>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/remote.php/dav/addressbooks/users/alice/contacts/nur-name.vcf</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:getetag>&quot;33cc44dd&quot;</d:getetag>
+        <card:address-data>BEGIN:VCARD
+VERSION:3.0
+FN:Nur Name
+END:VCARD
+</card:address-data>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/remote.php/dav/addressbooks/users/alice/contacts/juergen-schroeder.vcf</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:getetag>&quot;55ee66ff&quot;</d:getetag>
+        <card:address-data>BEGIN:VCARD
+VERSION:3.0
+UID:juergen-schroeder-uid
+FN:J&#252;rgen Schr&#246;der
+N:Schr&#246;der;J&#252;rgen;;;
+ORG:Meier &amp; S&#246;hne
+EMAIL:j.schroeder@meier-soehne.de
+END:VCARD
+</card:address-data>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+</d:multistatus>
