@@ -44,7 +44,7 @@
 
 ### Flanke Nextcloud-Ökosystem (CONTRIB)
 
-- [x] **CONTRIB-01**: Contribution-Fix an nextcloud/context_agent#227 (stateless_http=True bricht SDK>=1.28-Clients) als PR eingereicht
+- [ ] **CONTRIB-01**: Contribution-Fix an nextcloud/context_agent#227 (stateless_http=True bricht SDK>=1.28-Clients) als PR eingereicht *(vorbereitet: Fork, DCO-Commit, PR-Text; Einreichung ist Owner-Schritt)*
 
 ## v2 Requirements
 
@@ -95,7 +95,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TOOL-09 | Phase 1 | Complete |
 | AUTH-01 | Phase 1 | Complete |
 | EXAPP-03 | Phase 1 | Complete |
-| CONTRIB-01 | Phase 1 | Complete |
+| CONTRIB-01 | Phase 1 | Pending |
 | EXAPP-01 | Phase 2 | Pending |
 | AUTH-05 | Phase 2 | Pending |
 | AUTH-06 | Phase 2 | Pending |
