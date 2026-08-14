@@ -126,6 +126,21 @@ new objects but can never modify or remove existing ones.
 `search` and `fetch` exist because the ChatGPT connector profile requires exactly these two names
 and schemas. They are thin wrappers over the tools above, not a second implementation.
 
+### Calendar times
+
+CalDAV is the one place where a small time mistake produces a confidently wrong answer, so the
+calendar tools are explicit about it:
+
+- `start` and `end` are required and must carry a zone, for example `2026-09-01T00:00:00+02:00`
+  or `2026-09-01T00:00:00Z`. A value without a zone is refused instead of guessed.
+- Recurring events are expanded by Nextcloud itself, so every instance comes back as an absolute
+  time. The optional `timezone` parameter (an IANA name such as `Europe/Berlin`) changes only how
+  the answer is written, never which events it contains.
+- All day events are dates without a time and are marked with `all_day`. Their end date is
+  exclusive, as RFC 5545 defines it: an event on 24 October ends on 25 October.
+- `calendar_create_event` reads the created event back once and reports the times the server
+  stored, not the ones it was asked for.
+
 ### Optional apps
 
 Notes and Deck are optional Nextcloud apps. The tool list is the same everywhere: it never depends
