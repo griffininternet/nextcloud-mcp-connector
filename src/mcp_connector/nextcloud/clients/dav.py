@@ -253,6 +253,84 @@ def build_search_body(
     return etree.tostring(root, xml_declaration=True, encoding="utf-8")
 
 
+def build_fileid_body(scope: str, fileid: str, props: Sequence[str] = _SEARCH_PROPS) -> bytes:
+    """Build the basicsearch body that turns a file id back into a path.
+
+    ``oc:fileid`` is a queryable property of the Nextcloud search backend, verified against
+    a running Nextcloud 34: one SEARCH answers what a recursive PROPFIND would need a walk
+    of the whole home directory for.
+
+    The id becomes element text, so lxml escapes it, and the caller has already refused
+    anything that is not a number. Two guards for one value is cheap here: this is the one
+    lookup that takes an identifier straight from a model.
+    """
+    number = (fileid or "").strip()
+    if not number.isdigit():
+        raise ToolError(
+            message=f"{fileid!r} is not a numeric Nextcloud file id.",
+            hint="Use an id from a search tool, for example file:4711.",
+        )
+
+    root = etree.Element(
+        f"{{{xml.DAV}}}searchrequest",
+        nsmap={"d": xml.DAV, "oc": xml.OC, "nc": xml.NC},
+    )
+    basic = etree.SubElement(root, f"{{{xml.DAV}}}basicsearch")
+
+    select = etree.SubElement(basic, f"{{{xml.DAV}}}select")
+    prop = etree.SubElement(select, f"{{{xml.DAV}}}prop")
+    for name in props:
+        etree.SubElement(prop, name)
+
+    from_element = etree.SubElement(basic, f"{{{xml.DAV}}}from")
+    scope_element = etree.SubElement(from_element, f"{{{xml.DAV}}}scope")
+    href = etree.SubElement(scope_element, f"{{{xml.DAV}}}href")
+    href.text = scope
+    depth = etree.SubElement(scope_element, f"{{{xml.DAV}}}depth")
+    depth.text = "infinity"
+
+    where = etree.SubElement(basic, f"{{{xml.DAV}}}where")
+    equals = etree.SubElement(where, f"{{{xml.DAV}}}eq")
+    eq_prop = etree.SubElement(equals, f"{{{xml.DAV}}}prop")
+    etree.SubElement(eq_prop, f"{{{xml.OC}}}fileid")
+    literal = etree.SubElement(equals, f"{{{xml.DAV}}}literal")
+    literal.text = number
+
+    etree.SubElement(basic, f"{{{xml.DAV}}}orderby")
+
+    limit_element = etree.SubElement(basic, f"{{{xml.DAV}}}limit")
+    nresults = etree.SubElement(limit_element, f"{{{xml.DAV}}}nresults")
+    nresults.text = "1"
+
+    return etree.tostring(root, xml_declaration=True, encoding="utf-8")
+
+
+async def find_by_fileid(
+    client: httpx.AsyncClient,
+    creds: Credentials,
+    fileid: str,
+) -> dict[str, Any] | None:
+    """Return the entry of one file id inside the user's own home, or ``None``.
+
+    ``None`` and not an exception: a file id that belongs to no file is an ordinary
+    outcome (the file was deleted, or it lives in a share this account lost), and the
+    caller words that better than this layer could.
+
+    The scope is the user's own home, so an id from another account resolves to nothing
+    here even before Nextcloud applies its own permission check.
+    """
+    response = await client.request(
+        "SEARCH",
+        f"{creds.base_url}{DAV_ROOT_PATH}",
+        headers={"Content-Type": "text/xml"},
+        content=build_fileid_body(search_scope(creds), fileid),
+        auth=httpx.BasicAuth(creds.user, creds.secret),
+    )
+    _check(response, f"the file with id {fileid}")
+    entries = parse_entries(response.content, creds)
+    return entries[0] if entries else None
+
+
 def _list_body() -> bytes:
     """Build the PROPFIND body of a folder listing; with lxml, never with a string."""
     root = etree.Element(

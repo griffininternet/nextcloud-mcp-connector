@@ -17,7 +17,7 @@ output schema: every byte here is paid for in every ``tools/list`` of every sess
 from mcp.server.mcpserver import Context
 
 from .. import deps
-from ..models import SearchHit, SearchResults
+from ..models import FetchResult, SearchHit, SearchResults
 from ..tools import chatgpt
 from . import READ_ONLY, graceful, mcp
 
@@ -29,3 +29,11 @@ async def search(query: str, ctx: Context | None = None) -> SearchResults:
     clients = deps.resolve_clients(ctx)
     hits = await chatgpt.search(clients, query)
     return SearchResults(results=[SearchHit(**hit) for hit in hits])
+
+
+@mcp.tool(annotations=READ_ONLY)
+@graceful
+async def fetch(id: str, ctx: Context | None = None) -> FetchResult:  # noqa: A002 - OpenAI contract
+    """Fetch the full content of one search result by its id."""
+    clients = deps.resolve_clients(ctx)
+    return FetchResult(**await chatgpt.fetch(clients, id))

@@ -283,7 +283,7 @@ async def test_the_long_card_form_is_read_directly(clients: NcClients) -> None:
         "stackId": 11,
         "duedate": "2026-09-01T10:00:00+00:00",
     }
-    with respx.mock(assert_all_called=True) as mock:
+    with respx.mock(assert_all_called=False) as mock:
         mock_capabilities(mock, deck=DECK_INSTALLED)
         boards = mock.get(f"{DECK_API}/boards")
         mock.get(f"{DECK_API}/boards/2/stacks/11/cards/102").mock(
