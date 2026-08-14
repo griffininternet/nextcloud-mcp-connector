@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-08-PLAN.md
-last_updated: "2026-08-14T17:23:04.750Z"
+stopped_at: Completed 01-05-PLAN.md
+last_updated: "2026-08-14T17:48:17.706Z"
 last_activity: 2026-08-14
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 14
-  completed_plans: 8
+  completed_plans: 9
   percent: 0
 ---
 
@@ -30,7 +30,7 @@ Plan: 9 of 14
 Status: Ready to execute
 Last activity: 2026-08-14
 
-Progress: [██████░░░░] 57%
+Progress: [██████░░░░] 64%
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Progress: [██████░░░░] 57%
 | Phase 01-server-kern P06 | 27 min | 2 tasks | 13 files |
 | Phase 01-server-kern PP07 | 34 min | 3 tasks | 13 files |
 | Phase 01-server-kern P08 | 25 min | 2 tasks | 10 files |
+| Phase 01-server-kern P05 | 16 min | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -104,6 +105,11 @@ Recent decisions affecting current work:
 - [Phase 01-server-kern]: Faellt ein einzelner Kalender aus, erscheint er als degraded-Eintrag; fallen alle aus, ist das ein Fehler und keine leere Terminliste
 - [Phase 01-server-kern]: Generierte Adressbuecher (z-server-generated--, z-app-generated--) zaehlen nicht als Adressbuecher des Nutzers; sonst waere 'kein Adressbuch' auf jedem echten Server unerreichbar und eine Namenssuche wuerde das Kontenverzeichnis der Instanz mitliefern
 - [Phase 01-server-kern]: contacts_search bleibt rein lesend, es gibt keinen CardDAV-Schreibpfad in Phase 1; D-07 plus T-01-57; ein Grep-Test haelt das Modul frei von schreibenden Methoden
+- [Phase 01-server-kern]: Cursor-Handles sind unsigniert und tragen nur Offset, Suchbegriff und Ordner: sie enthalten kein Geheimnis und keine Autoritaet, die Credentials kommen pro Aufruf aus dem Auth-Kanal (T-01-33)
+- [Phase 01-server-kern]: Ein Handle aus einer anderen Suche oder einem anderen Ordner wird abgelehnt statt still auf die falsche Seite angewendet
+- [Phase 01-server-kern]: files_search behaelt die Serverreihenfolge (Folgeseiten entstehen aus groesserem d:limit plus Slice); files_list sortiert selbst, Ordner zuerst, dann Name
+- [Phase 01-server-kern]: propfind_children erkennt den Ordner selbst am Pfad statt an der Position und gibt ihn mit zurueck, damit ein Dateipfad ohne zweiten Request erklaert werden kann
+- [Phase 01-server-kern]: Das note-Feld 'matched on names only; contents are not indexed' steht in jeder Suchantwort, nicht nur bei null Treffern (Pitfall 5, gegen NC 34 verifiziert)
 
 ### Pending Todos
 
@@ -125,6 +131,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-14T17:23:04.736Z
-Stopped at: Completed 01-08-PLAN.md
+Last session: 2026-08-14T17:48:06.345Z
+Stopped at: Completed 01-05-PLAN.md
 Resume file: None
