@@ -106,8 +106,9 @@ uv run uvicorn mcp_connector.entry_http:app --host 127.0.0.1 --port 8765
 ```
 
 The MCP endpoint is `POST /mcp`. `GET /health` answers `{"status":"ok","version":"..."}`
-without authentication, which is what a reverse proxy or a container health check should
-poll.
+without authentication and without the host check, which is what a reverse proxy or a
+container health check should poll. It is a liveness probe and nothing else: a 200 there
+does not mean a client can connect, see the 421 section below.
 
 Note what is missing from that block: no `NC_MCP_USER` and no `NC_MCP_APP_PASSWORD`. In
 this mode the server holds no Nextcloud account of its own. The target Nextcloud, however,
@@ -174,18 +175,28 @@ off with `NC_MCP_DISABLE_DNS_REBINDING_PROTECTION=true`.
 
 ### 1. `421 Misdirected Request`
 
-Symptom: the client cannot connect at all, and the server log shows a 421 before any MCP
-message. `curl` against `/health` from the same host works.
+Symptom: the client cannot connect at all, and the server answers `POST /mcp` with a 421
+before any MCP message. `GET /health` keeps answering 200, which is the confusing part:
+`/health` is a plain route and is deliberately not behind the host check, so a healthy
+probe says nothing about whether a client can connect.
 
 Cause: the `Host` header of the request is not in the allow list. This check runs in the
 transport layer, before any code of this server, so there is no friendly error message.
 
 Fix: set `NC_MCP_ALLOWED_HOSTS` to the name the client actually uses, including the port if
-the client was given one. Verify from outside:
+the client was given one. Reproduce and verify against the MCP endpoint, never against
+`/health`:
 
 ```bash
-curl -i -H 'Host: mcp.example.com' http://127.0.0.1:8765/health
+curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+  -H 'Host: mcp.example.com' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \
+  http://127.0.0.1:8765/mcp
 ```
+
+`421` means the name is missing from the allow list. `200` means it is accepted.
 
 ### 2. `Session terminated` or a client that reconnects in a loop
 
