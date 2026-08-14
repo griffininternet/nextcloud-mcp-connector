@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-12-PLAN.md
-last_updated: "2026-08-14T15:49:05.552Z"
+stopped_at: Completed 01-03-PLAN.md
+last_updated: "2026-08-14T16:07:12.989Z"
 last_activity: 2026-08-14
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 14
-  completed_plans: 3
+  completed_plans: 4
   percent: 0
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 1 (Server-Kern): EXECUTING
-Plan: 4 of 14
+Plan: 5 of 14
 Status: Ready to execute
 Last activity: 2026-08-14
 
-Progress: [██░░░░░░░░] 21%
+Progress: [███░░░░░░░] 29%
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Progress: [██░░░░░░░░] 21%
 | Phase 01-server-kern P01 | 24 min | 3 tasks | 10 files |
 | Phase 01-server-kern P02 | 18 min | 3 tasks | 21 files |
 | Phase 01-server-kern P12 | 14 min | 3 tasks | 2 files |
+| Phase 01-server-kern P03 | 25 min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -76,6 +77,8 @@ Recent decisions affecting current work:
 - [Phase 01-server-kern]: Repo-Sichtbarkeit option-a: alles oeffentlich inklusive .planning (Owner-Entscheidung, T-01-84 accept)
 - [Phase 01-server-kern]: PyPI-Verfuegbarkeit nur ueber die JSON-API und den Simple-Index pruefen: die HTML-Projektseite liefert wegen einer Bot-Challenge auch fuer freie Namen 200
 - [Phase 01-server-kern]: TOOL-09 bleibt Pending: der README-Nachweis reicht nicht, die Schreibgrenzen belegt erst der Grep- und Registry-Test in Plan 14
+- [Phase 01-server-kern]: Annahme A1 bestaetigt: Nextcloud 34.0.2 antwortet auf PUT mit If-None-Match: * bei existierender Datei mit 412; Laufzeitbeweis gegen nextcloud:34-apache; der geplante PROPFIND-Fallback mit TOCTOU-Restrisiko entfaellt
+- [Phase 01-server-kern]: occ-Kommandos mit Passwort laufen ueber 'docker compose exec -e OC_PASS=...', Testnutzer-Passwoerter mindestens 10 Zeichen; Grund: eine auf dem Host gesetzte Variable erreicht den Container nie, und Nextclouds Passwort-Policy lehnt kuerzere Passwoerter ab
 
 ### Pending Todos
 
@@ -97,6 +100,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-14T15:48:33.641Z
-Stopped at: Completed 01-12-PLAN.md
+Last session: 2026-08-14T16:07:12.974Z
+Stopped at: Completed 01-03-PLAN.md
 Resume file: None
