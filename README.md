@@ -141,6 +141,23 @@ calendar tools are explicit about it:
 - `calendar_create_event` reads the created event back once and reports the times the server
   stored, not the ones it was asked for.
 
+### Contacts
+
+`contacts_search` is read only, and it stays that way in this version: there is no CardDAV write
+path at all.
+
+- The search term is matched by Nextcloud itself against the full name and the mail addresses of a
+  card, case and accent insensitive. A phone number is returned but not searched for.
+- Every address book of the account is asked at the same time. One that fails is named under
+  `degraded`, so a partial answer is visibly partial.
+- The two collections Nextcloud generates for every account are left out: the account directory of
+  the instance (`z-server-generated--system`, shown as "Accounts") and the "recently contacted"
+  list. Neither is an address book the user keeps, and a name search should not hand out the
+  directory of a whole organisation as a side effect.
+- An account without an address book of its own gets an error that names
+  `occ dav:create-addressbook <user> contacts`, never an empty result: "no address book" and "no
+  matching contact" are different answers.
+
 ### Optional apps
 
 Notes and Deck are optional Nextcloud apps. The tool list is the same everywhere: it never depends
