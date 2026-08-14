@@ -94,3 +94,24 @@ async def test_calendar_list_events_demands_a_window_with_a_timezone() -> None:
     assert "+02:00" in schema["properties"]["start"]["description"], (
         "the example value keeps the model from guessing the format"
     )
+
+
+@pytest.mark.anyio
+async def test_calendar_create_event_is_annotated_as_create_only() -> None:
+    """Not idempotent, and honestly so: If-None-Match refuses the second identical call."""
+    async with Client(mcp, raise_exceptions=True) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+
+    assert "calendar_create_event" in tools, "the calendar write path must be exposed"
+    tool = tools["calendar_create_event"]
+
+    annotations = tool.annotations
+    assert annotations is not None
+    assert annotations.read_only_hint is False, "calendar_create_event writes"
+    assert annotations.destructive_hint is False, "it can only create, never replace or delete"
+    assert annotations.idempotent_hint is False, "a second call creates a second event"
+    assert annotations.open_world_hint is False
+    assert tool.output_schema is None, "structured_output=False (schema diet)"
+
+    schema = tool.input_schema
+    assert set(schema.get("required", [])) >= {"summary", "start", "end"}
