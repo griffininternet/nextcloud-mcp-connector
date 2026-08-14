@@ -26,12 +26,12 @@ Entwickler koennen den MCP-Server lokal (stdio) und remote (Streamable HTTP) mit
 - **D-07:** Kontakte (1): `contacts_search` (lesend). [auto]
 - **D-08:** Suche (1): `unified_search` (OCS Unified Search, provider-parallel, berechtigungstreu). [auto]
 - **D-09:** ChatGPT-Profil (2): `search` und `fetch` mit exakt dem OpenAI-Kompatibilitaets-Schema (search: id/title/url; fetch: id/title/text/url/metadata). `search` delegiert an Unified Search, `fetch` loest IDs auf Datei/Notiz/Karte/Termin auf. ID-Format: praefixiert (`file:<fileid>`, `note:<id>`, `card:<boardId>:<cardId>`, `event:<calendar>:<uid>`), damit fetch eindeutig routen kann. [auto]
-- **D-10:** [informational] prepare_context ist NICHT in Phase 1 (Phase 4), wird aber beim Tool-Registry-Design mitgedacht (Fan-out nutzt dieselben Client-Funktionen).
+- prepare_context ist NICHT in Phase 1 (Phase 4), wird aber beim Tool-Registry-Design mitgedacht (Fan-out nutzt dieselben Client-Funktionen). (ehemals D-10, informational)
 
 ### Auth-Modell Phase 1
 - **D-11:** stdio: NC-Base-URL + Username + App-Passwort aus Env (NC_MCP_URL, NC_MCP_USER, NC_MCP_APP_PASSWORD). [auto]
 - **D-12:** Streamable HTTP: Credential-Passthrough pro Request via Authorization-Header (Basic user:app-passwort). Zusaetzlich optionaler statischer Bearer fuer Single-User-Deployments (Env). KEIN Token-Store in Phase 1 (kommt mit OAuth in Phase 3). Kein Credential-Logging, niemals. [auto]
-- **D-13:** [informational] Login Flow v2 ist Phase 3 (AUTH-02), nicht Phase 1.
+- Login Flow v2 ist Phase 3 (AUTH-02), nicht Phase 1. (ehemals D-13, informational)
 
 ### Antwort- und Fehlerformat
 - **D-14:** Kompakte JSON-Antworten mit stabilen Feldern; outputSchema nur wo Clients es nutzen (Schema-Diaet nach InfraNode-Playbook: keine Auto-Titles, kurze Descriptions nur im inputSchema). CI-Check fuer Token-Budget der tools/list-Antwort. [auto]
