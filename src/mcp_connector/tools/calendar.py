@@ -26,18 +26,26 @@ finds nothing without it.
 """
 
 import asyncio
-from datetime import UTC, date, datetime, time
+import uuid
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
+from icalendar import Calendar as IcsCalendar
+from icalendar import Event as IcsEvent
+from icalendar import Timezone as IcsTimezone
 
+from .. import ids
 from ..errors import ToolError
 from ..nextcloud import NcClients
 from ..nextcloud.clients import caldav
 
 DEFAULT_LIMIT = 100
 MAX_LIMIT = 500
+
+#: Identifies this generator in every object it writes, as RFC 5545 asks for.
+PRODID = "-//Nextcloud MCP Connector//nextcloud-mcp-connector 0.1//EN"
 
 #: Wall clock budget for one calendar. A single slow collection must not hold the answer
 #: hostage; it becomes a named degradation instead (threat T-01-50).
@@ -198,6 +206,183 @@ def _reason(exc: BaseException) -> str:
     if isinstance(exc, httpx.RequestError):
         return "The calendar could not be reached."
     raise exc
+
+
+async def create_event(
+    clients: NcClients,
+    summary: str,
+    start: str,
+    end: str,
+    calendar: str | None = None,
+    location: str | None = None,
+    description: str | None = None,
+    all_day: bool = False,
+    timezone: str | None = None,
+) -> dict[str, Any]:
+    """Create one new event and answer with the times the server confirmed.
+
+    The object name is a fresh UUID and the write carries ``If-None-Match: *``, so this
+    call can add an event but never replace one (TOOL-09, threat T-01-48). Afterwards the
+    object is read back once: a server that silently drops a field is the documented bug
+    class here, and only the read back exposes it.
+    """
+    title = (summary or "").strip()
+    if not title:
+        raise ToolError(
+            message="An event needs a summary.",
+            hint="Give a short title, for example 'Projektbesprechung'.",
+        )
+
+    zone = resolve_zone(timezone)
+    if all_day:
+        begin, finish = _all_day_window(start, end)
+    else:
+        begin, finish = _timed_window(start, end, zone if timezone else UTC)
+
+    calendars = await caldav.discover_calendars(clients.client, clients.creds)
+    target = _select(calendars, calendar)[0]
+
+    object_name = f"{uuid.uuid4()}.ics"
+    uid = object_name.removesuffix(".ics")
+    ics = build_ics(
+        uid=uid,
+        summary=title,
+        start=begin,
+        end=finish,
+        location=(location or "").strip() or None,
+        description=(description or "").strip() or None,
+        tzid=timezone if not all_day and timezone else None,
+    )
+
+    await caldav.put_event(clients.client, clients.creds, target.uri, object_name, ics)
+
+    confirmed = await _read_back(clients, target, object_name)
+    event = confirmed or {
+        "id": ids.encode_event(target.uri, object_name),
+        "uid": uid,
+        "summary": title,
+        "start": begin,
+        "end": finish,
+        "all_day": all_day,
+        "location": location or "",
+        "calendar": target.display_name,
+    }
+
+    result = _as_output(event, zone)
+    result["created"] = True
+    result["confirmed"] = confirmed is not None
+    return result
+
+
+async def _read_back(
+    clients: NcClients, target: caldav.CalendarRef, object_name: str
+) -> dict[str, Any] | None:
+    """Read the created object once. A failure here does not undo the write.
+
+    Reporting an error after a successful PUT would be the worst possible answer: the model
+    would create the event a second time, and this server cannot delete the first one.
+    """
+    try:
+        events = await caldav.get_event(
+            clients.client,
+            clients.creds,
+            target.uri,
+            object_name,
+            calendar=target.display_name,
+        )
+    except ToolError:
+        return None
+    except (TimeoutError, httpx.TimeoutException, httpx.RequestError):
+        return None
+    return events[0] if events else None
+
+
+def _all_day_window(start: str, end: str) -> tuple[date, date]:
+    """Two pure dates, with the RFC 5545 exclusive end applied to a single day event."""
+    begin = _parse_day(start, field="start")
+    finish = _parse_day(end, field="end")
+    if finish < begin:
+        raise ToolError(
+            message="end must not be before start.",
+            hint="For an all day event give the last day or the day after it, e.g. 2026-10-25.",
+        )
+    if finish == begin:
+        # RFC 5545 counts the end out, so start == end would be an event of zero length.
+        finish = begin + timedelta(days=1)
+    return begin, finish
+
+
+def _timed_window(start: str, end: str, zone: Any) -> tuple[datetime, datetime]:
+    """Two instants, expressed in the zone that will be written into the object."""
+    begin = parse_instant(start, field="start")
+    finish = parse_instant(end, field="end")
+    if finish <= begin:
+        raise ToolError(
+            message="end must be after start.",
+            hint="An event needs a duration; give an end after the start.",
+        )
+    return begin.astimezone(zone), finish.astimezone(zone)
+
+
+def _parse_day(value: str, field: str) -> date:
+    raw = (value or "").strip()
+    try:
+        return date.fromisoformat(raw)
+    except (TypeError, ValueError):
+        raise ToolError(
+            message=f"{field} is not a date ({value!r}).",
+            hint="An all day event takes a plain date, for example 2026-10-24.",
+        ) from None
+
+
+def build_ics(
+    *,
+    uid: str,
+    summary: str,
+    start: datetime | date,
+    end: datetime | date,
+    location: str | None = None,
+    description: str | None = None,
+    tzid: str | None = None,
+) -> bytes:
+    """Build one VCALENDAR with exactly one VEVENT, always through icalendar.
+
+    Never by string concatenation: RFC 5545 escaping, line folding and the ``VALUE=DATE``
+    form are exactly the places where a hand written generator breaks, and a summary that
+    contains a line break would otherwise be able to open a second component
+    (threat T-01-46).
+    """
+    calendar = IcsCalendar()
+    calendar.add("prodid", PRODID)
+    calendar.add("version", "2.0")
+
+    if tzid is not None and isinstance(start, datetime) and start.tzinfo is not None:
+        # An IANA TZID with a matching VTIMEZONE. A Windows identifier such as
+        # "W. Europe Standard Time" is the classic interop killer and cannot appear here,
+        # because the component is generated from the zoneinfo database itself.
+        year = start.year
+        component = IcsTimezone.from_tzinfo(
+            start.tzinfo,
+            tzid=tzid,
+            first_date=date(year - 1, 1, 1),
+            last_date=date(year + 5, 1, 1),
+        )
+        component.pop("COMMENT", None)
+        calendar.add_component(component)
+
+    event = IcsEvent()
+    event.add("uid", uid)
+    event.add("dtstamp", datetime.now(UTC))
+    event.add("dtstart", start)
+    event.add("dtend", end)
+    event.add("summary", summary)
+    if location:
+        event.add("location", location)
+    if description:
+        event.add("description", description)
+    calendar.add_component(event)
+
+    return calendar.to_ical()
 
 
 def _sort_key(event: dict[str, Any]) -> datetime:

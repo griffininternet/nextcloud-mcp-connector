@@ -12,7 +12,7 @@ from pydantic import Field
 
 from .. import deps
 from ..tools import calendar as calendar_tools
-from . import READ_ONLY, compact, graceful, mcp
+from . import CREATE_ONLY, READ_ONLY, compact, graceful, mcp
 
 
 @mcp.tool(annotations=READ_ONLY, structured_output=False)
@@ -44,5 +44,44 @@ async def calendar_list_events(
             calendar=calendar,
             timezone=timezone,
             limit=limit,
+        )
+    )
+
+
+@mcp.tool(annotations=CREATE_ONLY, structured_output=False)
+@graceful
+async def calendar_create_event(
+    summary: Annotated[str, Field(description="Title of the new event")],
+    start: Annotated[
+        str,
+        Field(description="Start, ISO 8601 with zone, e.g. 2026-09-15T14:00:00+02:00"),
+    ],
+    end: Annotated[str, Field(description="End, same format as start")],
+    calendar: Annotated[
+        str | None, Field(description="Target calendar by name or uri; default: the first")
+    ] = None,
+    location: Annotated[str | None, Field(description="Optional place")] = None,
+    description: Annotated[str | None, Field(description="Optional longer text")] = None,
+    all_day: Annotated[
+        bool, Field(description="All day: start and end are plain dates, end is exclusive")
+    ] = False,
+    timezone: Annotated[
+        str | None, Field(description="IANA zone to store the event in, e.g. Europe/Berlin")
+    ] = None,
+    ctx: Context = None,
+) -> str:
+    """Create a calendar event; returns the times the server confirmed, never overwrites."""
+    clients = deps.resolve_clients(ctx)
+    return compact(
+        await calendar_tools.create_event(
+            clients,
+            summary=summary,
+            start=start,
+            end=end,
+            calendar=calendar,
+            location=location,
+            description=description,
+            all_day=all_day,
+            timezone=timezone,
         )
     )
