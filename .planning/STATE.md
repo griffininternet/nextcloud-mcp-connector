@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-03-PLAN.md
-last_updated: "2026-08-14T16:07:12.989Z"
+stopped_at: Completed 01-04-PLAN.md
+last_updated: "2026-08-14T16:25:07.210Z"
 last_activity: 2026-08-14
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 14
-  completed_plans: 4
+  completed_plans: 5
   percent: 0
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 1 (Server-Kern): EXECUTING
-Plan: 5 of 14
+Plan: 6 of 14
 Status: Ready to execute
 Last activity: 2026-08-14
 
-Progress: [███░░░░░░░] 29%
+Progress: [████░░░░░░] 36%
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Progress: [███░░░░░░░] 29%
 | Phase 01-server-kern P02 | 18 min | 3 tasks | 21 files |
 | Phase 01-server-kern P12 | 14 min | 3 tasks | 2 files |
 | Phase 01-server-kern P03 | 25 min | 3 tasks | 10 files |
+| Phase 01-server-kern P04 | 20 min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,12 @@ Recent decisions affecting current work:
 - [Phase 01-server-kern]: TOOL-09 bleibt Pending: der README-Nachweis reicht nicht, die Schreibgrenzen belegt erst der Grep- und Registry-Test in Plan 14
 - [Phase 01-server-kern]: Annahme A1 bestaetigt: Nextcloud 34.0.2 antwortet auf PUT mit If-None-Match: * bei existierender Datei mit 412; Laufzeitbeweis gegen nextcloud:34-apache; der geplante PROPFIND-Fallback mit TOCTOU-Restrisiko entfaellt
 - [Phase 01-server-kern]: occ-Kommandos mit Passwort laufen ueber 'docker compose exec -e OC_PASS=...', Testnutzer-Passwoerter mindestens 10 Zeichen; Grund: eine auf dem Host gesetzte Variable erreicht den Container nie, und Nextclouds Passwort-Policy lehnt kuerzere Passwoerter ab
+- [Phase 01-server-kern]: select_mode nimmt die Header als Keyword dazu: aus dem Environment allein ist stdio nicht erkennbar, denn ein stdio-Prozess hat konstruktionsbedingt keine Header
+- [Phase 01-server-kern]: Die Auth-Verdrahtung entsteht beim Bau des MCPServer in server/__init__.py: auth= und token_verifier= sind Konstruktorargumente, ein Moduswechsel ist ein Neustart
+- [Phase 01-server-kern]: Im Static-Bearer-Modus bleibt der Nextcloud-Zugang aus dem Env: der Bearer authentifiziert den Aufrufer dieses Servers, er waehlt keinen Nextcloud-Nutzer
+- [Phase 01-server-kern]: Die Nextcloud-Basis-URL kommt in jedem Modus aus NC_MCP_URL, nie aus dem Request: ein Client, der das Ziel waehlen koennte, koennte diesen Server samt Credentials auf einen fremden Host richten
+- [Phase 01-server-kern]: Der Default-Testlauf deselektiert jetzt auch den matrix-Marker, damit 'uv run pytest' keinen Serverprozess startet
+- [Phase 01-server-kern]: AUTH-01 bleibt Pending: Basic-Passthrough und Static Bearer sind unit-getestet, der Remote-Rundlauf mit echtem App-Passwort gegen eine laufende Nextcloud fehlt noch
 
 ### Pending Todos
 
@@ -100,6 +107,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-14T16:07:12.974Z
-Stopped at: Completed 01-03-PLAN.md
+Last session: 2026-08-14T16:24:51.120Z
+Stopped at: Completed 01-04-PLAN.md
 Resume file: None

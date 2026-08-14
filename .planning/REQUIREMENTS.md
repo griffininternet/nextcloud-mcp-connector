@@ -7,11 +7,11 @@
 
 ### Server-Kern (SRV)
 
-- [ ] **SRV-01**: MCP-Client kann sich per Streamable HTTP verbinden (mcp>=2.0, bedient Session- und Stateless-Clients aus demselben Endpoint; Regressionstest gegen SDK>=1.28-Clients, Lehre aus context_agent#227)
+- [x] **SRV-01**: MCP-Client kann sich per Streamable HTTP verbinden (mcp>=2.0, bedient Session- und Stateless-Clients aus demselben Endpoint; Regressionstest gegen SDK>=1.28-Clients, Lehre aus context_agent#227)
 - [x] **SRV-02**: Nutzer kann denselben Server lokal per stdio betreiben (Entry-Point ohne ExApp, App-Passwort aus Env)
 - [ ] **SRV-03**: Tools tragen korrekte Annotationen (readOnlyHint/destructiveHint/idempotentHint/openWorldHint) und token-schlanke Schemas (Schema-Diät-Pattern aus InfraNode)
 - [ ] **SRV-04**: Tool-Aufrufe gegen nicht installierte Nextcloud-Apps liefern klare Fehlertexte statt Crashes (Graceful Degradation)
-- [ ] **SRV-05**: Kein In-Memory-Session-State in Tools (Pagination über Handles), Server ist multi-worker-fähig
+- [x] **SRV-05**: Kein In-Memory-Session-State in Tools (Pagination über Handles), Server ist multi-worker-fähig
 
 ### Werkzeuge (TOOL)
 
@@ -80,11 +80,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SRV-01 | Phase 1 | Pending |
+| SRV-01 | Phase 1 | Complete |
 | SRV-02 | Phase 1 | Complete |
 | SRV-03 | Phase 1 | Pending |
 | SRV-04 | Phase 1 | Pending |
-| SRV-05 | Phase 1 | Pending |
+| SRV-05 | Phase 1 | Complete |
 | TOOL-01 | Phase 1 | Pending |
 | TOOL-02 | Phase 1 | Pending |
 | TOOL-03 | Phase 1 | Pending |
