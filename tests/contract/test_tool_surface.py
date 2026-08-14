@@ -2,14 +2,56 @@
 
 RED on purpose in plan 01-01: ``mcp_connector.server`` does not exist yet. Plan 01-02
 delivers the walking skeleton (``files_read`` over stdio) and turns this file green.
-The full check of all 15 curated tools follows in plan 01-14; here we pin exactly the
-one capability the skeleton must provide.
+Plan 01-14 closes the phase and widens the file to the full surface: the section
+"the whole surface at once" below checks all 15 tools in one pass instead of one
+vertical at a time, so a sixteenth tool, a wrong annotation, a stray output schema or a
+user parameter cannot slip in between two plans.
 """
+
+from pathlib import Path
+from typing import Any
 
 import pytest
 from mcp import Client
 
 from mcp_connector.server import mcp
+
+README = Path(__file__).resolve().parents[2] / "README.md"
+
+# The curated set (D-03 to D-09). A set comparison, not a subset check: a sixteenth tool
+# fails this file just as loudly as a missing one. Counter proof for the reviewer: adding
+# ``@mcp.tool`` for a ``files_delete`` anywhere under ``server/reg_*.py`` turns
+# ``test_the_curated_set_is_complete_and_only_the_chatgpt_profile_has_a_schema`` and
+# ``test_every_tool_carries_honest_annotations`` red, because both compare against this
+# frozen literal and never against ``len(tools)`` alone.
+EXPECTED_TOOLS = {
+    "files_search",
+    "files_list",
+    "files_read",
+    "files_upload",
+    "calendar_list_events",
+    "calendar_create_event",
+    "notes_search",
+    "notes_read",
+    "notes_create",
+    "deck_browse",
+    "deck_create_card",
+    "contacts_search",
+    "unified_search",
+    "search",
+    "fetch",
+}
+
+# The four write paths. Everything else in EXPECTED_TOOLS only reads (D-16).
+CREATE_TOOLS = {"files_upload", "calendar_create_event", "notes_create", "deck_create_card"}
+
+# The documented exception to the schema diet: ChatGPT reads structured content (D-14).
+STRUCTURED_TOOLS = {"search", "fetch"}
+
+# A parameter that names a user turns this server into a confused deputy: the credentials
+# come from the auth channel, so a tool that also accepts a user name would let the model
+# ask for someone else's data (T-01-95).
+FORBIDDEN_PROPERTIES = {"user", "username", "uid", "userid", "owner"}
 
 
 @pytest.mark.anyio
@@ -219,27 +261,11 @@ async def test_the_curated_set_is_complete_and_only_the_chatgpt_profile_has_a_sc
     async with Client(mcp, raise_exceptions=True) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
 
-    assert set(tools) == {
-        "files_search",
-        "files_list",
-        "files_read",
-        "files_upload",
-        "calendar_list_events",
-        "calendar_create_event",
-        "notes_search",
-        "notes_read",
-        "notes_create",
-        "deck_browse",
-        "deck_create_card",
-        "contacts_search",
-        "unified_search",
-        "search",
-        "fetch",
-    }
+    assert set(tools) == EXPECTED_TOOLS
     assert len(tools) == 15, "the curated set is 15 tools, no more and no fewer"
 
     with_schema = {name for name, tool in tools.items() if tool.output_schema is not None}
-    assert with_schema == {"search", "fetch"}, (
+    assert with_schema == STRUCTURED_TOOLS, (
         "an output schema exists exactly where a client reads it (D-14)"
     )
 
@@ -300,3 +326,119 @@ async def test_calendar_create_event_is_annotated_as_create_only() -> None:
 
     schema = tool.input_schema
     assert set(schema.get("required", [])) >= {"summary", "start", "end"}
+
+
+# ---------------------------------------------------------------------------
+# The whole surface at once (plan 01-14, phase acceptance)
+#
+# The tests above pin one vertical each, which is the right granularity while a
+# vertical is being built. These four walk the complete registry instead, so the
+# checks hold for a tool nobody thought about when this file was written.
+# ---------------------------------------------------------------------------
+
+
+def _properties(schema: dict[str, Any]) -> list[tuple[str, Any]]:
+    """Every property name in a JSON schema, including nested ones and ``$defs``.
+
+    A shallow pass over ``properties`` would miss exactly the case worth catching: a
+    parameter that arrives as a nested model and therefore lives under ``$defs``.
+    """
+    found: list[tuple[str, Any]] = []
+    stack: list[Any] = [schema]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key in ("properties", "$defs", "definitions") and isinstance(value, dict):
+                    found.extend(value.items())
+                stack.append(value)
+        elif isinstance(node, list):
+            stack.extend(node)
+    return found
+
+
+@pytest.mark.anyio
+async def test_every_tool_carries_honest_annotations() -> None:
+    """D-16 over the whole registry: four create-only tools, eleven pure reads."""
+    async with Client(mcp, raise_exceptions=True) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+
+    assert set(tools) == EXPECTED_TOOLS, "the curated set is frozen (D-03 to D-09)"
+    assert CREATE_TOOLS < EXPECTED_TOOLS, "every write tool must be part of the curated set"
+
+    for name, tool in sorted(tools.items()):
+        annotations = tool.annotations
+        assert annotations is not None, f"{name} has no annotations"
+        assert annotations.open_world_hint is False, (
+            f"{name} talks to one known Nextcloud, never to the open web"
+        )
+        if name in CREATE_TOOLS:
+            assert annotations.read_only_hint is False, f"{name} writes and must say so"
+            assert annotations.destructive_hint is False, (
+                f"{name} can only create, never replace or delete"
+            )
+            assert annotations.idempotent_hint is False, (
+                f"a second {name} call is a second object, not a no-op"
+            )
+        else:
+            assert annotations.read_only_hint is True, f"{name} only reads"
+
+
+@pytest.mark.anyio
+async def test_every_tool_has_a_non_empty_description_and_only_two_have_an_output_schema() -> None:
+    """The description is what the model reads before it decides; empty is not an option."""
+    async with Client(mcp, raise_exceptions=True) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+
+    for name, tool in sorted(tools.items()):
+        description = (tool.description or "").strip()
+        assert description, f"{name} has no description"
+        assert len(description) >= 20, f"{name} has a description too short to be useful"
+
+    with_schema = {name for name, tool in tools.items() if tool.output_schema is not None}
+    assert with_schema == STRUCTURED_TOOLS, (
+        "an output schema exists exactly at search and fetch, nowhere else (D-14)"
+    )
+
+
+@pytest.mark.anyio
+async def test_no_input_schema_accepts_a_user_parameter() -> None:
+    """T-01-95: the caller is the auth channel, never a tool argument."""
+    async with Client(mcp, raise_exceptions=True) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+
+    assert set(tools) == EXPECTED_TOOLS, "the confused deputy check must cover all 15 schemas"
+
+    findings: list[str] = []
+    for name, tool in sorted(tools.items()):
+        schema = tool.input_schema or {}
+        for property_name, _definition in _properties(schema):
+            if property_name.lower() in FORBIDDEN_PROPERTIES:
+                findings.append(f"{name}.{property_name}")
+
+    assert findings == [], (
+        "a tool that takes a user name lets the model act as someone else: " + ", ".join(findings)
+    )
+
+
+@pytest.mark.anyio
+async def test_the_readme_permission_table_matches_the_live_registry() -> None:
+    """D-16: the documented permission level is generated from the same truth, or it lies."""
+    async with Client(mcp, raise_exceptions=True) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+
+    documented: dict[str, str] = {}
+    for line in README.read_text(encoding="utf-8").splitlines():
+        if not line.startswith("| `"):
+            continue
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        if len(cells) < 2 or cells[1] not in ("read", "create-only"):
+            continue
+        documented[cells[0].strip("`")] = cells[1]
+
+    assert set(documented) == set(tools), (
+        "the README tool table and the registry must list the same names"
+    )
+    for name, level in sorted(documented.items()):
+        expected = "create-only" if name in CREATE_TOOLS else "read"
+        assert level == expected, f"README calls {name} {level}, the registry says {expected}"
