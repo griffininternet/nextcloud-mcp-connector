@@ -16,7 +16,10 @@ services:
     image: nextcloud:34-apache
     container_name: nc-mcp-test
     ports:
-      - "${NC_TEST_PORT:-8080}:80"
+      # Loopback only (WR-06): with the default admin password and the bruteforce guard
+      # disabled at bootstrap, a 0.0.0.0 binding would expose a trivially ownable
+      # instance to the developer's or runner's LAN.
+      - "127.0.0.1:${NC_TEST_PORT:-8080}:80"
     environment:
       SQLITE_DATABASE: nextcloud
       NEXTCLOUD_ADMIN_USER: "${NC_TEST_ADMIN_USER:-admin}"

@@ -44,6 +44,14 @@ def test_compose_pins_the_nextcloud_image_and_a_healthcheck() -> None:
     assert "healthcheck" in text, "docker compose up --wait needs a healthcheck"
 
 
+def test_compose_binds_the_test_instance_to_loopback_only() -> None:
+    """WR-06: throwaway credentials are only defensible while nothing but localhost can
+    reach the instance; a bare host port would publish it on every interface."""
+    text = COMPOSE.read_text(encoding="utf-8")
+    assert '"127.0.0.1:${NC_TEST_PORT:-8080}:80"' in text
+    assert '"${NC_TEST_PORT:-8080}:80"' not in text.replace("127.0.0.1:${NC_TEST_PORT:-8080}", "")
+
+
 def test_bootstrap_creates_calendar_addressbook_and_kills_the_bruteforce_guard() -> None:
     text = BOOTSTRAP.read_text(encoding="utf-8")
     assert "dav:create-calendar" in text
