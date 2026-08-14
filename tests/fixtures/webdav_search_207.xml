@@ -1,0 +1,69 @@
+<?xml version="1.0"?>
+<!--
+  Answer of a WebDAV SEARCH against the DAV root, shaped after the verified example in
+  01-RESEARCH.md. Four responses on purpose: a plain file, a folder, a name with a space
+  and an ampersand (percent encoded in the href, escaped in the displayname), and an entry
+  whose fileid is reported as 404 by a second propstat block.
+-->
+<d:multistatus xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns">
+  <d:response>
+    <d:href>/remote.php/dav/files/alice/Docs/budget-2026.md</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:displayname>budget-2026.md</d:displayname>
+        <d:getcontenttype>text/markdown</d:getcontenttype>
+        <d:getlastmodified>Thu, 14 Aug 2026 10:00:00 GMT</d:getlastmodified>
+        <d:getcontentlength>2048</d:getcontentlength>
+        <d:resourcetype/>
+        <oc:fileid>4711</oc:fileid>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/remote.php/dav/files/alice/Budget%20Ablage/</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:displayname>Budget Ablage</d:displayname>
+        <d:getlastmodified>Wed, 13 Aug 2026 09:30:00 GMT</d:getlastmodified>
+        <d:resourcetype><d:collection/></d:resourcetype>
+        <oc:fileid>4712</oc:fileid>
+        <oc:size>15360</oc:size>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/remote.php/dav/files/alice/Docs/Jahres%20budget%20%26%20Anhang.md</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:displayname>Jahres budget &amp; Anhang.md</d:displayname>
+        <d:getcontenttype>text/markdown</d:getcontenttype>
+        <d:getlastmodified>Tue, 12 Aug 2026 08:15:00 GMT</d:getlastmodified>
+        <d:getcontentlength>512</d:getcontentlength>
+        <d:resourcetype/>
+        <oc:fileid>4713</oc:fileid>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/remote.php/dav/files/alice/budget.txt</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:displayname>budget.txt</d:displayname>
+        <d:getcontenttype>text/plain</d:getcontenttype>
+        <d:getlastmodified>Mon, 11 Aug 2026 07:00:00 GMT</d:getlastmodified>
+        <d:getcontentlength>64</d:getcontentlength>
+        <d:resourcetype/>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+    <d:propstat>
+      <d:prop>
+        <oc:fileid/>
+      </d:prop>
+      <d:status>HTTP/1.1 404 Not Found</d:status>
+    </d:propstat>
+  </d:response>
+</d:multistatus>
