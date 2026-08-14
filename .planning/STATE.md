@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-11-PLAN.md
-last_updated: "2026-08-14T19:25:26.732Z"
+stopped_at: Completed 01-14-PLAN.md
+last_updated: "2026-08-14T19:51:43.810Z"
 last_activity: 2026-08-14
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 14
-  completed_plans: 13
+  completed_plans: 14
   percent: 0
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 1 (Server-Kern): EXECUTING
-Plan: 12 of 14
+Plan: 14 of 14 (alle Plaene ausgefuehrt; Review-Gates und Phasenabschluss stehen aus)
 Status: Ready to execute
 Last activity: 2026-08-14
 
-Progress: [█████████░] 93%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -64,6 +64,7 @@ Progress: [█████████░] 93%
 | Phase 01-server-kern P09 | 13 min | 2 tasks | 10 files |
 | Phase 01-server-kern P10 | 15 min | 2 tasks | 12 files |
 | Phase 01-server-kern P11 | 74 min | 2 tasks | 11 files |
+| Phase 01-server-kern P14 | 71 min | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -131,10 +132,18 @@ Recent decisions affecting current work:
 - [Phase 01-server-kern]: Die Deck-Kurzform wird per Sweep aufgeloest (ein Request pro Board, Abbruch beim Fund, Cache nur innerhalb des Aufrufs); die interne Route aus A4 wird nicht benutzt und steht deshalb nirgends woertlich im Modul, weil ein Grep-Test sie fernhaelt
 - [Phase 01-server-kern]: fetch beantwortet eine url-ID mit einem ToolError, dessen Hinweis die URL traegt: ein Erfolgsergebnis ohne Inhalt ist die Form, die zum Erfinden einlaedt (T-01-75)
 - [Phase 01-server-kern]: SRV-03 bleibt Pending: Annotationen und Budget-Gate stimmen fuer alle 15 Tools, die Abnahme gehoert nach Plan 01-14
+- [Phase 01-server-kern]: Das Token-Budget-Gate steht auf dem gemessenen Wert plus 15 Prozent (10643 -> 12500 Bytes): 24000 war mehr als das Doppelte der Messung; ein Gate, das nie ausloest, schuetzt nichts
+- [Phase 01-server-kern]: Das Destruktiv-Gate filtert Kommentare und Docstrings per AST, behaelt aber String-Literale: Der ehrliche Satz in dav.py wuerde ein naives Grep rot faerben; method=DELETE ist das eigentliche Ziel
+- [Phase 01-server-kern]: Vulture laeuft bei voller Konfidenz mit annotierter Whitelist statt --min-confidence 80: Bei 80 meldete der CI-Schritt gar nichts und konnte nie fehlschlagen
+- [Phase 01-server-kern]: Die README-Tool-Tabelle wird im Contract-Test gegen die laufende Registry geprueft statt von Hand gepflegt: Eine handgepflegte Tabelle veraltet beim ersten neuen Tool; die Registry ist die einzige Wahrheit
+- [Phase 01-server-kern]: Modul-globaler veraenderlicher Zustand ist im Produktionscode verboten, mit genau zwei namentlich gelisteten Ausnahmen: Ein Dictionary, das eine Anfrage ueberlebt, ist einen Refactor von einem Session-Store entfernt und bricht den Restart-Beweis
+- [Phase 01-server-kern]: CONTRIB-01 bleibt Pending und Success Criterion 5 nur zur Haelfte erfuellt: Die App-ID ist eingefroren und dokumentiert, aber der PR an context_agent 227 ist ein Owner-Schritt und noch nicht eingereicht
 
 ### Pending Todos
 
 - **Owner-Schritt 01-13:** PR an nextcloud/context_agent#227 einreichen. Branch und DCO-Commit liegen im Fork street1983nk/context_agent (fix/stateless-http-session-compat, def1425), der PR-Text in docs/contrib/227-pr-body.md. Kommando und Pruefpunkte stehen in .planning/phases/01-server-kern/01-13-SUMMARY.md. Vorher `git push origin main` im Connector-Repo, damit der verlinkte Regressionstest oeffentlich sichtbar ist. Danach PR-URL nachtragen, ROADMAP 01-13 abhaken, CONTRIB-01 auf Complete.
+- **Owner-Schritt 01-14:** Ein Durchgang mit Claude Desktop selbst nach docs/client-setup.md. Die Anleitung ist gegen die Referenz-Clients der Testsuite verprobt (mcp 2.0 und mcp 1.29 gegen denselben laufenden Endpoint, plus scripts/acceptance_all_tools.py ueber alle 15 Tools per stdio); die Konfigurationspfade fuer Claude Desktop stammen aus der offiziellen Dokumentation und sind auf diesem Rechner nicht verifiziert.
+- **Aufraeumen (optional):** Die Docker-Testinstanz traegt jetzt zusaetzlich die Calendar-App 6.5.3 und die Abnahme-Artefakte. Fuer einen sauberen Stand: `docker compose -f compose.test.yml down -v` und danach `bash scripts/bootstrap_test_nc.sh`.
 
 ### Blockers/Concerns
 
@@ -152,6 +161,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-14T19:25:26.718Z
-Stopped at: Completed 01-11-PLAN.md
+Last session: 2026-08-14T19:50:39.954Z
+Stopped at: Completed 01-14-PLAN.md
 Resume file: None

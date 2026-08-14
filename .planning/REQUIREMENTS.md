@@ -9,7 +9,7 @@
 
 - [x] **SRV-01**: MCP-Client kann sich per Streamable HTTP verbinden (mcp>=2.0, bedient Session- und Stateless-Clients aus demselben Endpoint; Regressionstest gegen SDK>=1.28-Clients, Lehre aus context_agent#227)
 - [x] **SRV-02**: Nutzer kann denselben Server lokal per stdio betreiben (Entry-Point ohne ExApp, App-Passwort aus Env)
-- [ ] **SRV-03**: Tools tragen korrekte Annotationen (readOnlyHint/destructiveHint/idempotentHint/openWorldHint) und token-schlanke Schemas (Schema-Diät-Pattern aus InfraNode)
+- [x] **SRV-03**: Tools tragen korrekte Annotationen (readOnlyHint/destructiveHint/idempotentHint/openWorldHint) und token-schlanke Schemas (Schema-Diät-Pattern aus InfraNode)
 - [x] **SRV-04**: Tool-Aufrufe gegen nicht installierte Nextcloud-Apps liefern klare Fehlertexte statt Crashes (Graceful Degradation)
 - [x] **SRV-05**: Kein In-Memory-Session-State in Tools (Pagination über Handles), Server ist multi-worker-fähig
 
@@ -20,10 +20,10 @@
 - [x] **TOOL-03**: Nutzer kann Notizen suchen, lesen und anlegen (Notes-REST)
 - [x] **TOOL-04**: Nutzer kann Deck-Boards und Karten lesen und neue Karten anlegen (Deck-REST)
 - [x] **TOOL-05**: Nutzer kann Kontakte suchen (CardDAV, lesend)
-- [ ] **TOOL-06**: Nutzer kann berechtigungstreu über die ganze Cloud suchen (Unified Search OCS, provider-parallel)
+- [x] **TOOL-06**: Nutzer kann berechtigungstreu über die ganze Cloud suchen (Unified Search OCS, provider-parallel)
 - [x] **TOOL-07**: ChatGPT-Kompatibilitätsprofil: Tools `search` und `fetch` mit OpenAI-Schema (id/title/url bzw. id/title/text/url/metadata)
 - [ ] **TOOL-08**: Gamechanger prepare_context: ein Aufruf bündelt relevante Dateien, Termine, Notizen und Karten zu einer Anfrage token-effizient (mit Kurz/Voll-Parameter)
-- [ ] **TOOL-09**: Kein Tool kann löschen, überschreiben oder Freigaben ändern; Permission-Level pro Tool ist dokumentiert und sichtbar
+- [x] **TOOL-09**: Kein Tool kann löschen, überschreiben oder Freigaben ändern; Permission-Level pro Tool ist dokumentiert und sichtbar
 
 ### Auth und Berechtigungen (AUTH)
 
@@ -82,7 +82,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | SRV-01 | Phase 1 | Complete |
 | SRV-02 | Phase 1 | Complete |
-| SRV-03 | Phase 1 | Pending |
+| SRV-03 | Phase 1 | Complete |
 | SRV-04 | Phase 1 | Complete |
 | SRV-05 | Phase 1 | Complete |
 | TOOL-01 | Phase 1 | Complete |
@@ -90,9 +90,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TOOL-03 | Phase 1 | Complete |
 | TOOL-04 | Phase 1 | Complete |
 | TOOL-05 | Phase 1 | Complete |
-| TOOL-06 | Phase 1 | Pending |
+| TOOL-06 | Phase 1 | Complete |
 | TOOL-07 | Phase 1 | Complete |
-| TOOL-09 | Phase 1 | Pending |
+| TOOL-09 | Phase 1 | Complete |
 | AUTH-01 | Phase 1 | Complete |
 | EXAPP-03 | Phase 1 | Complete |
 | CONTRIB-01 | Phase 1 | Pending |
