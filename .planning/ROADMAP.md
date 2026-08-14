@@ -64,7 +64,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 01-11-PLAN.md - ChatGPT-Profil: search und fetch (Wave 5)
+- [x] 01-11-PLAN.md - ChatGPT-Profil: search und fetch (Wave 5)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -140,7 +140,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Server-Kern | 11/14 | In Progress|  |
+| 1. Server-Kern | 13/14 | In Progress|  |
 | 2. ExApp-Shell | 0/TBD | Not started | - |
 | 3. OAuth 2.1 | 0/TBD | Not started | - |
 | 4. Per-User-Verwaltung und prepare_context | 0/TBD | Not started | - |

@@ -21,7 +21,7 @@
 - [x] **TOOL-04**: Nutzer kann Deck-Boards und Karten lesen und neue Karten anlegen (Deck-REST)
 - [x] **TOOL-05**: Nutzer kann Kontakte suchen (CardDAV, lesend)
 - [ ] **TOOL-06**: Nutzer kann berechtigungstreu über die ganze Cloud suchen (Unified Search OCS, provider-parallel)
-- [ ] **TOOL-07**: ChatGPT-Kompatibilitätsprofil: Tools `search` und `fetch` mit OpenAI-Schema (id/title/url bzw. id/title/text/url/metadata)
+- [x] **TOOL-07**: ChatGPT-Kompatibilitätsprofil: Tools `search` und `fetch` mit OpenAI-Schema (id/title/url bzw. id/title/text/url/metadata)
 - [ ] **TOOL-08**: Gamechanger prepare_context: ein Aufruf bündelt relevante Dateien, Termine, Notizen und Karten zu einer Anfrage token-effizient (mit Kurz/Voll-Parameter)
 - [ ] **TOOL-09**: Kein Tool kann löschen, überschreiben oder Freigaben ändern; Permission-Level pro Tool ist dokumentiert und sichtbar
 
@@ -91,7 +91,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TOOL-04 | Phase 1 | Complete |
 | TOOL-05 | Phase 1 | Complete |
 | TOOL-06 | Phase 1 | Pending |
-| TOOL-07 | Phase 1 | Pending |
+| TOOL-07 | Phase 1 | Complete |
 | TOOL-09 | Phase 1 | Pending |
 | AUTH-01 | Phase 1 | Complete |
 | EXAPP-03 | Phase 1 | Complete |

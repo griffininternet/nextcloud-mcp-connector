@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: 01-13-PLAN.md vorbereitet, Checkpoint offen (Owner reicht den PR ein)
-last_updated: "2026-08-14T18:52:00.000Z"
+stopped_at: Completed 01-11-PLAN.md
+last_updated: "2026-08-14T19:25:26.732Z"
 last_activity: 2026-08-14
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 14
-  completed_plans: 11
+  completed_plans: 13
   percent: 0
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 1 (Server-Kern): EXECUTING
-Plan: 11 of 14
+Plan: 12 of 14
 Status: Ready to execute
 Last activity: 2026-08-14
 
-Progress: [████████░░] 79%
+Progress: [█████████░] 93%
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ Progress: [████████░░] 79%
 | Phase 01-server-kern P05 | 16 min | 2 tasks | 13 files |
 | Phase 01-server-kern P09 | 13 min | 2 tasks | 10 files |
 | Phase 01-server-kern P10 | 15 min | 2 tasks | 12 files |
+| Phase 01-server-kern P11 | 74 min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -124,6 +125,12 @@ Recent decisions affecting current work:
 - [Phase 01-server-kern]: Der #227-Fix macht stateless_http konfigurierbar statt hart False: der Default behebt den Bug, MCP_STATELESS_HTTP=1 erhaelt das alte Verhalten; minimaler Diff, hoechste Merge-Wahrscheinlichkeit
 - [Phase 01-server-kern]: Der Regressionstest der #227-Klasse bleibt bei uns (tests/compat/legacy_client_check.py); im fremden CI braeuchte er ein zweites Client-Environment gegen einen laufenden ExApp-Container und erzeugte nur Rauschen
 - [Phase 01-server-kern]: Upstream-Beitraege laufen im Fork ausserhalb unseres Repos, mit lokal gesetzter git-Identitaet street1983nk / k.cherif@outlook.de und git commit -s (DCO); die Einreichung loest immer der Owner aus
+- [Phase 01-server-kern]: search und fetch sind die einzigen Tools MIT Output-Schema (kein structured_output=False); mcp 2.x erzeugt aus dem Pydantic-Rueckgabetyp structured_content und content gleichzeitig, genau die Doppelung, die OpenAI verlangt
+- [Phase 01-server-kern]: graceful ist generisch (PEP 695), weil eine auf str festgenagelte Dekorator-Signatur genau die Return-Annotation geloescht haette, aus der das SDK das Output-Schema baut
+- [Phase 01-server-kern]: file:<fileid> wird per WebDAV-SEARCH mit d:eq auf oc:fileid in einen Pfad aufgeloest, live gegen Nextcloud 34 verifiziert; die Unified Search liefert nur die fileid, nie den Pfad
+- [Phase 01-server-kern]: Die Deck-Kurzform wird per Sweep aufgeloest (ein Request pro Board, Abbruch beim Fund, Cache nur innerhalb des Aufrufs); die interne Route aus A4 wird nicht benutzt und steht deshalb nirgends woertlich im Modul, weil ein Grep-Test sie fernhaelt
+- [Phase 01-server-kern]: fetch beantwortet eine url-ID mit einem ToolError, dessen Hinweis die URL traegt: ein Erfolgsergebnis ohne Inhalt ist die Form, die zum Erfinden einlaedt (T-01-75)
+- [Phase 01-server-kern]: SRV-03 bleibt Pending: Annotationen und Budget-Gate stimmen fuer alle 15 Tools, die Abnahme gehoert nach Plan 01-14
 
 ### Pending Todos
 
@@ -145,6 +152,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-14T18:52:00.000Z
-Stopped at: 01-13-PLAN.md Task 1 fertig, Task 2 ist ein offener Human-Action-Checkpoint (Owner reicht den PR ein), Task 3 nicht ausgefuehrt
-Resume file: .planning/phases/01-server-kern/01-13-SUMMARY.md
+Last session: 2026-08-14T19:25:26.718Z
+Stopped at: Completed 01-11-PLAN.md
+Resume file: None
