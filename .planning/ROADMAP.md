@@ -40,7 +40,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 Plans:
 **Wave 1**
 
-- [ ] 01-01-PLAN.md - Scaffold, Toolchain, CI und roter Contract-Test (Wave 1)
+- [x] 01-01-PLAN.md - Scaffold, Toolchain, CI und roter Contract-Test (Wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -140,7 +140,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Server-Kern | 0/14 | Planned | - |
+| 1. Server-Kern | 1/14 | In Progress|  |
 | 2. ExApp-Shell | 0/TBD | Not started | - |
 | 3. OAuth 2.1 | 0/TBD | Not started | - |
 | 4. Per-User-Verwaltung und prepare_context | 0/TBD | Not started | - |
