@@ -49,6 +49,11 @@ exclude = [".planning"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.ruff.lint.isort]
+# Without this, `mcp_connector` is grouped with the third-party `mcp` package,
+# because the project is installed into the environment.
+known-first-party = ["mcp_connector"]
+
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
