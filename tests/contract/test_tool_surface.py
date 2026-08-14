@@ -214,6 +214,27 @@ async def test_unified_search_is_listed_as_a_pure_read_over_all_providers() -> N
 
 
 @pytest.mark.anyio
+async def test_search_is_a_read_tool_and_the_documented_exception_to_the_schema_diet() -> None:
+    """D-14: an output schema exists exactly where a client reads it, and ChatGPT does."""
+    async with Client(mcp, raise_exceptions=True) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+
+    assert "search" in tools, "the ChatGPT profile tool is named exactly search (TOOL-07)"
+    tool = tools["search"]
+
+    annotations = tool.annotations
+    assert annotations is not None
+    assert annotations.read_only_hint is True, "search only reads"
+    assert annotations.open_world_hint is False
+
+    assert tool.output_schema is not None, "ChatGPT expects structured output from search"
+    assert tools["unified_search"].output_schema is None, (
+        "the exception stays an exception: the cloud wide search keeps the diet"
+    )
+    assert set(tool.input_schema.get("properties", {})) == {"query"}
+
+
+@pytest.mark.anyio
 async def test_calendar_create_event_is_annotated_as_create_only() -> None:
     """Not idempotent, and honestly so: If-None-Match refuses the second identical call."""
     async with Client(mcp, raise_exceptions=True) as client:
