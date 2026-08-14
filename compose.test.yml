@@ -1,0 +1,36 @@
+# Local throwaway Nextcloud for the integration tests (D-21).
+#
+#   docker compose -f compose.test.yml up -d --wait   # start and wait for healthy
+#   bash scripts/bootstrap_test_nc.sh                 # apps, users, calendars, .env.test
+#   docker compose -f compose.test.yml down           # stop, keep the data volume
+#   docker compose -f compose.test.yml down -v        # stop and throw the data away
+#
+# SQLite instead of a second container: this instance holds a handful of test files,
+# and every second of startup is paid again on every CI run.
+#
+# The credentials below are throwaway values for an instance that only ever listens on
+# localhost. They are not a deployment secret; the real per-user app passwords are
+# generated at bootstrap time and land in .env.test, which is git-ignored.
+services:
+  nextcloud:
+    image: nextcloud:34-apache
+    container_name: nc-mcp-test
+    ports:
+      - "${NC_TEST_PORT:-8080}:80"
+    environment:
+      SQLITE_DATABASE: nextcloud
+      NEXTCLOUD_ADMIN_USER: "${NC_TEST_ADMIN_USER:-admin}"
+      NEXTCLOUD_ADMIN_PASSWORD: "${NC_TEST_ADMIN_PASSWORD:-admin-test-pw}"
+      NEXTCLOUD_TRUSTED_DOMAINS: "localhost 127.0.0.1"
+    healthcheck:
+      # status.php answers as soon as the web server is up. That is not the same as
+      # "installed", so the bootstrap script polls `occ status` before it does any work.
+      test: ["CMD", "php", "-r", "exit(file_get_contents('http://localhost/status.php') ? 0 : 1);"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+    volumes:
+      - nextcloud-test-data:/var/www/html
+
+volumes:
+  nextcloud-test-data:
