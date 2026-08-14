@@ -1,4 +1,4 @@
-"""WebDAV client: PROPFIND with Depth 0, GET with an optional Range, and a create-only PUT.
+"""WebDAV client: SEARCH, PROPFIND with Depth 0 and 1, GET with a Range, create-only PUT.
 
 This module implements no destructive request. There is no DELETE, no MOVE, no COPY and no
 PROPPATCH, and the single write is a PUT that carries ``If-None-Match: *``. That header is
@@ -13,8 +13,10 @@ server afterwards), and never let a redirect pass silently (the auth header woul
 foreign host or vanish).
 """
 
+from collections.abc import Sequence
 from posixpath import dirname
-from urllib.parse import quote
+from typing import Any
+from urllib.parse import quote, unquote, urlsplit
 
 import httpx
 from lxml import etree
@@ -26,6 +28,10 @@ from . import xml
 
 DAV_FILES_PREFIX = "/remote.php/dav/files/"
 
+#: The search endpoint is the DAV root, not the files path: Nextcloud's search backend
+#: reports an empty arbiter path, so every other target answers 405.
+DAV_ROOT_PATH = "/remote.php/dav/"
+
 _STAT_PROPS = (
     f"{{{xml.DAV}}}getcontentlength",
     f"{{{xml.DAV}}}getcontenttype",
@@ -36,10 +42,31 @@ _STAT_PROPS = (
     f"{{{xml.OC}}}permissions",
 )
 
+#: Selected for every search hit. Only queryable properties may appear in the comparison,
+#: but any property may be selected, which is why the size and the type are in here.
+_SEARCH_PROPS = (
+    f"{{{xml.DAV}}}displayname",
+    f"{{{xml.DAV}}}getcontenttype",
+    f"{{{xml.DAV}}}getlastmodified",
+    f"{{{xml.DAV}}}getcontentlength",
+    f"{{{xml.DAV}}}resourcetype",
+    f"{{{xml.OC}}}fileid",
+)
+
+#: A folder listing additionally reports the recursive folder size and the permission
+#: string, so a caller sees what it may do with an entry before it tries.
+_LIST_PROPS = (
+    *_SEARCH_PROPS,
+    f"{{{xml.OC}}}size",
+    f"{{{xml.OC}}}permissions",
+)
+
 _PATH_HINT = (
     "Use an absolute path inside the user's own files, for example /Docs/notes.md. "
     "Parent references and backslashes are not accepted."
 )
+
+_TERM_HINT = "Give at least one word from the file or folder name, for example 'budget'."
 
 
 def safe_path(path: str) -> str:
@@ -145,6 +172,202 @@ async def get_range(
     )
     _check(response, target)
     return response.content
+
+
+def search_scope(creds: Credentials, folder: str = "/") -> str:
+    """Return the search scope: the user's own home, or one folder below it.
+
+    The scope is never built from a parameter alone. The user segment comes from the auth
+    channel and the folder part runs through :func:`safe_path` first, so a search cannot
+    reach into another account (threat T-01-32).
+
+    The href stays unescaped text on purpose: the verified example in the Nextcloud
+    documentation writes the plain path, and lxml escapes whatever XML would need.
+    """
+    target = safe_path(folder)
+    suffix = "" if target == "/" else target
+    return f"/files/{creds.user}{suffix}"
+
+
+def build_search_body(
+    scope: str,
+    term: str,
+    limit: int,
+    props: Sequence[str] = _SEARCH_PROPS,
+) -> bytes:
+    """Build the basicsearch body of a name search; with lxml, never with a string.
+
+    Two things in here are not cosmetic. The term becomes element *text*, so an ampersand
+    or an angle bracket in a model generated query is escaped by lxml instead of closing a
+    tag (threat T-01-30). And the limit is always written: without it Nextcloud silently
+    caps at 100 results, which would make a truncated answer indistinguishable from a
+    complete one.
+
+    The query tree stays flat, one comparison, no matter how long the term is. Nextcloud
+    refuses a query with more than 100 operators, and a tree built from user input is the
+    only way to get near that number.
+    """
+    needle = (term or "").strip()
+    if not needle:
+        raise ToolError(message="The search term is empty.", hint=_TERM_HINT)
+    if limit < 1:
+        raise ToolError(
+            message=f"The result limit must be at least 1 (got {limit}).",
+            hint="Leave the limit out to use the default.",
+        )
+
+    root = etree.Element(
+        f"{{{xml.DAV}}}searchrequest",
+        nsmap={"d": xml.DAV, "oc": xml.OC, "nc": xml.NC},
+    )
+    basic = etree.SubElement(root, f"{{{xml.DAV}}}basicsearch")
+
+    select = etree.SubElement(basic, f"{{{xml.DAV}}}select")
+    prop = etree.SubElement(select, f"{{{xml.DAV}}}prop")
+    for name in props:
+        etree.SubElement(prop, name)
+
+    from_element = etree.SubElement(basic, f"{{{xml.DAV}}}from")
+    scope_element = etree.SubElement(from_element, f"{{{xml.DAV}}}scope")
+    href = etree.SubElement(scope_element, f"{{{xml.DAV}}}href")
+    href.text = scope
+    depth = etree.SubElement(scope_element, f"{{{xml.DAV}}}depth")
+    depth.text = "infinity"
+
+    where = etree.SubElement(basic, f"{{{xml.DAV}}}where")
+    like = etree.SubElement(where, f"{{{xml.DAV}}}like")
+    like_prop = etree.SubElement(like, f"{{{xml.DAV}}}prop")
+    etree.SubElement(like_prop, f"{{{xml.DAV}}}displayname")
+    literal = etree.SubElement(like, f"{{{xml.DAV}}}literal")
+    # The percent signs are the wildcards of the search itself. A term that contains one
+    # widens the match; it cannot leave the comparison, because Nextcloud binds the
+    # literal as a query parameter.
+    literal.text = f"%{needle}%"
+
+    etree.SubElement(basic, f"{{{xml.DAV}}}orderby")
+
+    limit_element = etree.SubElement(basic, f"{{{xml.DAV}}}limit")
+    nresults = etree.SubElement(limit_element, f"{{{xml.DAV}}}nresults")
+    nresults.text = str(limit)
+
+    return etree.tostring(root, xml_declaration=True, encoding="utf-8")
+
+
+def _list_body() -> bytes:
+    """Build the PROPFIND body of a folder listing; with lxml, never with a string."""
+    root = etree.Element(
+        f"{{{xml.DAV}}}propfind",
+        nsmap={"d": xml.DAV, "oc": xml.OC, "nc": xml.NC},
+    )
+    prop = etree.SubElement(root, f"{{{xml.DAV}}}prop")
+    for name in _LIST_PROPS:
+        etree.SubElement(prop, name)
+    return etree.tostring(root, xml_declaration=True, encoding="utf-8")
+
+
+async def search(
+    client: httpx.AsyncClient,
+    creds: Credentials,
+    scope: str,
+    term: str,
+    limit: int,
+) -> list[dict[str, Any]]:
+    """Search names below ``scope`` and return the stable entry shape, one request.
+
+    ``text/xml`` and not ``application/xml``: that is the content type the Nextcloud
+    documentation uses for SEARCH, and the search backend is the pickier of the two paths.
+    """
+    response = await client.request(
+        "SEARCH",
+        f"{creds.base_url}{DAV_ROOT_PATH}",
+        headers={"Content-Type": "text/xml"},
+        content=build_search_body(scope, term, limit),
+        auth=httpx.BasicAuth(creds.user, creds.secret),
+    )
+    _check(response, scope)
+    return parse_entries(response.content, creds)
+
+
+async def propfind_children(
+    client: httpx.AsyncClient,
+    creds: Credentials,
+    path: str,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """List one folder with Depth 1 and return ``(the folder itself, its children)``.
+
+    Depth 1 answers with the collection *and* its direct children, so the entry of the
+    folder itself has to be dropped from the listing. It is matched by path rather than by
+    position: the answer is a set of responses, and relying on the first one being the
+    parent is an assumption the protocol does not make.
+
+    The folder entry is returned instead of being thrown away, because the caller needs it
+    to tell a file from a folder without a second request: Depth 1 on a file answers with
+    that file alone, which would otherwise look like an empty folder.
+    """
+    target = safe_path(path)
+    response = await client.request(
+        "PROPFIND",
+        files_url(creds, target),
+        headers={"Depth": "1", "Content-Type": "application/xml"},
+        content=_list_body(),
+        auth=httpx.BasicAuth(creds.user, creds.secret),
+    )
+    _check(response, target)
+
+    entries = parse_entries(response.content, creds)
+    itself = next((entry for entry in entries if entry["path"] == target), None)
+    if itself is None:
+        raise ToolError(
+            message=f"Nextcloud returned no properties for {target}.",
+            hint="Check the path in the Nextcloud web interface and try again.",
+        )
+    children = [entry for entry in entries if entry["path"] != target]
+    return itself, children
+
+
+def parse_entries(body: str | bytes, creds: Credentials) -> list[dict[str, Any]]:
+    """Map a Multi-Status onto file entries, dropping everything outside the user's home.
+
+    A href that does not sit below this user's files directory is not an answer to any
+    question this client asks, so it is skipped instead of turned into a path that would
+    later be sent back to Nextcloud.
+    """
+    home = f"{DAV_FILES_PREFIX}{creds.user}"
+    entries: list[dict[str, Any]] = []
+    for href, props in xml.parse_multistatus(body):
+        path = _home_path_of(href, home)
+        if path is None:
+            continue
+        entries.append(_entry(path, props))
+    return entries
+
+
+def _home_path_of(href: str, home: str) -> str | None:
+    """Return the path inside the user's home, or ``None`` if the href is somewhere else."""
+    raw = unquote(urlsplit(href).path)
+    if not raw.startswith(home):
+        return None
+    rest = raw[len(home) :]
+    if rest and not rest.startswith("/"):
+        # "alicexyz" starts with "alice" but is a different account.
+        return None
+    return rest.rstrip("/") or "/"
+
+
+def _entry(path: str, props: dict[str, str]) -> dict[str, Any]:
+    """One stable dict per file or folder. Missing properties become empty, never None."""
+    resourcetype = props.get(f"{{{xml.DAV}}}resourcetype", "")
+    raw_size = props.get(f"{{{xml.DAV}}}getcontentlength") or props.get(f"{{{xml.OC}}}size") or ""
+    return {
+        "path": path,
+        "name": props.get(f"{{{xml.DAV}}}displayname") or path.rsplit("/", 1)[-1] or "/",
+        "is_collection": f"{{{xml.DAV}}}collection" in resourcetype,
+        "size": int(raw_size) if raw_size.isdigit() else 0,
+        "content_type": props.get(f"{{{xml.DAV}}}getcontenttype", ""),
+        "last_modified": props.get(f"{{{xml.DAV}}}getlastmodified", ""),
+        "fileid": props.get(f"{{{xml.OC}}}fileid", ""),
+        "permissions": props.get(f"{{{xml.OC}}}permissions", ""),
+    }
 
 
 async def put_new_file(
