@@ -201,7 +201,7 @@ async def test_every_addressbook_failing_is_an_error_and_not_an_empty_result(
         with pytest.raises(ToolError) as excinfo:
             await contacts_tools.search(clients, "meier")
 
-    assert "could not be read" in excinfo.value.message.lower()
+    assert "none of the address books could be read" in excinfo.value.message.lower()
     assert excinfo.value.hint
 
 
