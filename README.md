@@ -59,21 +59,44 @@ Client configuration, for example for Claude Desktop or Cursor:
 
 ## HTTP mode
 
-The same server also speaks Streamable HTTP for remote clients. In this mode credentials are not
-read from the environment, they travel per request in the `Authorization` header (Basic, user and
-app password), so one deployment can serve several users without a credential store.
+The same server also speaks Streamable HTTP for remote clients:
 
-For single user deployments a static bearer token is available as a convenience.
+```bash
+export NC_MCP_URL=https://cloud.example.com
+export NC_MCP_ALLOWED_HOSTS=mcp.example.com
+uv run uvicorn mcp_connector.entry_http:app --host 127.0.0.1 --port 8765
+```
+
+The MCP endpoint is `POST /mcp`, and `GET /health` answers `{"status":"ok","version":"..."}`
+without authentication. One endpoint serves both protocol generations: clients on the current
+spec and clients built on MCP SDK 1.x are routed by the protocol version of their request, and a
+restart cannot interrupt a conversation because the server keeps no session state.
+
+Credentials are not read from the environment in this mode. They travel per request in the
+`Authorization` header (Basic, user and app password) and are forwarded unchanged to Nextcloud,
+which authenticates them. The server never treats the header as an identity claim of its own, and
+it stores nothing, so one deployment can serve several users without a credential store.
+
+For single user deployments a static bearer token is available instead: set
+`NC_MCP_STATIC_BEARER`, and the Nextcloud account is taken from the environment like in stdio
+mode. The two HTTP modes are mutually exclusive.
+
+`NC_MCP_ALLOWED_HOSTS` is not optional in practice. Without it, the transport layer only accepts
+`Host: localhost` and `Host: 127.0.0.1` and answers every other request with `421 Misdirected
+Request` before any MCP code runs. Note that this is the `Host` header of incoming requests, not
+the bind address: `--host 0.0.0.0` allows nobody in.
 
 ## Environment variables
 
 | Variable | Mode | Required | Purpose |
 |----------|------|----------|---------|
-| `NC_MCP_URL` | stdio | yes | Base URL of your Nextcloud, including a subpath if you use one |
-| `NC_MCP_USER` | stdio | yes | Nextcloud user id |
-| `NC_MCP_APP_PASSWORD` | stdio | yes | App password from Settings, Security, Devices and sessions |
-| `NC_MCP_ALLOWED_HOSTS` | HTTP | yes | Comma separated allow list of Nextcloud hosts the server may talk to |
+| `NC_MCP_URL` | all | yes | Base URL of your Nextcloud, including a subpath if you use one |
+| `NC_MCP_USER` | stdio, static bearer | yes | Nextcloud user id |
+| `NC_MCP_APP_PASSWORD` | stdio, static bearer | yes | App password from Settings, Security, Devices and sessions |
+| `NC_MCP_ALLOWED_HOSTS` | HTTP | yes in practice | Comma separated `Host` header allow list of this server; a port wildcard is added per name |
 | `NC_MCP_STATIC_BEARER` | HTTP | no | Static bearer token for single user deployments; without it, clients authenticate per request |
+| `NC_MCP_DISABLE_DNS_REBINDING_PROTECTION` | HTTP | no | Set to `true` only behind a proxy that controls the `Host` header |
+| `NC_MCP_PUBLIC_URL` | static bearer | no | Public URL of this server for the bearer discovery document |
 
 No credential is ever logged, in any mode.
 
@@ -127,7 +150,12 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
-Integration tests need a local test Nextcloud and are opt-in via `uv run pytest -m integration`.
+`uv run pytest` starts nothing and needs nothing. The two heavier layers are opt-in:
+
+- `uv run pytest -m matrix` starts the HTTP server as a subprocess and checks that a current
+  client and a client on MCP SDK 1.29 are both served from the same endpoint, and that the
+  conversation survives a restart. It needs no Nextcloud.
+- `uv run pytest -m integration` needs the local test Nextcloud from `compose.test.yml`.
 
 ## License
 
