@@ -214,6 +214,53 @@ async def test_unified_search_is_listed_as_a_pure_read_over_all_providers() -> N
 
 
 @pytest.mark.anyio
+async def test_the_curated_set_is_complete_and_only_the_chatgpt_profile_has_a_schema() -> None:
+    """The whole surface in one assertion: 15 tools, and the diet holds for 13 of them."""
+    async with Client(mcp, raise_exceptions=True) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+
+    assert set(tools) == {
+        "files_search",
+        "files_list",
+        "files_read",
+        "files_upload",
+        "calendar_list_events",
+        "calendar_create_event",
+        "notes_search",
+        "notes_read",
+        "notes_create",
+        "deck_browse",
+        "deck_create_card",
+        "contacts_search",
+        "unified_search",
+        "search",
+        "fetch",
+    }
+    assert len(tools) == 15, "the curated set is 15 tools, no more and no fewer"
+
+    with_schema = {name for name, tool in tools.items() if tool.output_schema is not None}
+    assert with_schema == {"search", "fetch"}, (
+        "an output schema exists exactly where a client reads it (D-14)"
+    )
+
+
+@pytest.mark.anyio
+async def test_fetch_is_a_read_tool_with_the_openai_parameter_name() -> None:
+    """TOOL-07: the parameter is called ``id``, and a connector that renames it breaks."""
+    async with Client(mcp, raise_exceptions=True) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+
+    tool = tools["fetch"]
+    annotations = tool.annotations
+    assert annotations is not None
+    assert annotations.read_only_hint is True, "fetch only reads"
+    assert annotations.open_world_hint is False
+
+    assert set(tool.input_schema.get("properties", {})) == {"id"}
+    assert set(tool.input_schema.get("required", [])) == {"id"}
+
+
+@pytest.mark.anyio
 async def test_search_is_a_read_tool_and_the_documented_exception_to_the_schema_diet() -> None:
     """D-14: an output schema exists exactly where a client reads it, and ChatGPT does."""
     async with Client(mcp, raise_exceptions=True) as client:
