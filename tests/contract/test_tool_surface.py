@@ -27,3 +27,24 @@ async def test_files_read_is_exposed_with_honest_annotations() -> None:
     assert tool.output_schema is None, (
         "files_read must run with structured_output=False (schema diet)"
     )
+
+
+@pytest.mark.anyio
+async def test_files_upload_is_annotated_as_create_only() -> None:
+    """The only write tool of the phase must say out loud what it does and does not do."""
+    async with Client(mcp, raise_exceptions=True) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+
+    assert "files_upload" in tools, "the create-only write path must be exposed"
+
+    tool = tools["files_upload"]
+    annotations = tool.annotations
+    assert annotations is not None, "files_upload has no annotations"
+    assert annotations.read_only_hint is False, "files_upload writes"
+    assert annotations.destructive_hint is False, "it can only create, never replace"
+    assert annotations.idempotent_hint is False, "a second call on the same path fails"
+    assert annotations.open_world_hint is False
+    assert tool.output_schema is None, "structured_output=False (schema diet)"
+    assert "never overwrites" in (tool.description or ""), (
+        "the constraint belongs in the description the model reads"
+    )
