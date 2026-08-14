@@ -676,6 +676,130 @@ async def test_creating_in_an_unknown_calendar_lists_the_ones_that_exist(
     assert "Persönlich" in excinfo.value.hint
 
 
+def _calendar_entry(uri: str, name: str) -> str:
+    return (
+        f"<d:response><d:href>/remote.php/dav/calendars/alice/{uri}/</d:href>"
+        f"<d:propstat><d:prop><d:displayname>{name}</d:displayname>"
+        "<d:resourcetype><d:collection/><cal:calendar/></d:resourcetype>"
+        '<cal:supported-calendar-component-set><cal:comp name="VEVENT"/>'
+        "</cal:supported-calendar-component-set></d:prop>"
+        "<d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>"
+    )
+
+
+def _discovery_body(*entries: tuple[str, str]) -> str:
+    inner = "".join(_calendar_entry(uri, name) for uri, name in entries)
+    return (
+        '<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" '
+        f'xmlns:cal="urn:ietf:params:xml:ns:caldav">{inner}</d:multistatus>'
+    )
+
+
+@pytest.mark.anyio
+async def test_creating_without_a_calendar_targets_personal_even_when_it_is_not_first(
+    clients: NcClients,
+) -> None:
+    """WR-04: the default target is the 'personal' uri, never the discovery order."""
+    body = _discovery_body(("geteilt", "Team (geteilt)"), ("personal", "Persönlich"))
+    with respx.mock(assert_all_called=True) as mock:
+        mock.route(method="PROPFIND", url=CALENDAR_HOME).mock(return_value=dav_response(body))
+        put = mock.route(method="PUT", url__startswith=PERSONAL).mock(
+            return_value=httpx.Response(201)
+        )
+        mock.route(method="GET", url__startswith=PERSONAL).mock(
+            return_value=httpx.Response(
+                200,
+                text=READBACK.format(uid="server-uid"),
+                headers={"Content-Type": "text/calendar; charset=utf-8"},
+            )
+        )
+        result = await calendar_tools.create_event(
+            clients,
+            summary="Projektbesprechung",
+            start="2026-09-15T14:00:00+02:00",
+            end="2026-09-15T15:00:00+02:00",
+        )
+
+    assert put.call_count == 1
+    assert result["calendar"] == "Persönlich", "the answer names the calendar that was chosen"
+
+
+@pytest.mark.anyio
+async def test_creating_without_a_calendar_and_without_personal_asks_the_caller_to_choose(
+    clients: NcClients,
+) -> None:
+    """WR-04: with several calendars and no 'personal', silently picking one could write
+    into a calendar shared into the account."""
+    body = _discovery_body(("arbeit", "Arbeit"), ("geteilt", "Team (geteilt)"))
+    with respx.mock(assert_all_called=False) as mock:
+        mock.route(method="PROPFIND", url=CALENDAR_HOME).mock(return_value=dav_response(body))
+        put = mock.route(method="PUT")
+        with pytest.raises(ToolError) as excinfo:
+            await calendar_tools.create_event(
+                clients,
+                summary="Projektbesprechung",
+                start="2026-09-15T14:00:00+02:00",
+                end="2026-09-15T15:00:00+02:00",
+            )
+
+    assert put.call_count == 0, "nothing is written until the target is unambiguous"
+    assert "Arbeit" in excinfo.value.hint
+    assert "Team (geteilt)" in excinfo.value.hint
+
+
+@pytest.mark.anyio
+async def test_a_single_calendar_without_personal_is_the_deterministic_default(
+    clients: NcClients,
+) -> None:
+    body = _discovery_body(("arbeit", "Arbeit"))
+    target = f"{CALENDAR_HOME}arbeit/"
+    with respx.mock(assert_all_called=True) as mock:
+        mock.route(method="PROPFIND", url=CALENDAR_HOME).mock(return_value=dav_response(body))
+        put = mock.route(method="PUT", url__startswith=target).mock(
+            return_value=httpx.Response(201)
+        )
+        mock.route(method="GET", url__startswith=target).mock(
+            return_value=httpx.Response(
+                200,
+                text=READBACK.format(uid="server-uid"),
+                headers={"Content-Type": "text/calendar; charset=utf-8"},
+            )
+        )
+        result = await calendar_tools.create_event(
+            clients,
+            summary="Projektbesprechung",
+            start="2026-09-15T14:00:00+02:00",
+            end="2026-09-15T15:00:00+02:00",
+        )
+
+    assert put.call_count == 1
+    assert result["calendar"] == "Arbeit"
+
+
+@pytest.mark.anyio
+async def test_an_ambiguous_calendar_parameter_is_refused_with_the_candidates(
+    clients: NcClients,
+) -> None:
+    """WR-04: 'team' matches one calendar by uri and another by display name."""
+    body = _discovery_body(("team", "Projekte"), ("beta", "Team"))
+    with respx.mock(assert_all_called=False) as mock:
+        mock.route(method="PROPFIND", url=CALENDAR_HOME).mock(return_value=dav_response(body))
+        put = mock.route(method="PUT")
+        with pytest.raises(ToolError) as excinfo:
+            await calendar_tools.create_event(
+                clients,
+                summary="Projektbesprechung",
+                start="2026-09-15T14:00:00+02:00",
+                end="2026-09-15T15:00:00+02:00",
+                calendar="team",
+            )
+
+    assert put.call_count == 0
+    assert "more than one" in excinfo.value.message
+    assert "Projekte (team)" in excinfo.value.hint
+    assert "Team (beta)" in excinfo.value.hint
+
+
 @pytest.mark.anyio
 async def test_creating_without_any_calendar_names_the_occ_command(
     clients: NcClients,

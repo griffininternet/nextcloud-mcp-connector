@@ -57,6 +57,10 @@ _TIME_HINT = (
 
 _ZONE_HINT = "Use an IANA name such as Europe/Berlin or UTC."
 
+#: URI of the calendar Nextcloud creates as the default of every account. A create
+#: without a ``calendar`` parameter writes here and nowhere else (WR-04).
+DEFAULT_CALENDAR_URI = "personal"
+
 
 async def list_events(
     clients: NcClients,
@@ -180,6 +184,43 @@ def _select(calendars: list[caldav.CalendarRef], wanted: str | None) -> list[cal
     )
 
 
+def _pick_target(calendars: list[caldav.CalendarRef], wanted: str | None) -> caldav.CalendarRef:
+    """The one calendar a create writes into: deterministic, never positional (WR-04).
+
+    The discovery order of a multistatus is not guaranteed and includes calendars shared
+    into the account, so ``[0]`` could silently write into a calendar other people see,
+    and this server can never delete the event again. Instead: a named parameter must
+    match exactly one calendar, and without a parameter the target is the default
+    calendar ``personal``; when that does not exist and exactly one calendar does, that
+    one; otherwise the caller has to choose from the real names.
+    """
+    if wanted is not None and wanted.strip():
+        matches = _select(calendars, wanted)
+        if len(matches) > 1:
+            candidates = ", ".join(
+                sorted(f"{entry.display_name} ({entry.uri})" for entry in matches)
+            )
+            raise ToolError(
+                message=f"{wanted!r} matches more than one calendar.",
+                hint=f"Pick one by its uri. Matching calendars: {candidates}.",
+            )
+        return matches[0]
+
+    for entry in calendars:
+        if entry.uri.casefold() == DEFAULT_CALENDAR_URI:
+            return entry
+    if len(calendars) == 1:
+        return calendars[0]
+
+    available = ", ".join(sorted(f"{entry.display_name} ({entry.uri})" for entry in calendars))
+    raise ToolError(
+        message=(
+            f"This account has no '{DEFAULT_CALENDAR_URI}' calendar, so the target has to be named."
+        ),
+        hint=f"Pass the calendar parameter. Available calendars: {available}.",
+    )
+
+
 async def _query_one(
     clients: NcClients,
     entry: caldav.CalendarRef,
@@ -225,6 +266,10 @@ async def create_event(
     call can add an event but never replace one (TOOL-09, threat T-01-48). Afterwards the
     object is read back once: a server that silently drops a field is the documented bug
     class here, and only the read back exposes it.
+
+    Without a ``calendar`` parameter the event goes into the default calendar
+    ``personal``; the answer names the calendar that was written to. See
+    :func:`_pick_target` for why the target is never simply the first discovery entry.
     """
     title = (summary or "").strip()
     if not title:
@@ -240,7 +285,7 @@ async def create_event(
         begin, finish = _timed_window(start, end, zone if timezone else UTC)
 
     calendars = await caldav.discover_calendars(clients.client, clients.creds)
-    target = _select(calendars, calendar)[0]
+    target = _pick_target(calendars, calendar)
 
     object_name = f"{uuid.uuid4()}.ics"
     uid = object_name.removesuffix(".ics")

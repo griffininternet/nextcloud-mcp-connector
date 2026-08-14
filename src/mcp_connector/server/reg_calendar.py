@@ -58,7 +58,7 @@ async def calendar_create_event(
     ],
     end: Annotated[str, Field(description="End, same format as start")],
     calendar: Annotated[
-        str | None, Field(description="Target calendar by name or uri; default: the first")
+        str | None, Field(description="Target calendar by name or uri; default: personal")
     ] = None,
     location: Annotated[str | None, Field(description="Optional place")] = None,
     description: Annotated[str | None, Field(description="Optional longer text")] = None,
