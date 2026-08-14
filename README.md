@@ -235,6 +235,33 @@ Deck is one browse tool with a level, not one tool per level:
 - `limit` is per provider and is capped again by Nextcloud itself. If a provider paginates, its
   cursor comes back under `cursors`.
 
+### ChatGPT connector profile
+
+`search` and `fetch` are the two names the OpenAI connector looks for. Their parameters are
+`query` and `id`, their field names are fixed, and both are the only tools of this server that
+ship an output schema, because ChatGPT reads the payload as structured content:
+
+```json
+{"results":[{"id":"file:4711","title":"Budget 2026.md","url":"https://cloud.example.org/index.php/f/4711","text":"in Dokumente"}]}
+```
+
+```json
+{"id":"file:4711","title":"Budget 2026.md","text":"# Budget 2026 ...","url":"https://cloud.example.org/index.php/f/4711","metadata":{"kind":"file","path":"/Dokumente/Budget 2026.md","content_type":"text/markdown"}}
+```
+
+- `search` adds no second search. It calls `unified_search` and renames the fields, so both tools
+  answer the same question the same way.
+- Every hit carries a non-empty, absolute URL on the configured instance. ChatGPT creates citation
+  metadata only while `url` is a non-empty string, so an empty one would silently drop the source.
+- `fetch` resolves the four id kinds the read tools understand: `file:<fileid>` (looked up by a
+  single WebDAV search on `oc:fileid`), `note:<id>`, `card:<board>:<stack>:<card>` including the
+  short `card:<cardId>` form from the Deck search provider, and `event:<calendar>:<object>`.
+- A `url:` id is answered honestly: this server never requests a URL that came out of a search
+  entry, and it says so instead of inventing content. An unknown prefix is refused with the list of
+  the valid ones, because resolving a chat message as a note is worse than an error.
+- A long file is cut at the same limit as `files_read`. The cut is marked inside `text` and again
+  in `metadata`, with the offset to continue from.
+
 ### Optional apps
 
 Notes and Deck are optional Nextcloud apps. The tool list is the same everywhere: it never depends
