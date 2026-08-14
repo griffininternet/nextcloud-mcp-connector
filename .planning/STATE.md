@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-05-PLAN.md
-last_updated: "2026-08-14T17:48:17.706Z"
+stopped_at: Completed 01-09-PLAN.md
+last_updated: "2026-08-14T18:03:20.771Z"
 last_activity: 2026-08-14
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 14
-  completed_plans: 9
+  completed_plans: 10
   percent: 0
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 1 (Server-Kern): EXECUTING
-Plan: 9 of 14
+Plan: 10 of 14
 Status: Ready to execute
 Last activity: 2026-08-14
 
-Progress: [██████░░░░] 64%
+Progress: [███████░░░] 71%
 
 ## Performance Metrics
 
@@ -61,6 +61,7 @@ Progress: [██████░░░░] 64%
 | Phase 01-server-kern PP07 | 34 min | 3 tasks | 13 files |
 | Phase 01-server-kern P08 | 25 min | 2 tasks | 10 files |
 | Phase 01-server-kern P05 | 16 min | 2 tasks | 13 files |
+| Phase 01-server-kern P09 | 13 min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -110,6 +111,9 @@ Recent decisions affecting current work:
 - [Phase 01-server-kern]: files_search behaelt die Serverreihenfolge (Folgeseiten entstehen aus groesserem d:limit plus Slice); files_list sortiert selbst, Ordner zuerst, dann Name
 - [Phase 01-server-kern]: propfind_children erkennt den Ordner selbst am Pfad statt an der Position und gibt ihn mit zurueck, damit ein Dateipfad ohne zweiten Request erklaert werden kann
 - [Phase 01-server-kern]: Das note-Feld 'matched on names only; contents are not indexed' steht in jeder Suchantwort, nicht nur bei null Treffern (Pitfall 5, gegen NC 34 verifiziert)
+- [Phase 01-server-kern]: canCreateBoards false beendet deck_create_card nicht sofort, sondern loest eine Pruefung der Board-Rechte aus; canCreateBoards regelt in Deck nur neue Boards; ein Nutzer ohne dieses Recht kann Schreibrechte auf einem geteilten Board haben, eine woertliche Ablehnung waere falsch negativ
+- [Phase 01-server-kern]: deck_browse ist ein Tool mit Literal-Enum level statt drei Tools; level=cards kostet genau einen Request; D-06 plus Token-Budget und Client-Slots; GET /boards/{id}/stacks liefert die Karten bereits mit, ein Request pro Stack waere N+1
+- [Phase 01-server-kern]: Deck-API-Version 1.0 statt 1.1 und numerische Pflicht fuer alle Pfad-Ids; 1.1 bringt nur Attachment-Typen, 1.0 laeuft auf mehr Instanzen; nicht numerische Ids kaemen aus Modell-Eingaben direkt in den URL-Pfad (T-01-63)
 
 ### Pending Todos
 
@@ -131,6 +135,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-14T17:48:06.345Z
-Stopped at: Completed 01-05-PLAN.md
+Last session: 2026-08-14T18:03:05.629Z
+Stopped at: Completed 01-09-PLAN.md
 Resume file: None
