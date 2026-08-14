@@ -113,7 +113,7 @@ new objects but can never modify or remove existing ones.
 | `files_upload` | create-only | Upload a new file; an existing path is refused, never overwritten |
 | `calendar_list_events` | read | List events in an explicit time range, with an explicit time zone |
 | `calendar_create_event` | create-only | Create a new event; existing events are never changed |
-| `notes_search` | read | Find notes by title and category |
+| `notes_search` | read | Find notes by title and content via the Nextcloud notes search provider |
 | `notes_read` | read | Read a single note |
 | `notes_create` | create-only | Create a new note; existing notes are never changed |
 | `deck_browse` | read | Browse Deck boards, stacks and cards |
@@ -125,6 +125,14 @@ new objects but can never modify or remove existing ones.
 
 `search` and `fetch` exist because the ChatGPT connector profile requires exactly these two names
 and schemas. They are thin wrappers over the tools above, not a second implementation.
+
+### Optional apps
+
+Notes and Deck are optional Nextcloud apps. The tool list is the same everywhere: it never depends
+on which apps an instance has, so it stays cacheable and predictable for every client. If an app is
+missing, the tool says so in one sentence and names an alternative, for example
+"The Notes app is not installed on this Nextcloud." Calendars and contacts need no app at all:
+CalDAV and CardDAV are part of the Nextcloud core.
 
 ## What this server cannot do
 
