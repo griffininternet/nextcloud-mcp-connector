@@ -85,13 +85,18 @@ class StaticBearerVerifier:
     ``secrets.compare_digest`` instead of ``==``: the comparison runs on attacker
     supplied input, and a short-circuiting comparison leaks the shared prefix over
     enough requests (threat T-01-24). The token is never logged and never echoed.
+
+    The comparison runs on UTF-8 bytes, never on the strings themselves:
+    ``compare_digest`` raises ``TypeError`` as soon as either side contains a
+    non-ASCII character, and the caller-supplied side is hostile header input. A
+    crash here would turn a malformed bearer into a 500 instead of a 401.
     """
 
     def __init__(self, token: str) -> None:
-        self._token = token
+        self._token = token.encode("utf-8")
 
     async def verify_token(self, token: str) -> AccessToken | None:
-        if not token or not secrets.compare_digest(token, self._token):
+        if not token or not secrets.compare_digest(token.encode("utf-8"), self._token):
             return None
         return AccessToken(
             token=token,

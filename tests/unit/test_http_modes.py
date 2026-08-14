@@ -210,6 +210,24 @@ async def test_the_verifier_rejects_a_wrong_token() -> None:
     assert await verifier.verify_token(BEARER + "x") is None
 
 
+@pytest.mark.anyio
+async def test_a_non_ascii_bearer_is_rejected_and_never_crashes() -> None:
+    """``compare_digest`` raises TypeError on non-ASCII str input; hostile header
+    content must land on the 401 path, never on a 500 (WR-01)."""
+    verifier = deps.StaticBearerVerifier(BEARER)
+    assert await verifier.verify_token("töken-mit-ümlaut-ß") is None
+    assert await verifier.verify_token(BEARER + "é") is None
+
+
+@pytest.mark.anyio
+async def test_a_non_ascii_configured_token_still_authenticates_its_own_value() -> None:
+    """A non-ASCII NC_MCP_STATIC_BEARER must not break every request with a crash."""
+    verifier = deps.StaticBearerVerifier("geheim-ü-token")
+    token = await verifier.verify_token("geheim-ü-token")
+    assert token is not None
+    assert await verifier.verify_token("geheim-u-token") is None
+
+
 def test_the_verifier_compares_in_constant_time() -> None:
     """T-01-24: a plain ``==`` would leak the token length by length of comparison."""
     source = inspect.getsource(deps.StaticBearerVerifier)
