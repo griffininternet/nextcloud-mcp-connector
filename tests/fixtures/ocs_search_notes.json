@@ -1,0 +1,30 @@
+{
+  "ocs": {
+    "meta": { "status": "ok", "statuscode": 200, "message": "OK" },
+    "data": {
+      "name": "Notes",
+      "isPaginated": false,
+      "entries": [
+        {
+          "thumbnailUrl": "",
+          "title": "Protokoll 2026-08-14",
+          "subline": "Anwesend: Anja, Khaled. Thema: Übergabe der Straßenplanung",
+          "resourceUrl": "http://nc.test/index.php/apps/notes/note/12",
+          "icon": "icon-notes",
+          "rounded": false,
+          "attributes": []
+        },
+        {
+          "thumbnailUrl": "",
+          "title": "Protokoll Kickoff",
+          "subline": "Ziele, Rollen und die nächsten Schritte",
+          "resourceUrl": "http://nc.test/index.php/apps/notes/note/7",
+          "icon": "icon-notes",
+          "rounded": false,
+          "attributes": []
+        }
+      ],
+      "cursor": null
+    }
+  }
+}
