@@ -147,6 +147,46 @@ async def test_contacts_search_is_listed_as_a_pure_read() -> None:
 
 
 @pytest.mark.anyio
+async def test_the_two_deck_tools_are_listed_and_browse_takes_an_enum_level() -> None:
+    """D-06: one browse tool with a level parameter, never one tool per Deck level."""
+    async with Client(mcp, raise_exceptions=True) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+
+    for name in ("deck_browse", "deck_create_card"):
+        assert name in tools, f"{name} is part of the curated set (D-06)"
+        assert tools[name].output_schema is None, "structured_output=False (schema diet)"
+
+    browse = tools["deck_browse"]
+    annotations = browse.annotations
+    assert annotations is not None
+    assert annotations.read_only_hint is True, "deck_browse only reads"
+    assert annotations.open_world_hint is False
+
+    schema = browse.input_schema
+    assert schema["properties"]["level"]["enum"] == ["boards", "stacks", "cards"], (
+        "the level is an enum in the schema, not a free string the model has to guess"
+    )
+    assert "$defs" not in schema, "no nested models in the input schema (schema diet)"
+
+    create = tools["deck_create_card"].annotations
+    assert create is not None
+    assert create.read_only_hint is False, "deck_create_card writes"
+    assert create.destructive_hint is False, "it can only create, never replace or delete"
+    assert create.idempotent_hint is False, "a second call creates a second card"
+    assert create.open_world_hint is False
+
+
+@pytest.mark.anyio
+async def test_there_is_no_tool_per_deck_level() -> None:
+    """The anti-pattern D-06 rules out: three tools would cost slots without any gain."""
+    async with Client(mcp, raise_exceptions=True) as client:
+        names = {tool.name for tool in (await client.list_tools()).tools}
+
+    forbidden = {"deck_list_boards", "deck_list_stacks", "deck_list_cards", "deck_read_card"}
+    assert not (names & forbidden), f"deck_browse covers these levels: {names & forbidden}"
+
+
+@pytest.mark.anyio
 async def test_calendar_create_event_is_annotated_as_create_only() -> None:
     """Not idempotent, and honestly so: If-None-Match refuses the second identical call."""
     async with Client(mcp, raise_exceptions=True) as client:
