@@ -34,7 +34,10 @@ testpaths = ["tests"]
 # The default run is fast and starts nothing: no Docker (the local Linux Docker engine
 # is not available) and no server subprocess. Both heavier layers are opt-in via their
 # marker, and a command line `-m` overrides this one.
-addopts = "-m 'not integration and not matrix' -q"
+# importlib import mode: unit and integration tests may carry the same file name
+# (test_unified_search.py in both layers), which the legacy prepend mode rejects with
+# an "import file mismatch" because the test tree has no packages.
+addopts = "-m 'not integration and not matrix' -q --import-mode=importlib"
 markers = [
     "integration: needs the Docker test Nextcloud (opt-in via -m integration)",
     "matrix: starts local subprocesses without Nextcloud (opt-in via -m matrix)",

@@ -25,6 +25,7 @@ stack trace.
 import json
 from collections.abc import Mapping
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -40,6 +41,9 @@ OCS_HEADERS: Mapping[str, str] = {
     "OCS-APIRequest": "true",
     "Accept": "application/json",
 }
+
+#: Unified search: the provider list, and one search route per provider below it.
+SEARCH_PROVIDERS_PATH = "/search/providers"
 
 #: ``100`` is the OCS v1 success code, ``200`` the v2 one. Instances answer with either.
 _OK_STATUS = frozenset({100, 200})
@@ -75,6 +79,46 @@ async def ocs_get(
         headers=dict(OCS_HEADERS),
         auth=httpx.BasicAuth(creds.user, creds.secret),
     )
+
+
+async def list_search_providers(
+    client: httpx.AsyncClient, creds: Credentials
+) -> list[dict[str, Any]]:
+    """Return the search providers this instance offers right now.
+
+    Read on every call and never cached: the list follows the installed apps, and an app
+    enabled a minute ago has to show up without restarting this server. A provider that an
+    administrator removed can still linger here until the next Nextcloud restart, which is
+    exactly why the caller treats a failing provider as a degradation, not as a bug.
+    """
+    response = await ocs_get(client, creds, SEARCH_PROVIDERS_PATH)
+    data = parse_ocs(response, what="the list of search providers")
+    if not isinstance(data, list):
+        return []
+    return [item for item in data if isinstance(item, dict)]
+
+
+async def provider_search(
+    client: httpx.AsyncClient,
+    creds: Credentials,
+    provider_id: str,
+    term: str,
+    limit: int,
+    cursor: str | int | None = None,
+) -> dict[str, Any]:
+    """Ask one search provider and return its ``{name, isPaginated, entries, cursor}``.
+
+    ``limit`` is a wish: Nextcloud caps it at ``unified-search.max-results-per-request``.
+    The provider id is quoted because it comes off the wire, not out of our own code.
+    """
+    params: dict[str, Any] = {"term": term, "limit": limit}
+    if cursor is not None and str(cursor) != "":
+        params["cursor"] = cursor
+
+    path = f"{SEARCH_PROVIDERS_PATH}/{quote(provider_id, safe='')}/search"
+    response = await ocs_get(client, creds, path, params=params)
+    data = parse_ocs(response, what=f"the search results of the provider {provider_id}")
+    return data if isinstance(data, dict) else {}
 
 
 def parse_ocs(response: httpx.Response, what: str) -> Any:

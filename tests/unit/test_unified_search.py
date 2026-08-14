@@ -213,7 +213,9 @@ async def test_a_slow_provider_is_cut_off_and_marked_degraded(
         await asyncio.sleep(5)
         return httpx.Response(200, json=hits("Files", []))
 
-    with respx.mock(assert_all_called=True) as mock:
+    # assert_all_called stays off: the cancelled request never completes, so respx never
+    # records it as a call. That is exactly the behaviour under test.
+    with respx.mock(assert_all_called=False) as mock:
         mock.get(PROVIDERS_URL).mock(
             return_value=httpx.Response(200, json=provider_list("files", "notes"))
         )

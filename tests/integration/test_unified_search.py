@@ -54,7 +54,7 @@ async def test_the_instance_reports_its_own_provider_list(clients: NcClients) ->
     """The list is instance specific; the only entry we may rely on is the core one."""
     providers = await ocs.list_search_providers(clients.client, clients.creds)
 
-    ids = {provider.get("id") for provider in providers}
+    ids = {str(provider.get("id")) for provider in providers}
     assert "files" in ids, f"a Nextcloud without the files provider is not one: {sorted(ids)}"
 
 
