@@ -22,3 +22,42 @@ jobs:
         run: uv run pytest tests/unit tests/contract
       - name: Tool budget gate
         run: uv run python scripts/check_tool_budget.py
+      - name: Transport matrix (no Docker, no Nextcloud)
+        # Client matrix and restart proof run without Nextcloud: tools/list never
+        # reaches the cloud. Keeping them here means SRV-01 and SRV-05 are checked on
+        # every push, not only in the slower integration job.
+        run: uv run pytest -m matrix
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Start the test Nextcloud
+        # --wait honours the healthcheck in compose.test.yml, so no sleep is needed.
+        run: docker compose -f compose.test.yml up -d --wait
+      - name: Bootstrap apps, users, calendar and address book
+        run: bash scripts/bootstrap_test_nc.sh
+      - name: Install locked environment
+        run: uv sync --frozen
+      - name: Integration tests against Nextcloud
+        run: |
+          set -a && . ./.env.test && set +a
+          uv run pytest -m integration
+      - name: Client matrix against the running HTTP server (SRV-01, SRV-05)
+        run: |
+          set -a && . ./.env.test && set +a
+          export NC_MCP_ALLOWED_HOSTS=127.0.0.1
+          uv run uvicorn mcp_connector.entry_http:app --host 127.0.0.1 --port 8765 &
+          for _ in $(seq 1 60); do
+            curl -sf http://127.0.0.1:8765/health && break
+            sleep 0.5
+          done
+          uv run python tests/compat/modern_client_check.py http://127.0.0.1:8765/mcp
+          uv run --isolated --no-project --with "mcp>=1.29,<2" \
+            python tests/compat/legacy_client_check.py http://127.0.0.1:8765/mcp
+      - name: Nextcloud logs on failure
+        if: failure()
+        run: docker compose -f compose.test.yml logs --tail=200
