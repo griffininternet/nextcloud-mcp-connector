@@ -313,9 +313,7 @@ async def test_the_calendar_tools_never_ask_for_the_optional_app_capabilities(
 async def test_the_limit_caps_the_answer_and_marks_it(clients: NcClients) -> None:
     with respx.mock(assert_all_called=True) as mock:
         mock_calendars(mock)
-        result = await calendar_tools.list_events(
-            clients, start=WINDOW[0], end=WINDOW[1], limit=2
-        )
+        result = await calendar_tools.list_events(clients, start=WINDOW[0], end=WINDOW[1], limit=2)
 
     assert result["count"] == 2
     assert result["truncated"] is True
@@ -327,9 +325,7 @@ async def test_an_impossible_limit_is_refused(clients: NcClients) -> None:
     with respx.mock(assert_all_called=False) as mock:
         everything = mock.route()
         with pytest.raises(ToolError):
-            await calendar_tools.list_events(
-                clients, start=WINDOW[0], end=WINDOW[1], limit=0
-            )
+            await calendar_tools.list_events(clients, start=WINDOW[0], end=WINDOW[1], limit=0)
 
     assert everything.call_count == 0
 
