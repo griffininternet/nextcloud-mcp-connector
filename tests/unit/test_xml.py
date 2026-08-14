@@ -64,11 +64,29 @@ BILLION_LAUGHS = """<?xml version="1.0"?>
 
 
 def test_hardened_parser_settings() -> None:
+    """lxml does not expose the flags as attributes, so pin them at the source level.
+
+    The behaviour is asserted separately by the entity and billion-laughs probes below.
+    """
+    import inspect
+
     parser = xml.hardened_parser()
     assert isinstance(parser, etree.XMLParser)
-    assert parser.resolve_entities is False
-    assert parser.no_network is True
-    assert parser.huge_tree is False
+
+    source = inspect.getsource(xml.hardened_parser)
+    for setting in ("resolve_entities=False", "no_network=True", "huge_tree=False"):
+        assert setting in source, f"hardened_parser must keep {setting}"
+
+
+def test_hardened_parser_does_not_expand_entities() -> None:
+    """Behavioural proof for resolve_entities=False on a body with a defined entity."""
+    body = (
+        '<?xml version="1.0"?><!DOCTYPE d [<!ENTITY greet "hello">]>'
+        '<d:multistatus xmlns:d="DAV:"><d:response><d:href>&greet;</d:href>'
+        "</d:response></d:multistatus>"
+    )
+    with pytest.raises(ToolError):
+        xml.parse_multistatus(body)
 
 
 def test_namespace_constants() -> None:

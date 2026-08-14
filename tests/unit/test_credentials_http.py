@@ -6,6 +6,7 @@ that ``follow_redirects=True`` would cause.
 
 import asyncio
 import logging
+import sys
 
 import httpx
 import pytest
@@ -80,18 +81,21 @@ def test_each_event_loop_gets_its_own_client() -> None:
 
 
 def test_configure_logging_silences_httpx_and_writes_to_stderr() -> None:
+    package_logger = logging.getLogger("mcp_connector")
+    for handler in list(package_logger.handlers):
+        package_logger.removeHandler(handler)
+
     nc_http.configure_logging()
     nc_http.configure_logging()  # idempotent: no duplicate handlers
 
     assert logging.getLogger("httpx").level == logging.WARNING
     assert logging.getLogger("httpcore").level == logging.WARNING
 
-    package_logger = logging.getLogger("mcp_connector")
     handlers = package_logger.handlers
     assert len(handlers) == 1, "configure_logging must not stack handlers"
     stream = getattr(handlers[0], "stream", None)
-    assert stream is not None
-    assert stream.name == "<stderr>", "stdout is the wire in stdio mode"
+    assert stream is sys.stderr, "stdout is the wire in stdio mode"
+    assert package_logger.propagate is False, "records must not reach a root stdout handler"
 
 
 def test_resolve_credentials_uses_the_environment(
