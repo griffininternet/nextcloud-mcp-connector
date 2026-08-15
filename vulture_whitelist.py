@@ -48,3 +48,11 @@ _.verify_token
 deck_api_versions
 NSMAP
 get_board
+
+# --- Reserved names of the AppAPI deploy environment -----------------------------------
+# ENV_APP_PERSISTENT_STORAGE: AppAPI injects APP_PERSISTENT_STORAGE into every ExApp
+#   container. The name is declared here in one place, with the other eight AppAPI
+#   variables, instead of appearing as a bare string in the plan that starts using the
+#   volume (02-04). Declaring a name without evaluating it is the same "no silent
+#   defaults" rule the HTTP mode variables followed in phase 1.
+ENV_APP_PERSISTENT_STORAGE

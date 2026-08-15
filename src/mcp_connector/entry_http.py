@@ -20,12 +20,17 @@ Two decisions worth the comment they cost:
   address and Host allowlist are unrelated. Hence ``NC_MCP_ALLOWED_HOSTS`` from day one.
 * ``/health`` is a custom route, and custom routes are never authenticated, even when the
   rest of the server is. That is exactly right for a health probe and forbidden for
-  anything else, so this module registers exactly one.
+  anything else, so this module still registers exactly one. The AppAPI lifecycle routes
+  of phase 2 are deliberately not registered here: ``entry_exapp.build_exapp_app``
+  attaches them to its own application object, so this standalone mode stays exactly the
+  server phase 1 shipped (D-23).
 
 Not built here on purpose: mounting this app into a host application. A mounted sub-app
 gets no lifespan of its own, so the host would have to enter ``mcp.session_manager.run()``
-in its own lifespan or fail on the first request. That belongs to the ExApp shell in
-phase 2, together with the FastAPI runner.
+in its own lifespan or fail on the first request. The ExApp shell of phase 2 avoids that
+question instead of answering it: it builds its own top level application and adds the
+three lifecycle routes to it, without FastAPI and without a second framework layer
+(D-24).
 """
 
 from collections.abc import Mapping
