@@ -777,6 +777,7 @@ def test_the_secrets_reach_the_container_through_stdin() -> None:
     text = BOOTSTRAP.read_text(encoding="utf-8")
     assert "occ_stdin" in text
     assert 'OC_PASS="$(cat)"' in text
+    assert 'JSON="$(cat)"' in text
 
 
 def test_no_grep_q_on_a_pipe_in_the_shell_scripts() -> None:
@@ -793,7 +794,6 @@ def test_no_grep_q_on_a_pipe_in_the_shell_scripts() -> None:
         assert "| grep -q" not in text, (
             f"{script.name} pipes into grep -q; under pipefail that is the SIGPIPE flake"
         )
-    assert 'JSON="$(cat)"' in text
 
 
 def test_the_registration_verifies_what_the_registry_serves() -> None:
