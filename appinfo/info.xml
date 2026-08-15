@@ -40,7 +40,7 @@ Every request runs under the identity of the signed in user, so an assistant nev
 			<image-tag>0.1.0</image-tag>
 		</docker-install>
 		<!--
-		  - Exactly two routes, and they are the whole external attack surface of this app.
+		  - Exactly four routes, and they are the whole external attack surface of this app.
 		  -
 		  - The three AppAPI lifecycle paths (/heartbeat, /init and /enabled) are deliberately
 		  - absent, and this comment is the only place they appear here. A path that matches no
@@ -62,16 +62,48 @@ Every request runs under the identity of the signed in user, so an assistant nev
 		  - attached, and which of the two a reader sees then depends on whether the proxy
 		  - prepends or appends. The app refuses such a request outright since WR-01; this
 		  - list makes sure it never has to (WR-01, IN-01).
+		  -
+		  - /mcp is PUBLIC since plan 03-01, and that is a deliberate trade, not a
+		  - relaxation. The OAuth discovery flow begins with a 401 that carries the
+		  - resource_metadata pointer, and that answer has to come from this app: with
+		  - access_level USER, HaRP rejects an anonymous caller before our code sees it, and
+		  - the client never learns where the metadata lives (spike open item, pitfall 6).
+		  - The protection that access level provided was replaced in the same change, not
+		  - dropped: exapp/middleware.py now reads the user id of the AppAPI header, and an
+		  - empty one has to pass an own bearer check. While no token verifier is configured
+		  - that check refuses every bearer, so the route is closed by default (T-03-01).
+		  -
+		  - The three well-known routes replace the single ^/\.well-known/ of phase 2, which
+		  - was the accepted risk AR-02-06: HaRP matches route patterns with re.match, which
+		  - anchors at the start only, so that pattern published the whole well-known tree of
+		  - this app, present and future. Every route below names one document and ends with
+		  - $; without the end anchor a pattern would still cover its neighbours, for example
+		  - /.well-known/openid-configuration.evil (pitfall 14). Their order follows the way a
+		  - client walks the discovery: the protected resource document first, then the
+		  - authorization server document at the path appended OpenID variant a client finds
+		  - on its own, then at the RFC 8414 spelling the reverse proxy rules rewrite to.
 		-->
 		<routes>
 			<route>
 				<url>^/mcp/?$</url>
 				<verb>GET,POST,DELETE</verb>
-				<access_level>USER</access_level>
+				<access_level>PUBLIC</access_level>
 				<headers_to_exclude>["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERSION","X-ORIGIN-IP"]</headers_to_exclude>
 			</route>
 			<route>
-				<url>^/\.well-known/</url>
+				<url>^/\.well-known/oauth-protected-resource/mcp$</url>
+				<verb>GET</verb>
+				<access_level>PUBLIC</access_level>
+				<headers_to_exclude>["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERSION","X-ORIGIN-IP"]</headers_to_exclude>
+			</route>
+			<route>
+				<url>^/\.well-known/openid-configuration$</url>
+				<verb>GET</verb>
+				<access_level>PUBLIC</access_level>
+				<headers_to_exclude>["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERSION","X-ORIGIN-IP"]</headers_to_exclude>
+			</route>
+			<route>
+				<url>^/\.well-known/oauth-authorization-server$</url>
 				<verb>GET</verb>
 				<access_level>PUBLIC</access_level>
 				<headers_to_exclude>["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERSION","X-ORIGIN-IP"]</headers_to_exclude>

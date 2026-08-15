@@ -400,10 +400,13 @@ verify_image_digest() {
 # (D-25 publishes nothing before phase 5), while the local test needs an image that
 # actually exists, and that one lives in the loopback registry.
 #
-# The four backslashes in the well-known route are two levels of escaping: the unquoted
+# The four backslashes in each well-known route are two levels of escaping: the unquoted
 # heredoc consumes one pair, and JSON needs the remaining one so the route regex reaches
-# AppAPI as ^/\.well-known/ with an escaped dot. Two backslashes here produce the invalid
-# JSON escape \. and AppAPI answers "Invalid app info provided in JSON format".
+# AppAPI as ^/\.well-known/... with an escaped dot. Two backslashes here produce the
+# invalid JSON escape \. and AppAPI answers "Invalid app info provided in JSON format".
+# Every well-known pattern ends with $, and /mcp is access level 0 (PUBLIC) like the other
+# three: HaRP matches with re.match, and the 401 of the OAuth discovery flow has to come
+# from the ExApp itself (appinfo/info.xml carries the full reasoning, plan 03-01).
 #
 # headers_to_exclude mirrors appinfo/info.xml: the proxy strips the headers it sets itself,
 # so a client cannot send a second AUTHORIZATION-APP-API next to the real one (WR-01).
@@ -414,7 +417,7 @@ EXCLUDED_HEADERS='["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERS
 json_info() {
   local daemon="$1" port="$2"
   cat <<JSON
-{"id":"${APP_ID}","name":"${APP_NAME}","daemon_config_name":"${daemon}","version":"${APP_VERSION}","secret":"${APP_SECRET}","port":${port},"docker-install":{"registry":"${REGISTRY}","image":"${IMAGE_NAME}","image-tag":"${APP_VERSION}"},"routes":[{"url":"^/mcp/?$","verb":"GET,POST,DELETE","access_level":1,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/\\\\.well-known/","verb":"GET","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}}]}
+{"id":"${APP_ID}","name":"${APP_NAME}","daemon_config_name":"${daemon}","version":"${APP_VERSION}","secret":"${APP_SECRET}","port":${port},"docker-install":{"registry":"${REGISTRY}","image":"${IMAGE_NAME}","image-tag":"${APP_VERSION}"},"routes":[{"url":"^/mcp/?$","verb":"GET,POST,DELETE","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/\\\\.well-known/oauth-protected-resource/mcp$","verb":"GET","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/\\\\.well-known/openid-configuration$","verb":"GET","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/\\\\.well-known/oauth-authorization-server$","verb":"GET","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}}]}
 JSON
 }
 
