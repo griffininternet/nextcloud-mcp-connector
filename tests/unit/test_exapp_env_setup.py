@@ -552,10 +552,76 @@ def test_the_deploy_daemon_publishes_no_port() -> None:
 
 
 def test_the_bootstrap_never_reaches_into_the_other_topology() -> None:
-    """T-02-34: the other test instance is in daily use and must survive this script."""
+    """T-02-34, WR-07: the other test instance is in daily use and must survive this
+    script. Naming the file is not enough, because the name used to be overridable: a
+    forgotten `export COMPOSE_FILE=compose.test.yml` passed this test and still disabled
+    the bruteforce guard on the instance somebody was using."""
     text = BOOTSTRAP.read_text(encoding="utf-8")
     assert "compose.test.yml" not in text
     assert "down -v" not in text
+    assert 'COMPOSE_FILE="compose.exapp.yml"' in text
+    assert "COMPOSE_FILE:-" not in text, "the compose file is overridable from the shell"
+    assert "ensure_own_topology" in text
+
+
+@needs_bash
+@pytest.mark.parametrize(
+    ("content", "expected_code"),
+    [
+        ("name: nc-mcp-exapp\nservices:\n", 0),
+        ("name: some-other-project\nservices:\n", 1),
+        ("services:\n", 1),
+        (None, 1),
+    ],
+    ids=["the right project", "a foreign project", "no project name", "no file at all"],
+)
+def test_the_topology_guard_refuses_a_foreign_compose_file(
+    tmp_path: Path, content: str | None, expected_code: int
+) -> None:
+    """WR-07: the guard is what makes the fixed file name more than a comment."""
+    compose = tmp_path / "compose.exapp.yml"
+    if content is not None:
+        compose.write_text(content, encoding="utf-8", newline="\n")
+    script = (
+        "set -euo pipefail\n"
+        f'COMPOSE_FILE="{compose.as_posix()}"\n'
+        f"{shell_function('ensure_own_topology')}\n"
+        "ensure_own_topology\n"
+    )
+
+    result = run_bash(script)
+
+    assert result.returncode == expected_code, result.stderr
+
+
+@pytest.mark.parametrize(
+    "forbidden",
+    ['-e "OC_PASS=', '--json-info "$(', '--json-info "${json}"'],
+)
+def test_no_secret_travels_through_the_process_list(forbidden: str) -> None:
+    """WR-06: the argv of `docker` is world readable in `ps aux` for the whole call, and
+    the payload of the registration carries "secret":"<APP_SECRET>", which is bearer
+    equivalent. Both the app secret and the user passwords go through stdin now."""
+    text = BOOTSTRAP.read_text(encoding="utf-8")
+    assert forbidden not in text, f"{forbidden!r} puts a secret on a command line"
+
+
+def test_the_secrets_reach_the_container_through_stdin() -> None:
+    text = BOOTSTRAP.read_text(encoding="utf-8")
+    assert "occ_stdin" in text
+    assert 'OC_PASS="$(cat)"' in text
+    assert 'JSON="$(cat)"' in text
+
+
+def test_the_registration_verifies_what_the_registry_serves() -> None:
+    """WR-09: the loopback registry takes a push from every local process, and the deploy
+    daemon pulls by tag. A digest is the content, a tag is only a name."""
+    text = BOOTSTRAP.read_text(encoding="utf-8")
+    assert "verify_image_digest" in text
+    body = shell_function("ensure_exapp")
+    assert body.index("verify_image_digest") < body.index("register_exapp"), (
+        "the digest is checked after the registration triggered the pull"
+    )
 
 
 # --- the secret handling around the registration (CR-02) --------------------------

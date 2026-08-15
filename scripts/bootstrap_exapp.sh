@@ -33,7 +33,12 @@ cd "$(dirname "$0")/.."
 # Linux, where the variable is simply unknown.
 export MSYS_NO_PATHCONV=1
 
-COMPOSE_FILE="${COMPOSE_FILE:-compose.exapp.yml}"
+# Not overridable, and checked below (WR-07). This script creates users, hands out app
+# passwords and switches `auth.bruteforce.protection.enabled` off. All three are fine on
+# the throwaway topology of this one file and unacceptable on any other instance, so a
+# forgotten `export COMPOSE_FILE=...` in the calling shell must not be able to aim it at
+# the other topology of this repository, which is in daily use.
+COMPOSE_FILE="compose.exapp.yml"
 SERVICE="nextcloud"
 HARP_CONTAINER="${HARP_CONTAINER:-nc-mcp-exapp-harp}"
 HOST_PORT="${NC_EXAPP_PORT:-8081}"
@@ -60,11 +65,25 @@ ALICE_PASSWORD="${NC_EXAPP_ALICE_PASSWORD:-alice-test-pw-01}"
 BOB_PASSWORD="${NC_EXAPP_BOB_PASSWORD:-bob-test-pw-01}"
 TOKEN_NAME="mcp-exapp"
 ENV_FILE="${ENV_FILE:-.env.exapp}"
+# Filled by ensure_image and read by verify_image_digest right before the registration.
+IMAGE_DIGEST=""
 
 MANUAL_MODE=0
 if [ "${1:-}" = "--manual" ]; then
   MANUAL_MODE=1
 fi
+
+ensure_own_topology() {
+  if [ ! -f "${COMPOSE_FILE}" ]; then
+    echo "ERROR: ${COMPOSE_FILE} is not here. Run this script from the repository root." >&2
+    return 1
+  fi
+  if ! grep -q '^name: nc-mcp-exapp$' "${COMPOSE_FILE}"; then
+    echo "ERROR: ${COMPOSE_FILE} does not declare the nc-mcp-exapp project." >&2
+    echo "This script only ever runs against that throwaway topology (WR-07)." >&2
+    return 1
+  fi
+}
 
 OCC="docker compose -f ${COMPOSE_FILE} exec -T --user www-data ${SERVICE} php occ"
 
@@ -74,13 +93,27 @@ occ() {
   $OCC "$@"
 }
 
-# A password for occ has to travel inside the container. An exported variable on the host
-# never reaches the process that `docker compose exec` starts, so -e is not optional here.
+# Every secret this script hands to the container travels through stdin, never through a
+# command line (WR-06). The argv of `docker` is world readable in `ps aux` for the whole
+# duration of a call, and an inline -e assignment additionally lands in the container
+# config of the exec. A pipe is private to the two processes at its ends.
+#
+# The `sh -c '<snippet>' sh "$@"` form is the portable way to give that snippet positional
+# arguments: the word after the snippet becomes $0, everything after it becomes $1 and up.
+occ_stdin() {
+  local snippet="$1"
+  shift
+  docker compose -f "${COMPOSE_FILE}" exec -T --user www-data "${SERVICE}" \
+    sh -c "${snippet}" sh "$@"
+}
+
+# A password for occ has to travel inside the container: an exported variable on the host
+# never reaches the process that `docker compose exec` starts.
 occ_pw() {
   local password="$1"
   shift
-  docker compose -f "${COMPOSE_FILE}" exec -T -e "OC_PASS=${password}" \
-    --user www-data "${SERVICE}" php occ "$@"
+  printf '%s' "$password" |
+    occ_stdin 'OC_PASS="$(cat)"; export OC_PASS; exec php occ "$@"' "$@"
 }
 
 wait_for_install() {
@@ -259,7 +292,36 @@ ensure_image() {
     echo "Is the registry service up? docker compose -f ${COMPOSE_FILE} ps registry" >&2
     return 1
   fi
-  echo "image ${ref}: built and pushed"
+  IMAGE_DIGEST="$(docker inspect --format '{{index .RepoDigests 0}}' "${ref}" 2>/dev/null |
+    tr -d '\r' | cut -d@ -f2)"
+  if [ -z "${IMAGE_DIGEST}" ]; then
+    echo "ERROR: the push of ${ref} left no digest behind, so nothing can be verified." >&2
+    return 1
+  fi
+  echo "image ${ref}: built and pushed (${IMAGE_DIGEST})"
+}
+
+# The loopback registry has neither authentication nor TLS, so every local process, down to
+# a package postinstall script, may `docker push` over this tag. The deploy daemon pulls by
+# tag, and what it pulls is started with APP_SECRET in its environment (WR-09). A tag is a
+# name, a digest is the content: this compares what the registry serves now against what we
+# pushed, immediately before the registration that triggers the pull.
+verify_image_digest() {
+  local ref="${REGISTRY}/${IMAGE_NAME}:${APP_VERSION}" remote
+  remote="$(docker buildx imagetools inspect "${ref}" --format '{{.Manifest.Digest}}' 2>/dev/null |
+    tr -d '\r' | tr -d '[:space:]')"
+  if [ -z "$remote" ]; then
+    echo "ERROR: could not read the digest of ${ref} from the registry." >&2
+    return 1
+  fi
+  if [ "$remote" != "${IMAGE_DIGEST}" ]; then
+    echo "ERROR: ${ref} in the registry is not the image this run built." >&2
+    echo "  pushed:  ${IMAGE_DIGEST}" >&2
+    echo "  serving: ${remote}" >&2
+    echo "Someone else pushed over this tag. Refusing to register it (WR-09)." >&2
+    return 1
+  fi
+  echo "image digest ${remote}: unchanged since the push"
 }
 
 # The registration overrides exactly three fields of the manifest: registry, image and
@@ -274,11 +336,25 @@ ensure_image() {
 #
 # headers_to_exclude mirrors appinfo/info.xml: the proxy strips the headers it sets itself,
 # so a client cannot send a second AUTHORIZATION-APP-API next to the real one (WR-01).
+#
+# Daemon and port are parameters, so the development loop builds its payload the same way
+# instead of rewriting this one with sed.
 EXCLUDED_HEADERS='["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERSION","X-ORIGIN-IP"]'
 json_info() {
+  local daemon="$1" port="$2"
   cat <<JSON
-{"id":"${APP_ID}","name":"${APP_NAME}","daemon_config_name":"${DAEMON_NAME}","version":"${APP_VERSION}","secret":"${APP_SECRET}","port":${APP_PORT},"docker-install":{"registry":"${REGISTRY}","image":"${IMAGE_NAME}","image-tag":"${APP_VERSION}"},"routes":[{"url":"^/mcp/?$","verb":"GET,POST,DELETE","access_level":1,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/\\\\.well-known/","verb":"GET","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}}]}
+{"id":"${APP_ID}","name":"${APP_NAME}","daemon_config_name":"${daemon}","version":"${APP_VERSION}","secret":"${APP_SECRET}","port":${port},"docker-install":{"registry":"${REGISTRY}","image":"${IMAGE_NAME}","image-tag":"${APP_VERSION}"},"routes":[{"url":"^/mcp/?$","verb":"GET,POST,DELETE","access_level":1,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/\\\\.well-known/","verb":"GET","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}}]}
 JSON
+}
+
+# The payload carries "secret":"<APP_SECRET>", which is bearer equivalent, so it goes in
+# through stdin and never as an argument of the docker client (WR-06).
+register_exapp() {
+  local daemon="$1" port="$2"
+  local snippet
+  snippet='JSON="$(cat)"; exec php occ app_api:app:register "$1" "$2"'
+  snippet="${snippet} "'--json-info "$JSON" --force-scopes --wait-finish'
+  json_info "$daemon" "$port" | occ_stdin "${snippet}" "${APP_ID}" "$daemon"
 }
 
 # access_level travels as a number on purpose. AppAPI maps the names PUBLIC, USER and
@@ -291,8 +367,8 @@ ensure_exapp() {
     echo "exapp ${APP_ID}: registered"
     return 0
   fi
-  if ! output="$(occ app_api:app:register "${APP_ID}" "${DAEMON_NAME}" \
-    --json-info "$(json_info)" --force-scopes --wait-finish 2>&1)"; then
+  verify_image_digest || return 1
+  if ! output="$(register_exapp "${DAEMON_NAME}" "${APP_PORT}" 2>&1)"; then
     echo "ERROR: could not register the ExApp ${APP_ID}:" >&2
     echo "${output}" >&2
     echo "Logs: docker compose -f ${COMPOSE_FILE} logs --tail=100 appapi-harp" >&2
@@ -322,7 +398,7 @@ ensure_exapp_enabled() {
 # The development loop: no image, no container, a locally started process instead. Only
 # reached with --manual, because it registers a second daemon and a second app entry.
 register_manual_install() {
-  local output json
+  local output
   if ! occ app_api:daemon:list 2>/dev/null | grep -q "${MANUAL_DAEMON_NAME}"; then
     if ! output="$(occ app_api:daemon:register \
       "${MANUAL_DAEMON_NAME}" "Manual Install" manual-install http \
@@ -333,15 +409,11 @@ register_manual_install() {
     fi
     echo "daemon ${MANUAL_DAEMON_NAME}: registered"
   fi
-  json="$(json_info | sed \
-    -e "s/\"daemon_config_name\":\"${DAEMON_NAME}\"/\"daemon_config_name\":\"${MANUAL_DAEMON_NAME}\"/" \
-    -e "s/\"port\":${APP_PORT}/\"port\":${MANUAL_APP_PORT}/")"
   if occ app_api:app:list 2>/dev/null | grep -q "${APP_ID}"; then
     echo "exapp ${APP_ID}: already registered, unregister it first to switch the daemon"
     return 0
   fi
-  if ! output="$(occ app_api:app:register "${APP_ID}" "${MANUAL_DAEMON_NAME}" \
-    --json-info "${json}" --force-scopes --wait-finish 2>&1)"; then
+  if ! output="$(register_exapp "${MANUAL_DAEMON_NAME}" "${MANUAL_APP_PORT}" 2>&1)"; then
     echo "ERROR: could not register the ExApp in manual-install mode:" >&2
     echo "${output}" >&2
     return 1
@@ -350,6 +422,7 @@ register_manual_install() {
 }
 
 echo "== ExApp topology bootstrap =="
+ensure_own_topology
 wait_for_install
 
 # Notes and Deck are optional apps; the tool plans of the later phases need both.
