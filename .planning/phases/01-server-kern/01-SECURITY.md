@@ -3,7 +3,7 @@ phase: 1
 slug: 01-server-kern
 status: verified
 threats_total: 102
-threats_closed: 101
+threats_closed: 102
 threats_open: 0
 threats_accepted: 9
 threats_transferred: 16
