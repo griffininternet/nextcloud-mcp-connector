@@ -33,6 +33,7 @@
 - [ ] **AUTH-04**: Claude.ai-Connector und ChatGPT-Connector verbinden nachweislich plug-and-play gegen eine öffentliche Staging-Instanz (E2E-Erfolgskriterium)
 - [x] **AUTH-05**: Jede Nextcloud-Anfrage läuft unter der Identität des angemeldeten Nutzers (ExApp-Impersonation bzw. Nutzer-Credentials); der Assistent sieht nie mehr als der Nutzer in der Weboberfläche
 - [x] **AUTH-06**: Discovery-Endpunkte (well-known/PRM, WWW-Authenticate) sind unauthentifiziert erreichbar, auch durch den AppAPI-Proxy-Pfad (früher Spike, Hauptrisiko)
+- [ ] **AUTH-07**: Admin kann steuern, welche OAuth-Clients sich verbinden dürfen: Client-Registry mit allowed-Flag als Enforcement-Punkt im AS-Design von Anfang an, Dynamic Client Registration global abschaltbar (Owner-Entscheid 14.08.2026; Admin-UI dafür darf in Phase 4 folgen)
 
 ### ExApp und Distribution (EXAPP)
 
@@ -102,6 +103,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AUTH-02 | Phase 3 | Pending |
 | AUTH-03 | Phase 3 | Pending |
 | AUTH-04 | Phase 3 | Pending |
+| AUTH-07 | Phase 3 | Pending |
 | EXAPP-02 | Phase 4 | Pending |
 | TOOL-08 | Phase 4 | Pending |
 | EXAPP-04 | Phase 5 | Pending |
