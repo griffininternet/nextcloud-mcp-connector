@@ -14,7 +14,7 @@ Der Weg führt vom sofort nutzbaren Kern zur Store-Distribution: Zuerst entsteht
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Server-Kern** - Alle Kern-Tools, stdio und Streamable HTTP mit App-Passwort; App-ID-Freeze und context_agent-Fix (completed 2026-08-14)
-- [ ] **Phase 2: ExApp-Shell** - Installation über AppAPI, Berechtigungs-Durchgriff, Discovery- und DAV-Spikes
+- [x] **Phase 2: ExApp-Shell** - Installation über AppAPI, Berechtigungs-Durchgriff, Discovery- und DAV-Spikes (completed 2026-08-15)
 - [ ] **Phase 3: OAuth 2.1** - Spec-konformes OAuth mit E2E-Beweis gegen Claude.ai und ChatGPT, Login Flow v2 als Fallback
 - [ ] **Phase 4: Per-User-Verwaltung und prepare_context** - Settings-UI mit Token-Kontrolle plus Bündel-Tool
 - [ ] **Phase 5: Hardening und Store-Einreichung** - Sicherheits-Tests, Signatur, Listing, Client-Doku vor der Conference
@@ -106,7 +106,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 02-07-PLAN.md - Permission-Parity über die volle Kette, Doku, AIO-Entscheidung, Abnahme (Wave 5)
+- [x] 02-07-PLAN.md - Permission-Parity über die volle Kette, Doku, AIO-Entscheidung, Abnahme (Wave 5)
 
 ### Phase 3: OAuth 2.1
 
@@ -164,7 +164,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Server-Kern | 14/14 | Complete    | 2026-08-14 |
-| 2. ExApp-Shell | 6/7 | In Progress|  |
+| 2. ExApp-Shell | 7/7 | Complete   | 2026-08-15 |
 | 3. OAuth 2.1 | 0/TBD | Not started | - |
 | 4. Per-User-Verwaltung und prepare_context | 0/TBD | Not started | - |
 | 5. Hardening und Store-Einreichung | 0/TBD | Not started | - |

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-06-PLAN.md
-last_updated: "2026-08-15T12:05:00.000Z"
+stopped_at: Completed 02-07-PLAN.md
+last_updated: "2026-08-15T14:46:26.727Z"
 last_activity: 2026-08-15
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 21
-  completed_plans: 20
-  percent: 95
+  completed_plans: 21
+  percent: 40
 ---
 
 # Project State
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 2
-Plan: 02-06 complete, next 02-07
+Plan: 02-07 complete; all 7 plans of phase 2 done, awaiting phase review gates
 Status: Executing
 Last activity: 2026-08-15
 
-Progress: [█████████░] 95%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 20
+- Total plans completed: 21
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -45,7 +45,7 @@ Progress: [█████████░] 95%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1 | 14 | - | - |
-| 2 | 6 | 199 min | 33 min |
+| 2 | 7 | 254 min | 36 min |
 
 **Recent Trend:**
 
@@ -72,6 +72,7 @@ Progress: [█████████░] 95%
 | Phase 02-exapp-shell P04 | 63 min | 3 tasks | 10 files |
 | Phase 02-exapp-shell P05 | 14 min | 3 tasks | 5 files |
 | Phase 02-exapp-shell P06 | 45 min | 2 tasks | 3 files |
+| Phase 02-exapp-shell P07 | 55 min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -175,12 +176,17 @@ Recent decisions affecting current work:
 - [Phase 02-exapp-shell]: AUTH-05 ist abgehakt (DAV-Spike D-30, Fall A): alle sechs API-Familien (WebDAV, CalDAV, CardDAV, OCS, Notes, Deck) laufen unter AppAPI-Impersonation gegen NC 34.0.2 / AppAPI 34.0.0, die Identitaet ist serverseitig belegt (cloud/user liefert genau alice bzw. bob, exapp_impersonation.log protokolliert jeden Request); keine Provider-Aufteilung, kein App-Passwort-Rueckfall, Annahme A1 bestaetigt
 - [Phase 02-exapp-shell]: Der Negativfall ist der Kern von AUTH-05: bob erreicht alices Datei auch bei bekanntem Pfad nicht (404, nie 200); der Confused-Deputy-Beweis zeigt, dass ein zusaetzlicher gueltiger Authorization-Basic-Header fuer alice die bob-Impersonation NICHT ueberschreibt (cloud/user bleibt bob), weil die Identitaet allein aus AUTHORIZATION-APP-API stammt
 - [Phase 02-exapp-shell]: Zwei Kontrollpruefungen machen die Matrix beweiskraeftig: der messende Prozess traegt kein NC_MCP_APP_PASSWORD und keinen NC_MCP_STATIC_BEARER, und ein falsches APP_SECRET (64 Nullen) wird mit 401 abgewiesen; die Create-only-Grenze (If-None-Match: *) haelt unter Impersonation (zweites PUT 412)
+- [Phase 02-exapp-shell]: AUTH-05 ist ueber die volle Kette bestaetigt (MCP-Client, HaRP, ExApp, Impersonation, Nextcloud-ACLs); bob findet nichts von alice ueber files_search, notes_search, unified_search und files_read, alice findet ihre eigenen Inhalte im selben Lauf (test_permission_fidelity_exapp.py, 9 gruen); die Middleware-Grenze haelt live (anonymes /mcp = 403, Heartbeat von aussen = 502)
+- [Phase 02-exapp-shell]: Ein per occ user:add angelegter Nutzer hat ein leeres Files-Home ohne suchbaren Root; eine WebDAV-SEARCH antwortet dann 500 statt leer; ensure_files_home legt eine neutrale Datei an und scannt sie (wie ein Erst-Login-Skeleton), danach ist die SEARCH ein sauberes leeres Ergebnis
+- [Phase 02-exapp-shell]: Der Nextcloud-AIO-Smoke ist Fall B; er scheitert an AIOs Domain-Validierung (oeffentliche Domain plus gueltiges TLS), ist mit fehlenden Schritten in docs/exapp-install.md dokumentiert und als benannter Punkt an Phase 5 uebergeben (D-31), nicht still gestrichen
 
 ### Pending Todos
 
 - **Owner-Schritt 01-13:** PR an nextcloud/context_agent#227 einreichen. Branch und DCO-Commit liegen im Fork street1983nk/context_agent (fix/stateless-http-session-compat, def1425), der PR-Text in docs/contrib/227-pr-body.md. Kommando und Pruefpunkte stehen in .planning/phases/01-server-kern/01-13-SUMMARY.md. Vorher `git push origin main` im Connector-Repo, damit der verlinkte Regressionstest oeffentlich sichtbar ist. Danach PR-URL nachtragen, ROADMAP 01-13 abhaken, CONTRIB-01 auf Complete.
 - **Owner-Schritt 01-14:** Ein Durchgang mit Claude Desktop selbst nach docs/client-setup.md. Die Anleitung ist gegen die Referenz-Clients der Testsuite verprobt (mcp 2.0 und mcp 1.29 gegen denselben laufenden Endpoint, plus scripts/acceptance_all_tools.py ueber alle 15 Tools per stdio); die Konfigurationspfade fuer Claude Desktop stammen aus der offiziellen Dokumentation und sind auf diesem Rechner nicht verifiziert.
-- **ExApp-Topologie wieder anfahren (02-07):** Die Volumes des nc-mcp-exapp-Projekts liegen noch, wurden aber in 02-06 erneut neu aufgebaut. Weil die Daemon-Registrierung mit jedem down -v verschwindet, ist ein voller Bootstrap noetig: `export HP_SHARED_KEY=$(openssl rand -hex 32)`, `docker compose -p nc-mcp-exapp -f compose.exapp.yml up -d --wait`, dann `bash scripts/bootstrap_exapp.sh`. Der ExApp-Container gehoert nicht zum compose-Projekt (Deploy Daemon erzeugt ihn ueber den Docker-Socket); `down` laesst ihn stehen, `docker stop nc_app_mcp_connector` beendet ihn.
+- **Nextcloud-AIO-Smoke (Phase 5, D-31):** Der zweite Smoke-Schritt aus Success Criterion 1 ist an Phase 5 uebergeben. Er scheitert auf diesem Rechner an AIOs Domain-Validierung (oeffentliche Domain plus gueltiges TLS). Die fehlenden Schritte stehen in docs/exapp-install.md, Abschnitt Nextcloud AIO: Host mit oeffentlicher Domain und Zertifikat, AIO-Mastercontainer starten, optionalen HaRP-Container aktivieren (Annahme A6 unverifiziert), App als ExApp installieren, den Permission-Fidelity-Smoke wiederholen und occ app_api:app:list festhalten.
+- **WR-12 Linux-socat-Loop (Phase 5):** Die Linux-Variante des --manual-Entwicklungsloops (socat auf das Compose-Gateway) ist dokumentiert, aber auf diesem Windows-Host nicht durchgespielt; Entwicklungs-Komfort, nicht der ausgelieferte Pfad.
+- **ExApp-Topologie:** Nach 02-07 heruntergefahren (`docker compose -p nc-mcp-exapp -f compose.exapp.yml down`, Volumes bleiben) und `docker stop nc_app_mcp_connector`. Wieder anfahren fuer weitere Laeufe: `export HP_SHARED_KEY=$(openssl rand -hex 32)`, `up -d --wait`, dann `bash scripts/bootstrap_exapp.sh` (die Daemon-Registrierung verschwindet mit jedem down -v).
 - **Aufraeumen (optional):** Die Docker-Testinstanz traegt jetzt zusaetzlich die Calendar-App 6.5.3 und die Abnahme-Artefakte. Fuer einen sauberen Stand: `docker compose -f compose.test.yml down -v` und danach `bash scripts/bootstrap_test_nc.sh`.
 
 ### Blockers/Concerns
@@ -199,6 +205,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-15T12:05:00.000Z
+Last session: 2026-08-15T14:46:26.710Z
 Stopped at: Completed 02-06-PLAN.md
 Resume file: None
