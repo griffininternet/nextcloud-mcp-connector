@@ -65,8 +65,12 @@ jobs:
       - name: Generate a fresh HaRP shared key
         # compose.exapp.yml requires HP_SHARED_KEY and carries no default (WR-11), and the
         # bootstrap rejects anything that is not 64 hex characters (CR-02). One fresh key per
-        # run is handed to every later step through the job environment.
-        run: echo "HP_SHARED_KEY=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+        # run is handed to every later step through the job environment. The mask keeps any
+        # future step that prints its environment from writing the key into a public log.
+        run: |
+          KEY="$(openssl rand -hex 32)"
+          echo "::add-mask::${KEY}"
+          echo "HP_SHARED_KEY=${KEY}" >> "$GITHUB_ENV"
       - name: Start the HaRP topology
         # --wait honours the healthchecks in compose.exapp.yml, so no sleep is needed. The
         # topology brings its own reverse proxy, deploy daemon and loopback registry,
