@@ -96,5 +96,11 @@ def _json(
     status_code: int = 200,
     headers: dict[str, str] | None = None,
 ) -> JSONResponse:
-    """One helper for every answer, so ``no-store`` cannot be forgotten on one branch."""
-    return JSONResponse(payload, status_code=status_code, headers=headers or dict(_NO_STORE))
+    """One helper for every answer, so ``no-store`` cannot be forgotten on one branch.
+
+    The extra headers are merged over the constant instead of replacing it (IN-06): with
+    ``headers or dict(_NO_STORE)`` a caller that passed a non-empty dict without
+    ``Cache-Control`` silently lost ``no-store``, and the PHP proxy then cached the
+    answer for 3600 seconds, which is exactly the pitfall the constant exists against.
+    """
+    return JSONResponse(payload, status_code=status_code, headers={**_NO_STORE, **(headers or {})})

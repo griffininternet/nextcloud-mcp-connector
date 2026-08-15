@@ -146,6 +146,27 @@ def test_both_routes_carry_no_store() -> None:
         assert http.get(PROBE_PATH).headers["cache-control"] == "no-store"
 
 
+def test_extra_headers_never_cost_the_no_store() -> None:
+    """IN-06: the helper promised that no-store cannot be forgotten, but a caller passing
+    a non-empty header dict without Cache-Control used to replace the constant and the
+    PHP proxy then cached the answer for an hour. Merging keeps the promise."""
+    response = discovery._json({}, headers={"WWW-Authenticate": "Bearer"})
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["www-authenticate"] == "Bearer"
+
+
+def test_a_caller_that_sets_cache_control_itself_wins() -> None:
+    """The merge order is deliberate: an explicit Cache-Control is a decision, not an
+    accident, and the default must not overrule it silently."""
+    response = discovery._json({}, headers={"Cache-Control": "no-store, max-age=0"})
+    assert response.headers["cache-control"] == "no-store, max-age=0"
+
+
+def test_no_headers_at_all_still_answer_no_store() -> None:
+    response = discovery._json({})
+    assert response.headers["cache-control"] == "no-store"
+
+
 # --- wiring ----------------------------------------------------------------------
 
 
