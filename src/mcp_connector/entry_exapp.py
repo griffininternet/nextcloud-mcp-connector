@@ -21,14 +21,19 @@ from collections.abc import Mapping
 import uvicorn
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
+from starlette.routing import Route
 
 from . import config
 from .errors import ToolError
 from .exapp.lifecycle import lifecycle_routes
+from .exapp.middleware import RequireAppApi
 from .nextcloud.http import configure_logging
 from .server import mcp
 
 __all__ = ["build_exapp_app", "main"]
+
+#: The one route of this application that carries the MCP transport.
+MCP_PATH = "/mcp"
 
 #: The socket path HaRP itself defaults to when it starts an ExApp with the FRP tunnel.
 DEFAULT_EXAPP_SOCK = "/tmp/exapp.sock"  # noqa: S108 - HaRP dictates this path, not we
@@ -51,12 +56,28 @@ def build_exapp_app(env: Mapping[str, str] | None = None) -> Starlette:
     The three lifecycle routes are appended here and nowhere else. Registering them on the
     shared server object would add them to the standalone HTTP mode as well, and D-23 says
     that mode stays as it was.
+
+    The MCP route is wrapped in :class:`~mcp_connector.exapp.middleware.RequireAppApi`
+    here and only here, for the same reason: the standalone HTTP mode of phase 1 has no
+    AppAPI identity and must not grow an authentication it cannot satisfy (D-23). Inside
+    this mode the wrapper is not optional, so a missing wrap is an error and not a
+    warning: it would leave the whole JSON-RPC preamble unauthenticated (CR-01).
     """
     security = TransportSecuritySettings(
         allowed_hosts=config.allowed_hosts(env),
         enable_dns_rebinding_protection=config.dns_rebinding_protection(env),
     )
     app = mcp.streamable_http_app(transport_security=security)
+    guarded = 0
+    for route in app.router.routes:
+        if isinstance(route, Route) and route.path == MCP_PATH:
+            route.app = RequireAppApi(route.app, env)
+            guarded += 1
+    if guarded != 1:
+        raise RuntimeError(
+            f"the ExApp application has {guarded} guarded {MCP_PATH} routes instead of one; "
+            "the MCP transport would be served without the AppAPI handshake"
+        )
     for route in lifecycle_routes(env):
         app.router.routes.append(route)
     return app
