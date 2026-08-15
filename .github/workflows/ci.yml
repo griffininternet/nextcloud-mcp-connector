@@ -55,6 +55,31 @@ jobs:
         # that someone could mistake for a release.
         run: docker buildx build --platform linux/amd64,linux/arm64 --output type=cacheonly .
 
+  exapp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Start the HaRP topology
+        # --wait honours the healthchecks in compose.exapp.yml, so no sleep is needed. The
+        # topology brings its own reverse proxy, deploy daemon and loopback registry,
+        # because AppAPI reaches an ExApp through the public Nextcloud URL.
+        run: docker compose -f compose.exapp.yml up -d --wait
+      - name: Install the app as an ExApp
+        # The script builds the image, pushes it into the loopback registry of the
+        # topology and registers the app. Nothing is pushed outside; publishing to a
+        # public registry belongs to phase 5 (D-25).
+        run: bash scripts/bootstrap_exapp.sh
+      - name: The ExApp is registered and enabled
+        run: |
+          docker compose -f compose.exapp.yml exec -T --user www-data nextcloud \
+            php occ app_api:app:list | tee exapp-list.txt
+          grep -E 'mcp_connector .*\[enabled\]' exapp-list.txt
+      - name: Topology and ExApp logs on failure
+        if: failure()
+        run: |
+          docker compose -f compose.exapp.yml logs --tail=200
+          docker logs nc_app_mcp_connector --tail=200 || true
+
   integration:
     runs-on: ubuntu-latest
     steps:

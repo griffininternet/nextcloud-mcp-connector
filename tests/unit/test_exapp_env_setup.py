@@ -33,8 +33,18 @@ START = ROOT / "start.sh"
 HEALTHCHECK = ROOT / "healthcheck.sh"
 DOCKERIGNORE = ROOT / ".dockerignore"
 INFO_XML = ROOT / "appinfo" / "info.xml"
+COMPOSE_EXAPP = ROOT / "compose.exapp.yml"
+CADDYFILE = ROOT / "deploy" / "Caddyfile"
+BOOTSTRAP = ROOT / "scripts" / "bootstrap_exapp.sh"
 
 CONTAINER_FILES = (DOCKERFILE, START, HEALTHCHECK)
+
+#: The second half of this file guards the test topology of plan 02-04. Same reason as
+#: above: docker compose exec breaks on a CR, a port that lost its 127.0.0.1 prefix
+#: publishes a throwaway Nextcloud to the LAN (T-02-30), and a bootstrap script that grew a
+#: reference to the other compose file could take down an instance somebody is using
+#: (T-02-34).
+TOPOLOGY_FILES = (COMPOSE_EXAPP, CADDYFILE, BOOTSTRAP)
 
 #: Names that must never be baked into a layer: they are secrets, or they are the second
 #: credential channel the ExApp mode refuses to have (T-02-23, D-27).
@@ -103,6 +113,52 @@ def manifest_problems(root: etree._Element) -> list[str]:
                 problems.append(f"route {url!r} exposes the lifecycle path {path}")
 
     return problems
+
+
+def compose_services(text: str) -> dict[str, str]:
+    """Split the services mapping of a compose file into one text block per service.
+
+    Hand written instead of parsed: the project has no YAML dependency, and adding one for
+    six assertions would be a runtime dependency for a test. The file it reads is written
+    by hand and stays inside the two space indentation the rest of the repository uses.
+    """
+    blocks: dict[str, list[str]] = {}
+    in_services = False
+    current: str | None = None
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        indent = len(line) - len(line.lstrip())
+        if indent == 0:
+            in_services = line.startswith("services:")
+            current = None
+            continue
+        if in_services and indent == 2 and line.strip().endswith(":"):
+            current = line.strip().rstrip(":")
+            blocks[current] = []
+            continue
+        if current is not None:
+            blocks[current].append(line)
+    return {name: "\n".join(body) for name, body in blocks.items()}
+
+
+def published_ports(text: str) -> list[str]:
+    """Every entry of every ``ports:`` list in the given compose text, comments removed."""
+    ports: list[str] = []
+    collecting = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped == "ports:":
+            collecting = True
+            continue
+        if collecting:
+            if stripped.startswith("- "):
+                ports.append(stripped[2:].strip().strip('"').strip("'"))
+            else:
+                collecting = False
+    return ports
 
 
 def _matches(url: str, path: str) -> bool:
@@ -233,3 +289,53 @@ def test_the_manifest_gate_rejects_a_throttler_on_401(manifest_root: etree._Elem
     etree.SubElement(route, "bruteforce_protection").text = "[401]"
 
     assert any("throttles on 401" in problem for problem in manifest_problems(manifest_root))
+
+
+@pytest.mark.parametrize("path", list(TOPOLOGY_FILES))
+def test_the_test_topology_is_checked_in(path: Path) -> None:
+    assert path.is_file(), f"{path.name} is missing"
+
+
+@pytest.mark.parametrize("path", list(TOPOLOGY_FILES))
+def test_no_crlf_in_the_topology_files(path: Path) -> None:
+    assert b"\r\n" not in path.read_bytes(), (
+        f"{path.name} has CRLF endings; docker compose exec and bash both break on the CR"
+    )
+
+
+def test_the_topology_publishes_on_loopback_only() -> None:
+    """T-02-30: throwaway credentials plus a disabled bruteforce guard, so no LAN."""
+    ports = published_ports(COMPOSE_EXAPP.read_text(encoding="utf-8"))
+    assert ports, "no published port found, the parser or the file changed shape"
+    for port in ports:
+        assert port.startswith("127.0.0.1:"), f"port {port!r} is not bound to loopback"
+
+
+def test_the_topology_carries_its_own_project_name() -> None:
+    """Without it compose derives the project from the directory and both topologies land
+    in the same project, where a `down` on one stops the containers of the other
+    (T-02-34)."""
+    lines = COMPOSE_EXAPP.read_text(encoding="utf-8").splitlines()
+    names = [line for line in lines if line.startswith("name:")]
+    assert names == ["name: nc-mcp-exapp"]
+
+
+def test_the_deploy_daemon_publishes_no_port() -> None:
+    """Caddy reaches HaRP inside the compose network; a published port only adds reach."""
+    services = compose_services(COMPOSE_EXAPP.read_text(encoding="utf-8"))
+    assert "appapi-harp" in services, f"services found: {sorted(services)}"
+    assert "ports:" not in services["appapi-harp"]
+
+
+def test_the_bootstrap_never_reaches_into_the_other_topology() -> None:
+    """T-02-34: the other test instance is in daily use and must survive this script."""
+    text = BOOTSTRAP.read_text(encoding="utf-8")
+    assert "compose.test.yml" not in text
+    assert "down -v" not in text
+
+
+def test_the_reverse_proxy_routes_the_exapps_prefix() -> None:
+    """Without this rule the installation fails at the heartbeat (research pitfall 7)."""
+    text = CADDYFILE.read_text(encoding="utf-8")
+    assert "/exapps/*" in text
+    assert "appapi-harp:8780" in text
