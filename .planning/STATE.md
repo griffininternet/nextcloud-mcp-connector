@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-08-15T06:23:48.876Z"
+stopped_at: Completed 02-03-PLAN.md
+last_updated: "2026-08-15T09:15:33.000Z"
 last_activity: 2026-08-15
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 21
-  completed_plans: 16
-  percent: 76
+  completed_plans: 17
+  percent: 81
 ---
 
 # Project State
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 2
-Plan: 02-02 complete, next 02-03
+Plan: 02-03 complete, next 02-04
 Status: Executing
 Last activity: 2026-08-15
 
-Progress: [████████░░] 76%
+Progress: [████████░░] 81%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 16
+- Total plans completed: 17
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -45,7 +45,7 @@ Progress: [████████░░] 76%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1 | 14 | - | - |
-| 2 | 2 | 45 min | 23 min |
+| 2 | 3 | 77 min | 26 min |
 
 **Recent Trend:**
 
@@ -68,6 +68,7 @@ Progress: [████████░░] 76%
 | Phase 01-server-kern P14 | 71 min | 3 tasks | 13 files |
 | Phase 02-exapp-shell P01 | 30 min | 3 tasks | 15 files |
 | Phase 02-exapp-shell P02 | 15 min | 3 tasks | 10 files |
+| Phase 02-exapp-shell P03 | 32 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -152,6 +153,12 @@ Recent decisions affecting current work:
 - [Phase 02-exapp-shell]: Der ExApp-Zweig steht vor dem Passthrough-Zweig und liest den Authorization-Header nie; HaRP reicht einen mitgeschickten Basic-Header durch, ein zweiter akzeptierter Kanal waere genau der stille Fallback, den D-27 verbietet (T-02-11)
 - [Phase 02-exapp-shell]: Das Quelltext-Gate gegen hart verdrahtetes BasicAuth liest das gesamte clients-Paket statt einer Dateiliste; ein siebtes Client-Modul faellt damit ohne Testaenderung unter dasselbe Verbot (T-02-15)
 - [Phase 02-exapp-shell]: AUTH-05 bleibt Pending, obwohl der vierte Credential-Modus steht; der Weg von AUTHORIZATION-APP-API bis in jede Anfrage ist unit-belegt, der Negativbeweis mit zwei Konten gegen eine laufende Nextcloud gehoert zu Plan 02-05
+- [Phase 02-exapp-shell]: uv sync laeuft im Image mit --no-editable, damit die Laufzeitstufe nur die virtuelle Umgebung traegt und keine zweite Kopie von src; nc-mcp-exapp liegt danach als fertiges Skript in /app/.venv/bin
+- [Phase 02-exapp-shell]: /frpc.toml wird im Image als leere Datei mit Eigentuemer 10001 angelegt, statt Schreibrechte auf / zu vergeben: start.sh bleibt damit woertlich das HaRP-Original, und ein unprivilegierter Prozess darf eine eigene Datei kuerzen
+- [Phase 02-exapp-shell]: Das Volume-Ziel /nc_app_mcp_connector_data entsteht im Image mit Eigentuemer 10001, weil ein frisches Docker-Volume Eigentuemer und Modus des ueberdeckten Verzeichnisses erbt (DockerActions::buildDefaultExAppVolume)
+- [Phase 02-exapp-shell]: Der Manifest-Gate vergleicht nicht nur eine Wortliste weiter Regexe, sondern matcht jede deklarierte Route gegen /heartbeat, /init und /enabled; eine Gegenprobe im Test belegt, dass das Gate ausloest
+- [Phase 02-exapp-shell]: Der CI-Job image bekommt docker/setup-qemu-action zusaetzlich zu setup-buildx-action, weil die arm64-Haelfte des Matrix-Baus auf einem amd64-Runner sonst nicht ausfuehrbar ist; veroeffentlicht wird nichts (D-25)
+- [Phase 02-exapp-shell]: EXAPP-01 bleibt Pending: das installierbare Paket existiert (Image plus Manifest), der Nachweis der Installation durch den Deploy Daemon gehoert zu Plan 02-04
 
 ### Pending Todos
 
@@ -175,6 +182,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-15T06:23:10.638Z
-Stopped at: Completed 02-02-PLAN.md
+Last session: 2026-08-15T09:15:33.000Z
+Stopped at: Completed 02-03-PLAN.md
 Resume file: None
