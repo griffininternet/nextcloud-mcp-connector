@@ -409,8 +409,9 @@ ERROR_PAGES = [
     ("E7", 500, strings.ERROR_GENERIC_TITLE, "Try again"),
 ]
 
-#: Everything a user must never read on an error page, and everything an attacker must not
-#: learn from one: which check fired, which parameter was wrong, where we run (T-03-24).
+#: What an attacker must not learn from an error page: which check fired, which parameter
+#: was wrong, where we run (T-03-24). Checked against the whole document, markup included,
+#: because a leak in an attribute is still a leak.
 FORBIDDEN_ON_ERROR_PAGES = [
     "invalid_grant",
     "invalid_client",
@@ -423,14 +424,15 @@ FORBIDDEN_ON_ERROR_PAGES = [
     "client_secret",
     "Traceback",
     "traceback",
-    "click here",
-    "Sorry",
-    "!",
 ]
 
+#: The copy rules of the contract. Checked against the visible text only: the document type
+#: declaration carries an exclamation mark that no user ever reads.
+FORBIDDEN_IN_ERROR_TEXT = ["click here", "Sorry", "you entered", "!"]
 
-def error_body(code: str, **kwargs: object) -> str:
-    response, _ = errors.error_page(code, env=ENV, **kwargs)  # type: ignore[arg-type]
+
+def error_body(code: str, client: str = "", seconds: int = 0) -> str:
+    response, _ = errors.error_page(code, env=ENV, client=client, seconds=seconds)
     return body(response)
 
 
@@ -463,9 +465,13 @@ def test_every_error_page_carries_the_security_headers_of_the_shell(
 def test_no_error_page_tells_the_attacker_which_check_fired(
     code: str, status: int, title: str, next_step: str
 ) -> None:
-    rendered = error_body(code, client=HOSTILE_NAME, seconds=30)
+    response, _ = errors.error_page(code, env=ENV, client=HOSTILE_NAME, seconds=30)
+    rendered = body(response)
     for needle in FORBIDDEN_ON_ERROR_PAGES:
         assert needle not in rendered, f"{code} leaks {needle!r}"
+    readable = parse(response).text
+    for needle in FORBIDDEN_IN_ERROR_TEXT:
+        assert needle not in readable, f"{code} breaks a copy rule with {needle!r}"
 
 
 def test_the_table_has_exactly_the_seven_pages_of_the_contract() -> None:
