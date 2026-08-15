@@ -38,10 +38,17 @@ Two more properties of the file are deliberate:
 ## Install
 
 ```
+export HP_SHARED_KEY="$(openssl rand -hex 32)"
 docker compose -f compose.exapp.yml up -d --wait
 bash scripts/bootstrap_exapp.sh
 docker compose -f compose.exapp.yml down        # when you are done, keeps the volume
 ```
+
+The first line is not optional. The compose file used to carry a fixed default for
+`HP_SHARED_KEY`, which meant the documented command produced the same key on every machine
+that ever ran it, published in this repository, and the bootstrap then wrote it into
+`.env.exapp` where it looked generated (WR-11). `up` now fails with a named variable until a
+real one is exported, and the bootstrap refuses anything that is not 64 hex characters.
 
 `down` stops the four services of the file. The ExApp container is not one of them: the
 deploy daemon created it over the Docker socket, so it keeps running and has to be stopped

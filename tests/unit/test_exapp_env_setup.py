@@ -544,6 +544,45 @@ def test_the_topology_carries_its_own_project_name() -> None:
     assert names == ["name: nc-mcp-exapp"]
 
 
+def test_the_shared_key_has_no_default_in_the_repository() -> None:
+    """WR-11: a fixed default is a published secret, and the documented command used it,
+    so nobody ever saw that their HaRP tunnel was open to whoever read this file."""
+    services = compose_services(COMPOSE_EXAPP.read_text(encoding="utf-8"))
+    lines = [
+        line.strip()
+        for line in services["appapi-harp"].splitlines()
+        if line.strip().startswith("HP_SHARED_KEY:")
+    ]
+    assert lines, "HP_SHARED_KEY is not set for the deploy daemon any more"
+    assert "${HP_SHARED_KEY:?" in lines[0], f"{lines[0]!r} still carries a default"
+    assert ":-" not in lines[0]
+
+
+def test_only_the_reverse_proxy_is_a_trusted_proxy() -> None:
+    """WR-08: the whole subnet also covered the ExApp container, which is the component
+    that processes untrusted input. It must not be able to forge a client address."""
+    text = COMPOSE_EXAPP.read_text(encoding="utf-8")
+    services = compose_services(text)
+    addresses = set()
+    for service, key in (
+        ("nextcloud", "TRUSTED_PROXIES"),
+        ("appapi-harp", "HP_TRUSTED_PROXY_IPS"),
+    ):
+        values = [
+            line.split(":", 1)[1].strip().strip('"')
+            for line in services[service].splitlines()
+            if line.strip().startswith(f"{key}:")
+        ]
+        assert values, f"{key} is not set for {service}"
+        assert "/" not in values[0], f"{key} is a range, not one proxy: {values[0]!r}"
+        addresses.add(values[0])
+
+    assert len(addresses) == 1, f"the two trust lists disagree: {addresses}"
+    assert f"ipv4_address: {addresses.pop()}" in services["caddy"], (
+        "the trusted address is not the fixed one assigned to the reverse proxy"
+    )
+
+
 def test_the_deploy_daemon_publishes_no_port() -> None:
     """Caddy reaches HaRP inside the compose network; a published port only adds reach."""
     services = compose_services(COMPOSE_EXAPP.read_text(encoding="utf-8"))

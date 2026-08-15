@@ -30,6 +30,13 @@ services:
       - "127.0.0.1:${NC_EXAPP_PORT:-8081}:80"
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      default:
+        # A fixed address, because Nextcloud and HaRP have to trust exactly this one
+        # container and nothing else in the subnet (WR-08). The ExApp container is hung
+        # into the same network by the deploy daemon, and it is the component that
+        # processes untrusted input: it must never be able to rewrite a client address.
+        ipv4_address: 172.29.42.10
     depends_on:
       nextcloud:
         condition: service_healthy
@@ -53,9 +60,12 @@ services:
       OVERWRITEHOST: "127.0.0.1:${NC_EXAPP_PORT:-8081}"
       OVERWRITEPROTOCOL: http
       OVERWRITECLIURL: "http://127.0.0.1:${NC_EXAPP_PORT:-8081}"
-      # Only the proxy in front of it may rewrite the client address, and the proxy lives
-      # in this subnet. The value matches the ipam block at the end of this file.
-      TRUSTED_PROXIES: "172.29.42.0/24"
+      # Only the proxy in front of it may rewrite the client address, and that is one
+      # container, not the subnet (WR-08). The whole /24 also covered the ExApp container,
+      # which would have let anything running in there forge client IPs towards Nextcloud:
+      # bruteforce counters, audit entries and IP based rules all read that value. The
+      # address is the fixed one assigned to caddy above.
+      TRUSTED_PROXIES: "172.29.42.10"
     healthcheck:
       # status.php answers as soon as the web server is up. That is not the same as
       # "installed", so the bootstrap script polls `occ status` before it does any work.
@@ -76,14 +86,18 @@ services:
     # No ports section: Caddy reaches 8780 inside this network, and publishing the port
     # would weaken the WR-06 rule without buying anything.
     environment:
-      # Throwaway default so that `up` works without any preparation. Whoever wants a
-      # random one exports it before `up`:
+      # No default (WR-11). The old one was a fixed string in a public repository, and it
+      # was used by exactly the command the documentation gives, so nobody ever saw it: the
+      # bootstrap reads the key back from this container and writes it into .env.exapp,
+      # where it looks like a generated value. Whoever reaches the FRP port with it can
+      # register as this ExApp. `up` now fails until the operator generates one:
       #   export HP_SHARED_KEY="$(openssl rand -hex 32)"
-      # The bootstrap script does not guess this value, it reads it back from this
-      # running container, so the daemon registration can never drift away from it.
-      HP_SHARED_KEY: "${HP_SHARED_KEY:-nc-mcp-exapp-local-harp-key}"
+      # Reading it back rather than guessing it stays right: the daemon registration can
+      # never drift away from the container that was started before the bootstrap ran.
+      HP_SHARED_KEY: "${HP_SHARED_KEY:?export HP_SHARED_KEY with 64 hex characters first, see .env.exapp.example}"
       NC_INSTANCE_URL: "http://caddy"
-      HP_TRUSTED_PROXY_IPS: "172.29.42.0/24"
+      # One proxy, not the subnet: see the TRUSTED_PROXIES comment above (WR-08).
+      HP_TRUSTED_PROXY_IPS: "172.29.42.10"
       # The image defaults to "warning", which hides the one line that says where a
       # request was routed. HP_LOG_LEVEL=info in the environment makes a failing
       # registration debuggable without editing this file.
