@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-04-PLAN.md
-last_updated: "2026-08-15T10:19:38.000Z"
+stopped_at: Completed 02-05-PLAN.md
+last_updated: "2026-08-15T11:43:38.000Z"
 last_activity: 2026-08-15
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 21
-  completed_plans: 18
-  percent: 86
+  completed_plans: 19
+  percent: 90
 ---
 
 # Project State
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 2
-Plan: 02-04 complete, next 02-05
+Plan: 02-05 complete, next 02-06
 Status: Executing
 Last activity: 2026-08-15
 
-Progress: [█████████░] 86%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 18
+- Total plans completed: 19
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -45,7 +45,7 @@ Progress: [█████████░] 86%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1 | 14 | - | - |
-| 2 | 4 | 140 min | 35 min |
+| 2 | 5 | 154 min | 31 min |
 
 **Recent Trend:**
 
@@ -70,6 +70,7 @@ Progress: [█████████░] 86%
 | Phase 02-exapp-shell P02 | 15 min | 3 tasks | 10 files |
 | Phase 02-exapp-shell P03 | 32 min | 3 tasks | 8 files |
 | Phase 02-exapp-shell P04 | 63 min | 3 tasks | 10 files |
+| Phase 02-exapp-shell P05 | 14 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -165,12 +166,17 @@ Recent decisions affecting current work:
 - [Phase 02-exapp-shell]: Der ExApp-Port liegt bei 23000, weil der FRP-Server in HaRP nur 23000 bis 23999 erlaubt; ausserhalb meldet frpc port not allowed und HAProxy antwortet ohne Backend mit 503
 - [Phase 02-exapp-shell]: Das Image legt /certs fuer uid 10001 an, weil HaRP das FRP-Client-Zertifikat mit der Identitaet des Containers installiert; ohne das Verzeichnis scheitert die Zertifikatsinstallation mit 500 und der Tunnel bleibt ungesichert und damit tot
 - [Phase 02-exapp-shell]: EXAPP-01 ist abgehakt: occ app_api:app:list meldet mcp_connector als enabled, deploy und init stehen auf 100, der MCP-Endpunkt wird mit dem App-Passwort eines Nutzers bedient; der AIO-Nachweis bleibt Sache von Plan 02-07
+- [Phase 02-exapp-shell]: AUTH-06 ist GO und abgehakt: die RFC-9728-Metadaten sind unauthentifiziert von aussen ueber BEIDE Proxy-Wege erreichbar (HaRP und PHP-Proxy je 200 mit JSON), der WWW-Authenticate-resource_metadata-Zeiger passiert beide Proxys unveraendert; die Discovery-Route leckt nichts (nur oeffentliche URL plus Methodenliste, kein Secret, kein interner Host)
+- [Phase 02-exapp-shell]: Der kanonische RFC-9728-Wurzelpfad ist 404 und gehoert Nextcloud, nicht der ExApp; Phase 3 setzt auf den resource_metadata-Zeiger (SEP-985 Prioritaet 1) plus eine Admin-Reverse-Proxy-Regel als getesteten Fallback (Caddy und nginx in docs/spike-discovery.md)
+- [Phase 02-exapp-shell]: Die Discovery-Sonde ist bewusst ein Spike-Artefakt (T-02-44): der 401 stammt aus einer eigenen Sonde unter /.well-known/, nicht aus /mcp, weil /mcp in Phase 2 bewusst auf USER steht; Ersatz durch echte PRM aus AuthSettings plus /mcp auf PUBLIC ist Phase-3-Aufgabe
+- [Phase 02-exapp-shell]: Ein unbekannter Bearer ueber HaRP auf der USER-Route /mcp wird 403 (sauberes 4xx, kein 5xx) beantwortet; damit kann ein spaeter PUBLIC gestelltes /mcp unbekannte Tokens an den eigenen Token-Verifier weiterreichen statt in einen 401 zu kippen (Open Question 4)
+- [Phase 02-exapp-shell]: Die exapp-Topologie musste fuer die Messung neu aufgebaut werden (down -v, frischer Hex64-HP_SHARED_KEY): die in den Volumes von 02-04 gespeicherte HaRP-Daemon-Registrierung nutzte den alten Nicht-Hex-Schluessel, den der nach 02-04 eingezogene require_hex64-Gate (CR-02) ablehnt; nur das nc-mcp-exapp-Projekt betroffen, nc-mcp-test blieb unberuehrt
 
 ### Pending Todos
 
 - **Owner-Schritt 01-13:** PR an nextcloud/context_agent#227 einreichen. Branch und DCO-Commit liegen im Fork street1983nk/context_agent (fix/stateless-http-session-compat, def1425), der PR-Text in docs/contrib/227-pr-body.md. Kommando und Pruefpunkte stehen in .planning/phases/01-server-kern/01-13-SUMMARY.md. Vorher `git push origin main` im Connector-Repo, damit der verlinkte Regressionstest oeffentlich sichtbar ist. Danach PR-URL nachtragen, ROADMAP 01-13 abhaken, CONTRIB-01 auf Complete.
 - **Owner-Schritt 01-14:** Ein Durchgang mit Claude Desktop selbst nach docs/client-setup.md. Die Anleitung ist gegen die Referenz-Clients der Testsuite verprobt (mcp 2.0 und mcp 1.29 gegen denselben laufenden Endpoint, plus scripts/acceptance_all_tools.py ueber alle 15 Tools per stdio); die Konfigurationspfade fuer Claude Desktop stammen aus der offiziellen Dokumentation und sind auf diesem Rechner nicht verifiziert.
-- **ExApp-Topologie wieder anfahren (02-05):** `docker compose -f compose.exapp.yml up -d --wait`, danach `docker start nc_app_mcp_connector`. Der ExApp-Container gehoert nicht zum compose-Projekt, weil der Deploy Daemon ihn ueber den Docker-Socket erzeugt hat; `down` laesst ihn stehen und `up` startet ihn nicht mit.
+- **ExApp-Topologie wieder anfahren (02-06):** Die Volumes des nc-mcp-exapp-Projekts liegen noch, wurden aber in 02-05 einmal neu aufgebaut. Weil die alte Daemon-Registrierung mit dem neuen Aufbau verschwunden ist, ist ein voller Bootstrap noetig: `export HP_SHARED_KEY=$(openssl rand -hex 32)`, `docker compose -p nc-mcp-exapp -f compose.exapp.yml up -d --wait`, dann `bash scripts/bootstrap_exapp.sh`. Der ExApp-Container gehoert nicht zum compose-Projekt (Deploy Daemon erzeugt ihn ueber den Docker-Socket); `down` laesst ihn stehen, `docker stop nc_app_mcp_connector` beendet ihn.
 - **Aufraeumen (optional):** Die Docker-Testinstanz traegt jetzt zusaetzlich die Calendar-App 6.5.3 und die Abnahme-Artefakte. Fuer einen sauberen Stand: `docker compose -f compose.test.yml down -v` und danach `bash scripts/bootstrap_test_nc.sh`.
 
 ### Blockers/Concerns
@@ -189,6 +195,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-15T10:19:38.000Z
-Stopped at: Completed 02-04-PLAN.md
+Last session: 2026-08-15T11:43:38.000Z
+Stopped at: Completed 02-05-PLAN.md
 Resume file: None
