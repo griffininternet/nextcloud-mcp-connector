@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: planning
-stopped_at: Phase 3 context gathered
-last_updated: "2026-08-15T20:06:34.614Z"
+status: executing
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-08-15T21:40:02.993Z"
 last_activity: 2026-08-15
 progress:
   total_phases: 5
   completed_phases: 2
-  total_plans: 21
-  completed_plans: 21
+  total_plans: 30
+  completed_plans: 22
   percent: 40
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 3
-Plan: Not started
-Status: Ready to plan
+Plan: 2 of 9
+Status: In progress
 Last activity: 2026-08-15
 
-Progress: [██████████] 100%
+Progress: [███████░░░] 73%
 
 ## Performance Metrics
 
@@ -73,6 +73,7 @@ Progress: [██████████] 100%
 | Phase 02-exapp-shell P05 | 14 min | 3 tasks | 5 files |
 | Phase 02-exapp-shell P06 | 45 min | 2 tasks | 3 files |
 | Phase 02-exapp-shell P07 | 55 min | 3 tasks | 6 files |
+| Phase 03 P01 | 65 min | 3 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -179,6 +180,11 @@ Recent decisions affecting current work:
 - [Phase 02-exapp-shell]: AUTH-05 ist ueber die volle Kette bestaetigt (MCP-Client, HaRP, ExApp, Impersonation, Nextcloud-ACLs); bob findet nichts von alice ueber files_search, notes_search, unified_search und files_read, alice findet ihre eigenen Inhalte im selben Lauf (test_permission_fidelity_exapp.py, 9 gruen); die Middleware-Grenze haelt live (anonymes /mcp = 403, Heartbeat von aussen = 502)
 - [Phase 02-exapp-shell]: Ein per occ user:add angelegter Nutzer hat ein leeres Files-Home ohne suchbaren Root; eine WebDAV-SEARCH antwortet dann 500 statt leer; ensure_files_home legt eine neutrale Datei an und scannt sie (wie ein Erst-Login-Skeleton), danach ist die SEARCH ein sauberes leeres Ergebnis
 - [Phase 02-exapp-shell]: Der Nextcloud-AIO-Smoke ist Fall B; er scheitert an AIOs Domain-Validierung (oeffentliche Domain plus gueltiges TLS), ist mit fehlenden Schritten in docs/exapp-install.md dokumentiert und als benannter Punkt an Phase 5 uebergeben (D-31), nicht still gestrichen
+- [Phase 03-oauth-2-1]: Der issuer der AS-Metadaten wird als exakter String auf die konfigurierte public_url gesetzt: AnyHttpUrl haengt einer pfadlosen URL einen Schraegstrich an, und RFC 8414 vergleicht den issuer zeichengenau
+- [Phase 03-oauth-2-1]: Genau ein Tool-Scope nextcloud in der PRM; offline_access nur in den AS-Metadaten: D-42 plus MCP-Spec: offline_access gehoert weder in scopes_supported der PRM noch in den WWW-Authenticate-Scope
+- [Phase 03-oauth-2-1]: token_endpoint_auth_methods_supported traegt zusaetzlich none: Claude.ai und ChatGPT kommen als public clients ohne Client-Secret; das SDK listet per Default nur die beiden Secret-Methoden
+- [Phase 03-oauth-2-1]: Die Bearer-Grenze ist fail-closed: ohne konfigurierten Verifier ist jeder Bearer ungueltig: Manifest-Umstellung auf PUBLIC und eigene Pruefung entstanden in derselben Aenderung (Pitfall 6); der echte Verifier folgt in Plan 03-06
+- [Phase 03-oauth-2-1]: Das Manifest deklariert je Dokument eine vollstaendig verankerte Route, das Gate faellt ohne Endanker: HaRP matcht mit re.match, ein Muster ohne Endanker trifft auch Nachbarn; damit ist AR-02-06 geschlossen
 
 ### Pending Todos
 
@@ -205,6 +211,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-15T20:06:34.594Z
-Stopped at: Phase 3 context gathered
-Resume file: .planning/phases/03-oauth-2-1/03-CONTEXT.md
+Last session: 2026-08-15T21:39:20.307Z
+Stopped at: Completed 03-01-PLAN.md
+Resume file: None

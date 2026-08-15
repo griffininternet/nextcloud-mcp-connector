@@ -123,7 +123,42 @@ Plans:
   4. Token-Widerruf wirkt sofort: Ein widerrufener Client erhält 401 mit korrektem WWW-Authenticate-Header und kann sich sauber neu verbinden
   5. Wiederholte fehlgeschlagene Auth-Versuche drosseln die Nextcloud-Instanz nicht (keine Auth-Retries, Validierungs-Cache, handlungsfähige 401/429-Meldungen)
 
-**Plans**: TBD
+**Plans**: 9 plans in 8 waves
+
+Plans:
+**Wave 1**
+
+- [x] 03-01-PLAN.md - Discovery-Produktivpfad, Routen-Haertung D-38 und PUBLIC-Umstellung mit Bearer-Grenze (Wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 03-02-PLAN.md - Verschluesselter Token-Store, der Neustarts ueberlebt (Wave 2)
+- [ ] 03-03-PLAN.md - UI-Bausteine nach 03-UI-SPEC: Shell, Komponenten, Texte, sieben Fehlerseiten (Wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 03-04-PLAN.md - Login Flow v2 und Onboarding ohne OAuth (AUTH-02) (Wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 03-05-PLAN.md - Client-Registry, DCR-Policy, AS-Routen und Consent-Bruecke (Wave 4)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 03-06-PLAN.md - Zustimmung, Code-Tausch, Token-Verifier und fuenfter Credential-Modus (Wave 5)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 03-07-PLAN.md - Rotation, Widerruf, Drosselung und die D-40-Missbrauchsmatrix (Wave 6)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 03-08-PLAN.md - Integrationsbeweis gegen die laufende Topologie und docs/oauth-setup.md (Wave 7)
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 03-09-PLAN.md - Staging-E2E mit Claude.ai und ChatGPT (AUTH-04, Owner-Action) (Wave 8)
+
 **UI hint**: yes
 
 ### Phase 4: Per-User-Verwaltung und prepare_context
@@ -166,7 +201,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Server-Kern | 14/14 | Complete    | 2026-08-14 |
 | 2. ExApp-Shell | 7/7 | Complete    | 2026-08-15 |
-| 3. OAuth 2.1 | 0/TBD | Not started | - |
+| 3. OAuth 2.1 | 1/9 | In Progress|  |
 | 4. Per-User-Verwaltung und prepare_context | 0/TBD | Not started | - |
 | 5. Hardening und Store-Einreichung | 0/TBD | Not started | - |
 
@@ -178,7 +213,7 @@ Alle 26 v1-Requirements sind genau einer Phase zugeordnet (siehe Traceability in
 |-------|--------------|
 | 1 | SRV-01..05, TOOL-01..07, TOOL-09, AUTH-01, EXAPP-03, CONTRIB-01 (16) |
 | 2 | EXAPP-01, AUTH-05, AUTH-06 (3) |
-| 3 | AUTH-02, AUTH-03, AUTH-04 (3) |
+| 3 | AUTH-02, AUTH-03, AUTH-04, AUTH-07 (4) |
 | 4 | EXAPP-02, TOOL-08 (2) |
 | 5 | EXAPP-04, EXAPP-05 (2) |
 
