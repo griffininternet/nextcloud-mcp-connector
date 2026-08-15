@@ -1,7 +1,9 @@
 * text=auto
 
-# Shell scripts and compose/CI files must keep LF endings: the development host is
-# Windows, and `docker compose exec` fails on CR artifacts.
+# Shell scripts, compose/CI files and the container build must keep LF endings: the
+# development host is Windows, `docker compose exec` fails on CR artifacts, and a CR in
+# the Dockerfile or in start.sh turns the ENTRYPOINT into a "not found" inside the image.
 *.sh text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
+Dockerfile text eol=lf

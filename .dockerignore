@@ -1,0 +1,21 @@
+# The build context is attack surface, not a convenience: everything listed here would
+# otherwise be uploaded to the daemon and could end up in a layer by one careless COPY.
+# A .env file has no business in any image (T-02-23), and .git carries the full history
+# including anything that was ever committed by mistake.
+.git
+.github
+.gitignore
+.planning
+.venv
+.pytest_cache
+.ruff_cache
+tests
+docs
+scripts
+__pycache__
+*.pyc
+.env*
+.harp-certs
+compose*.yml
+Dockerfile
+.dockerignore

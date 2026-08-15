@@ -1,0 +1,112 @@
+# syntax=docker/dockerfile:1
+#
+# ExApp container image for the AppAPI deploy daemon (EXAPP-01, D-25).
+#
+# Two stages, because uv and the build tool chain have no business in a published image:
+# the build stage resolves the locked environment, the runtime stage carries that
+# environment plus curl and frpc, and nothing else.
+#
+# There is no EXPOSE. AppAPI passes APP_PORT to the container at start time, and behind
+# HaRP there is no TCP port at all (unix socket plus frpc tunnel), so an EXPOSE would only
+# document a number this image cannot know.
+
+# --------------------------------------------------------------------------------------
+# Build stage: resolve the locked dependency set
+# --------------------------------------------------------------------------------------
+FROM python:3.13-slim AS build
+
+# A pinned uv release from the official image instead of a curl-pipe-shell installer: the
+# image tag is what resolves the dependency set, and a moving "latest" would make the
+# build irreproducible (T-02-24).
+COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /bin/uv
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=never
+
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+COPY src ./src
+
+# --frozen: uv.lock is the truth. A pyproject.toml that drifted away from it fails the
+# build here instead of quietly resolving something else into the image (T-02-24).
+# --no-dev leaves pytest, ruff, pyright and vulture out.
+# --no-editable installs the package itself into the environment, so the runtime stage
+# needs the virtual environment alone and never a copy of src.
+RUN uv sync --frozen --no-dev --no-editable
+
+# --------------------------------------------------------------------------------------
+# Runtime stage
+# --------------------------------------------------------------------------------------
+FROM python:3.13-slim AS runtime
+
+# Provenance in the image itself, so a later security response does not have to guess
+# where this thing came from (T-02-26). A cosign signature belongs to the store
+# submission in phase 5.
+LABEL org.opencontainers.image.source="https://github.com/street1983nk/nextcloud-mcp-connector" \
+      org.opencontainers.image.licenses="AGPL-3.0-or-later" \
+      org.opencontainers.image.title="MCP Connector"
+
+# curl is not a convenience: the HaRP integration requires it in the image, and the
+# healthcheck below is built on it. ca-certificates keeps outgoing HTTPS to Nextcloud
+# working when the deploy daemon does not inject its own certificates.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# frpc, the tunnel client HaRP expects beside the application (start.sh launches it).
+# Version and both checksums are copied verbatim from the HaRP README, section "Adapting
+# ExApps to use HaRP" (github.com/nextcloud/HaRP, branch main, retrieved 2026-08-15), the
+# same section that publishes start.sh. sha256sum -c turns a tampered or replaced release
+# asset into a failed build instead of a running foreign binary (T-02-SC).
+ARG TARGETARCH
+ARG FRP_VERSION=0.61.1
+ARG FRP_AMD64_SHA256=bff260b68ca7b1461182a46c4f34e9709ba32764eed30a15dd94ac97f50a2c40
+ARG FRP_ARM64_SHA256=af6366f2b43920ebfe6235dba6060770399ed1fb18601e5818552bd46a7621f8
+RUN set -eux; \
+    case "${TARGETARCH:-amd64}" in \
+        arm64) FRP_ARCH=arm64; FRP_SHA256="${FRP_ARM64_SHA256}" ;; \
+        amd64) FRP_ARCH=amd64; FRP_SHA256="${FRP_AMD64_SHA256}" ;; \
+        *) echo "unsupported target architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL -o /tmp/frp.tar.gz \
+        "https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/frp_${FRP_VERSION}_linux_${FRP_ARCH}.tar.gz"; \
+    echo "${FRP_SHA256}  /tmp/frp.tar.gz" | sha256sum -c -; \
+    tar -C /tmp -xzf /tmp/frp.tar.gz; \
+    install -m 0755 "/tmp/frp_${FRP_VERSION}_linux_${FRP_ARCH}/frpc" /usr/local/bin/frpc; \
+    rm -rf "/tmp/frp_${FRP_VERSION}_linux_${FRP_ARCH}" /tmp/frp.tar.gz
+
+# One fixed unprivileged uid, created before anything is chowned to it (T-02-22). A root
+# container would hold a docker managed volume and a shared secret with far more authority
+# than an MCP responder needs.
+RUN groupadd --gid 10001 exapp \
+    && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin exapp
+
+COPY start.sh healthcheck.sh /
+RUN chmod 0755 /start.sh /healthcheck.sh \
+    # start.sh writes /frpc.toml, and an unprivileged process cannot create a file in /.
+    # It can truncate one it owns, which is exactly what the redirect in start.sh does,
+    # so the file is pre-created here instead of loosening the permissions of /.
+    && install -o 10001 -g 10001 -m 0600 /dev/null /frpc.toml \
+    # AppAPI mounts the volume nc_app_<appid>_data at /nc_app_<appid>_data and passes that
+    # path as APP_PERSISTENT_STORAGE (DockerActions::buildDefaultExAppVolume). A fresh
+    # named volume inherits owner and mode of the directory it covers, so creating it here
+    # is what makes the storage writable for the unprivileged process.
+    && install -d -o 10001 -g 10001 -m 0700 /nc_app_mcp_connector_data
+
+COPY --from=build --chown=10001:10001 /app/.venv /app/.venv
+ENV PATH="/app/.venv/bin:${PATH}"
+
+# Behind HaRP the Host header is the one of the reverse proxy, so a host allowlist would be
+# a permanent 421 trap here, and the process is reachable through the deploy daemon only.
+# This is the single configuration value the image sets. No APP_SECRET, no
+# NC_MCP_APP_PASSWORD, no NC_MCP_STATIC_BEARER: secrets come from the deploy environment
+# and never from a layer (T-02-23).
+ENV NC_MCP_DISABLE_DNS_REBINDING_PROTECTION=1
+
+WORKDIR /app
+USER 10001:10001
+
+HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=6 CMD ["/healthcheck.sh"]
+
+ENTRYPOINT ["/start.sh", "nc-mcp-exapp"]
