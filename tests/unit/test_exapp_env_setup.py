@@ -18,6 +18,7 @@ chain of asserts, so the last test in this file can feed it a deliberately broke
 and prove that the gate actually fires.
 """
 
+import ipaddress
 import re
 import shutil
 import subprocess
@@ -627,6 +628,22 @@ def test_only_the_reverse_proxy_is_a_trusted_proxy() -> None:
     assert f"ipv4_address: {addresses.pop()}" in services["caddy"], (
         "the trusted address is not the fixed one assigned to the reverse proxy"
     )
+
+
+def test_dynamic_addresses_never_enter_the_static_half_of_the_subnet() -> None:
+    """IN-03: without an ip_range Docker may reassign the fixed proxy address once caddy
+    is down, and the next container holding 172.29.42.10 (possibly the ExApp container
+    itself) would be a trusted proxy for Nextcloud and HaRP."""
+    text = COMPOSE_EXAPP.read_text(encoding="utf-8")
+    ranges = re.findall(r"^\s*ip_range:\s*(\S+)\s*$", text, flags=re.MULTILINE)
+    assert ranges, "the ipam configuration carries no ip_range for dynamic assignment"
+    dynamic = ipaddress.ip_network(ranges[0])
+    statics = re.findall(r"^\s*ipv4_address:\s*(\S+)\s*$", text, flags=re.MULTILINE)
+    assert statics, "no statically assigned address found, the trust anchor is gone"
+    for address in statics:
+        assert ipaddress.ip_address(address) not in dynamic, (
+            f"static address {address} lies inside the dynamic range {dynamic}"
+        )
 
 
 def test_the_deploy_daemon_publishes_no_port() -> None:

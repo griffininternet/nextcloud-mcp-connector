@@ -138,6 +138,11 @@ networks:
     ipam:
       config:
         - subnet: 172.29.42.0/24
+          # Dynamic assignment never enters the static half (IN-03): without the range,
+          # Docker could hand the fixed proxy address 172.29.42.10 to any other container
+          # once caddy is down, including the ExApp container the daemon creates, which
+          # would make the component that processes untrusted input a trusted proxy.
+          ip_range: 172.29.42.128/25
 
 volumes:
   nextcloud-exapp-data:
