@@ -304,6 +304,18 @@ each one is visible in the answer the tool gives rather than hidden behind an em
 | **No session, so no server side paging state** | A long list hands back a `next` handle you pass in again | Nothing. The handle survives a restart, which is the point |
 | **Calendars need an explicit time window with a zone** | A `start` or `end` without a zone is refused | Send `2026-09-01T00:00:00+02:00` or `...Z`. A guessed zone is a confidently wrong answer |
 | **One IP for many users triggers the brute force guard** | `429` after a wrong app password, for everyone behind the same deployment | Wait and use a correct app password; see the troubleshooting section in the client setup |
+| **The ExApp mode authenticates with an app password, not OAuth yet** | The `/exapps/mcp_connector/mcp` endpoint accepts a Basic app password that HaRP resolves to your user | Use the app password; OAuth is the phase 3 way in, see the ExApp section of [docs/client-setup.md](docs/client-setup.md) |
+
+Phase 2 made the server installable as a Nextcloud ExApp through AppAPI, with every request
+running under the calling user's own identity. Three documents record it and the two spikes it
+depended on:
+
+- [docs/exapp-install.md](docs/exapp-install.md): installing the app as an ExApp on the HaRP
+  topology, the evidence, the known pitfalls, and the Nextcloud AIO handoff to phase 5.
+- [docs/spike-discovery.md](docs/spike-discovery.md): the discovery decision for the phase 3
+  OAuth topology, with the measured matrix and the reverse proxy fallback.
+- [docs/spike-dav.md](docs/spike-dav.md): the DAV impersonation result, which is that all six
+  API families run under one impersonation mode, so there is no per family provider split.
 
 ## Development
 

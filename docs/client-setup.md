@@ -1,16 +1,19 @@
 # Client setup
 
-Two ways to connect an assistant to your Nextcloud with this server:
+Three ways to connect an assistant to your Nextcloud with this server:
 
 | Transport | Who it is for | Credentials |
 |-----------|---------------|-------------|
 | **stdio** | One person, one machine. Claude Desktop, Claude Code, Cursor and every other client that starts a local process. | App password from the environment |
 | **Streamable HTTP** | A shared or remote deployment. One process can serve several people. | App password per request, in the `Authorization` header |
+| **ExApp (AppAPI)** | An administrator installs the server into Nextcloud itself, and every user connects with their own identity. | App password per request; HaRP resolves it to the user (OAuth in phase 3) |
 
-Both speak the same 15 tools. The only difference is where the credentials come from.
+All three speak the same 15 tools. The only difference is where the credentials come from and
+where the identity is resolved.
 
-This page covers the two transports that were verified in phase 1. The full client matrix
-(ChatGPT, Cursor, Open WebUI, MUCGPT) follows in a later phase.
+The stdio and Streamable HTTP transports were verified in phase 1; the ExApp mode was added in
+phase 2 and has its own installation guide in [exapp-install.md](exapp-install.md). The full
+client matrix (ChatGPT, Cursor, Open WebUI, MUCGPT) follows in a later phase.
 
 ## Before you start: get an app password
 
@@ -170,6 +173,67 @@ Without the variable, only `127.0.0.1`, `localhost` and `[::1]` are accepted.
 
 Behind a reverse proxy that rewrites `Host` itself, and only there, the check can be turned
 off with `NC_MCP_DISABLE_DNS_REBINDING_PROTECTION=true`.
+
+## ExApp mode (installed through AppAPI)
+
+The third way to run this server is as a Nextcloud ExApp, installed by an administrator
+through AppAPI. It sits beside stdio and the standalone HTTP mode above: same code, same 15
+tools, a different place the identity comes from. Installing it is a separate document,
+[exapp-install.md](exapp-install.md); this section is about connecting a client to an
+instance where it is already installed.
+
+The client endpoint is:
+
+```
+https://<nextcloud>/exapps/mcp_connector/mcp
+```
+
+That is the public Nextcloud URL with the ExApp prefix, not a port of its own. AppAPI reaches
+every ExApp under `/exapps/<appid>`, and the reverse proxy in front of Nextcloud forwards it.
+
+In phase 2 the authentication is a Nextcloud username and an app password, sent as an ordinary
+Basic header, exactly as in the HTTP passthrough above:
+
+```
+Authorization: Basic base64(alice:xxxxx-xxxxx-xxxxx-xxxxx-xxxxx)
+```
+
+The difference is where that header is read. It goes to HaRP, the AppAPI proxy, which resolves
+it to a Nextcloud user and hands the ExApp the resolved identity as signed AppAPI headers. The
+server never receives the app password as a Nextcloud credential of its own; it receives who
+the user is, and every Nextcloud request then runs under that user's own permissions. This is
+why the permission promise holds through the whole chain and not only in our client layer.
+
+OAuth is the phase 3 way to authenticate here, so a client will later present a token instead
+of a Basic header. Until then the app password is the supported credential, and the endpoint
+is otherwise the same, so nothing about the client configuration changes when OAuth arrives
+except the header.
+
+In Claude Code, the same command as the HTTP mode points at the ExApp endpoint:
+
+```bash
+claude mcp add --transport http nextcloud https://cloud.example.com/exapps/mcp_connector/mcp \
+  --header "Authorization: Basic $(printf 'alice:xxxxx-xxxxx-xxxxx-xxxxx-xxxxx' | base64)"
+```
+
+### Three things that are specific to this mode
+
+1. **The PHP proxy path is not the way in.** AppAPI also exposes an ExApp under
+   `/apps/app_api/proxy/mcp_connector/...`, and it answers. It is still not the recommended
+   endpoint: its streaming and header behaviour differ from the direct `/exapps/` route, which
+   is the one measured and relied on here. The measurement of both paths is in
+   [spike-discovery.md](spike-discovery.md); use `/exapps/mcp_connector/mcp`.
+2. **No `/exapps/` rule, no connection.** The reverse proxy in front of Nextcloud has to route
+   `/exapps/*` to HaRP. Without that rule the installation never even completes its heartbeat,
+   let alone serves `/mcp`, and the failure looks like a Nextcloud problem rather than a proxy
+   one. The bundled Caddy of Nextcloud All-in-One ships this rule, and `deploy/Caddyfile`
+   rebuilds it for the local topology.
+3. **Discovery lives at a pointer, not at the canonical path.** The RFC 9728 metadata a phase 3
+   OAuth client looks for is reachable unauthenticated over the ExApp, but the canonical
+   `/.well-known/oauth-protected-resource/...` root path is answered by Nextcloud with a 404, so
+   a client has to follow the `resource_metadata` pointer from the `WWW-Authenticate` header
+   instead. The fallback, a reverse proxy rule that serves the metadata at the canonical path,
+   is written out in [spike-discovery.md](spike-discovery.md).
 
 ## Three things that will go wrong
 

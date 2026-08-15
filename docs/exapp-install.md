@@ -3,7 +3,8 @@
 **Status:** proven on a local HaRP topology
 **Measured on:** 2026-08-15
 **Scope:** installing this app as an AppAPI ExApp with the HaRP deploy daemon, on
-`docker compose`, from a locally built image. Nextcloud All-in-One is not covered here.
+`docker compose`, from a locally built image. Nextcloud All-in-One is the second smoke step
+and is handled as a named handoff to phase 5 in the Nextcloud AIO section below.
 
 Everything below was executed against Nextcloud 34.0.2 with AppAPI 34.0.0 and the image
 `ghcr.io/nextcloud/nextcloud-appapi-harp:release`. The outputs in the Evidence section are
@@ -276,6 +277,48 @@ is reachable from a network.
 **`.env.exapp` carries working secrets** (app passwords, the HaRP shared key and the app
 secret). It is git-ignored; `.env.exapp.example` documents the variable names and holds
 placeholders only.
+
+## Nextcloud AIO
+
+Success Criterion 1 of phase 2 names two smoke targets: the `docker compose` HaRP topology
+above, and Nextcloud All-in-One. This section records the decision on the second one, because
+D-31 requires it to be handed over with a reason rather than dropped in silence.
+
+**Decision: not run on this development host. Handed to phase 5 as a named open item.**
+
+**Where it stops.** The AIO mastercontainer refuses to start the Nextcloud stack until its
+setup step validates a domain: it wants a publicly resolvable domain name with a valid, public
+TLS certificate and inbound reachability on ports 80 and 443, and it runs that check before it
+will bring up any container the ExApp could be installed into. The abort boundary in D-31 names
+exactly this, a step that demands a publicly resolvable domain, a public certificate or an
+outward port forward, as disproportionate for a loopback development machine, so the smoke stops
+at the domain validation and does not proceed to installing the app.
+
+A second reason reinforces the same call on this specific host. The AIO mastercontainer drives
+the Docker daemon through a mounted socket to create and manage its own containers. That daemon
+also runs the owner's in-daily-use test instance (`nc-mcp-test` on `127.0.0.1:8080`), and the
+standing instruction is to never touch it. Starting a socket-privileged mastercontainer next to
+it is a risk not worth taking for a reachability smoke that is already blocked by the domain
+requirement.
+
+**What is still missing, for phase 5.** To run the AIO smoke, these steps remain, in order:
+
+1. A host with a publicly resolvable domain and a valid TLS certificate, or the AIO Let's
+   Encrypt path with inbound 80 and 443 open to that domain.
+2. Start the AIO mastercontainer and complete its domain validation and initial setup.
+3. Enable the optional AppAPI and HaRP container in the AIO interface. Research assumption A6
+   is that this is the only AIO specific action needed, but it is unverified: it may also
+   require registering the HaRP deploy daemon, which the compose bootstrap does explicitly.
+4. Install this app as an ExApp through the AIO managed AppAPI, from a published image or the
+   store, since the loopback registry of the compose topology is not present in AIO.
+5. Repeat the permission fidelity smoke over the AIO topology: alice finds her own content and
+   bob finds nothing of hers, over files, notes and unified search, the same proof
+   `tests/integration/test_permission_fidelity_exapp.py` runs against the compose topology.
+6. Record `occ app_api:app:list` from the AIO instance as the evidence for case A.
+
+**Handoff.** This is an open item for phase 5 (store submission), not a closed one. It is also
+reported in the plan summary as an owner and phase 5 item so it is tracked in the project state
+rather than remembered only here.
 
 ## Related
 
