@@ -39,6 +39,22 @@ jobs:
         # every push, not only in the slower integration job.
         run: uv run pytest -m matrix
 
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # QEMU is what makes the arm64 half of the matrix runnable on an amd64 runner: the
+      # Dockerfile installs packages and unpacks frpc for the target architecture, so
+      # those layers execute emulated instead of being cross compiled.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: ExApp image build (no push)
+        # Both architectures are built and none of them is published: registry publishing
+        # belongs to phase 5 (D-25), so there is no login and no registry step in this
+        # workflow at all. cacheonly keeps the build honest without producing an artifact
+        # that someone could mistake for a release.
+        run: docker buildx build --platform linux/amd64,linux/arm64 --output type=cacheonly .
+
   integration:
     runs-on: ubuntu-latest
     steps:
