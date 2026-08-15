@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-03-PLAN.md
-last_updated: "2026-08-15T09:15:33.000Z"
+stopped_at: Completed 02-04-PLAN.md
+last_updated: "2026-08-15T10:19:38.000Z"
 last_activity: 2026-08-15
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 21
-  completed_plans: 17
-  percent: 81
+  completed_plans: 18
+  percent: 86
 ---
 
 # Project State
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 2
-Plan: 02-03 complete, next 02-04
+Plan: 02-04 complete, next 02-05
 Status: Executing
 Last activity: 2026-08-15
 
-Progress: [████████░░] 81%
+Progress: [█████████░] 86%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 17
+- Total plans completed: 18
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -45,7 +45,7 @@ Progress: [████████░░] 81%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1 | 14 | - | - |
-| 2 | 3 | 77 min | 26 min |
+| 2 | 4 | 140 min | 35 min |
 
 **Recent Trend:**
 
@@ -69,6 +69,7 @@ Progress: [████████░░] 81%
 | Phase 02-exapp-shell P01 | 30 min | 3 tasks | 15 files |
 | Phase 02-exapp-shell P02 | 15 min | 3 tasks | 10 files |
 | Phase 02-exapp-shell P03 | 32 min | 3 tasks | 8 files |
+| Phase 02-exapp-shell P04 | 63 min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -159,11 +160,17 @@ Recent decisions affecting current work:
 - [Phase 02-exapp-shell]: Der Manifest-Gate vergleicht nicht nur eine Wortliste weiter Regexe, sondern matcht jede deklarierte Route gegen /heartbeat, /init und /enabled; eine Gegenprobe im Test belegt, dass das Gate ausloest
 - [Phase 02-exapp-shell]: Der CI-Job image bekommt docker/setup-qemu-action zusaetzlich zu setup-buildx-action, weil die arm64-Haelfte des Matrix-Baus auf einem amd64-Runner sonst nicht ausfuehrbar ist; veroeffentlicht wird nichts (D-25)
 - [Phase 02-exapp-shell]: EXAPP-01 bleibt Pending: das installierbare Paket existiert (Image plus Manifest), der Nachweis der Installation durch den Deploy Daemon gehoert zu Plan 02-04
+- [Phase 02-exapp-shell]: Die HaRP-Testtopologie ist ein zweites compose-File mit eigenem Projektnamen nc-mcp-exapp, eigenem Volume, eigenem Netz und Port 8081 (D-31); die vom Owner genutzte Instanz aus compose.test.yml bleibt dadurch unberuehrt, und ein Test haelt fest, dass das Bootstrap-Skript sie nicht einmal erwaehnt
+- [Phase 02-exapp-shell]: access_level wandert als Zahl in die json-info-Registrierung: AppAPI mappt PUBLIC/USER/ADMIN nur auf dem info.xml-Pfad, eine json-info-Registrierung schreibt den Wert roh in die Integer-Spalte von ex_apps_routes
+- [Phase 02-exapp-shell]: Der ExApp-Port liegt bei 23000, weil der FRP-Server in HaRP nur 23000 bis 23999 erlaubt; ausserhalb meldet frpc port not allowed und HAProxy antwortet ohne Backend mit 503
+- [Phase 02-exapp-shell]: Das Image legt /certs fuer uid 10001 an, weil HaRP das FRP-Client-Zertifikat mit der Identitaet des Containers installiert; ohne das Verzeichnis scheitert die Zertifikatsinstallation mit 500 und der Tunnel bleibt ungesichert und damit tot
+- [Phase 02-exapp-shell]: EXAPP-01 ist abgehakt: occ app_api:app:list meldet mcp_connector als enabled, deploy und init stehen auf 100, der MCP-Endpunkt wird mit dem App-Passwort eines Nutzers bedient; der AIO-Nachweis bleibt Sache von Plan 02-07
 
 ### Pending Todos
 
 - **Owner-Schritt 01-13:** PR an nextcloud/context_agent#227 einreichen. Branch und DCO-Commit liegen im Fork street1983nk/context_agent (fix/stateless-http-session-compat, def1425), der PR-Text in docs/contrib/227-pr-body.md. Kommando und Pruefpunkte stehen in .planning/phases/01-server-kern/01-13-SUMMARY.md. Vorher `git push origin main` im Connector-Repo, damit der verlinkte Regressionstest oeffentlich sichtbar ist. Danach PR-URL nachtragen, ROADMAP 01-13 abhaken, CONTRIB-01 auf Complete.
 - **Owner-Schritt 01-14:** Ein Durchgang mit Claude Desktop selbst nach docs/client-setup.md. Die Anleitung ist gegen die Referenz-Clients der Testsuite verprobt (mcp 2.0 und mcp 1.29 gegen denselben laufenden Endpoint, plus scripts/acceptance_all_tools.py ueber alle 15 Tools per stdio); die Konfigurationspfade fuer Claude Desktop stammen aus der offiziellen Dokumentation und sind auf diesem Rechner nicht verifiziert.
+- **ExApp-Topologie wieder anfahren (02-05):** `docker compose -f compose.exapp.yml up -d --wait`, danach `docker start nc_app_mcp_connector`. Der ExApp-Container gehoert nicht zum compose-Projekt, weil der Deploy Daemon ihn ueber den Docker-Socket erzeugt hat; `down` laesst ihn stehen und `up` startet ihn nicht mit.
 - **Aufraeumen (optional):** Die Docker-Testinstanz traegt jetzt zusaetzlich die Calendar-App 6.5.3 und die Abnahme-Artefakte. Fuer einen sauberen Stand: `docker compose -f compose.test.yml down -v` und danach `bash scripts/bootstrap_test_nc.sh`.
 
 ### Blockers/Concerns
@@ -182,6 +189,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-15T09:15:33.000Z
-Stopped at: Completed 02-03-PLAN.md
+Last session: 2026-08-15T10:19:38.000Z
+Stopped at: Completed 02-04-PLAN.md
 Resume file: None

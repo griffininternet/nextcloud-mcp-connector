@@ -97,7 +97,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 02-04-PLAN.md - Testtopologie mit Reverse-Proxy und HaRP plus Installation über AppAPI (Wave 3)
+- [x] 02-04-PLAN.md - Testtopologie mit Reverse-Proxy und HaRP plus Installation über AppAPI (Wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -164,7 +164,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Server-Kern | 14/14 | Complete    | 2026-08-14 |
-| 2. ExApp-Shell | 3/7 | In Progress|  |
+| 2. ExApp-Shell | 4/7 | In Progress|  |
 | 3. OAuth 2.1 | 0/TBD | Not started | - |
 | 4. Per-User-Verwaltung und prepare_context | 0/TBD | Not started | - |
 | 5. Hardening und Store-Einreichung | 0/TBD | Not started | - |

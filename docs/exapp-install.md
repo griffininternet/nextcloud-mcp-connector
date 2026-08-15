@@ -43,6 +43,14 @@ bash scripts/bootstrap_exapp.sh
 docker compose -f compose.exapp.yml down        # when you are done, keeps the volume
 ```
 
+`down` stops the four services of the file. The ExApp container is not one of them: the
+deploy daemon created it over the Docker socket, so it keeps running and has to be stopped
+separately, which is also why the compose network stays in use until then.
+
+```
+docker stop nc_app_mcp_connector
+```
+
 The bootstrap script is idempotent: it creates the test users and their calendars, installs
 or enables AppAPI, registers the HaRP daemon, builds the image, pushes it into the loopback
 registry and registers the app. A second run is a no-op apart from a fresh app password in
