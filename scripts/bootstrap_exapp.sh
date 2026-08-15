@@ -302,12 +302,17 @@ ensure_daemon_harp() {
   # nextcloud_url is passed explicitly: without it AppAPI replaces https by http, and the
   # deploy daemon has to reach Nextcloud through the same reverse proxy that serves
   # /exapps/, otherwise the heartbeat fails (research pitfall 7).
-  if ! output="$(occ app_api:daemon:register \
+  #
+  # HP_SHARED_KEY is bearer equivalent (CR-02, WR-11), so it travels through stdin like
+  # every other secret of this script (WR-06) and never through the argv of the docker
+  # client on the host. The remaining argv inside the container is the same residual risk
+  # WR-06 already documents and accepts for the json-info payload.
+  if ! output="$(printf '%s' "${HP_SHARED_KEY}" | occ_stdin \
+    'KEY="$(cat)"; exec php occ app_api:daemon:register "$@" --harp_shared_key "$KEY"' \
     "${DAEMON_NAME}" "Harp Proxy (Docker)" docker-install http \
     "appapi-harp:8780" "http://caddy" \
     --net "${NETWORK_NAME}" --harp \
     --harp_frp_address "appapi-harp:8782" \
-    --harp_shared_key "${HP_SHARED_KEY}" \
     --set-default 2>&1)"; then
     echo "ERROR: could not register the deploy daemon ${DAEMON_NAME}:" >&2
     echo "${output}" >&2

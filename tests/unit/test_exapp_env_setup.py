@@ -644,14 +644,28 @@ def test_the_topology_guard_refuses_a_foreign_compose_file(
 
 @pytest.mark.parametrize(
     "forbidden",
-    ['-e "OC_PASS=', '--json-info "$(', '--json-info "${json}"'],
+    [
+        '-e "OC_PASS=',
+        '--json-info "$(',
+        '--json-info "${json}"',
+        '--harp_shared_key "${',
+        '-u "${',
+    ],
 )
 def test_no_secret_travels_through_the_process_list(forbidden: str) -> None:
-    """WR-06: the argv of `docker` is world readable in `ps aux` for the whole call, and
-    the payload of the registration carries "secret":"<APP_SECRET>", which is bearer
-    equivalent. Both the app secret and the user passwords go through stdin now."""
-    text = BOOTSTRAP.read_text(encoding="utf-8")
-    assert forbidden not in text, f"{forbidden!r} puts a secret on a command line"
+    """WR-06: the argv of `docker` and `curl` is world readable in `ps aux` for the whole
+    call, and every value these patterns carry is bearer equivalent: the registration
+    payload holds "secret":"<APP_SECRET>", the daemon registration holds HP_SHARED_KEY,
+    OC_PASS is a login password and `curl -u` an app password. All of them go through
+    stdin or a private file now. Checked over every shell script, not only the bootstrap:
+    the pattern crept back into two sister scripts once (02-REVIEW WR-01 to WR-03)."""
+    scripts = sorted((ROOT / "scripts").glob("*.sh"))
+    assert scripts, "no shell scripts found, the guard would silently pass"
+    for script in scripts:
+        text = script.read_text(encoding="utf-8")
+        assert forbidden not in text, (
+            f"{forbidden!r} in {script.name} puts a secret on a command line"
+        )
 
 
 def test_the_secrets_reach_the_container_through_stdin() -> None:
