@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-08-15T21:40:02.993Z"
+stopped_at: Completed 03-03-PLAN.md
+last_updated: "2026-08-15T22:00:00.000Z"
 last_activity: 2026-08-15
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 30
-  completed_plans: 22
+  completed_plans: 23
   percent: 40
 ---
 
@@ -30,13 +30,13 @@ Plan: 2 of 9
 Status: In progress
 Last activity: 2026-08-15
 
-Progress: [███████░░░] 73%
+Progress: [████████░░] 77%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 28
+- Total plans completed: 29
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -74,6 +74,7 @@ Progress: [███████░░░] 73%
 | Phase 02-exapp-shell P06 | 45 min | 2 tasks | 3 files |
 | Phase 02-exapp-shell P07 | 55 min | 3 tasks | 6 files |
 | Phase 03 P01 | 65 min | 3 tasks | 15 files |
+| Phase 03 P03 | 20 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -185,6 +186,12 @@ Recent decisions affecting current work:
 - [Phase 03-oauth-2-1]: token_endpoint_auth_methods_supported traegt zusaetzlich none: Claude.ai und ChatGPT kommen als public clients ohne Client-Secret; das SDK listet per Default nur die beiden Secret-Methoden
 - [Phase 03-oauth-2-1]: Die Bearer-Grenze ist fail-closed: ohne konfigurierten Verifier ist jeder Bearer ungueltig: Manifest-Umstellung auf PUBLIC und eigene Pruefung entstanden in derselben Aenderung (Pitfall 6); der echte Verifier folgt in Plan 03-06
 - [Phase 03-oauth-2-1]: Das Manifest deklariert je Dokument eine vollstaendig verankerte Route, das Gate faellt ohne Endanker: HaRP matcht mit re.match, ein Muster ohne Endanker trifft auch Nachbarn; damit ist AR-02-06 geschlossen
+- [Phase 03-oauth-2-1]: Jede HTML-Seite der Phase entsteht in genau einer Funktion (exapp/ui/layout.py): CSP mit Nonce, X-Frame-Options, Referrer-Policy und no-store haben damit eine Quelle statt einer Kopie je Seite
+- [Phase 03-oauth-2-1]: page() nimmt die Umgebung und nie den Request: die Absenderzeile (Wortmarke plus Host) kommt aus config.public_url, sonst koennte ein gefaelschter Host-Header umschreiben, wer nach Zugriff fragt
+- [Phase 03-oauth-2-1]: Der Client-Name aus der DCR-Registrierung wird vor dem Escaping gesaeubert (Steuerzeichen weg, 80 Zeichen) und der Escaping-Test vergleicht Elementanzahlen statt Teilzeichenketten
+- [Phase 03-oauth-2-1]: Nutzertexte stehen als Modulkonstanten in __all__: das ist der Katalog fuer eine spaetere Lokalisierung und zugleich der Grund, warum der vulture-Gate ohne Whitelist-Eintrag gruen bleibt
+- [Phase 03-oauth-2-1]: link() und form() lehnen jedes Ziel ab, das kein lokaler Pfad ist: ein Open Redirect im Consent-Umfeld ist im Renderer billiger verboten als in fuenf Route-Handlern geprueft
+- [Phase 03-oauth-2-1]: AUTH-02 und AUTH-03 bleiben Pending: Plan 03-03 haengt bewusst keine Route ein, die Bausteine allein sind weder Browser-Login noch OAuth-Verbindung
 
 ### Pending Todos
 
@@ -211,6 +218,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-15T21:39:20.307Z
-Stopped at: Completed 03-01-PLAN.md
+Last session: 2026-08-15T22:00:00.000Z
+Stopped at: Completed 03-03-PLAN.md
 Resume file: None

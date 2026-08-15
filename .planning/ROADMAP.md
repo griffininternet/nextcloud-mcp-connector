@@ -133,7 +133,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [ ] 03-02-PLAN.md - Verschluesselter Token-Store, der Neustarts ueberlebt (Wave 2)
-- [ ] 03-03-PLAN.md - UI-Bausteine nach 03-UI-SPEC: Shell, Komponenten, Texte, sieben Fehlerseiten (Wave 2)
+- [x] 03-03-PLAN.md - UI-Bausteine nach 03-UI-SPEC: Shell, Komponenten, Texte, sieben Fehlerseiten (Wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -201,7 +201,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Server-Kern | 14/14 | Complete    | 2026-08-14 |
 | 2. ExApp-Shell | 7/7 | Complete    | 2026-08-15 |
-| 3. OAuth 2.1 | 1/9 | In Progress|  |
+| 3. OAuth 2.1 | 2/9 | In Progress|  |
 | 4. Per-User-Verwaltung und prepare_context | 0/TBD | Not started | - |
 | 5. Hardening und Store-Einreichung | 0/TBD | Not started | - |
 
