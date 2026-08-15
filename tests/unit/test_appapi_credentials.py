@@ -16,10 +16,13 @@ object, and respx answers the one call that leaves the process.
 """
 
 import base64
+import inspect
+import logging
 
 import httpx
 import pytest
 
+from mcp_connector import config, deps
 from mcp_connector.nextcloud.credentials import AppApiAuth, Credentials
 
 BASE_URL = "http://nc.test"
@@ -43,6 +46,45 @@ def appapi_credentials(user: str = USER, secret: str = APP_SECRET) -> Credential
         app_version=APP_VERSION,
         aa_version=AA_VERSION,
     )
+
+
+def token(user: str = USER, secret: str = APP_SECRET) -> str:
+    """The AUTHORIZATION-APP-API value exactly as AppAPI builds it."""
+    return base64.b64encode(f"{user}:{secret}".encode()).decode()
+
+
+def appapi_headers(user: str = USER, secret: str = APP_SECRET) -> dict[str, str]:
+    """The three headers HaRP puts in front of every request it forwards."""
+    return {
+        "EX-APP-ID": APP_ID,
+        "EX-APP-VERSION": APP_VERSION,
+        "AUTHORIZATION-APP-API": token(user, secret),
+    }
+
+
+def basic() -> str:
+    """A Basic header of somebody else, offered as a second channel on purpose."""
+    return "Basic " + base64.b64encode(b"mallory:another-password").decode()
+
+
+class FakeContext:
+    """Stand-in for the SDK context: ``headers`` is ``None`` on stdio and in-memory."""
+
+    def __init__(self, headers: dict[str, str] | None = None) -> None:
+        self.headers = headers
+
+
+@pytest.fixture
+def exapp_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The deploy environment AppAPI injects into the ExApp container."""
+    monkeypatch.setenv(config.ENV_APP_ID, APP_ID)
+    monkeypatch.setenv(config.ENV_APP_SECRET, APP_SECRET)
+    monkeypatch.setenv(config.ENV_APP_VERSION, APP_VERSION)
+    monkeypatch.setenv(config.ENV_AA_VERSION, AA_VERSION)
+    monkeypatch.setenv(config.ENV_NEXTCLOUD_URL, BASE_URL)
+    # An ExApp container has neither of these, and phase 1 must not leak into this mode.
+    monkeypatch.delenv(config.ENV_STATIC_BEARER, raising=False)
+    monkeypatch.delenv(config.ENV_APP_PASSWORD, raising=False)
 
 
 def flow(auth: httpx.Auth, request: httpx.Request) -> list[httpx.Request]:
@@ -176,10 +218,112 @@ def test_the_repr_of_appapi_credentials_hides_the_base64_token() -> None:
 
 def test_the_repr_of_the_appapi_auth_hides_secret_and_token() -> None:
     auth = appapi_credentials().auth()
-    token = base64.b64encode(f"{USER}:{APP_SECRET}".encode()).decode()
     text = repr(auth)
 
     assert APP_SECRET not in text
-    assert token not in text
+    assert token() not in text
     assert "AppApiAuth" in text
     assert APP_ID in text
+
+
+# --- the fourth branch of resolve_credentials -------------------------------------
+
+
+def test_the_exapp_mode_takes_the_user_from_the_appapi_header(exapp_env: None) -> None:
+    creds = deps.resolve_credentials(FakeContext(headers=appapi_headers(user="bob")))
+
+    assert creds.mode == "appapi"
+    assert creds.user == "bob"
+    assert creds.secret == APP_SECRET
+    assert creds.base_url == BASE_URL
+    assert creds.app_id == APP_ID
+    assert creds.app_version == APP_VERSION
+    assert creds.aa_version == AA_VERSION
+
+
+def test_an_additional_basic_header_changes_nothing(exapp_env: None) -> None:
+    """T-02-11, D-27: HaRP forwards whatever the client sent, and we read one channel."""
+    without = deps.resolve_credentials(FakeContext(headers=appapi_headers(user="bob")))
+
+    with_basic = dict(appapi_headers(user="bob"))
+    with_basic["Authorization"] = basic()
+    result = deps.resolve_credentials(FakeContext(headers=with_basic))
+
+    assert result == without
+    assert result.user == "bob"
+
+
+def test_a_basic_header_alone_is_not_enough_in_the_exapp_mode(exapp_env: None) -> None:
+    with pytest.raises(deps.MCPError):
+        deps.resolve_credentials(FakeContext(headers={"Authorization": basic()}))
+
+
+def test_an_empty_user_id_gets_no_data_access(exapp_env: None) -> None:
+    """T-02-12: the app context is a valid token and still not a person."""
+    with pytest.raises(deps.MCPError) as excinfo:
+        deps.resolve_credentials(FakeContext(headers=appapi_headers(user="")))
+
+    assert "user" in excinfo.value.message.lower()
+
+
+def test_a_wrong_app_secret_is_refused(exapp_env: None) -> None:
+    with pytest.raises(deps.MCPError):
+        deps.resolve_credentials(FakeContext(headers=appapi_headers(secret="wrong-secret")))
+
+
+def test_a_missing_appapi_header_is_refused(exapp_env: None) -> None:
+    with pytest.raises(deps.MCPError):
+        deps.resolve_credentials(FakeContext(headers={}))
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {},
+        {"Authorization": basic()},
+        {**appapi_headers(), "AUTHORIZATION-APP-API": "not base64 at all"},
+        appapi_headers(secret="wrong-secret"),
+        appapi_headers(user=""),
+    ],
+)
+def test_no_refusal_ever_repeats_a_header_value(exapp_env: None, headers: dict[str, str]) -> None:
+    """T-02-03: the header is credential material, not text we may quote back."""
+    try:
+        deps.resolve_credentials(FakeContext(headers=headers))
+    except deps.MCPError as exc:
+        text = f"{exc.message} {exc}"
+        for value in headers.values():
+            assert value not in text
+        assert APP_SECRET not in text
+
+
+def test_the_exapp_resolution_writes_nothing_to_the_log(
+    exapp_env: None, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.DEBUG):
+        deps.resolve_credentials(FakeContext(headers=appapi_headers(user="bob")))
+
+    assert APP_SECRET not in caplog.text
+    assert caplog.text.strip() == ""
+
+
+def test_resolve_credentials_still_takes_exactly_one_parameter() -> None:
+    """T-02-10: no tool and no caller may hand in a user id next to the context."""
+    params = list(inspect.signature(deps.resolve_credentials).parameters)
+    assert params == ["ctx"]
+
+
+def test_the_stdio_mode_is_untouched_by_the_new_branch(
+    monkeypatch: pytest.MonkeyPatch, nc_env: dict[str, str]
+) -> None:
+    """A stdio process has no headers, so no deploy variable can move it into ExApp."""
+    monkeypatch.setenv(config.ENV_APP_ID, APP_ID)
+    monkeypatch.setenv(config.ENV_APP_SECRET, APP_SECRET)
+    monkeypatch.setenv(config.ENV_URL, nc_env["base_url"])
+    monkeypatch.setenv(config.ENV_USER, nc_env["user"])
+    monkeypatch.setenv(config.ENV_APP_PASSWORD, nc_env["secret"])
+
+    creds = deps.resolve_credentials(FakeContext(headers=None))
+
+    assert creds.mode == "basic"
+    assert creds.user == nc_env["user"]
