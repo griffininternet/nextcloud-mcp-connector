@@ -27,7 +27,7 @@ from starlette.routing import Route
 from starlette.testclient import TestClient
 
 from mcp_connector import config
-from mcp_connector.exapp.ui import icons, layout, strings
+from mcp_connector.exapp.ui import errors, icons, layout, strings
 
 ENV = {config.ENV_PUBLIC_URL: "https://cloud.example.com/exapps/mcp_connector"}
 HOST = "cloud.example.com"
@@ -392,3 +392,144 @@ def test_the_footer_names_who_may_ask_for_a_password() -> None:
 def test_a_page_can_carry_its_own_footer() -> None:
     document = parse(sample_page(footer=strings.CONSENT_FOOTER.format(host=HOST)))
     assert "never sees the password you typed" in document.text
+
+
+# --- E1 to E7, the seven error pages ------------------------------------------------------
+#
+# The table below is the second copy of the UI-SPEC table on purpose. A test that reads the
+# status code out of the implementation proves that the implementation equals itself.
+
+ERROR_PAGES = [
+    ("E1", 403, strings.ERROR_ALLOWLIST_TITLE, "Ask your administrator"),
+    ("E2", 400, strings.ERROR_REGISTRATION_OFF_TITLE, "Ask your administrator"),
+    ("E3", 400, strings.ERROR_EXPIRED_TITLE, "Start the connection again"),
+    ("E4", 408, strings.ERROR_TIMEOUT_TITLE, "Start the connection again"),
+    ("E5", 400, strings.ERROR_REDIRECT_TITLE, "Start the connection again"),
+    ("E6", 429, strings.ERROR_THROTTLED_TITLE, "Wait"),
+    ("E7", 500, strings.ERROR_GENERIC_TITLE, "Try again"),
+]
+
+#: Everything a user must never read on an error page, and everything an attacker must not
+#: learn from one: which check fired, which parameter was wrong, where we run (T-03-24).
+FORBIDDEN_ON_ERROR_PAGES = [
+    "invalid_grant",
+    "invalid_client",
+    "invalid_request",
+    "unauthorized_client",
+    "access_denied",
+    "redirect_uri",
+    "code_verifier",
+    "code_challenge",
+    "client_secret",
+    "Traceback",
+    "traceback",
+    "click here",
+    "Sorry",
+    "!",
+]
+
+
+def error_body(code: str, **kwargs: object) -> str:
+    response, _ = errors.error_page(code, env=ENV, **kwargs)  # type: ignore[arg-type]
+    return body(response)
+
+
+@pytest.mark.parametrize(("code", "status", "title", "next_step"), ERROR_PAGES)
+def test_every_error_page_names_the_problem_and_the_next_step(
+    code: str, status: int, title: str, next_step: str
+) -> None:
+    response, _ = errors.error_page(code, env=ENV, client=BENIGN_NAME, seconds=30)
+    document = parse(response)
+    assert response.status_code == status
+    assert title in document.text
+    assert next_step in document.text
+    assert document.tags.count("h1") == 1
+    assert icons.CROSS in body(response)
+
+
+@pytest.mark.parametrize(("code", "status", "title", "next_step"), ERROR_PAGES)
+def test_every_error_page_carries_the_security_headers_of_the_shell(
+    code: str, status: int, title: str, next_step: str
+) -> None:
+    response, _ = errors.error_page(code, env=ENV, client=BENIGN_NAME, seconds=30)
+    assert response.headers["content-type"] == "text/html; charset=utf-8"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["referrer-policy"] == "no-referrer"
+    assert response.headers["cache-control"] == "no-store"
+    assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
+
+
+@pytest.mark.parametrize(("code", "status", "title", "next_step"), ERROR_PAGES)
+def test_no_error_page_tells_the_attacker_which_check_fired(
+    code: str, status: int, title: str, next_step: str
+) -> None:
+    rendered = error_body(code, client=HOSTILE_NAME, seconds=30)
+    for needle in FORBIDDEN_ON_ERROR_PAGES:
+        assert needle not in rendered, f"{code} leaks {needle!r}"
+
+
+def test_the_table_has_exactly_the_seven_pages_of_the_contract() -> None:
+    expected = tuple(code for code, _, _, _ in ERROR_PAGES)
+    assert expected == errors.CODES
+
+
+def test_the_client_name_on_an_error_page_is_cleaned_and_escaped() -> None:
+    benign = parse(errors.error_page("E1", env=ENV, client=BENIGN_NAME)[0])
+    hostile = parse(errors.error_page("E1", env=ENV, client=HOSTILE_NAME)[0])
+    assert hostile.tags == benign.tags
+    assert "Bad Client" in hostile.text
+    long_name = "N" * 200
+    assert long_name not in error_body("E1", client=long_name)
+
+
+def test_an_error_page_without_a_client_name_still_reads_as_a_sentence() -> None:
+    rendered = error_body("E1")
+    assert strings.CLIENT_NAME_FALLBACK in rendered
+
+
+def test_the_timeout_page_offers_the_way_back() -> None:
+    document = parse(errors.error_page("E4", env=ENV)[0])
+    assert strings.ACTION_START_OVER in document.text
+    assert document.tags.count("a") == 1
+    for target in document.values_of("href"):
+        assert target.startswith("/")
+        assert "://" not in target
+
+
+def test_the_throttled_page_carries_retry_after_with_the_number_of_its_own_text() -> None:
+    response, _ = errors.error_page("E6", env=ENV, seconds=42)
+    assert response.status_code == 429
+    assert response.headers["retry-after"] == "42"
+    assert "Wait 42 seconds" in parse(response).text
+
+
+def test_the_throttled_page_never_promises_an_immediate_retry() -> None:
+    response, _ = errors.error_page("E6", env=ENV, seconds=0)
+    assert int(response.headers["retry-after"]) >= 1
+
+
+def test_two_generic_pages_carry_two_different_references() -> None:
+    """The reference correlates with one log line and decodes to nothing else."""
+    first_response, first = errors.error_page("E7", env=ENV)
+    second_response, second = errors.error_page("E7", env=ENV)
+    assert first != second
+    assert len(first) == errors.REFERENCE_LENGTH
+    assert set(first) <= set(errors.REFERENCE_ALPHABET)
+    assert first in parse(first_response).text
+    assert second in parse(second_response).text
+
+
+@pytest.mark.parametrize("code", ["E1", "E2", "E3", "E4", "E5", "E6"])
+def test_only_the_generic_page_carries_a_reference(code: str) -> None:
+    _, reference = errors.error_page(code, env=ENV, seconds=30)
+    assert reference == ""
+
+
+def test_an_unknown_code_lands_on_the_generic_page_and_never_on_an_empty_one() -> None:
+    """Fail closed (D-37): a caller with a typo still answers something a user can act on."""
+    response, reference = errors.error_page("nope", env=ENV)
+    assert response.status_code == 500
+    document = parse(response)
+    assert strings.ERROR_GENERIC_TITLE in document.text
+    assert reference in document.text
+    assert reference != ""
