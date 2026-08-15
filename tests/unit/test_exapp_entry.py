@@ -1,25 +1,35 @@
 """The ExApp entry point and the boundary against the two phase 1 modes (D-23, D-27).
 
 Nothing here starts a server: ``build_exapp_app`` is a pure function of its environment,
-and every ``main`` case below exits before uvicorn is reached. Two regressions matter most
+and every ``main`` case below exits before uvicorn is reached. Three regressions matter most
 in this file. The standalone HTTP application of phase 1 must not grow a lifecycle route
-or an AppAPI requirement just because the ExApp module exists, and the MCP route of the
+or an AppAPI requirement just because the ExApp module exists, the MCP route of the
 ExApp application must never answer a request that carries no valid handshake (CR-01):
 before the wrapper existed, an ``initialize`` without a single AppAPI header was answered
-with 200 and a fresh session id.
+with 200 and a fresh session id. And since plan 03-01 the route is declared PUBLIC, so HaRP
+no longer decides who reaches it: an AppAPI context without a user id has to pass our own
+bearer check or leave with a 401 that points at the metadata (pitfall 6, T-03-01).
 """
 
 import base64
 
 import pytest
+from mcp.server.auth.provider import AccessToken
+from starlette.applications import Starlette
+from starlette.requests import Request
+from starlette.responses import PlainTextResponse, Response
+from starlette.routing import Route
 from starlette.testclient import TestClient
 
 from mcp_connector import config, entry_exapp, entry_http
 from mcp_connector.errors import ToolError
+from mcp_connector.exapp.middleware import RequireAppApi
+from mcp_connector.oauth.metadata import PRM_SUFFIX, TOOL_SCOPE
 
 APP_ID = "mcp_connector"
 APP_SECRET = "app-secret-test"
 APP_VERSION = "0.1.0"
+PUBLIC_URL = "https://cloud.example.com/exapps/mcp_connector"
 
 EXAPP_ENV = {
     config.ENV_APP_ID: APP_ID,
@@ -30,6 +40,9 @@ EXAPP_ENV = {
 #: Behind HaRP the Host header is the one of the proxy, which is what the container sets
 #: this to as well. Without it every request below would be answered with 421 instead.
 SERVED_ENV = {**EXAPP_ENV, config.ENV_DISABLE_DNS_REBINDING: "1"}
+#: The same environment with a configured public URL, so the pointer in the 401 can be
+#: asserted as a whole string instead of as a fragment.
+OAUTH_ENV = {**SERVED_ENV, config.ENV_PUBLIC_URL: PUBLIC_URL}
 
 LIFECYCLE_PATHS = {"/heartbeat", "/init", "/enabled"}
 
@@ -60,6 +73,42 @@ def appapi_headers(user: str = "alice", secret: str = APP_SECRET) -> dict[str, s
         "EX-APP-VERSION": APP_VERSION,
         "AUTHORIZATION-APP-API": token,
     }
+
+
+class StubVerifier:
+    """The one method of the SDK ``TokenVerifier`` protocol, over one accepted token.
+
+    Plan 03-06 puts the real verifier here. Until then the boundary is built with ``None``,
+    which is the fail-closed state: no verifier means no valid bearer exists.
+    """
+
+    def __init__(self, accepted: str | None = None) -> None:
+        self._accepted = accepted
+        self.seen: list[str] = []
+
+    async def verify_token(self, token: str) -> AccessToken | None:
+        self.seen.append(token)
+        if self._accepted is not None and token == self._accepted:
+            return AccessToken(token=token, client_id="test-client", scopes=[TOOL_SCOPE])
+        return None
+
+
+def guarded_app(verifier: StubVerifier | None = None) -> Starlette:
+    """One route behind the real boundary, so a verifier can be handed in.
+
+    ``build_exapp_app`` builds the MCP transport behind the same wrapper but takes no
+    verifier yet (plan 03-06 wires it). This little application drives the branches of the
+    wrapper itself, including the one that hands a token to a verifier.
+    """
+
+    async def served(request: Request) -> Response:
+        return PlainTextResponse("served")
+
+    app = Starlette(routes=[Route("/mcp", served, methods=["GET", "POST"])])
+    for route in app.router.routes:
+        if isinstance(route, Route):
+            route.app = RequireAppApi(route.app, OAUTH_ENV, token_verifier=verifier)
+    return app
 
 
 # --- the application -------------------------------------------------------------
@@ -105,21 +154,124 @@ def test_initialize_without_a_valid_handshake_is_rejected(
     assert response.content == b"", name
     assert "mcp-session-id" not in {key.lower() for key in response.headers}, name
     assert response.headers["cache-control"] == "no-store", name
+    # An invalid handshake says nothing at all, not even which scheme would work: the
+    # caller behind those headers is a proxy, not an OAuth client (T-02-03).
+    assert "www-authenticate" not in {key.lower() for key in response.headers}, name
 
 
-@pytest.mark.parametrize("user", ["alice", ""])
-def test_initialize_with_a_valid_handshake_is_served(user: str) -> None:
-    """The empty user id is the app context and passes the boundary on purpose (T-02-12).
-
-    Refusing it belongs to the credential layer, which is where the data access is.
-    """
+def test_initialize_with_a_valid_handshake_is_served() -> None:
+    """A resolved Nextcloud user is the AUTH-01 path and is not asked for a bearer."""
     with TestClient(entry_exapp.build_exapp_app(SERVED_ENV)) as client:
         response = client.post(
-            "/mcp", json=INITIALIZE, headers={**MCP_HEADERS, **appapi_headers(user=user)}
+            "/mcp", json=INITIALIZE, headers={**MCP_HEADERS, **appapi_headers(user="alice")}
         )
 
     assert response.status_code == 200
     assert "protocolVersion" in response.text
+
+
+# --- the second identity source of the same boundary (T-03-01, T-03-06) -----------
+
+
+def test_an_empty_user_without_a_bearer_gets_the_discovery_401() -> None:
+    """The 401 that starts the OAuth flow, out of /mcp itself and not out of HaRP.
+
+    Until phase 2 the empty user id was the app context and passed on purpose (T-02-12);
+    since /mcp is PUBLIC it is also what an anonymous caller produces, so the second check
+    of this boundary decides here instead of at the credential layer.
+    """
+    with TestClient(entry_exapp.build_exapp_app(OAUTH_ENV)) as client:
+        response = client.post(
+            "/mcp", json=INITIALIZE, headers={**MCP_HEADERS, **appapi_headers(user="")}
+        )
+
+    assert response.status_code == 401
+    assert response.content == b""
+    assert response.headers["cache-control"] == "no-store"
+    challenge = response.headers["www-authenticate"]
+    assert challenge.startswith('Bearer error="invalid_token"')
+    assert f'scope="{TOOL_SCOPE}"' in challenge
+    assert f'resource_metadata="{PUBLIC_URL}{PRM_SUFFIX}"' in challenge
+    assert "offline_access" not in challenge
+
+
+@pytest.mark.parametrize(
+    "authorization",
+    ["Bearer whatever", "Bearer ", "bearer lower-case-scheme", "Basic YWxpY2U6cHc=", ""],
+    ids=["a token", "an empty token", "a lower case scheme", "another scheme", "no header"],
+)
+def test_an_empty_user_is_refused_for_every_bearer_while_no_verifier_exists(
+    authorization: str,
+) -> None:
+    """Fail-closed: without a verifier every bearer is invalid, never 200 and never 500."""
+    headers = {**MCP_HEADERS, **appapi_headers(user="")}
+    if authorization:
+        headers["Authorization"] = authorization
+
+    with TestClient(entry_exapp.build_exapp_app(OAUTH_ENV)) as client:
+        response = client.post("/mcp", json=INITIALIZE, headers=headers)
+
+    assert response.status_code == 401
+    assert "resource_metadata=" in response.headers["www-authenticate"]
+
+
+def test_the_401_of_the_bearer_boundary_never_repeats_the_token() -> None:
+    """T-03-06: not in the body, not in a header, not in the challenge."""
+    secret_token = "5f4dcc3b5aa765d61d8327deb882cf99"
+    headers = {
+        **MCP_HEADERS,
+        **appapi_headers(user=""),
+        "Authorization": f"Bearer {secret_token}",
+    }
+
+    with TestClient(entry_exapp.build_exapp_app(OAUTH_ENV)) as client:
+        response = client.post("/mcp", json=INITIALIZE, headers=headers)
+
+    assert response.status_code == 401
+    assert secret_token not in response.text
+    for key, value in response.headers.items():
+        assert secret_token not in value, key
+
+
+def test_a_verified_bearer_reaches_the_route_behind_the_boundary() -> None:
+    """The other direction of the same branch, with the verifier plan 03-06 will hand in."""
+    verifier = StubVerifier(accepted="a-good-token")
+
+    with TestClient(guarded_app(verifier)) as client:
+        response = client.get(
+            "/mcp", headers={**appapi_headers(user=""), "Authorization": "Bearer a-good-token"}
+        )
+
+    assert response.status_code == 200
+    assert response.text == "served"
+    assert verifier.seen == ["a-good-token"]
+
+
+def test_a_rejected_bearer_stops_at_the_boundary() -> None:
+    verifier = StubVerifier(accepted="a-good-token")
+
+    with TestClient(guarded_app(verifier)) as client:
+        response = client.get(
+            "/mcp", headers={**appapi_headers(user=""), "Authorization": "Bearer a-stolen-token"}
+        )
+
+    assert response.status_code == 401
+    assert "resource_metadata=" in response.headers["www-authenticate"]
+    assert verifier.seen == ["a-stolen-token"]
+
+
+def test_a_resolved_user_is_never_asked_for_a_bearer() -> None:
+    """Two identity sources, one branch each: no fallback from one to the other (D-27)."""
+    verifier = StubVerifier(accepted="a-good-token")
+
+    with TestClient(guarded_app(verifier)) as client:
+        response = client.get(
+            "/mcp",
+            headers={**appapi_headers(user="alice"), "Authorization": "Bearer a-stolen-token"},
+        )
+
+    assert response.status_code == 200
+    assert verifier.seen == [], "the AUTH-01 path read the Authorization header"
 
 
 def test_a_duplicated_route_wrap_is_a_build_error(monkeypatch: pytest.MonkeyPatch) -> None:

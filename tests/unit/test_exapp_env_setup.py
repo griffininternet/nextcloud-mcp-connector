@@ -28,6 +28,8 @@ import pytest
 from lxml import etree
 
 import mcp_connector
+from mcp_connector import config
+from mcp_connector.entry_exapp import build_exapp_app
 from mcp_connector.nextcloud.clients.xml import hardened_parser
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -76,6 +78,17 @@ PROXY_OWNED_HEADERS = (
     "X-ORIGIN-IP",
 )
 
+#: What this phase opens: the MCP transport plus the three discovery documents (D-38).
+DECLARED_ROUTES = 4
+
+#: Enough of a deploy environment to build the application the manifest is compared against.
+MANIFEST_ENV = {
+    config.ENV_APP_ID: "mcp_connector",
+    config.ENV_APP_SECRET: "app-secret-test",
+    config.ENV_APP_VERSION: mcp_connector.__version__,
+    config.ENV_NEXTCLOUD_URL: "http://nc.test",
+}
+
 
 def instruction_values(text: str, keyword: str) -> list[str]:
     """Every value of a Dockerfile instruction, in file order, comments removed."""
@@ -111,8 +124,8 @@ def manifest_problems(root: etree._Element) -> list[str]:
         problems.append(f"image tag {image_tag!r} does not follow the version {version!r}")
 
     routes = root.findall(".//route")
-    if len(routes) != 2:
-        problems.append(f"{len(routes)} routes declared, this phase opens exactly two")
+    if len(routes) != DECLARED_ROUTES:
+        problems.append(f"{len(routes)} routes declared, this phase opens exactly four")
 
     for route in routes:
         url = (route.findtext("url") or "").strip()
@@ -127,6 +140,13 @@ def manifest_problems(root: etree._Element) -> list[str]:
                 problems.append(f"route {url!r} does not have {header} stripped by the proxy")
         if access_level == "PUBLIC" and not url.startswith("^/"):
             problems.append(f"public route {url!r} is not anchored at a path")
+        if "well-known" in url and not url.endswith("$"):
+            # HaRP matches with re.match, which anchors at the start only, so a pattern
+            # without an end anchor also matches every neighbour that starts the same way:
+            # the old ^/\.well-known/ covered the whole tree, and even a per document
+            # pattern without the $ would still cover /.well-known/openid-configuration.evil
+            # (pitfall 14, AR-02-06).
+            problems.append(f"well-known route {url!r} has no end anchor")
         if "401" in bruteforce:
             problems.append(f"route {url!r} throttles on 401, which breaks OAuth discovery")
         for path in LIFECYCLE_PATHS:
@@ -134,6 +154,27 @@ def manifest_problems(root: etree._Element) -> list[str]:
                 problems.append(f"route {url!r} exposes the lifecycle path {path}")
 
     return problems
+
+
+def declared_well_known_paths(root: etree._Element) -> set[str]:
+    """The literal path behind every well-known route pattern of the manifest.
+
+    The patterns are regular expressions for HaRP; reducing them to their literal form
+    (anchors and escapes removed) is what makes them comparable with the Starlette paths
+    the application actually registers.
+    """
+    paths = set()
+    for route in root.findall(".//route"):
+        url = (route.findtext("url") or "").strip()
+        if "well-known" not in url:
+            continue
+        paths.add(url.removeprefix("^").removesuffix("$").replace("\\", ""))
+    return paths
+
+
+def _excluded_headers() -> str:
+    """The headers_to_exclude value of the manifest, for a route a test builds itself."""
+    return "[" + ",".join(f'"{header}"' for header in PROXY_OWNED_HEADERS) + "]"
 
 
 def compose_services(text: str) -> dict[str, str]:
@@ -496,14 +537,72 @@ def test_the_tunnel_probe_reads_the_process_table(
     assert result.returncode == expected_code, result.stderr
 
 
-def test_the_manifest_declares_exactly_the_two_routes_of_this_phase(
+def test_the_manifest_declares_exactly_the_four_routes_of_this_phase(
     manifest_root: etree._Element,
 ) -> None:
+    """D-38: /mcp is PUBLIC since plan 03-01, and the one broad well-known route that
+    carried the accepted risk AR-02-06 is three fully anchored ones now."""
     routes = [
         ((route.findtext("url") or "").strip(), (route.findtext("access_level") or "").strip())
         for route in manifest_root.findall(".//route")
     ]
-    assert routes == [("^/mcp/?$", "USER"), ("^/\\.well-known/", "PUBLIC")]
+    assert routes == [
+        ("^/mcp/?$", "PUBLIC"),
+        ("^/\\.well-known/oauth-protected-resource/mcp$", "PUBLIC"),
+        ("^/\\.well-known/openid-configuration$", "PUBLIC"),
+        ("^/\\.well-known/oauth-authorization-server$", "PUBLIC"),
+    ]
+
+
+def test_the_declared_well_known_routes_are_the_registered_ones(
+    manifest_root: etree._Element,
+) -> None:
+    """Set equality, not a subset: a document that is declared but not served is a 404 an
+    administrator cannot explain, and one that is served but not declared is unreachable
+    through the proxy. Both are silent until a client tries to connect."""
+    registered = {
+        path
+        for path in (
+            getattr(route, "path", "") for route in build_exapp_app(MANIFEST_ENV).router.routes
+        )
+        if "well-known" in path
+    }
+
+    assert declared_well_known_paths(manifest_root) == registered
+
+
+def test_the_manifest_gate_rejects_a_well_known_route_without_an_end_anchor(
+    manifest_root: etree._Element,
+) -> None:
+    """Pitfall 14: HaRP matches with re.match, so a missing $ opens the neighbours too."""
+    routes = manifest_root.find(".//routes")
+    assert routes is not None
+    route = etree.SubElement(routes, "route")
+    etree.SubElement(route, "url").text = "^/\\.well-known/openid-configuration"
+    etree.SubElement(route, "verb").text = "GET"
+    etree.SubElement(route, "access_level").text = "PUBLIC"
+    etree.SubElement(route, "headers_to_exclude").text = _excluded_headers()
+
+    problems = manifest_problems(manifest_root)
+
+    assert any("has no end anchor" in problem for problem in problems)
+
+
+def test_the_manifest_gate_rejects_the_broad_well_known_route_of_phase_two(
+    manifest_root: etree._Element,
+) -> None:
+    """The exact pattern AR-02-06 was accepted for. It must never come back unnoticed."""
+    routes = manifest_root.find(".//routes")
+    assert routes is not None
+    route = etree.SubElement(routes, "route")
+    etree.SubElement(route, "url").text = "^/\\.well-known/"
+    etree.SubElement(route, "verb").text = "GET"
+    etree.SubElement(route, "access_level").text = "PUBLIC"
+    etree.SubElement(route, "headers_to_exclude").text = _excluded_headers()
+
+    problems = manifest_problems(manifest_root)
+
+    assert any("has no end anchor" in problem for problem in problems)
 
 
 def test_the_manifest_passes_its_own_gate(manifest_root: etree._Element) -> None:
@@ -551,6 +650,21 @@ def test_the_bootstrap_registration_strips_the_same_headers() -> None:
     assert '"headers_to_exclude":[]' not in text
     for header in PROXY_OWNED_HEADERS:
         assert f'"{header}"' in text, f"{header} is not stripped by the registration"
+
+
+def test_the_bootstrap_registration_declares_the_same_four_routes(
+    manifest_root: etree._Element,
+) -> None:
+    """The json-info payload overrides the manifest, so a route that only lives in
+    appinfo/info.xml is not registered on the test instance at all. access_level travels as
+    a number there: 0 is PUBLIC, and this phase declares nothing else."""
+    text = BOOTSTRAP.read_text(encoding="utf-8")
+    assert text.count('"access_level":0') == DECLARED_ROUTES
+    assert '"access_level":1' not in text
+    for path in declared_well_known_paths(manifest_root):
+        # The payload carries the pattern with a doubled backslash escape, so the literal
+        # path is compared without the dot escape (see the comment above json_info).
+        assert path.replace("/.well-known/", "well-known/") in text, path
 
 
 def test_the_manifest_gate_rejects_a_throttler_on_401(manifest_root: etree._Element) -> None:
