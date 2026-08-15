@@ -169,12 +169,21 @@ ensure_user() {
 # address book at all, and every CalDAV or CardDAV test fails with an empty result that
 # looks like a bug in our own XML (research pitfall 3).
 ensure_calendar() {
-  local uid="$1" name="$2"
-  if occ dav:create-calendar "$uid" "$name" >/dev/null 2>&1; then
-    echo "calendar ${uid}/${name}: created"
-  else
-    echo "calendar ${uid}/${name}: already there"
-  fi
+  local uid="$1" name="$2" attempt
+  # The create races the DAV app warming up right after the install, and a create that
+  # failed transiently must not pass as "already there": two CI runs died exactly like
+  # that, with the rerun green. So the create is retried until the calendar is actually
+  # listed, with a hard timeout instead of a single check.
+  for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+    occ dav:create-calendar "$uid" "$name" >/dev/null 2>&1 || true
+    if occ dav:list-calendars "$uid" 2>/dev/null | grep -q "$name"; then
+      echo "calendar ${uid}/${name}: present (attempt ${attempt})"
+      return 0
+    fi
+    sleep 5
+  done
+  echo "ERROR: calendar ${uid}/${name} did not appear within 60s." >&2
+  return 1
 }
 
 ensure_addressbook() {
