@@ -165,7 +165,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Server-Kern | 14/14 | Complete    | 2026-08-14 |
-| 2. ExApp-Shell | 7/7 | Complete   | 2026-08-15 |
+| 2. ExApp-Shell | 7/7 | Complete    | 2026-08-15 |
 | 3. OAuth 2.1 | 0/TBD | Not started | - |
 | 4. Per-User-Verwaltung und prepare_context | 0/TBD | Not started | - |
 | 5. Hardening und Store-Einreichung | 0/TBD | Not started | - |
