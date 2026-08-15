@@ -60,7 +60,7 @@ Plans:
 - [x] 01-05-PLAN.md - files_search und files_list mit zustandsloser Pagination (Wave 4)
 - [x] 01-09-PLAN.md - Deck-Tools: deck_browse und deck_create_card (Wave 4)
 - [x] 01-10-PLAN.md - unified_search mit parallelem Provider-Fan-out (Wave 4)
-- [x] 01-13-PLAN.md - Contribution-PR an nextcloud/context_agent#227 (Wave 4) *(wartet auf die Einreichung durch den Owner)*
+- [x] 01-13-PLAN.md - Contribution-PR an nextcloud/context_agent#227 (Wave 4) *(PR eingereicht: nextcloud/context_agent PR 230, 2026-08-15)*
 
 **Wave 5** *(blocked on Wave 4 completion)*
 

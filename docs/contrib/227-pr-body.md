@@ -5,8 +5,8 @@ Target repo:  nextcloud/context_agent
 Head branch:  street1983nk:fix/stateless-http-session-compat
 Commit:       def1425 (single functional change, Signed-off-by / DCO)
 Title:        fix(mcp): make stateless_http configurable and session-capable by default
-PR URL:       wird nach Einreichung ergaenzt
-Submitted:    wird nach Einreichung ergaenzt
+PR URL:       https://github.com/nextcloud/context_agent/pull/230
+Submitted:    2026-08-15
 
 Everything below this comment is the PR body as it will be rendered on GitHub.
 -->
