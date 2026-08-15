@@ -60,9 +60,17 @@ measure() {
   MEASURED_WWWAUTH="${wwwauth}"
 }
 
+# The app password never goes on a command line (WR-06): `curl -u` would leave it world
+# readable in `ps aux` for the duration of each authenticated request. A curl config file
+# with owner-only permissions hands it over privately instead, and the trap removes the
+# file on every exit, including a failed hard expectation.
 basic_auth=()
 if [ -n "${ALICE_APP_PASSWORD}" ]; then
-  basic_auth=(-u "${ALICE_USER}:${ALICE_APP_PASSWORD}")
+  curl_config="$(mktemp)"
+  trap 'rm -f "${curl_config}"' EXIT
+  chmod 600 "${curl_config}"
+  printf 'user = "%s:%s"\n' "${ALICE_USER}" "${ALICE_APP_PASSWORD}" > "${curl_config}"
+  basic_auth=(-K "${curl_config}")
 fi
 
 # 1. the RFC 9728 metadata route, unauthenticated, over both ways
