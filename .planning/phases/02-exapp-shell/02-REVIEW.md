@@ -258,6 +258,10 @@ run: |
 
 ### IN-02: Der Plaintext-Guard prüft nur das Verzeichnis, nicht die Zertifikatsdateien
 
+**Status:** resolved (Commit c8d26ee, 2026-08-15): entrypoint.sh wartet auf die drei
+Dateien, die start.sh referenziert (client.crt, client.key, ca.crt), nicht mehr nur auf
+das Verzeichnis; echter bash-Test deckt den Race-Fall (Verzeichnis ohne Dateien) ab.
+
 **Datei:** `entrypoint.sh:27-40` gegen `start.sh:14,22-24`
 
 **Befund:** Beide prüfen `-d /certs/frp`. HaRP legt das Verzeichnis (per `mkdir -p`)
@@ -271,6 +275,9 @@ Tunnel), aber ein vermeidbarer roter Container mit irreführender Fehlermeldung.
 Verzeichnis.
 
 ### IN-03: Die feste Trusted-Proxy-IP liegt im dynamischen Vergabebereich des Compose-Subnetzes
+
+**Status:** resolved (Commit 0de9a1c, 2026-08-15): `ip_range: 172.29.42.128/25` ergänzt;
+Test prüft, dass jede statische Adresse außerhalb des dynamischen Bereichs liegt.
 
 **Datei:** `compose.exapp.yml:39,68,100,132-140`
 
@@ -292,6 +299,10 @@ aber billig auszuschließen.
 
 ### IN-04: Ein docker-install-Daemon ohne HaRP läuft auf `/mcp` in die 421-Falle
 
+**Status:** resolved (Commit 727ce30, 2026-08-15): beides umgesetzt, Pitfall 5 in
+docs/exapp-install.md und Startup-Warnung in entry_exapp, wenn HP_SHARED_KEY fehlt,
+NC_MCP_ALLOWED_HOSTS leer ist und die Host-Prüfung scharf bleibt.
+
 **Datei:** `entrypoint.sh:57`, `src/mcp_connector/entry_exapp.py:120-133`,
 `src/mcp_connector/config.py:216-233`
 
@@ -310,6 +321,9 @@ eine Warnzeile loggen.
 
 ### IN-05: `notes.get_note` interpoliert die Note-Id ohne clientseitigen Guard in die URL
 
+**Status:** resolved (Commit 838b2dc, 2026-08-15): `_path_id`-Guard analog Deck in
+`get_note` und `web_url`; Tests decken Traversal-, Leer-, Negativ- und Happy-Path ab.
+
 **Datei:** `src/mcp_connector/nextcloud/clients/notes.py:70-77`
 
 **Befund:** Deck erzwingt an der Client-Schicht `_path_id` (nur Ziffern, T-01-63); Notes
@@ -322,6 +336,10 @@ Aufrufer erbt die Prüfung nicht.
 halber `web_url`) einziehen: `if not str(note_id).isdigit(): raise ToolError(...)`.
 
 ### IN-06: `discovery._json` garantiert das versprochene `no-store` nicht
+
+**Status:** resolved (Commit ebe02b4, 2026-08-15): Header werden gemergt statt ersetzt
+(`{**_NO_STORE, **(headers or {})}`); Tests decken Verlust-Fall, expliziten Override und
+Default ab.
 
 **Datei:** `src/mcp_connector/exapp/discovery.py:94-100`
 
@@ -336,6 +354,10 @@ eine geladene Falle, kein aktiver Fehler.
 headers={**_NO_STORE, **(headers or {})})`.
 
 ### IN-07: `json_info` interpoliert `port` und `REGISTRY` unvalidiert in die Registrierungs-Payload
+
+**Status:** resolved (Commit 2e36ac4, 2026-08-15): `require_port_number` (beide Ports,
+`^[0-9]+$`) und `require_registry_shape` (`^[0-9A-Za-z_.:-]+$`) laufen im Hauptfluss vor
+jeder Verwendung; bash-Tests decken JSON-Injection-, Leer- und Gut-Fälle ab.
 
 **Datei:** `scripts/bootstrap_exapp.sh:54,60-61,380-385`
 
@@ -352,6 +374,10 @@ hier nicht.
 ein Muster wie `^[0-9A-Za-z_.:-]+$`, sonst Abbruch.
 
 ### IN-08: `on: push` plus `on: pull_request` erzeugt Doppel-Läufe für jeden PR aus dem eigenen Repo
+
+**Status:** resolved (Commit 32a3365, 2026-08-15): `on.push.branches: [main]` plus
+`pull_request`. Abweichend vom Review-Vorschlag heißt der Default-Branch dieses Repos
+main, nicht master; weitere Trigger gab es nicht.
 
 **Datei:** `.github/workflows/ci.yml:3-5`
 
