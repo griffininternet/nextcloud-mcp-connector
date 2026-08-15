@@ -36,6 +36,38 @@ def live_env() -> dict[str, str | None]:
     }
 
 
+@pytest.fixture
+def exapp_env() -> dict[str, str]:
+    """The AppAPI deploy identity that ``scripts/bootstrap_exapp.sh`` writes into ``.env.exapp``.
+
+    This is the seam of the DAV spike (D-30): the values here let a test build the fourth
+    credential mode ``appapi`` and impersonate a user with ``APP_SECRET`` alone, exactly as
+    the deployed ExApp does. ``AA_VERSION`` is the one optional value, because HaRP writes a
+    hard coded placeholder into that header and nothing in this project evaluates it
+    (02-RESEARCH.md, pitfall 8).
+
+    When one of the required values is missing the caller skips with the variable named, the
+    same shape ``test_permission_fidelity.py`` uses. The skip is what keeps the default suite
+    green without the HaRP topology: ``pytest_collection_modifyitems`` deselects the
+    integration marker anyway, and an explicit ``-m integration`` run without ``.env.exapp``
+    lands here instead of erroring.
+    """
+    required = {
+        "base_url": "NC_MCP_URL",
+        "app_id": "APP_ID",
+        "app_secret": "APP_SECRET",
+        "app_version": "APP_VERSION",
+        "alice": "NC_MCP_TEST_USER",
+        "bob": "NC_MCP_TEST_USER2",
+    }
+    values = {key: (os.environ.get(name) or "").strip() for key, name in required.items()}
+    missing = sorted(required[key] for key, value in values.items() if not value)
+    if missing:
+        pytest.skip(f"no ExApp topology configured (missing: {', '.join(missing)})")
+    values["aa_version"] = (os.environ.get("AA_VERSION") or "").strip()
+    return values
+
+
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """Skip integration tests when no test Nextcloud is configured.
 
