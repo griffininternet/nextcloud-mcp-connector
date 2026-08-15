@@ -177,7 +177,7 @@ async def discover_calendars(client: httpx.AsyncClient, creds: Credentials) -> l
         home,
         headers={"Depth": "1", "Content-Type": "application/xml"},
         content=build_discovery_body(),
-        auth=httpx.BasicAuth(creds.user, creds.secret),
+        auth=creds.auth(),
     )
     _check(response, "the calendar list")
 
@@ -285,7 +285,7 @@ async def query_events(
         url,
         headers={"Depth": "1", "Content-Type": "application/xml"},
         content=body,
-        auth=httpx.BasicAuth(creds.user, creds.secret),
+        auth=creds.auth(),
     )
     _check(response, f"the calendar {calendar_uri}")
 
@@ -319,7 +319,7 @@ async def get_event(
     response = await client.get(
         object_url(creds, calendar_uri, object_name),
         headers={"Accept": "text/calendar"},
-        auth=httpx.BasicAuth(creds.user, creds.secret),
+        auth=creds.auth(),
     )
     _check(response, f"the event {object_name}")
     return parse_ics(
@@ -347,7 +347,7 @@ async def put_event(
         object_url(creds, calendar_uri, object_name),
         content=ics_bytes,
         headers={"If-None-Match": "*", "Content-Type": "text/calendar; charset=utf-8"},
-        auth=httpx.BasicAuth(creds.user, creds.secret),
+        auth=creds.auth(),
     )
     _check_write(response, calendar_uri, object_name)
     return {

@@ -67,17 +67,19 @@ async def ocs_get(
     path: str,
     params: Mapping[str, Any] | None = None,
 ) -> httpx.Response:
-    """GET an OCS endpoint with both mandatory headers and per request Basic auth.
+    """GET an OCS endpoint with both mandatory headers and per request authentication.
 
-    Authentication is passed per request and not on the client, because the HTTP
-    passthrough mode changes credentials from call to call. Redirects are not followed:
-    the client is built that way, and a redirecting base URL is a configuration error.
+    Authentication is passed per request and not on the client, because the passthrough
+    and the ExApp mode both change credentials from call to call. Which scheme it is, is
+    the credential object's decision and not this module's (see ``Credentials.auth``).
+    Redirects are not followed: the client is built that way, and a redirecting base URL
+    is a configuration error.
     """
     return await client.get(
         ocs_url(creds, path),
         params=dict(params) if params else None,
         headers=dict(OCS_HEADERS),
-        auth=httpx.BasicAuth(creds.user, creds.secret),
+        auth=creds.auth(),
     )
 
 

@@ -180,7 +180,7 @@ async def discover_addressbooks(
         home,
         headers={"Depth": "1", "Content-Type": "application/xml"},
         content=build_discovery_body(),
-        auth=httpx.BasicAuth(creds.user, creds.secret),
+        auth=creds.auth(),
     )
     _check(response, "the address book list")
 
@@ -274,7 +274,7 @@ async def query_contacts(
         url,
         headers={"Depth": "1", "Content-Type": "application/xml"},
         content=body,
-        auth=httpx.BasicAuth(creds.user, creds.secret),
+        auth=creds.auth(),
     )
     _check(response, f"the address book {addressbook_uri}")
     return parse_contacts(response.content, addressbook=addressbook or addressbook_uri)

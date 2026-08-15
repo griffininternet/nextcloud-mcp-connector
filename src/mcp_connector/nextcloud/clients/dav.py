@@ -127,7 +127,7 @@ async def stat(client: httpx.AsyncClient, creds: Credentials, path: str) -> dict
         files_url(creds, target),
         headers={"Depth": "0", "Content-Type": "application/xml"},
         content=_stat_body(),
-        auth=httpx.BasicAuth(creds.user, creds.secret),
+        auth=creds.auth(),
     )
     _check(response, target)
 
@@ -174,7 +174,7 @@ async def get_range(
     response = await client.get(
         files_url(creds, target),
         headers=headers,
-        auth=httpx.BasicAuth(creds.user, creds.secret),
+        auth=creds.auth(),
     )
     _check(response, target)
     if "Range" in headers and response.status_code == 200:
@@ -333,7 +333,7 @@ async def find_by_fileid(
         f"{creds.base_url}{DAV_ROOT_PATH}",
         headers={"Content-Type": "text/xml"},
         content=build_fileid_body(search_scope(creds), fileid),
-        auth=httpx.BasicAuth(creds.user, creds.secret),
+        auth=creds.auth(),
     )
     _check(response, f"the file with id {fileid}")
     entries = parse_entries(response.content, creds)
@@ -369,7 +369,7 @@ async def search(
         f"{creds.base_url}{DAV_ROOT_PATH}",
         headers={"Content-Type": "text/xml"},
         content=build_search_body(scope, term, limit),
-        auth=httpx.BasicAuth(creds.user, creds.secret),
+        auth=creds.auth(),
     )
     _check(response, scope)
     return parse_entries(response.content, creds)
@@ -397,7 +397,7 @@ async def propfind_children(
         files_url(creds, target),
         headers={"Depth": "1", "Content-Type": "application/xml"},
         content=_list_body(),
-        auth=httpx.BasicAuth(creds.user, creds.secret),
+        auth=creds.auth(),
     )
     _check(response, target)
 
@@ -474,7 +474,7 @@ async def put_new_file(
         files_url(creds, target),
         content=data,
         headers={"If-None-Match": "*", "Content-Type": content_type},
-        auth=httpx.BasicAuth(creds.user, creds.secret),
+        auth=creds.auth(),
     )
     _check_write(response, target)
     return {

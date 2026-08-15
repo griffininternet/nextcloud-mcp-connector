@@ -18,12 +18,17 @@ object, and respx answers the one call that leaves the process.
 import base64
 import inspect
 import logging
+from pathlib import Path
 
 import httpx
 import pytest
+import respx
 
 from mcp_connector import config, deps
+from mcp_connector.nextcloud.clients import ocs
 from mcp_connector.nextcloud.credentials import AppApiAuth, Credentials
+
+CLIENTS_DIR = Path(ocs.__file__).resolve().parent
 
 BASE_URL = "http://nc.test"
 USER = "alice"
@@ -327,3 +332,76 @@ def test_the_stdio_mode_is_untouched_by_the_new_branch(
 
     assert creds.mode == "basic"
     assert creds.user == nc_env["user"]
+
+
+# --- the client layer -------------------------------------------------------------
+
+
+def client_modules() -> list[Path]:
+    """Every client module, the whole package and not a hand written list of six."""
+    return sorted(p for p in CLIENTS_DIR.glob("*.py") if p.name != "__init__.py")
+
+
+def test_no_client_module_hard_wires_basic_auth() -> None:
+    """T-02-15: one module left behind would serve the wrong identity, silently."""
+    offenders = [
+        f"{path.name}:{number}"
+        for path in client_modules()
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1)
+        if "BasicAuth" in line
+    ]
+    assert offenders == [], (
+        f"these lines pick the scheme instead of asking the credentials: {offenders}"
+    )
+
+
+def test_every_call_site_asks_the_credentials() -> None:
+    """The 20 call sites of phase 1, counted so a deletion is as loud as an addition."""
+    found = sum(path.read_text(encoding="utf-8").count("creds.auth()") for path in client_modules())
+    assert found >= 20, f"expected at least 20 call sites through creds.auth(), found {found}"
+
+
+def test_the_json_clients_keep_the_ocs_api_request_header() -> None:
+    """Pitfall 12: without it Nextcloud answers the CSRF check, not the API."""
+    for name in ("notes.py", "deck.py", "ocs.py"):
+        text = (CLIENTS_DIR / name).read_text(encoding="utf-8")
+        assert "OCS-APIRequest" in text, f"{name} lost the header that makes it an API call"
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_read_in_the_basic_mode_sends_an_authorization_header() -> None:
+    route = respx.get(f"{BASE_URL}/ocs/v2.php/cloud/user").mock(
+        return_value=httpx.Response(200, json={})
+    )
+    creds = Credentials(BASE_URL, USER, SECRET)
+
+    async with httpx.AsyncClient(follow_redirects=False) as client:
+        await ocs.ocs_get(client, creds, "/cloud/user")
+
+    sent = route.calls.last.request
+    expected = base64.b64encode(f"{USER}:{SECRET}".encode()).decode()
+    assert sent.headers["authorization"] == f"Basic {expected}"
+    assert "AUTHORIZATION-APP-API" not in sent.headers
+    assert sent.headers["OCS-APIRequest"] == "true"
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_the_same_read_in_the_exapp_mode_sends_the_four_appapi_headers() -> None:
+    """The proof that one code path serves both modes without a branch in the client."""
+    route = respx.get(f"{BASE_URL}/ocs/v2.php/cloud/user").mock(
+        return_value=httpx.Response(200, json={})
+    )
+    creds = appapi_credentials(user="bob")
+
+    async with httpx.AsyncClient(follow_redirects=False) as client:
+        await ocs.ocs_get(client, creds, "/cloud/user")
+
+    sent = route.calls.last.request
+    assert sent.headers["AA-VERSION"] == AA_VERSION
+    assert sent.headers["EX-APP-ID"] == APP_ID
+    assert sent.headers["EX-APP-VERSION"] == APP_VERSION
+    assert sent.headers["AUTHORIZATION-APP-API"] == token(user="bob")
+    assert "authorization" not in sent.headers
+    assert sent.headers["OCS-APIRequest"] == "true"

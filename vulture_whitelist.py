@@ -33,8 +33,12 @@ contacts_search
 #   security.py and the client matrix, which waits for it before every run.
 # verify_token: the one method of the SDK TokenVerifier protocol; the SDK calls it on every
 #   authenticated request, tests/unit/test_http_modes.py calls it directly.
+# auth_flow: the one method of the httpx.Auth interface; httpx calls it for every request
+#   that was given auth=creds.auth(), and tests/unit/test_appapi_credentials.py drives it
+#   directly to read the four AppAPI headers off the signed request.
 health
 _.verify_token
+_.auth_flow
 
 # --- Read from outside the production call graph --------------------------------------
 # deck_api_versions: a capabilities field the Deck integration test asserts on; it exists so

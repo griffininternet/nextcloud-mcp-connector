@@ -72,7 +72,7 @@ async def get_note(client: httpx.AsyncClient, creds: Credentials, note_id: str) 
     response = await client.get(
         api_url(creds, f"/notes/{note_id}"),
         headers=dict(_HEADERS),
-        auth=httpx.BasicAuth(creds.user, creds.secret),
+        auth=creds.auth(),
     )
     return _as_note(ocs.parse_app_json(response, what=f"the note {note_id}"))
 
@@ -94,7 +94,7 @@ async def create_note(
         api_url(creds, "/notes"),
         json=body,
         headers={**_HEADERS, "Content-Type": "application/json"},
-        auth=httpx.BasicAuth(creds.user, creds.secret),
+        auth=creds.auth(),
     )
     return _as_note(ocs.parse_app_json(response, what="the new note"))
 

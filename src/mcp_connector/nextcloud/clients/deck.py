@@ -87,7 +87,7 @@ async def get_boards(
         api_url(creds, "/boards"),
         params={"details": "true"} if details else None,
         headers=dict(DECK_HEADERS),
-        auth=httpx.BasicAuth(creds.user, creds.secret),
+        auth=creds.auth(),
     )
     return _as_list(ocs.parse_app_json(response, what="the deck boards"), what="boards")
 
@@ -100,7 +100,7 @@ async def get_board(
     response = await client.get(
         api_url(creds, f"/boards/{board}"),
         headers=dict(DECK_HEADERS),
-        auth=httpx.BasicAuth(creds.user, creds.secret),
+        auth=creds.auth(),
     )
     return _as_dict(ocs.parse_app_json(response, what=f"the board {board}"), what="a board")
 
@@ -117,7 +117,7 @@ async def get_stacks(
     response = await client.get(
         api_url(creds, f"/boards/{board}/stacks"),
         headers=dict(DECK_HEADERS),
-        auth=httpx.BasicAuth(creds.user, creds.secret),
+        auth=creds.auth(),
     )
     payload = ocs.parse_app_json(response, what=f"the stacks of board {board}")
     return _as_list(payload, what="stacks")
@@ -137,7 +137,7 @@ async def get_card(
     response = await client.get(
         api_url(creds, f"/boards/{board}/stacks/{stack}/cards/{card}"),
         headers=dict(DECK_HEADERS),
-        auth=httpx.BasicAuth(creds.user, creds.secret),
+        auth=creds.auth(),
     )
     return _as_dict(ocs.parse_app_json(response, what=f"the card {card}"), what="a card")
 
@@ -170,7 +170,7 @@ async def create_card(
         api_url(creds, f"/boards/{board}/stacks/{stack}/cards"),
         json=body,
         headers=dict(DECK_HEADERS),
-        auth=httpx.BasicAuth(creds.user, creds.secret),
+        auth=creds.auth(),
     )
     return _as_dict(ocs.parse_app_json(response, what="the new card"), what="a card")
 
