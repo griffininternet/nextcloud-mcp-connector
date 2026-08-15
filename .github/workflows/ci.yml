@@ -59,6 +59,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Generate a fresh HaRP shared key
+        # compose.exapp.yml requires HP_SHARED_KEY and carries no default (WR-11), and the
+        # bootstrap rejects anything that is not 64 hex characters (CR-02). One fresh key per
+        # run is handed to every later step through the job environment.
+        run: echo "HP_SHARED_KEY=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
       - name: Start the HaRP topology
         # --wait honours the healthchecks in compose.exapp.yml, so no sleep is needed. The
         # topology brings its own reverse proxy, deploy daemon and loopback registry,
@@ -74,6 +82,19 @@ jobs:
           docker compose -f compose.exapp.yml exec -T --user www-data nextcloud \
             php occ app_api:app:list | tee exapp-list.txt
           grep -E 'mcp_connector .*\[enabled\]' exapp-list.txt
+      - name: Install locked environment
+        run: uv sync --frozen
+      - name: DAV impersonation matrix over the full chain (AUTH-05)
+        # The bootstrap wrote .env.exapp with the deploy identity and both app passwords.
+        run: |
+          set -a && . ./.env.exapp && set +a
+          uv run pytest tests/integration/test_exapp_dav_matrix.py -m integration
+      - name: Permission fidelity over the full chain (AUTH-05, D-28)
+        # The permission promise proven through HaRP, the ExApp and impersonation: bob finds
+        # nothing of alice's, alice finds her own content in the same run.
+        run: |
+          set -a && . ./.env.exapp && set +a
+          uv run pytest tests/integration/test_permission_fidelity_exapp.py -m integration
       - name: Topology and ExApp logs on failure
         if: failure()
         run: |
