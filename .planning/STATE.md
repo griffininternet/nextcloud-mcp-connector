@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: planning
-stopped_at: Phase 2 planned (7 plans), ready to execute
-last_updated: "2026-08-15T05:52:18.832Z"
-last_activity: 2026-08-14
+status: executing
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-08-15T06:07:11.069Z"
+last_activity: 2026-08-15
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 21
-  completed_plans: 14
-  percent: 20
+  completed_plans: 15
+  percent: 71
 ---
 
 # Project State
@@ -21,22 +21,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-14)
 
 **Core value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Current focus:** Phase 2 — exapp shell
+**Current focus:** Phase 2, ExApp-Shell
 
 ## Current Position
 
 Phase: 2
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-08-14
+Plan: 02-01 complete, next 02-02
+Status: Executing
+Last activity: 2026-08-15
 
-Progress: [██████████] 100%
+Progress: [███████░░░] 71%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 14
+- Total plans completed: 15
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -45,6 +45,7 @@ Progress: [██████████] 100%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1 | 14 | - | - |
+| 2 | 1 | 30 min | 30 min |
 
 **Recent Trend:**
 
@@ -65,6 +66,7 @@ Progress: [██████████] 100%
 | Phase 01-server-kern P10 | 15 min | 2 tasks | 12 files |
 | Phase 01-server-kern P11 | 74 min | 2 tasks | 11 files |
 | Phase 01-server-kern P14 | 71 min | 3 tasks | 13 files |
+| Phase 02-exapp-shell P01 | 30 min | 3 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -138,6 +140,13 @@ Recent decisions affecting current work:
 - [Phase 01-server-kern]: Die README-Tool-Tabelle wird im Contract-Test gegen die laufende Registry geprueft statt von Hand gepflegt: Eine handgepflegte Tabelle veraltet beim ersten neuen Tool; die Registry ist die einzige Wahrheit
 - [Phase 01-server-kern]: Modul-globaler veraenderlicher Zustand ist im Produktionscode verboten, mit genau zwei namentlich gelisteten Ausnahmen: Ein Dictionary, das eine Anfrage ueberlebt, ist einen Refactor von einem Session-Store entfernt und bricht den Restart-Beweis
 - [Phase 01-server-kern]: CONTRIB-01 bleibt Pending und Success Criterion 5 nur zur Haelfte erfuellt: Die App-ID ist eingefroren und dokumentiert, aber der PR an context_agent 227 ist ein Owner-Schritt und noch nicht eingereicht
+- [Phase 02-exapp-shell]: Die Lifecycle-Routen werden von einer Fabrik geliefert und nur von entry_exapp angehaengt, nicht per Dekorator am geteilten Serverobjekt registriert: eine Registrierung am Singleton wuerde /heartbeat, /init und /enabled auch im eigenstaendigen HTTP-Modus erscheinen lassen, sobald irgendein Import das Modul beruehrt (D-23)
+- [Phase 02-exapp-shell]: Der ExApp-Modus gewinnt in select_mode gegen den statischen Bearer, aber nie gegen stdio; ein Prozess mit beiden Kanaelen wird beim Start mit Exit-Code 2 abgelehnt statt pro Request still aufgeloest (D-27)
+- [Phase 02-exapp-shell]: Die AppAPI-Variablen tragen bewusst kein NC_MCP_-Praefix (APP_ID, APP_SECRET, APP_VERSION, AA_VERSION, APP_HOST, APP_PORT, APP_PERSISTENT_STORAGE, HP_SHARED_KEY, HP_EXAPP_SOCK, NEXTCLOUD_URL): die Namen gibt der AppAPI-Deploy-Daemon vor
+- [Phase 02-exapp-shell]: /init antwortet auch dann 200, wenn der OCS-Fortschritts-Push scheitert; ein 500 wuerde die Installation abbrechen, ein verpasster Push kostet nur eine Logzeile (Pitfall 3)
+- [Phase 02-exapp-shell]: Jede Lifecycle-Antwort traegt Cache-Control: no-store aus einer einzigen Hilfsfunktion; der PHP-Proxy cacht JSON sonst 3600 Sekunden (Pitfall 4)
+- [Phase 02-exapp-shell]: Ein anliegender x-origin-ip-Header beendet /init und /enabled mit 404: nur der PHP-Proxy setzt ihn, und der schuetzt diese Pfade nicht, haengt aber gueltige AppAPI-Header selbst an (Pitfall 2)
+- [Phase 02-exapp-shell]: EXAPP-01 und AUTH-05 bleiben Pending: dieser Plan belegt den Kontrakt in-process, der Installationsnachweis braucht Dockerfile, info.xml und eine laufende Nextcloud (Plaene 02-03 bis 02-05)
 
 ### Pending Todos
 
@@ -161,6 +170,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-15T05:52:18.812Z
+Last session: 2026-08-15T06:07:11.041Z
 Stopped at: Phase 2 planned (7 plans), ready to execute
-Resume file: .planning/phases/02-exapp-shell/02-01-PLAN.md
+Resume file: None

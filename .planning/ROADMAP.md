@@ -88,7 +88,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 02-01-PLAN.md - AppAPI-Handshake, Lifecycle-Endpunkte und ExApp-Entrypoint (Wave 1)
+- [x] 02-01-PLAN.md - AppAPI-Handshake, Lifecycle-Endpunkte und ExApp-Entrypoint (Wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -164,7 +164,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Server-Kern | 14/14 | Complete    | 2026-08-14 |
-| 2. ExApp-Shell | 0/7 | Planned | - |
+| 2. ExApp-Shell | 1/7 | In Progress|  |
 | 3. OAuth 2.1 | 0/TBD | Not started | - |
 | 4. Per-User-Verwaltung und prepare_context | 0/TBD | Not started | - |
 | 5. Hardening und Store-Einreichung | 0/TBD | Not started | - |
