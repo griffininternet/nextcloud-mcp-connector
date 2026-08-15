@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  - SPDX-FileCopyrightText: 2026 street1983nk
+  - SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	  xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+	<id>mcp_connector</id>
+	<name>MCP Connector</name>
+	<summary>Connect your Nextcloud to AI assistants over the Model Context Protocol.</summary>
+	<description><![CDATA[
+Connect your Nextcloud to AI assistants that speak the Model Context Protocol, such as Claude, Cursor or your own agent.
+The connector exposes a curated, read first set of tools for files, calendar, notes, deck and contacts instead of a raw API surface.
+Every request runs under the identity of the signed in user, so an assistant never sees more than that user sees in the web interface.
+	]]></description>
+	<version>0.1.0</version>
+	<licence>agpl</licence>
+	<author mail="k.cherif@outlook.de">street1983nk</author>
+	<namespace>McpConnector</namespace>
+	<category>integration</category>
+	<bugs>https://github.com/street1983nk/nextcloud-mcp-connector/issues</bugs>
+	<repository type="git">https://github.com/street1983nk/nextcloud-mcp-connector</repository>
+	<dependencies>
+		<!--
+		  - min 32: HaRP is the recommended deploy daemon from Nextcloud 32 on, and the
+		  - Docker Socket Proxy it replaces is scheduled for removal in Nextcloud 35.
+		  - max 34: 34 is what this app is tested against.
+		-->
+		<nextcloud min-version="32" max-version="34"/>
+	</dependencies>
+	<external-app>
+		<docker-install>
+			<!--
+			  - The image is not published before phase 5 (D-25: the CI builds it, nothing
+			  - pushes it). Until then the local test registers the app with the json-info
+			  - option of occ app_api:app:register, see plan 02-04.
+			-->
+			<registry>ghcr.io</registry>
+			<image>street1983nk/nextcloud-mcp-connector</image>
+			<image-tag>0.1.0</image-tag>
+		</docker-install>
+		<!--
+		  - Exactly two routes, and they are the whole external attack surface of this app.
+		  -
+		  - The three AppAPI lifecycle paths (/heartbeat, /init and /enabled) are deliberately
+		  - absent, and this comment is the only place they appear here. A path that matches no
+		  - route is answered with 404 by the proxy, while one broad route would make the PHP
+		  - proxy reachable for all of them, and that proxy does not protect them: it attaches
+		  - valid AppAPI headers itself, which turns the disable endpoint into a denial of
+		  - service button for anyone on the internet (T-02-20). HaRP blocks those paths, the
+		  - PHP proxy does not, so the narrow declaration is the control that has to hold.
+		  -
+		  - Order matters: the first route that matches path and verb wins, and its access
+		  - level decides alone.
+		  -
+		  - No bruteforce_protection on the MCP route. The OAuth discovery flow of phase 3
+		  - begins with a rejected request by specification, so a throttler armed on that
+		  - status would lock out legitimate first connections (T-02-21).
+		-->
+		<routes>
+			<route>
+				<url>^/mcp/?$</url>
+				<verb>GET,POST,DELETE</verb>
+				<access_level>USER</access_level>
+				<headers_to_exclude>[]</headers_to_exclude>
+			</route>
+			<route>
+				<url>^/\.well-known/</url>
+				<verb>GET</verb>
+				<access_level>PUBLIC</access_level>
+				<headers_to_exclude>[]</headers_to_exclude>
+			</route>
+		</routes>
+	</external-app>
+</info>
