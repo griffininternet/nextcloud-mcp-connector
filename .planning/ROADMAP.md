@@ -114,7 +114,7 @@ Plans:
 **Goal**: MCP-Clients verbinden plug-and-play per spec-konformem OAuth 2.1, mit Login Flow v2 als Fallback für Clients ohne OAuth
 **Mode:** mvp
 **Depends on**: Phase 2
-**Requirements**: AUTH-02, AUTH-03, AUTH-04
+**Requirements**: AUTH-02, AUTH-03, AUTH-04, AUTH-07
 **Success Criteria** (what must be TRUE):
 
   1. Der Claude.ai-Connector verbindet plug-and-play gegen eine öffentlich erreichbare Staging-Instanz: URL eintragen, Browser-Login mit Consent, Tools nutzbar, ohne manuelle Client-Konfiguration
