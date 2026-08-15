@@ -17,6 +17,7 @@ import respx
 
 from mcp_connector.errors import AppMissingError, ToolError
 from mcp_connector.nextcloud import NcClients, capabilities
+from mcp_connector.nextcloud.clients import notes as notes_client
 from mcp_connector.nextcloud.credentials import Credentials
 from mcp_connector.tools import notes as notes_tools
 
@@ -230,6 +231,36 @@ async def test_read_rejects_an_id_of_another_kind(clients: NcClients) -> None:
 
     assert notes_api.call_count == 0
     assert "note" in excinfo.value.hint.lower()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("note_id", ["12/../../ocs", "", "  ", "-1", "1.5", "note:12"])
+async def test_a_note_id_that_is_not_numeric_never_reaches_nextcloud(
+    clients: NcClients, note_id: str
+) -> None:
+    """IN-05: the id goes into the URL path, so the client refuses anything but digits
+    itself instead of trusting that every future caller repeats the tool layer's check
+    (T-01-63, same guard as the Deck client)."""
+    with respx.mock(assert_all_called=False) as mock:
+        notes_api = mock.route(url__startswith=NOTES_BASE)
+        with pytest.raises(ToolError) as excinfo:
+            await notes_client.get_note(clients.client, clients.creds, note_id)
+
+    assert notes_api.call_count == 0
+    assert "numeric" in excinfo.value.message
+
+
+@pytest.mark.parametrize("note_id", ["12/../evil", "", "javascript:alert(1)"])
+def test_web_url_refuses_a_non_numeric_id(note_id: str) -> None:
+    """IN-05: the link in every answer is built from the id as well, so the same guard
+    holds where no request is sent at all."""
+    with pytest.raises(ToolError):
+        notes_client.web_url(Credentials(BASE, USER, SECRET), note_id)
+
+
+def test_web_url_builds_the_link_for_a_numeric_id() -> None:
+    url = notes_client.web_url(Credentials(BASE, USER, SECRET), "12")
+    assert url == f"{BASE}/index.php/apps/notes/note/12"
 
 
 @pytest.mark.anyio

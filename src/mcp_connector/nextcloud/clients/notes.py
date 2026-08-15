@@ -44,7 +44,7 @@ def api_url(creds: Credentials, path: str = "") -> str:
 
 def web_url(creds: Credentials, note_id: str) -> str:
     """The link a human can open. Always built from the configured base URL."""
-    return f"{creds.base_url}{NOTES_WEB_PREFIX}/{note_id}"
+    return f"{creds.base_url}{NOTES_WEB_PREFIX}/{_path_id(note_id)}"
 
 
 def check_api_version(versions: tuple[str, ...]) -> None:
@@ -69,6 +69,7 @@ def check_api_version(versions: tuple[str, ...]) -> None:
 
 async def get_note(client: httpx.AsyncClient, creds: Credentials, note_id: str) -> dict[str, Any]:
     """Read one note including its content."""
+    note_id = _path_id(note_id)
     response = await client.get(
         api_url(creds, f"/notes/{note_id}"),
         headers=dict(_HEADERS),
@@ -97,6 +98,22 @@ async def create_note(
         auth=creds.auth(),
     )
     return _as_note(ocs.parse_app_json(response, what="the new note"))
+
+
+def _path_id(value: str | int, what: str = "note id") -> str:
+    """Ids are numeric in Notes; anything else is a bug or an attempt (T-01-63, IN-05).
+
+    The tool layer checks this as well, but this is the one place in the client package
+    where an identifier goes into a URL path, and a future second caller would not
+    inherit the tool layer's check. Same guard as the Deck client keeps for its ids.
+    """
+    text = str(value).strip()
+    if not text.isdigit():
+        raise ToolError(
+            message=f"{value!r} is not a numeric {what}.",
+            hint="Use an id from notes_search; Notes addresses notes by number.",
+        )
+    return text
 
 
 def _as_note(payload: Any) -> dict[str, Any]:
