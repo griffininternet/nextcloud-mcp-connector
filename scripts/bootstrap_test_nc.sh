@@ -53,10 +53,15 @@ occ_pw() {
     occ_stdin 'OC_PASS="$(cat)"; export OC_PASS; exec php occ "$@"' "$@"
 }
 
+# grep on an occ pipe never uses -q here: with pipefail, -q exits on the first match,
+# the pipe closes early and the docker side of the pipe can die on SIGPIPE (exit 141),
+# which turns a successful check into a flaky bootstrap failure (two CI runs died with
+# the calendar visibly printed one line above the failing check). grep without -q reads
+# its input to the end; the match result goes to /dev/null instead.
 wait_for_install() {
   local attempt
   for attempt in $(seq 1 60); do
-    if occ status 2>/dev/null | grep -q "installed: true"; then
+    if occ status 2>/dev/null | grep "installed: true" >/dev/null; then
       echo "nextcloud: installed"
       return 0
     fi
@@ -113,7 +118,7 @@ ensure_calendar() {
   # listed, with a hard timeout instead of a single check.
   for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
     occ dav:create-calendar "$uid" "$name" >/dev/null 2>&1 || true
-    if occ dav:list-calendars "$uid" 2>/dev/null | grep -q "$name"; then
+    if occ dav:list-calendars "$uid" 2>/dev/null | grep "$name" >/dev/null; then
       echo "calendar ${uid}/${name}: present (attempt ${attempt})"
       return 0
     fi
@@ -187,7 +192,7 @@ echo "wrote ${ENV_FILE}"
 echo
 echo "== verification =="
 occ dav:list-calendars alice
-if ! occ dav:list-calendars alice | grep -q "personal"; then
+if ! occ dav:list-calendars alice | grep "personal" >/dev/null; then
   echo "ERROR: alice has no calendar 'personal'." >&2
   exit 1
 fi

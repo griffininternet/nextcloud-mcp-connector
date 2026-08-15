@@ -116,10 +116,15 @@ occ_pw() {
     occ_stdin 'OC_PASS="$(cat)"; export OC_PASS; exec php occ "$@"' "$@"
 }
 
+# grep on an occ pipe never uses -q here: with pipefail, -q exits on the first match,
+# the pipe closes early and the docker side of the pipe can die on SIGPIPE (exit 141),
+# which turns a successful check into a flaky bootstrap failure (two CI runs died with
+# the calendar visibly printed one line above the failing check). grep without -q reads
+# its input to the end; the match result goes to /dev/null instead.
 wait_for_install() {
   local attempt
   for attempt in $(seq 1 60); do
-    if occ status 2>/dev/null | grep -q "installed: true"; then
+    if occ status 2>/dev/null | grep "installed: true" >/dev/null; then
       echo "nextcloud: installed"
       return 0
     fi
@@ -176,7 +181,7 @@ ensure_calendar() {
   # listed, with a hard timeout instead of a single check.
   for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
     occ dav:create-calendar "$uid" "$name" >/dev/null 2>&1 || true
-    if occ dav:list-calendars "$uid" 2>/dev/null | grep -q "$name"; then
+    if occ dav:list-calendars "$uid" 2>/dev/null | grep "$name" >/dev/null; then
       echo "calendar ${uid}/${name}: present (attempt ${attempt})"
       return 0
     fi
@@ -319,7 +324,7 @@ app_secret() {
 
 ensure_daemon_harp() {
   local output
-  if occ app_api:daemon:list 2>/dev/null | grep -q "${DAEMON_NAME}"; then
+  if occ app_api:daemon:list 2>/dev/null | grep "${DAEMON_NAME}" >/dev/null; then
     echo "daemon ${DAEMON_NAME}: exists"
     return 0
   fi
@@ -429,7 +434,7 @@ register_exapp() {
 # route whose access level reads "USER" is a route HaRP cannot evaluate.
 ensure_exapp() {
   local output
-  if occ app_api:app:list 2>/dev/null | grep -q "${APP_ID}"; then
+  if occ app_api:app:list 2>/dev/null | grep "${APP_ID}" >/dev/null; then
     echo "exapp ${APP_ID}: registered"
     return 0
   fi
@@ -449,7 +454,7 @@ ensure_exapp() {
 # writes the flag when the app answers 200 with an empty error field.
 ensure_exapp_enabled() {
   local output
-  if occ app_api:app:list 2>/dev/null | tr -d '\r' | grep -q "^${APP_ID} .*\[enabled\]"; then
+  if occ app_api:app:list 2>/dev/null | tr -d '\r' | grep "^${APP_ID} .*\[enabled\]" >/dev/null; then
     echo "exapp ${APP_ID}: enabled"
     return 0
   fi
@@ -465,7 +470,7 @@ ensure_exapp_enabled() {
 # reached with --manual, because it registers a second daemon and a second app entry.
 register_manual_install() {
   local output
-  if ! occ app_api:daemon:list 2>/dev/null | grep -q "${MANUAL_DAEMON_NAME}"; then
+  if ! occ app_api:daemon:list 2>/dev/null | grep "${MANUAL_DAEMON_NAME}" >/dev/null; then
     if ! output="$(occ app_api:daemon:register \
       "${MANUAL_DAEMON_NAME}" "Manual Install" manual-install http \
       "host.docker.internal:${MANUAL_APP_PORT}" "http://caddy" 2>&1)"; then
@@ -475,7 +480,7 @@ register_manual_install() {
     fi
     echo "daemon ${MANUAL_DAEMON_NAME}: registered"
   fi
-  if occ app_api:app:list 2>/dev/null | grep -q "${APP_ID}"; then
+  if occ app_api:app:list 2>/dev/null | grep "${APP_ID}" >/dev/null; then
     echo "exapp ${APP_ID}: already registered, unregister it first to switch the daemon"
     return 0
   fi
@@ -560,11 +565,11 @@ echo
 echo "== verification =="
 occ app_api:daemon:list
 occ app_api:app:list
-if ! occ app_api:app:list | grep -q "${APP_ID}"; then
+if ! occ app_api:app:list | grep "${APP_ID}" >/dev/null; then
   echo "ERROR: ${APP_ID} is not in the ExApp list." >&2
   exit 1
 fi
-if ! occ app_api:app:list | tr -d '\r' | grep -q "^${APP_ID} .*\[enabled\]"; then
+if ! occ app_api:app:list | tr -d '\r' | grep "^${APP_ID} .*\[enabled\]" >/dev/null; then
   echo "ERROR: ${APP_ID} is registered but not enabled." >&2
   exit 1
 fi

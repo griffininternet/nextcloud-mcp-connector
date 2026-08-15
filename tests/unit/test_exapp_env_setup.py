@@ -777,6 +777,22 @@ def test_the_secrets_reach_the_container_through_stdin() -> None:
     text = BOOTSTRAP.read_text(encoding="utf-8")
     assert "occ_stdin" in text
     assert 'OC_PASS="$(cat)"' in text
+
+
+def test_no_grep_q_on_a_pipe_in_the_shell_scripts() -> None:
+    """The scripts run with pipefail, and `grep -q` exits on the first match, which closes
+    the pipe while the docker side is still writing. That side then dies on SIGPIPE (exit
+    141) and pipefail turns the successful check into a failure. Two CI runs failed exactly
+    there, with the wanted calendar visibly printed one line above the failing check. A
+    grep without -q reads its input to the end, so `grep pattern >/dev/null` is the shape
+    every piped check uses; -q stays allowed where grep reads from a file, not a pipe."""
+    scripts = sorted((ROOT / "scripts").glob("*.sh"))
+    assert scripts, "no shell scripts found, the guard would silently pass"
+    for script in scripts:
+        text = script.read_text(encoding="utf-8")
+        assert "| grep -q" not in text, (
+            f"{script.name} pipes into grep -q; under pipefail that is the SIGPIPE flake"
+        )
     assert 'JSON="$(cat)"' in text
 
 
