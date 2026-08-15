@@ -219,7 +219,8 @@ Nextcloud rejects everything it sends.
 
 ## Known pitfalls
 
-These four were the ones that actually cost time in this setup.
+The first four were the ones that actually cost time in this setup; the fifth is named
+here before it does.
 
 **1. No reverse proxy in front of Nextcloud.** The heartbeat is fetched from
 `<nextcloud_url>/exapps/<appid>/heartbeat`, so a container name in `nextcloud_url` is not
@@ -262,6 +263,15 @@ docker compose -f compose.exapp.yml up -d --no-deps --force-recreate appapi-harp
 `HP_LOG_LEVEL=info` in the environment makes the daemon log the line that says where a
 request was actually routed, which is the fastest way to tell a cache problem from a
 configuration problem.
+
+**5. A docker-install daemon without HaRP runs `/mcp` into a 421 trap** (IN-04). Behind
+the PHP proxy the `Host` header of every proxied request is the container name, the DNS
+rebinding protection stays armed (the entrypoint only disarms it when `HP_SHARED_KEY` is
+set), and the default allowlist is localhost. The lifecycle routes sit before that check,
+so the installation turns green and every `/mcp` request afterwards answers 421 with a
+single log line. In that mode, set `NC_MCP_ALLOWED_HOSTS` to the host name the proxy uses
+for the container. The process also logs a warning at startup when it is started without
+`HP_SHARED_KEY` and without `NC_MCP_ALLOWED_HOSTS`.
 
 ## Security notes for production
 

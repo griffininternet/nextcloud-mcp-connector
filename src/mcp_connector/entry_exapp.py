@@ -89,6 +89,34 @@ def build_exapp_app(env: Mapping[str, str] | None = None) -> Starlette:
     return app
 
 
+def _warn_when_the_host_check_is_a_trap(env: Mapping[str, str] | None = None) -> None:
+    """Name the 421 trap of a docker-install daemon without HaRP at startup (IN-04).
+
+    Behind the PHP proxy the ``Host`` header is the container name, the rebinding
+    protection stays armed without ``HP_SHARED_KEY``, and the default allowlist is
+    localhost. The lifecycle routes sit before the transport check, so the installation
+    turns green and every ``/mcp`` request afterwards dies as a 421 that surfaces as one
+    log line. The warning is skipped when the operator already made a decision: an
+    allowlist is set, the shared key selects the HaRP path, or the check is disabled.
+    """
+    source = os.environ if env is None else env
+    if (source.get(config.ENV_HP_SHARED_KEY) or "").strip():
+        return
+    if (source.get(config.ENV_ALLOWED_HOSTS) or "").strip():
+        return
+    if not config.dns_rebinding_protection(env):
+        return
+    logger.warning(
+        "%s is not set and %s is empty. Without HaRP the Host header of every proxied "
+        "request is the container name, the Host check stays armed with the localhost "
+        "default, and every /mcp request will answer 421. Set %s to the host name the "
+        "proxy uses for this container (docs/exapp-install.md, pitfall 5).",
+        config.ENV_HP_SHARED_KEY,
+        config.ENV_ALLOWED_HOSTS,
+        config.ENV_ALLOWED_HOSTS,
+    )
+
+
 def main() -> None:
     """Validate the deploy environment, then serve until the container stops."""
     configure_logging()
@@ -116,6 +144,8 @@ def main() -> None:
         logger.info("MCP Connector is serving as an ExApp on %s", socket_path)
         uvicorn.run(app, uds=socket_path)
         return
+
+    _warn_when_the_host_check_is_a_trap()
 
     host = os.environ.get(config.ENV_APP_HOST) or "127.0.0.1"
     try:

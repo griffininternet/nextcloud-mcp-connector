@@ -206,6 +206,37 @@ def test_a_missing_deploy_variable_stops_the_start(monkeypatch: pytest.MonkeyPat
     assert excinfo.value.code == 2
 
 
+@pytest.mark.parametrize(
+    ("env", "warned"),
+    [
+        ({}, True),
+        ({config.ENV_HP_SHARED_KEY: "x" * 64}, False),
+        ({config.ENV_ALLOWED_HOSTS: "harp.example"}, False),
+        ({config.ENV_DISABLE_DNS_REBINDING: "1"}, False),
+        ({config.ENV_HP_SHARED_KEY: "   ", config.ENV_ALLOWED_HOSTS: ""}, True),
+    ],
+    ids=[
+        "neither key nor allowlist",
+        "harp path selected",
+        "allowlist set",
+        "host check disabled",
+        "blank values do not count as a decision",
+    ],
+)
+def test_the_421_trap_of_a_daemon_without_harp_is_named_at_startup(
+    caplog: pytest.LogCaptureFixture, env: dict[str, str], warned: bool
+) -> None:
+    """IN-04: without HaRP the Host header is the container name, the check stays armed
+    with the localhost default, and every /mcp request dies as a 421 while the
+    installation looks green. The warning names it once; an operator who set the
+    allowlist, the shared key or the rebinding switch already decided."""
+    with caplog.at_level("WARNING", logger="mcp_connector.entry_exapp"):
+        entry_exapp._warn_when_the_host_check_is_a_trap(env)
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert any(config.ENV_ALLOWED_HOSTS in message for message in messages) is warned, messages
+
+
 @pytest.mark.parametrize("port", [None, "", "not-a-number"])
 def test_a_missing_or_broken_port_stops_the_start(
     monkeypatch: pytest.MonkeyPatch, port: str | None
