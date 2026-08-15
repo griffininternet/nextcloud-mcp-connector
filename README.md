@@ -14,8 +14,8 @@ Two more properties follow from the same idea:
 
 - **The assistant never sees more than you do.** Every request runs with your own Nextcloud
   credentials, so Nextcloud permissions apply unchanged.
-- **15 tools, not 150.** The tool set is curated so that this server fits next to your other MCP
-  servers, even in clients with a hard tool limit.
+- **A deliberately small tool set.** The 15 tools are curated so that this server fits next to
+  your other MCP servers, even in clients with a hard tool limit.
 
 License: AGPL-3.0-or-later. App id, package names and repository name are frozen, see
 [docs/app-id-freeze.md](docs/app-id-freeze.md).
