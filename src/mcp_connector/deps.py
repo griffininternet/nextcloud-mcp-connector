@@ -17,6 +17,12 @@ Three rules that follow from D-12 and pitfall 8, all of them load bearing:
 The static bearer mode is the only mode that configures the SDK auth layer, and it
 configures ``auth=`` and ``token_verifier=`` together, because the SDK raises
 ``ValueError`` in the constructor when only one of them is set (pitfall 2).
+
+In the ExApp mode the identity comes from ``AUTHORIZATION-APP-API`` and from nowhere
+else. An ``Authorization`` header that arrives with the same request is not read: HaRP
+forwards whatever the client sent, so accepting it as well would be a second usable auth
+channel next to the one the proxy vouches for, which is exactly the silent fallback D-27
+forbids.
 """
 
 import base64
@@ -32,6 +38,7 @@ from mcp.types import INVALID_REQUEST
 
 from . import config
 from .config import load_stdio_credentials
+from .exapp.auth import AppApiRejected, verify_appapi_headers
 from .nextcloud import NcClients
 from .nextcloud.credentials import Credentials
 from .nextcloud.http import shared_client
@@ -64,6 +71,10 @@ def resolve_credentials(ctx: Any) -> Credentials:
     """
     headers = getattr(ctx, "headers", None) if ctx is not None else None
     mode = config.select_mode(headers=headers)
+
+    if mode == "exapp":
+        # headers is not None in this mode either, for the same reason.
+        return _credentials_from_appapi(headers or {})
 
     if mode == "http_passthrough":
         # headers is not None in this mode, select_mode guarantees it.
@@ -126,6 +137,47 @@ def build_auth(
         required_scopes=[],
     )
     return StaticBearerVerifier(token), settings
+
+
+def _credentials_from_appapi(headers: Mapping[str, str]) -> Credentials:
+    """Turn the AppAPI headers of this request into the credentials of one Nextcloud user.
+
+    Two refusals and no third path. A request that AppAPI did not sign is not ours to
+    serve, and a valid app context without a user id is not a person: impersonating
+    nobody with ``APP_SECRET`` would read data no logged in user could reach, which is the
+    one promise this whole project is built on (T-02-12).
+
+    Neither message repeats a header value, and neither of them offers a hint about which
+    check failed: the caller behind these headers is a proxy, not a model.
+    """
+    settings = config.exapp_settings()
+    try:
+        user = verify_appapi_headers(headers, settings.app_id, settings.app_secret)
+    except AppApiRejected:
+        raise MCPError(
+            code=INVALID_REQUEST,
+            message="This request carries no valid AppAPI authentication.",
+        ) from None
+
+    if not user:
+        raise MCPError(
+            code=INVALID_REQUEST,
+            message=(
+                "This AppAPI request has no user context, and without a user there is "
+                "nothing this server is allowed to read."
+            ),
+        )
+
+    # The base URL is the one AppAPI deployed us against, never a value from the request.
+    return Credentials(
+        base_url=settings.base_url,
+        user=user,
+        secret=settings.app_secret,
+        mode="appapi",
+        app_id=settings.app_id,
+        app_version=settings.app_version,
+        aa_version=settings.aa_version,
+    )
 
 
 def _credentials_from_basic(headers: Mapping[str, str]) -> Credentials:
