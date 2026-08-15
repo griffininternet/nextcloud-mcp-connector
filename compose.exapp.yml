@@ -84,6 +84,10 @@ services:
       HP_SHARED_KEY: "${HP_SHARED_KEY:-nc-mcp-exapp-local-harp-key}"
       NC_INSTANCE_URL: "http://caddy"
       HP_TRUSTED_PROXY_IPS: "172.29.42.0/24"
+      # The image defaults to "warning", which hides the one line that says where a
+      # request was routed. HP_LOG_LEVEL=info in the environment makes a failing
+      # registration debuggable without editing this file.
+      HP_LOG_LEVEL: "${HP_LOG_LEVEL:-warning}"
     volumes:
       # T-02-31, accepted: the Docker socket is effectively root on the host. The deploy
       # daemon cannot create the ExApp container without it. This topology listens on

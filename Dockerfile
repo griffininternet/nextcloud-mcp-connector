@@ -92,7 +92,14 @@ RUN chmod 0755 /start.sh /healthcheck.sh \
     # path as APP_PERSISTENT_STORAGE (DockerActions::buildDefaultExAppVolume). A fresh
     # named volume inherits owner and mode of the directory it covers, so creating it here
     # is what makes the storage writable for the unprivileged process.
-    && install -d -o 10001 -g 10001 -m 0700 /nc_app_mcp_connector_data
+    && install -d -o 10001 -g 10001 -m 0700 /nc_app_mcp_connector_data \
+    # HaRP installs the FRP client certificate into the running container and does it with
+    # the identity of the container, so it runs `mkdir -p /certs/frp` as uid 10001. Without
+    # this directory that command fails with "Permission denied", the certificate
+    # installation answers 500, frpc falls back to a plaintext handshake, the FRP server
+    # closes the connection, and every heartbeat is answered with 503 by HAProxy. Measured
+    # in plan 02-04 against the real deploy daemon; start.sh reads the same path.
+    && install -d -o 10001 -g 10001 -m 0700 /certs
 
 COPY --from=build --chown=10001:10001 /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:${PATH}"
