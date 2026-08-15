@@ -29,7 +29,15 @@ findings:
   warning: 13
   info: 8
   total: 23
-status: issues_found
+resolved:
+  critical: 2
+  warning: 13
+  info: 4
+  total: 19
+open:
+  info: 4
+fixed_at: 2026-08-15
+status: fixes_applied
 ---
 
 # Phase 02: Interim-Security-Review der ExApp-Oberfläche
@@ -37,7 +45,59 @@ status: issues_found
 **Geprüft:** 2026-08-15
 **Tiefe:** deep (cross-file, inklusive SDK-Quellen und laufendem Image)
 **Umfang:** ausschließlich Sicherheit, Plan 02-01 bis 02-04
-**Status:** issues_found
+**Status:** fixes_applied (behoben am 2026-08-15)
+
+## Behebungsstand
+
+Alle 2 Critical und alle 13 Warnings sind behoben, dazu 4 der 8 Info-Punkte. Jeder Fix
+hat einen eigenen Test, der den Angriffspfad schließt, und alle Gates sind grün
+(ruff, ruff format, pyright 0 Fehler, vulture leer, 698 pytest bestanden gegen 629 zu
+Beginn, Tool-Budget 10642 von 12500 Bytes).
+
+| ID | Status | Commit |
+|----|--------|--------|
+| CR-01 | fixed | `7bcb7c7` |
+| CR-02 | fixed | `1a85338` |
+| WR-01 | fixed | `6351e0d` |
+| WR-02 | fixed | `18ae821` |
+| WR-03 | fixed | `b9cd26a` |
+| WR-04 | fixed | `18ae821` |
+| WR-05 | fixed | `75c34e4` |
+| WR-06 | fixed | `e8e3bf3` |
+| WR-07 | fixed | `e8e3bf3` |
+| WR-08 | fixed | `fc2e0e2` |
+| WR-09 | fixed | `e8e3bf3` |
+| WR-10 | fixed | `17cb94f` |
+| WR-11 | fixed | `fc2e0e2` |
+| WR-12 | fixed | `cff191c` |
+| WR-13 | fixed | `18ae821` |
+| IN-01 | fixed | `6351e0d` |
+| IN-02 | fixed | `4e3ebb8` |
+| IN-03 | teilweise fixed | `4e3ebb8` |
+| IN-04 | fixed | `4e3ebb8` |
+| IN-05 | bewusst offen | -- |
+| IN-06 | fixed (über CR-02) | `1a85338` |
+| IN-07 | bewusst offen (Phase 3) | -- |
+| IN-08 | bewusst offen (keine Maßnahme empfohlen) | -- |
+
+**Für die Live-Abnahme 02-07 vorgemerkt**, weil nur ein echter Deploy es beantworten kann:
+
+* WR-04: der Zeitpunkt, zu dem HaRP `/certs/frp` in den laufenden Container legt. Der
+  Wrapper wartet `FRP_CERT_WAIT_SECONDS` (60) darauf. Reicht das nicht, ist der Wert zu
+  erhöhen, nicht der Guard zu entfernen.
+* WR-06: `occ` bekommt die Registrierungs-Payload jetzt über stdin. Der Aufruf ist
+  statisch geprüft und syntaktisch verifiziert, aber noch nie gegen ein echtes `occ`
+  gelaufen. Rest-Risiko: die Payload steht weiterhin in der argv des php-Prozesses
+  **innerhalb** des Nextcloud-Containers; aus der Host-Prozessliste ist sie raus.
+* WR-09: Digest-Abgleich vor der Registrierung. Gegen eine Wegwerf-Registry verifiziert
+  (`docker buildx imagetools inspect` erkennt einen Fremd-Push zuverlässig), aber nicht
+  gegen den Bootstrap-Lauf. Offene Option für später: den Digest zusätzlich in das von
+  AppAPI unterstützte Feld der Registrierung schreiben, statt ihn nur zu prüfen.
+* WR-11 und WR-08: `docker compose config` bestätigt beides statisch (ohne Key schlägt
+  `up` fehl, mit Key steht auf beiden Trust-Listen nur 172.29.42.10). Ob HaRP und
+  Nextcloud mit der engen Liste weiterhin die echte Client-IP sehen, zeigt erst der Lauf.
+* WR-12: die Linux-Variante des Entwicklungs-Loops (`socat` auf das Gateway 172.29.42.1)
+  ist dokumentiert, aber auf diesem Host nicht durchgespielt worden.
 
 ## Zusammenfassung
 
@@ -70,6 +130,8 @@ auf `/mcp` auf und würden die offene Grenze sonst mit erben.
 ## Critical Issues
 
 ### CR-01: Im ExApp-Modus ist der MCP-Endpunkt an der Transportgrenze unauthentifiziert
+
+**Status:** fixed in `7bcb7c7`. `exapp/middleware.RequireAppApi` umschließt die `/mcp`-Route in `build_exapp_app`, zusätzlich zur Prüfung im Handler, nicht statt ihrer. Tests: `initialize` ohne Header ist 401 ohne Session-Id und ohne Body, mit gültigem Handshake weiterhin 200 (auch mit leerer User-Id), und der Phase-1-Modus antwortet unverändert 200 ganz ohne AppAPI-Header.
 
 **Datei:** `src/mcp_connector/entry_exapp.py:55-62`, `src/mcp_connector/server/__init__.py:38-49`, `src/mcp_connector/deps.py:64-86`
 
@@ -149,6 +211,8 @@ bleibt in `_credentials_from_appapi`. Ein Test, der `initialize` ohne Header geg
 
 ### CR-02: Der Platzhalter aus `.env.exapp.example` wird ungeprüft zum echten `APP_SECRET`
 
+**Status:** fixed in `1a85338`. `require_hex64` lehnt jeden Wert ab, der nicht 64 Kleinbuchstaben-Hex ist, für `APP_SECRET` aus `.env.exapp` und für `HP_SHARED_KEY` aus dem HaRP-Container. Beide Secret-Zeilen in `.env.exapp.example` sind auskommentiert, der Kopf der Datei sagt "read this file, never copy it". Test: der alte Platzhalter und fünf weitere schwache Formen laufen real durch bash und brechen ab, ein generierter Wert bleibt über Läufe hinweg gepinnt.
+
 **Datei:** `scripts/bootstrap_exapp.sh:194-204`, `.env.exapp.example:27,31`
 
 **Befund:** `app_secret()` liest `APP_SECRET` per `sed` aus `.env.exapp` und gibt jeden
@@ -198,6 +262,8 @@ klarstellen, dass die Datei nie kopiert, sondern nur gelesen wird.
 
 ### WR-01: Header-Desync: `verify_appapi_headers` nimmt den letzten, jeder andere Leser den ersten Wert
 
+**Status:** fixed in `6351e0d`. `_single` verweigert jedes Mehrfachvorkommen der drei Header, statt es implizit aufzulösen: `getlist` für echte Starlette-Header, ein Scan über `items()` für das Dict aus den Tests. Beide Manifest-Routen und die json-info-Registrierung strippen jetzt `AUTHORIZATION-APP-API`, `EX-APP-ID`, `EX-APP-VERSION`, `AA-VERSION` und `X-ORIGIN-IP`.
+
 **Datei:** `src/mcp_connector/exapp/auth.py:51`, `appinfo/info.xml` (beide `<headers_to_exclude>[]</headers_to_exclude>`)
 
 **Befund (empirisch):** `{key.lower(): value for key, value in headers.items()}` behält bei
@@ -239,6 +305,8 @@ def _single(headers: Mapping[str, str], name: str) -> str:
 
 ### WR-02: `NC_MCP_DISABLE_DNS_REBINDING_PROTECTION=1` liegt fest im Image, für jeden Deploy-Modus
 
+**Status:** fixed in `18ae821`. Der Schalter ist aus dem Layer heraus und wird in `entrypoint.sh` nur bei gesetztem `HP_SHARED_KEY` exportiert; `NC_MCP_ALLOWED_HOSTS` bleibt unberührt. Am gebauten Image verifiziert: `Config.Env` enthält den Namen nicht mehr, und im Lauf ohne HaRP ist er ungesetzt.
+
 **Datei:** `Dockerfile:112`
 
 **Befund:** Der Schalter schaltet in `TransportSecuritySettings` sowohl die Host- als auch
@@ -262,6 +330,8 @@ fi
 ```
 
 ### WR-03: `select_mode` lässt sich durch zwei generische, nicht praefixierte Umgebungsvariablen umschalten
+
+**Status:** fixed in `b9cd26a`. `entry_http.build_app` bricht mit einem `ToolError` ab, sobald `exapp_configured(env)` gilt, also die im Bericht genannte Minimalvariante. Der Weg über ein zusätzlich verlangtes `NC_MCP_MODE` wurde bewusst nicht genommen: er hätte die Semantik von `select_mode` für alle vier Modi geändert, während der Guard den beschriebenen Pfad vollständig schließt, weil eine Phase-1-Instanz nur über `build_app` entsteht.
 
 **Datei:** `src/mcp_connector/config.py:157-158`, `src/mcp_connector/entry_exapp.py:38,69-77`
 
@@ -293,6 +363,8 @@ bei `exapp_configured(env)` mit einer klaren Meldung abbricht.
 
 ### WR-04: `start.sh` fällt still auf FRP ohne TLS zurück und schickt `HP_SHARED_KEY` im Klartext
 
+**Status:** fixed in `18ae821`. `start.sh` bleibt unangetastet; `entrypoint.sh` steht davor, wartet `FRP_CERT_WAIT_SECONDS` (60) auf `/certs/frp` (HaRP legt das Zertifikat in den *laufenden* Container, ein Abbruch in der ersten Millisekunde wäre falsch) und bricht danach mit Exit 1 ab. `ALLOW_PLAINTEXT_FRP=1` ist der dokumentierte Opt-in. Alle vier Zweige im Container verifiziert.
+
 **Datei:** `start.sh:37-52`
 
 **Befund:** Fehlt `/certs/frp`, wird `transport.tls.enable = false` geschrieben und
@@ -312,6 +384,8 @@ fehlendem `/certs/frp` mit Exit ungleich 0 abbricht, oder mindestens eine
 
 ### WR-05: Der Healthcheck bleibt grün, wenn frpc tot ist
 
+**Status:** fixed in `75c34e4`. Der HaRP-Zweig prüft die Prozesstabelle, bevor er den Socket probt. `/proc` statt `pgrep`, weil das Image kein procps enthält (im Container geprüft). Verifiziert: ohne frpc endet der Healthcheck mit 1.
+
 **Datei:** `healthcheck.sh:20-26`, `start.sh:63-66`
 
 **Befund:** Bei gesetztem `HP_SHARED_KEY` probt der Healthcheck den Unix-Socket
@@ -329,6 +403,8 @@ Nebenwirkung, nach der Prüfschwerpunkt 5 fragt.
 Prozess-Supervisor, aber die eine Zeile schliesst die Lücke.
 
 ### WR-06: Bootstrap schiebt `APP_SECRET` und Nutzerpasswörter durch die Prozessliste
+
+**Status:** fixed in `e8e3bf3`. `occ_stdin` reicht Secrets über eine Pipe, `occ_pw` liest `OC_PASS` per `$(cat)`, die Registrierungs-Payload kommt über stdin. `json_info` nimmt Daemon und Port als Parameter, wodurch auch das `sed` im `--manual`-Pfad entfällt. Rest-Risiko: die Payload steht weiterhin in der argv des php-Prozesses *innerhalb* des Nextcloud-Containers, aus der Host-Prozessliste ist sie heraus.
 
 **Datei:** `scripts/bootstrap_exapp.sh:82-84,270-271,319-320`
 
@@ -352,6 +428,8 @@ Falls `occ` kein `-` akzeptiert: die JSON-Datei mit `umask 077` in ein Container
 schreiben und den Pfad übergeben, danach löschen.
 
 ### WR-07: `COMPOSE_FILE` ist überschreibbar, der Schutz der anderen Topologie ist damit nur nominal
+
+**Status:** fixed in `e8e3bf3`. `COMPOSE_FILE` ist ein Literal, und `ensure_own_topology` prüft vor jedem Schritt, dass die Datei `name: nc-mcp-exapp` deklariert; `jq` wird nicht gebraucht, weil der Projektname im File steht. Der alte Test ist auf "kein Override" umgestellt, dazu kommt ein echter bash-Lauf gegen vier Fälle.
 
 **Datei:** `scripts/bootstrap_exapp.sh:36,347`, `tests/unit/test_exapp_env_setup.py:330-335`
 
@@ -382,6 +460,8 @@ Den Test entsprechend auf "kein `COMPOSE_FILE`-Override" umstellen.
 
 ### WR-08: `TRUSTED_PROXIES` und `HP_TRUSTED_PROXY_IPS` umfassen den ExApp-Container selbst
 
+**Status:** fixed in `fc2e0e2`. `caddy` bekommt `172.29.42.10` fest zugewiesen, `TRUSTED_PROXIES` und `HP_TRUSTED_PROXY_IPS` nennen nur diese Adresse. Mit `docker compose config` verifiziert, gestartet wurde nichts.
+
 **Datei:** `compose.exapp.yml:58,86`
 
 **Befund:** Beide Werte sind `172.29.42.0/24`, also das komplette Compose-Subnetz. Der
@@ -411,6 +491,8 @@ enthält aber vier bis fünf Container.
 
 ### WR-09: Unauthentifizierte Loopback-Registry plus Referenz per Tag statt Digest
 
+**Status:** fixed in `e8e3bf3`. `ensure_image` merkt sich den Digest des Pushes, `verify_image_digest` vergleicht ihn unmittelbar vor der Registrierung mit dem, was die Registry ausliefert, und bricht sonst ab. Gegen eine Wegwerf-Registry verifiziert: ein Fremd-Push auf denselben Tag ändert den Digest und wird erkannt. Den Digest zusätzlich *in* die Registrierung zu schreiben, bleibt offen, weil das von AppAPI unterstützte Feld ohne Live-Lauf nicht zu bestimmen ist.
+
 **Datei:** `compose.exapp.yml:103-116`, `scripts/bootstrap_exapp.sh:229-243,256`
 
 **Befund:** `registry:2` läuft ohne Auth und ohne TLS auf `127.0.0.1:5000`, die
@@ -434,6 +516,8 @@ DIGEST="$(docker inspect --format '{{index .RepoDigests 0}}' "${ref}" | cut -d@ 
 
 ### WR-10: Die request-gelieferte User-ID fliesst ungequotet in den DAV-Search-Scope
 
+**Status:** fixed in `17cb94f`. `search_scope` quotet `creds.user` wie jede andere Stelle. `parse_entries:422` wurde bewusst *nicht* geändert: `_home_path_of` wendet `unquote` auf den href an und vergleicht dann mit `home`, beide Seiten sind also bereits ungequotet und damit konsistent. Ein Quoten von `home` hätte den Vergleich kaputtgemacht, der Vorschlag ist an dieser Stelle gegen den Code geprüft und abgelehnt worden.
+
 **Datei:** `src/mcp_connector/nextcloud/clients/dav.py:198` gegen `:106,422`, `caldav.py:88`, `carddav.py:84`
 
 **Befund:** `return f"/files/{creds.user}{suffix}"` ist die einzige Stelle, an der
@@ -455,6 +539,8 @@ aber konsistent).
 
 ### WR-11: Fest verdrahteter Default für `HP_SHARED_KEY` im eingecheckten Compose-File
 
+**Status:** fixed in `fc2e0e2`. Kein Default mehr, `up` scheitert mit `${HP_SHARED_KEY:?...}` und einer Meldung, die den Generierungsbefehl nennt. Die Doku setzt `export HP_SHARED_KEY="$(openssl rand -hex 32)"` vor `up`, und der Bootstrap verlangt 64 Hex (CR-02).
+
 **Datei:** `compose.exapp.yml:84`
 
 **Befund:** `HP_SHARED_KEY: "${HP_SHARED_KEY:-nc-mcp-exapp-local-harp-key}"`. Der Default
@@ -474,6 +560,8 @@ oder den Key im Bootstrap vor dem `up` erzeugen.
 
 ### WR-12: Die Doku empfiehlt `APP_HOST=0.0.0.0` und widerspricht damit ihrer eigenen Loopback-Regel
 
+**Status:** fixed in `cff191c`. `APP_HOST=0.0.0.0` ist heraus, der Default `127.0.0.1` gilt und wird begründet. Für den Zugriff aus den Containern sind beide Wege dokumentiert: Docker Desktop erreicht den Loopback über `host.docker.internal`, unter Linux ein `socat`-Listener auf dem Compose-Gateway `172.29.42.1`.
+
 **Datei:** `docs/exapp-install.md:185` gegen `docs/exapp-install.md:31-34`
 
 **Befund:** Zeile 31 bis 34 begründet ausführlich, warum jeder Port an `127.0.0.1` gebunden
@@ -491,6 +579,8 @@ dem Container heraus zugreifen muss, entweder `host.docker.internal` mit einer e
 Bindung an die Docker-Bridge-IP dokumentieren oder einen SSH-/Socat-Tunnel.
 
 ### WR-13: Der Laufzeit-Nutzer darf seinen eigenen Code überschreiben
+
+**Status:** fixed in `18ae821`. `COPY --from=build /app/.venv /app/.venv` ohne `--chown`. Am gebauten Image verifiziert: der Laufzeit-Nutzer bekommt "Permission denied" beim Schreibversuch in `/app/.venv`.
 
 **Datei:** `Dockerfile:104`
 
@@ -518,6 +608,8 @@ genau diese drei sind bereits korrekt mit `0700` beziehungsweise `0600` angelegt
 
 ### IN-01: `x-origin-ip` ist ein clientsetzbarer Header als Sicherheitskontrolle
 
+**Status:** fixed in `6351e0d`, zusammen mit WR-01. `X-ORIGIN-IP` steht in `headers_to_exclude` beider Routen; die Prüfung in `_guard` bleibt als Defense-in-Depth stehen.
+
 **Datei:** `src/mcp_connector/exapp/lifecycle.py:44,101-102`
 
 Mit `headers_to_exclude: []` (siehe WR-01) wird der Header nicht gestrippt. Die Richtung
@@ -531,6 +623,8 @@ nicht tragend ist.
 
 ### IN-02: `_guard` fängt nur `AppApiRejected`, `exapp_settings` kann `ToolError` werfen
 
+**Status:** fixed in `4e3ebb8`. `_guard` fängt jetzt `(AppApiRejected, ToolError)`. Test: eine unvollständige Deploy-Umgebung ergibt 401 mit `no-store` statt 500, für `/init` und für `/enabled`.
+
 **Datei:** `src/mcp_connector/exapp/lifecycle.py:103-108`, `src/mcp_connector/exapp/auth.py:82`
 
 `require_appapi` ruft `config.exapp_settings(env)`, das bei fehlendem `NEXTCLOUD_URL`,
@@ -540,6 +634,8 @@ praktisch tot, aber der Kommentar "no rejection can escape as a 500" stimmt nur 
 der beiden Fehlertypen. Vorschlag: `except (AppApiRejected, ToolError)`.
 
 ### IN-03: Basis-Image nicht per Digest gepinnt, FRP-Checksummen als überschreibbare Build-Args
+
+**Status:** teilweise fixed in `4e3ebb8`. Version und beide Checksummen sind Konstanten des `RUN` statt `ARG`, also nicht mehr per `--build-arg` austauschbar (Image neu gebaut, frpc meldet weiterhin 0.61.1). Das Basis-Image bleibt bewusst auf `python:3.13-slim`: ein `@sha256:`-Pin ist ein Wert, der bei jedem Upstream-Patch von Hand nachzuziehen ist, und das gehört in die Release-Härtung von Phase 5, nicht in einen Interim-Fix.
 
 **Datei:** `Dockerfile:16,41,62-65`
 
@@ -551,6 +647,8 @@ als Konstante im `RUN` statt als `ARG`.
 
 ### IN-04: `normalize_base_url` akzeptiert Userinfo in der URL, die dann geloggt wird
 
+**Status:** fixed in `4e3ebb8`. `normalize_base_url` lehnt Userinfo ab, und weder die Meldung noch der Hint wiederholen die URL oder das Passwort.
+
 **Datei:** `src/mcp_connector/config.py:105-122`, `src/mcp_connector/exapp/status.py:60,64`
 
 `https://admin:pw@cloud.example.com` besteht Schema- und Netloc-Prüfung. Der Wert landet
@@ -558,6 +656,8 @@ in `settings.base_url` und aus `status.py` in zwei `logger.error`-Zeilen mit vol
 Vorschlag: `if parts.username or parts.password: raise ToolError(...)`.
 
 ### IN-05: Jeder Bootstrap-Lauf legt neue App-Passwörter an und widerruft keine alten
+
+**Status:** bewusst offen (Info). Der Fix verlangt, die Ausgabe von `occ user:auth-tokens:list` zu parsen, um an die Token-Ids zu kommen; dieses Format ist nicht versioniert und wechselt zwischen Nextcloud-Versionen. Das ist kein triviales, risikoloses Aufräumen, und die Tokens gehören zwei Wegwerf-Testnutzern einer Loopback-Instanz. Vorgemerkt für den Zeitpunkt, an dem der Bootstrap ohnehin gegen ein echtes `occ` verifiziert wird.
 
 **Datei:** `scripts/bootstrap_exapp.sh:156-169,368-370`
 
@@ -568,6 +668,8 @@ gültiges Token. Nach fünf Läufen existieren zehn gültige Zugänge, von denen
 
 ### IN-06: `json_info` baut JSON per String-Interpolation
 
+**Status:** fixed für `APP_SECRET` durch die Hex-Validierung aus CR-02 (`1a85338`). `APP_NAME` und `APP_ID` sind Konstanten dieses Skripts und enthalten keine Anführungszeichen; die Payload wird außerdem nicht mehr per `sed` nachbearbeitet, sondern mit Parametern gebaut (`e8e3bf3`).
+
 **Datei:** `scripts/bootstrap_exapp.sh:254-258`
 
 `"secret":"${APP_SECRET}"` und `"name":"${APP_NAME}"` werden ohne Escaping eingesetzt. Bei
@@ -576,6 +678,8 @@ Anführungszeichen entsteht ungültiges oder manipuliertes JSON. Mit dem Fix aus
 (Hex-Validierung) ist der Punkt für `APP_SECRET` erledigt.
 
 ### IN-07: `^/\.well-known/` ist ein unverankertes Praefix mit `access_level` PUBLIC
+
+**Status:** bewusst offen (Info), vorgemerkt für Phase 3. Die Route ist heute unbedient, und ihre enge Fassung hängt an der Pfadform, die der RFC-9728-Endpunkt des SDK tatsächlich ausliefert. Sie jetzt zu raten hieße, sie in Phase 3 zweimal zu ändern; sie jetzt zu entfernen hieße, den Manifest-Vertrag aus Plan 02 zu brechen, den die Tests festhalten. Beides kostet mehr als es an einem Pfad bringt, den heute nichts bedient.
 
 **Datei:** `appinfo/info.xml` (zweite Route), `scripts/bootstrap_exapp.sh:256`
 
@@ -589,6 +693,8 @@ Normalisierung fremder Komponenten. Vorschlag: bis Phase 3 die Route entfernen, 
 fassen, zum Beispiel `^/\.well-known/oauth-protected-resource$`.
 
 ### IN-08: Längenunterschied des Secrets bleibt über `compare_digest` beobachtbar
+
+**Status:** bewusst offen. Der Bericht empfiehlt selbst keine Maßnahme: der Inhalt leckt nicht, und die Länge eines 64-Zeichen-Hex-Secrets ist keine Information.
 
 **Datei:** `src/mcp_connector/exapp/auth.py:86-88`
 
@@ -642,3 +748,5 @@ Damit der Bericht nicht mit Weglassungen missverstanden wird:
 
 _Geprüft: 2026-08-15_
 _Reviewer: Claude (gsd-code-reviewer), Modus deep, Security-only_
+_Behoben: 2026-08-15, 11 atomare Commits von `7bcb7c7` bis `4e3ebb8`_
+_Fixer: Claude (gsd-code-fixer), Scope CR + WR vollständig, IN nur wo trivial_
