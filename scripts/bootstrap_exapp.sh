@@ -278,9 +278,12 @@ ensure_exapp() {
   echo "exapp ${APP_ID}: registered and deployed"
 }
 
+# `occ app_api:app:list` prints one line per app: "<id> (<name>): <version> [enabled]".
+# Enabling is not cosmetic: AppAPI sends PUT /enabled?enabled=1 to the container and only
+# writes the flag when the app answers 200 with an empty error field.
 ensure_exapp_enabled() {
   local output
-  if occ app_api:app:list 2>/dev/null | grep -A5 "${APP_ID}" | grep -qi "enabled.*\(true\|yes\|1\)"; then
+  if occ app_api:app:list 2>/dev/null | tr -d '\r' | grep -q "^${APP_ID} .*\[enabled\]"; then
     echo "exapp ${APP_ID}: enabled"
     return 0
   fi
@@ -390,7 +393,7 @@ if ! occ app_api:app:list | grep -q "${APP_ID}"; then
   echo "ERROR: ${APP_ID} is not in the ExApp list." >&2
   exit 1
 fi
-if ! occ app_api:app:list | tr -d '\r' | grep -A6 "${APP_ID}" | grep -qi "enabled"; then
+if ! occ app_api:app:list | tr -d '\r' | grep -q "^${APP_ID} .*\[enabled\]"; then
   echo "ERROR: ${APP_ID} is registered but not enabled." >&2
   exit 1
 fi
