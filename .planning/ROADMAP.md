@@ -102,7 +102,7 @@ Plans:
 **Wave 4** *(blocked on Wave 3 completion)*
 
 - [x] 02-05-PLAN.md - Discovery-Spike AUTH-06 mit Messmatrix und Phase-3-Empfehlung (Wave 4)
-- [ ] 02-06-PLAN.md - DAV-Spike D-30: Impersonations-Matrix je API-Familie (Wave 4)
+- [x] 02-06-PLAN.md - DAV-Spike D-30: Impersonations-Matrix je API-Familie (Wave 4)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -164,7 +164,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Server-Kern | 14/14 | Complete    | 2026-08-14 |
-| 2. ExApp-Shell | 5/7 | In Progress|  |
+| 2. ExApp-Shell | 6/7 | In Progress|  |
 | 3. OAuth 2.1 | 0/TBD | Not started | - |
 | 4. Per-User-Verwaltung und prepare_context | 0/TBD | Not started | - |
 | 5. Hardening und Store-Einreichung | 0/TBD | Not started | - |

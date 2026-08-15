@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-05-PLAN.md
-last_updated: "2026-08-15T11:43:38.000Z"
+stopped_at: Completed 02-06-PLAN.md
+last_updated: "2026-08-15T12:05:00.000Z"
 last_activity: 2026-08-15
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 21
-  completed_plans: 19
-  percent: 90
+  completed_plans: 20
+  percent: 95
 ---
 
 # Project State
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 2
-Plan: 02-05 complete, next 02-06
+Plan: 02-06 complete, next 02-07
 Status: Executing
 Last activity: 2026-08-15
 
-Progress: [█████████░] 90%
+Progress: [█████████░] 95%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 19
+- Total plans completed: 20
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -45,7 +45,7 @@ Progress: [█████████░] 90%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1 | 14 | - | - |
-| 2 | 5 | 154 min | 31 min |
+| 2 | 6 | 199 min | 33 min |
 
 **Recent Trend:**
 
@@ -71,6 +71,7 @@ Progress: [█████████░] 90%
 | Phase 02-exapp-shell P03 | 32 min | 3 tasks | 8 files |
 | Phase 02-exapp-shell P04 | 63 min | 3 tasks | 10 files |
 | Phase 02-exapp-shell P05 | 14 min | 3 tasks | 5 files |
+| Phase 02-exapp-shell P06 | 45 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -171,18 +172,21 @@ Recent decisions affecting current work:
 - [Phase 02-exapp-shell]: Die Discovery-Sonde ist bewusst ein Spike-Artefakt (T-02-44): der 401 stammt aus einer eigenen Sonde unter /.well-known/, nicht aus /mcp, weil /mcp in Phase 2 bewusst auf USER steht; Ersatz durch echte PRM aus AuthSettings plus /mcp auf PUBLIC ist Phase-3-Aufgabe
 - [Phase 02-exapp-shell]: Ein unbekannter Bearer ueber HaRP auf der USER-Route /mcp wird 403 (sauberes 4xx, kein 5xx) beantwortet; damit kann ein spaeter PUBLIC gestelltes /mcp unbekannte Tokens an den eigenen Token-Verifier weiterreichen statt in einen 401 zu kippen (Open Question 4)
 - [Phase 02-exapp-shell]: Die exapp-Topologie musste fuer die Messung neu aufgebaut werden (down -v, frischer Hex64-HP_SHARED_KEY): die in den Volumes von 02-04 gespeicherte HaRP-Daemon-Registrierung nutzte den alten Nicht-Hex-Schluessel, den der nach 02-04 eingezogene require_hex64-Gate (CR-02) ablehnt; nur das nc-mcp-exapp-Projekt betroffen, nc-mcp-test blieb unberuehrt
+- [Phase 02-exapp-shell]: AUTH-05 ist abgehakt (DAV-Spike D-30, Fall A): alle sechs API-Familien (WebDAV, CalDAV, CardDAV, OCS, Notes, Deck) laufen unter AppAPI-Impersonation gegen NC 34.0.2 / AppAPI 34.0.0, die Identitaet ist serverseitig belegt (cloud/user liefert genau alice bzw. bob, exapp_impersonation.log protokolliert jeden Request); keine Provider-Aufteilung, kein App-Passwort-Rueckfall, Annahme A1 bestaetigt
+- [Phase 02-exapp-shell]: Der Negativfall ist der Kern von AUTH-05: bob erreicht alices Datei auch bei bekanntem Pfad nicht (404, nie 200); der Confused-Deputy-Beweis zeigt, dass ein zusaetzlicher gueltiger Authorization-Basic-Header fuer alice die bob-Impersonation NICHT ueberschreibt (cloud/user bleibt bob), weil die Identitaet allein aus AUTHORIZATION-APP-API stammt
+- [Phase 02-exapp-shell]: Zwei Kontrollpruefungen machen die Matrix beweiskraeftig: der messende Prozess traegt kein NC_MCP_APP_PASSWORD und keinen NC_MCP_STATIC_BEARER, und ein falsches APP_SECRET (64 Nullen) wird mit 401 abgewiesen; die Create-only-Grenze (If-None-Match: *) haelt unter Impersonation (zweites PUT 412)
 
 ### Pending Todos
 
 - **Owner-Schritt 01-13:** PR an nextcloud/context_agent#227 einreichen. Branch und DCO-Commit liegen im Fork street1983nk/context_agent (fix/stateless-http-session-compat, def1425), der PR-Text in docs/contrib/227-pr-body.md. Kommando und Pruefpunkte stehen in .planning/phases/01-server-kern/01-13-SUMMARY.md. Vorher `git push origin main` im Connector-Repo, damit der verlinkte Regressionstest oeffentlich sichtbar ist. Danach PR-URL nachtragen, ROADMAP 01-13 abhaken, CONTRIB-01 auf Complete.
 - **Owner-Schritt 01-14:** Ein Durchgang mit Claude Desktop selbst nach docs/client-setup.md. Die Anleitung ist gegen die Referenz-Clients der Testsuite verprobt (mcp 2.0 und mcp 1.29 gegen denselben laufenden Endpoint, plus scripts/acceptance_all_tools.py ueber alle 15 Tools per stdio); die Konfigurationspfade fuer Claude Desktop stammen aus der offiziellen Dokumentation und sind auf diesem Rechner nicht verifiziert.
-- **ExApp-Topologie wieder anfahren (02-06):** Die Volumes des nc-mcp-exapp-Projekts liegen noch, wurden aber in 02-05 einmal neu aufgebaut. Weil die alte Daemon-Registrierung mit dem neuen Aufbau verschwunden ist, ist ein voller Bootstrap noetig: `export HP_SHARED_KEY=$(openssl rand -hex 32)`, `docker compose -p nc-mcp-exapp -f compose.exapp.yml up -d --wait`, dann `bash scripts/bootstrap_exapp.sh`. Der ExApp-Container gehoert nicht zum compose-Projekt (Deploy Daemon erzeugt ihn ueber den Docker-Socket); `down` laesst ihn stehen, `docker stop nc_app_mcp_connector` beendet ihn.
+- **ExApp-Topologie wieder anfahren (02-07):** Die Volumes des nc-mcp-exapp-Projekts liegen noch, wurden aber in 02-06 erneut neu aufgebaut. Weil die Daemon-Registrierung mit jedem down -v verschwindet, ist ein voller Bootstrap noetig: `export HP_SHARED_KEY=$(openssl rand -hex 32)`, `docker compose -p nc-mcp-exapp -f compose.exapp.yml up -d --wait`, dann `bash scripts/bootstrap_exapp.sh`. Der ExApp-Container gehoert nicht zum compose-Projekt (Deploy Daemon erzeugt ihn ueber den Docker-Socket); `down` laesst ihn stehen, `docker stop nc_app_mcp_connector` beendet ihn.
 - **Aufraeumen (optional):** Die Docker-Testinstanz traegt jetzt zusaetzlich die Calendar-App 6.5.3 und die Abnahme-Artefakte. Fuer einen sauberen Stand: `docker compose -f compose.test.yml down -v` und danach `bash scripts/bootstrap_test_nc.sh`.
 
 ### Blockers/Concerns
 
 - Harte Deadline: Store-Einreichung vor der Nextcloud Conference September 2026 (Scope kürzen, nie den Termin)
-- MEDIUM confidence: CalDAV/CardDAV mit AppAPI-Auth-Headern (Spike Phase 2), Consent-Bridge über AppAPI-Proxy (Spike früh in Phase 3)
+- CalDAV/CardDAV mit AppAPI-Auth-Headern: AUFGELOEST in 02-06 (DAV-Spike, beide Familien REPORT 207 unter Impersonation, serverseitig belegt); offen bleibt die Consent-Bridge über AppAPI-Proxy (Spike früh in Phase 3)
 - Vor Phase 1 verifizieren: nc_py_api-Support für NC 34 (vermutlich nur Badge-Lag)
 
 ## Deferred Items
@@ -195,6 +199,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-15T11:43:38.000Z
-Stopped at: Completed 02-05-PLAN.md
+Last session: 2026-08-15T12:05:00.000Z
+Stopped at: Completed 02-06-PLAN.md
 Resume file: None

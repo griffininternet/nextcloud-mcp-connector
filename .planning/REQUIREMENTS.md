@@ -31,7 +31,7 @@
 - [ ] **AUTH-02**: Nutzer kann sich per Login Flow v2 onboarden (Browser-Login, Client sieht nie das echte Passwort)
 - [ ] **AUTH-03**: MCP-Client verbindet per OAuth 2.1 nach MCP-Authorization-Spec: Protected Resource Metadata (RFC 9728), Dynamic Client Registration, PKCE S256, Token-Widerruf
 - [ ] **AUTH-04**: Claude.ai-Connector und ChatGPT-Connector verbinden nachweislich plug-and-play gegen eine öffentliche Staging-Instanz (E2E-Erfolgskriterium)
-- [ ] **AUTH-05**: Jede Nextcloud-Anfrage läuft unter der Identität des angemeldeten Nutzers (ExApp-Impersonation bzw. Nutzer-Credentials); der Assistent sieht nie mehr als der Nutzer in der Weboberfläche
+- [x] **AUTH-05**: Jede Nextcloud-Anfrage läuft unter der Identität des angemeldeten Nutzers (ExApp-Impersonation bzw. Nutzer-Credentials); der Assistent sieht nie mehr als der Nutzer in der Weboberfläche
 - [x] **AUTH-06**: Discovery-Endpunkte (well-known/PRM, WWW-Authenticate) sind unauthentifiziert erreichbar, auch durch den AppAPI-Proxy-Pfad (früher Spike, Hauptrisiko)
 
 ### ExApp und Distribution (EXAPP)
@@ -97,7 +97,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EXAPP-03 | Phase 1 | Complete |
 | CONTRIB-01 | Phase 1 | Complete |
 | EXAPP-01 | Phase 2 | Complete |
-| AUTH-05 | Phase 2 | Pending |
+| AUTH-05 | Phase 2 | Complete |
 | AUTH-06 | Phase 2 | Complete |
 | AUTH-02 | Phase 3 | Pending |
 | AUTH-03 | Phase 3 | Pending |
