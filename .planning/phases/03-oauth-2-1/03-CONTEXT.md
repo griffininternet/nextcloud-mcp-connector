@@ -110,6 +110,24 @@ klare Fehlerpfade und sauberer Wiederanlauf ohne kaputte Sessions.
   scheitert die Registrierung mit benennender Meldung, Allowlist-Modus blockt
   nicht gelistete Clients an authorize UND token. [auto]
 
+### Nachtraege aus der Recherche (auto-entschieden, Owner darf vetoen)
+- **D-41:** Refresh-Rotation mit striktem Reuse-Kill, aber idempotentem Retry-Fenster:
+  Innerhalb von ca. 10 s liefert derselbe (gerade rotierte) Refresh-Token dieselbe
+  neue Token-Antwort noch einmal (Antwort-Caching, KEIN zweiter Zweig der Familie);
+  nach dem Fenster gilt jede Wiederverwendung als Angriff und widerruft die ganze
+  Familie. Begruendung: Netzwerk-Retries der Connectoren brechen sonst Sessions
+  (Zuverlaessigkeits-Haelfte der Owner-Vorgabe), waehrend ein Angreifer im Fenster
+  nichts gewinnt (er bekommt dieselbe Antwort, die der legitime Client schon hat,
+  und das Fenster ist einmalig). [auto: Recherche-Empfehlung, konservative Formulierung]
+- **D-42:** Scope-Modell v1: genau EIN Scope (die kuratierte Tool-Flaeche als Ganzes,
+  keine destruktiven Tools vorhanden). read/write-Aufteilung mit Step-up ist
+  Phase-4+-Material. [auto: Einfachheit = Zuverlaessigkeit]
+- **D-43:** Schluessel fuer die App-Passwort-Verschluesselung NICHT aus APP_SECRET
+  ableiten (wird bei jeder Registrierung neu erzeugt, Update wuerde alle Ablagen
+  unlesbar machen): eigener 32-Byte-Schluessel in der ExApp-Config mit sensitive=1,
+  Daten in SQLite im APP_PERSISTENT_STORAGE-Volume, AESGCM mit aad=auth_id.
+  [auto: Recherche-Befund ersetzt den D-34-Kandidaten]
+
 ### Claude's Discretion
 - Interne Modulstruktur des AS, Schema des Token-Stores, exakte Lebensdauern
   (innerhalb "kurz"), Wortlaut der Consent-Seite (ui-phase darf im plan-chain

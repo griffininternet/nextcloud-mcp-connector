@@ -44,3 +44,10 @@ Both products on screen, on-prem framing. Owner publishes.
 **Decision note:** No direct connector-to-Findling tool. Everything goes through
 the Nextcloud unified search, so Nextcloud stays the single permission boundary,
 as both threat models require.
+
+## BL-04: Claude Code (Loopback + CIMD) als OAuth-Client
+
+**Befund (03-RESEARCH.md):** Claude Code nutzt Loopback-Redirects und CIMD und
+passt nicht ins exakte Redirect-Matching der v1. In v1 bleibt Claude Code auf dem
+App-Passwort-Pfad (AUTH-01, funktioniert heute). Spaeter: Loopback-Ausnahme nach
+RFC 8252 Abschnitt 7.3 (beliebiger Port auf 127.0.0.1) sauber implementieren.
