@@ -168,6 +168,21 @@ app_password() {
   printf '%s' "$token"
 }
 
+# Both secrets this script handles are bearer equivalent, so both are checked against the
+# one shape `openssl rand -hex 32` produces. Anything else is a hand written value or the
+# placeholder from .env.exapp.example, and that file is published in git: whoever reads it
+# could impersonate every account of the instance with APP_SECRET, or attach a foreign FRP
+# client to HaRP with HP_SHARED_KEY (CR-02). A weak value is refused, never adopted.
+require_hex64() {
+  local name="$1" value="$2" origin="$3"
+  if ! printf '%s' "$value" | grep -Eq '^[0-9a-f]{64}$'; then
+    echo "ERROR: ${name} in ${origin} is not 64 lower case hex characters." >&2
+    echo "It looks like a placeholder or a hand written value, and both are secrets that" >&2
+    echo "grant full access. Generate one: openssl rand -hex 32" >&2
+    return 1
+  fi
+}
+
 # The shared key is read back from the running HaRP container instead of being invented
 # here. Both sides have to carry the same value, and a generated one would silently drift
 # away from the container that was started before this script ran.
@@ -180,6 +195,7 @@ harp_shared_key() {
     echo "Start the topology first: docker compose -f ${COMPOSE_FILE} up -d --wait" >&2
     return 1
   fi
+  require_hex64 HP_SHARED_KEY "$key" "container ${HARP_CONTAINER}" || return 1
   printf '%s' "$key"
 }
 
@@ -190,13 +206,17 @@ app_version() {
 }
 
 # Fixed across runs: a new secret on every registration locks out a container or a
-# development process that still holds the old one (research pitfall 11).
+# development process that still holds the old one (research pitfall 11). Pinning an
+# existing value is exactly why it has to be validated first: a bad one would be held on
+# to across every further run, and .env.exapp.example ships a placeholder that the obvious
+# `cp .env.exapp.example .env.exapp` would turn into the real registration secret (CR-02).
 app_secret() {
   local existing=""
   if [ -f "${ENV_FILE}" ]; then
     existing="$(sed -n 's/^APP_SECRET=//p' "${ENV_FILE}" | head -n1 | tr -d '\r')"
   fi
   if [ -n "$existing" ]; then
+    require_hex64 APP_SECRET "$existing" "${ENV_FILE}" || return 1
     printf '%s' "$existing"
     return 0
   fi

@@ -19,6 +19,8 @@ and prove that the gate actually fires.
 """
 
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -28,6 +30,7 @@ import mcp_connector
 from mcp_connector.nextcloud.clients.xml import hardened_parser
 
 ROOT = Path(__file__).resolve().parents[2]
+ENV_EXAMPLE = ROOT / ".env.exapp.example"
 DOCKERFILE = ROOT / "Dockerfile"
 START = ROOT / "start.sh"
 HEALTHCHECK = ROOT / "healthcheck.sh"
@@ -159,6 +162,67 @@ def published_ports(text: str) -> list[str]:
             else:
                 collecting = False
     return ports
+
+
+def shell_function(name: str) -> str:
+    """Cut one function out of the bootstrap script so a test can run it on its own.
+
+    The alternative would be sourcing the whole file, and the whole file talks to Docker.
+    The cut is exact: the script writes every function as ``name() {`` on its own line and
+    closes it with a ``}`` in column one, and the assertions below fail loudly if that
+    ever stops being true.
+    """
+    text = BOOTSTRAP.read_text(encoding="utf-8")
+    opening = f"\n{name}() {{\n"
+    start = text.index(opening)
+    end = text.index("\n}\n", start)
+    return text[start + 1 : end + 3]
+
+
+def find_bash() -> str | None:
+    """A bash that can actually run this repository's scripts, or ``None``.
+
+    ``shutil.which('bash')`` is not enough on Windows: it finds the WSL relay in
+    System32 first, which fails with "execvpe(/bin/bash)" on a host without a distro and
+    cannot resolve a drive letter path even with one. So every candidate is probed with a
+    Windows style path it has to see, and the first one that passes wins.
+    """
+    probe = f'test -f "{Path(__file__).as_posix()}"'
+    candidates = [
+        shutil.which("bash"),
+        r"C:\Program Files\Git\bin\bash.exe",
+        r"C:\Program Files\Git\usr\bin\bash.exe",
+        "/bin/bash",
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        try:
+            result = subprocess.run(  # noqa: S603 - a literal probe, no user input
+                [candidate, "-c", probe],
+                capture_output=True,
+                check=False,
+                timeout=60,
+            )
+        except OSError:
+            continue
+        if result.returncode == 0:
+            return candidate
+    return None
+
+
+BASH = find_bash()
+
+
+def run_bash(script: str) -> subprocess.CompletedProcess[str]:
+    assert BASH is not None
+    return subprocess.run(  # noqa: S603 - a literal script from this test, no user input
+        [BASH, "-c", script],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
+    )
 
 
 def _matches(url: str, path: str) -> bool:
@@ -332,6 +396,98 @@ def test_the_bootstrap_never_reaches_into_the_other_topology() -> None:
     text = BOOTSTRAP.read_text(encoding="utf-8")
     assert "compose.test.yml" not in text
     assert "down -v" not in text
+
+
+# --- the secret handling around the registration (CR-02) --------------------------
+
+needs_bash = pytest.mark.skipif(BASH is None, reason="no usable bash on this host")
+
+#: What the example file used to hand over as a working APP_SECRET, plus the shapes a
+#: hand written value takes. None of them may survive into a registration.
+WEAK_SECRETS = (
+    "replace-me-with-a-random-hex-string",
+    "nc-mcp-exapp-local-harp-key",
+    "short",
+    "0123456789abcdef",  # 16 hex characters, a quarter of what openssl produces
+    "A" * 64,  # upper case, and not hex at all
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde",  # 63
+)
+GOOD_SECRET = "0123456789abcdef" * 4
+
+
+@pytest.mark.parametrize("name", ["APP_SECRET", "HP_SHARED_KEY"])
+def test_the_example_file_hands_out_no_usable_secret(name: str) -> None:
+    """CR-02: `cp .env.exapp.example .env.exapp` used to publish the registration secret."""
+    for line in ENV_EXAMPLE.read_text(encoding="utf-8").splitlines():
+        assert not line.strip().startswith(f"{name}="), f"{name} is assignable in the example"
+
+
+def test_the_example_file_says_that_it_is_read_and_not_copied() -> None:
+    text = ENV_EXAMPLE.read_text(encoding="utf-8")
+    assert "never copy it" in text
+
+
+@needs_bash
+@pytest.mark.parametrize("weak", WEAK_SECRETS)
+def test_a_weak_app_secret_stops_the_bootstrap(tmp_path: Path, weak: str) -> None:
+    """The attack path of CR-02, end to end: a placeholder must not become the secret."""
+    env_file = tmp_path / ".env.exapp"
+    env_file.write_text(f"APP_SECRET={weak}\n", encoding="utf-8")
+    script = (
+        "set -euo pipefail\n"
+        f'ENV_FILE="{env_file.as_posix()}"\n'
+        f"{shell_function('require_hex64')}\n"
+        f"{shell_function('app_secret')}\n"
+        "app_secret\n"
+    )
+
+    result = run_bash(script)
+
+    assert result.returncode != 0, f"{weak!r} was accepted as APP_SECRET"
+    assert weak not in result.stdout, "the weak value was printed as the secret to use"
+    assert "64 lower case hex" in result.stderr
+
+
+@needs_bash
+def test_a_generated_app_secret_is_pinned_across_runs(tmp_path: Path) -> None:
+    """The counter probe: the check must not break the reason the value is pinned at all
+    (research pitfall 11, a fresh secret locks out whoever still holds the old one)."""
+    env_file = tmp_path / ".env.exapp"
+    env_file.write_text(f"APP_SECRET={GOOD_SECRET}\n", encoding="utf-8")
+    script = (
+        "set -euo pipefail\n"
+        f'ENV_FILE="{env_file.as_posix()}"\n'
+        f"{shell_function('require_hex64')}\n"
+        f"{shell_function('app_secret')}\n"
+        "app_secret\n"
+    )
+
+    result = run_bash(script)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == GOOD_SECRET
+
+
+@needs_bash
+def test_a_missing_env_file_still_generates_a_fresh_secret(tmp_path: Path) -> None:
+    script = (
+        "set -euo pipefail\n"
+        f'ENV_FILE="{(tmp_path / "nothing-here").as_posix()}"\n'
+        f"{shell_function('require_hex64')}\n"
+        f"{shell_function('app_secret')}\n"
+        "app_secret\n"
+    )
+
+    result = run_bash(script)
+
+    assert result.returncode == 0, result.stderr
+    assert re.fullmatch(r"[0-9a-f]{64}", result.stdout.strip()), result.stdout
+
+
+def test_the_shared_key_is_validated_like_the_app_secret() -> None:
+    """Same class of secret, same gate: a foreign FRP client can attach with it."""
+    body = shell_function("harp_shared_key")
+    assert "require_hex64 HP_SHARED_KEY" in body
 
 
 def test_the_reverse_proxy_routes_the_exapps_prefix() -> None:
