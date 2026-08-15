@@ -186,6 +186,34 @@ ensure_addressbook() {
   fi
 }
 
+# Same class of issue as the calendar and address book above: `occ user:add` never fires the
+# first login, so a fresh user gets none of the skeleton files a real first login lays down
+# and its files home stays completely empty. An empty home has no searchable root node, so a
+# WebDAV SEARCH against it raises OCP\Files\NotFoundException on /<uid>/files inside the
+# FileSearchBackend and surfaces as HTTP 500, not a clean empty result. A CalDAV or CardDAV
+# read still answers empty, which is why only the file search is affected. The permission
+# tests search bob's home before bob ever writes to it, so without this a leak test would
+# fail on a server error rather than prove the boundary.
+#
+# Placing one neutral file (exactly what a first login's skeleton would leave behind) and
+# scanning it registers the root the search backend looks up, after which SEARCH answers an
+# honest empty. The file is generic and never matches the unique markers the permission tests
+# search for, so it does not weaken any positive control or leak test. A plain scan alone is
+# not enough: an empty home stays unsearchable. Verified against a clean rebuild from wiped
+# volumes.
+ensure_files_home() {
+  local uid="$1"
+  docker compose -f "${COMPOSE_FILE}" exec -T --user www-data "${SERVICE}" sh -c \
+    "mkdir -p 'data/${uid}/files' && printf 'Initialised by scripts/bootstrap_exapp.sh.\n' \
+      > 'data/${uid}/files/Readme.md'"
+  if occ files:scan "$uid" >/dev/null 2>&1; then
+    echo "files home ${uid}: initialised"
+  else
+    echo "files home ${uid}: scan failed" >&2
+    return 1
+  fi
+}
+
 app_password() {
   local uid="$1" password="$2" raw token
   raw="$(occ_pw "$password" user:auth-tokens:add "$uid" --password-from-env --name "$TOKEN_NAME")"
@@ -436,6 +464,11 @@ ensure_user bob "${BOB_PASSWORD}"
 ensure_calendar alice personal
 ensure_addressbook alice contacts
 ensure_calendar bob personal
+
+# Initialise both file homes so a WebDAV SEARCH answers an empty result, not a 500 (see
+# ensure_files_home). bob is the one the leak tests search before he owns anything.
+ensure_files_home alice
+ensure_files_home bob
 
 # Nextcloud counts failed logins per source IP, and a remote MCP server is one IP for many
 # users. The negative tests produce 401s on purpose, so the guard would throttle the whole
