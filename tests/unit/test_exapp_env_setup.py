@@ -364,6 +364,43 @@ def test_the_plaintext_guard_decides_by_the_shared_key(
     assert ("REACHED_START" in result.stdout) is (expected_code == 0)
 
 
+@needs_bash
+@pytest.mark.parametrize(
+    ("files", "expected_code"),
+    [
+        ((), 1),
+        (("client.crt", "client.key"), 1),
+        (("client.crt", "client.key", "ca.crt"), 0),
+    ],
+    ids=["directory without files", "ca.crt still missing", "all three files"],
+)
+def test_the_plaintext_guard_waits_for_the_files_not_the_directory(
+    tmp_path: Path, files: tuple[str, ...], expected_code: int
+) -> None:
+    """IN-02: HaRP creates /certs/frp with `mkdir -p` before it copies the three files
+    start.sh reads. A guard that only checks the directory lets start.sh emit a TLS
+    configuration whose certFile does not exist yet, so the guard has to wait for the
+    files themselves."""
+    stub = tmp_path / "start.sh"
+    stub.write_text('#!/bin/sh\necho REACHED_START "$@"\n', encoding="utf-8", newline="\n")
+    cert_dir = tmp_path / "certs"
+    cert_dir.mkdir()
+    for name in files:
+        (cert_dir / name).write_text("not a real certificate\n", encoding="utf-8", newline="\n")
+    body = (
+        ENTRYPOINT.read_text(encoding="utf-8")
+        .replace('FRP_CERT_DIR="/certs/frp"', f'FRP_CERT_DIR="{cert_dir.as_posix()}"')
+        .replace('exec /start.sh "$@"', f'exec sh "{stub.as_posix()}" "$@"')
+    )
+    assert cert_dir.as_posix() in body, "the certificate directory is not a single literal"
+    script = f'export HP_SHARED_KEY="{"x" * 64}"\nexport FRP_CERT_WAIT_SECONDS="0"\n{body}'
+
+    result = run_bash(script)
+
+    assert result.returncode == expected_code, result.stderr
+    assert ("REACHED_START" in result.stdout) is (expected_code == 0)
+
+
 def test_the_frpc_download_is_checksum_verified() -> None:
     """T-02-SC: frpc is a foreign binary, and a release asset can be replaced."""
     text = DOCKERFILE.read_text(encoding="utf-8")

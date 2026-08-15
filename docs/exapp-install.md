@@ -237,7 +237,9 @@ therefore creates `/certs` owned by the unprivileged user. The same call also tr
 and is harmless as long as the instance is not behind a private certificate authority.
 
 Since WR-04 the container no longer accepts the fallback. `entrypoint.sh` waits up to
-`FRP_CERT_WAIT_SECONDS` (60 by default) for `/certs/frp` and then refuses to start, because
+`FRP_CERT_WAIT_SECONDS` (60 by default) for the three certificate files in `/certs/frp`
+(`client.crt`, `client.key`, `ca.crt`; the directory alone appears before the files and is
+not enough, IN-02) and then refuses to start, because
 the fallback writes `transport.tls.enable = false` and sends `HP_SHARED_KEY` over the wire in
 the clear, which hands whoever reads that path the right to register their own tunnel. On a
 trusted local network the downgrade can be taken deliberately with `ALLOW_PLAINTEXT_FRP=1`;

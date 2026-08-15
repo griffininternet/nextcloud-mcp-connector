@@ -27,9 +27,20 @@ set -eu
 FRP_CERT_DIR="/certs/frp"
 FRP_CERT_WAIT_SECONDS="${FRP_CERT_WAIT_SECONDS:-60}"
 
+# The directory alone is not the certificate (IN-02): HaRP creates it with `mkdir -p`
+# before it copies the three files start.sh writes into the frpc configuration
+# (client.crt, client.key and ca.crt). In the race between the mkdir and the copy a
+# directory check lets start.sh emit a TLS configuration whose certFile does not exist
+# yet, and frpc dies with a misleading error. So the wait is for the files themselves.
+frp_certs_present() {
+    [ -f "${FRP_CERT_DIR}/client.crt" ] &&
+        [ -f "${FRP_CERT_DIR}/client.key" ] &&
+        [ -f "${FRP_CERT_DIR}/ca.crt" ]
+}
+
 if [ -n "${HP_SHARED_KEY:-}" ]; then
     waited=0
-    while [ ! -d "${FRP_CERT_DIR}" ] && [ "${waited}" -lt "${FRP_CERT_WAIT_SECONDS}" ]; do
+    while ! frp_certs_present && [ "${waited}" -lt "${FRP_CERT_WAIT_SECONDS}" ]; do
         if [ "${waited}" -eq 0 ]; then
             echo "waiting for HaRP to install the FRP client certificate in ${FRP_CERT_DIR}"
         fi
@@ -37,13 +48,15 @@ if [ -n "${HP_SHARED_KEY:-}" ]; then
         waited=$((waited + 1))
     done
 
-    if [ ! -d "${FRP_CERT_DIR}" ]; then
+    if ! frp_certs_present; then
         if [ "${ALLOW_PLAINTEXT_FRP:-0}" = "1" ]; then
-            echo "WARNING: ${FRP_CERT_DIR} is still missing after ${FRP_CERT_WAIT_SECONDS}s." >&2
-            echo "WARNING: ALLOW_PLAINTEXT_FRP=1 is set, so frpc will send HP_SHARED_KEY" >&2
-            echo "WARNING: unencrypted. Only ever do this on a trusted local network." >&2
+            echo "WARNING: the certificate files in ${FRP_CERT_DIR} are still incomplete" >&2
+            echo "WARNING: after ${FRP_CERT_WAIT_SECONDS}s. ALLOW_PLAINTEXT_FRP=1 is set, so" >&2
+            echo "WARNING: frpc will send HP_SHARED_KEY unencrypted. Only ever do this on" >&2
+            echo "WARNING: a trusted local network." >&2
         else
-            echo "ERROR: ${FRP_CERT_DIR} is still missing after ${FRP_CERT_WAIT_SECONDS}s." >&2
+            echo "ERROR: ${FRP_CERT_DIR} is still missing client.crt, client.key or ca.crt" >&2
+            echo "ERROR: after ${FRP_CERT_WAIT_SECONDS}s." >&2
             echo "ERROR: frpc would send HP_SHARED_KEY in the clear, and whoever reads it" >&2
             echo "ERROR: can attach their own tunnel to HaRP. Refusing to start." >&2
             echo "ERROR: The usual cause is that /certs is not writable for uid 10001, so" >&2
