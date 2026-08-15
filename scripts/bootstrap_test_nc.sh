@@ -30,13 +30,27 @@ occ() {
   $OCC "$@"
 }
 
-# A password for occ has to travel inside the container. An exported variable on the host
-# never reaches the process that `docker compose exec` starts, so -e is not optional here.
+# Every secret this script hands to the container travels through stdin, never through a
+# command line (WR-06). The argv of `docker` is world readable in `ps aux` for the whole
+# duration of a call, and an inline -e assignment additionally lands in the container
+# config of the exec. A pipe is private to the two processes at its ends.
+#
+# The `sh -c '<snippet>' sh "$@"` form is the portable way to give that snippet positional
+# arguments: the word after the snippet becomes $0, everything after it becomes $1 and up.
+occ_stdin() {
+  local snippet="$1"
+  shift
+  docker compose -f "${COMPOSE_FILE}" exec -T --user www-data "${SERVICE}" \
+    sh -c "${snippet}" sh "$@"
+}
+
+# A password for occ has to travel inside the container: an exported variable on the host
+# never reaches the process that `docker compose exec` starts.
 occ_pw() {
   local password="$1"
   shift
-  docker compose -f "${COMPOSE_FILE}" exec -T -e "OC_PASS=${password}" \
-    --user www-data "${SERVICE}" php occ "$@"
+  printf '%s' "$password" |
+    occ_stdin 'OC_PASS="$(cat)"; export OC_PASS; exec php occ "$@"' "$@"
 }
 
 wait_for_install() {
