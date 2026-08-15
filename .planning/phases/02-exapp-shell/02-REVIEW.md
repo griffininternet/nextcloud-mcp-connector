@@ -125,6 +125,10 @@ der argv von Host-Prozessen, also genau die Klasse, die Interim-WR-06 geschlosse
 
 ### WR-01: `ensure_daemon_harp` reicht `HP_SHARED_KEY` als Kommandozeilen-Argument durch die Host-Prozessliste
 
+**Status:** resolved (Commit a845867, 2026-08-15): Key geht per stdin über `occ_stdin` in
+die Registrierung; der Wächter-Test verbietet die drei argv-Muster jetzt in allen
+`scripts/*.sh`.
+
 **Datei:** `scripts/bootstrap_exapp.sh:305-311` (konkret Zeile 310), Testlücke in
 `tests/unit/test_exapp_env_setup.py:645-655`
 
@@ -164,6 +168,9 @@ erweitern, damit die Stelle nicht zurückkommt.
 
 ### WR-02: `bootstrap_test_nc.sh` verwendet weiterhin das `-e "OC_PASS=..."`-Muster, das Interim-WR-06 im Schwesterskript geschlossen hat
 
+**Status:** resolved (Commit 5c77752, 2026-08-15): `occ_stdin` und die stdin-Variante von
+`occ_pw` aus dem Schwesterskript übernommen.
+
 **Datei:** `scripts/bootstrap_test_nc.sh:35-40` (konkret Zeile 38)
 
 **Befund:** `occ_pw` übergibt das Login-Passwort als `-e "OC_PASS=${password}"` an
@@ -197,6 +204,9 @@ occ_pw() {
 
 ### WR-03: `spike_discovery.sh` legt Alices App-Passwort per `curl -u` in die argv
 
+**Status:** resolved (Commit 9a42f15, 2026-08-15): Credentials gehen über eine private
+curl-Konfigurationsdatei (`-K`, mktemp + chmod 600 + trap) statt über die argv.
+
 **Datei:** `scripts/spike_discovery.sh:63-65` (gesetzt), `:92-99` (verwendet)
 
 **Befund:** `basic_auth=(-u "${ALICE_USER}:${ALICE_APP_PASSWORD}")` reicht das
@@ -224,6 +234,9 @@ fi
 ## Info
 
 ### IN-01: Der CI-Job schreibt `HP_SHARED_KEY` unmaskiert in `GITHUB_ENV`
+
+**Status:** resolved (Commit b796584, 2026-08-15): `::add-mask::` vor dem Schreiben in
+`GITHUB_ENV` ergänzt.
 
 **Datei:** `.github/workflows/ci.yml:65-69`
 
