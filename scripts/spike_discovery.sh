@@ -7,7 +7,7 @@
 #   bash scripts/spike_discovery.sh                     # 4. this measurement
 #
 # Prerequisite: the ExApp is registered under the HaRP daemon and the running container
-# carries the discovery routes of this plan (rebuild and redeploy after a code change).
+# carries the metadata routes of plan 03-01 (rebuild and redeploy after a code change).
 # This script changes nothing on the instance: no occ, no registration, no restart. It only
 # sends GET and POST requests and reads the answers.
 #
@@ -25,7 +25,7 @@ ALICE_APP_PASSWORD="${NC_MCP_TEST_APP_PASSWORD:-}"
 
 # Filled by measure(), read by the verification block at the end.
 STATUS_METADATA_HARP=""
-WWWAUTH_PROBE_HARP=""
+WWWAUTH_MCP_HARP=""
 STATUS_HEARTBEAT_HARP=""
 
 printf '%s\n' "== discovery spike measurement =="
@@ -80,18 +80,23 @@ STATUS_METADATA_HARP="${MEASURED_STATUS}"
 measure "/.well-known/oauth-protected-resource/mcp" "PHP-Proxy" "none" \
   "${BASE}${PHP_PREFIX}/.well-known/oauth-protected-resource/mcp"
 
-# 2. the 401 probe with the WWW-Authenticate pointer, over both ways
-measure "/.well-known/mcp-discovery-probe" "HaRP" "none" \
-  "${BASE}${HARP_PREFIX}/.well-known/mcp-discovery-probe"
-WWWAUTH_PROBE_HARP="${MEASURED_WWWAUTH}"
-measure "/.well-known/mcp-discovery-probe" "PHP-Proxy" "none" \
-  "${BASE}${PHP_PREFIX}/.well-known/mcp-discovery-probe"
+# 2. the two authorization server documents, unauthenticated, over both ways. Their
+# canonical root paths belong to Nextcloud, which is what the two rewrite rules in
+# deploy/Caddyfile are for; measured here below our own prefix, where they exist.
+measure "/.well-known/openid-configuration" "HaRP" "none" \
+  "${BASE}${HARP_PREFIX}/.well-known/openid-configuration"
+measure "/.well-known/oauth-authorization-server" "PHP-Proxy" "none" \
+  "${BASE}${PHP_PREFIX}/.well-known/oauth-authorization-server"
 
-# 3. /mcp without auth: rejected before the ExApp because access_level is USER. The URL is
-# the fourth argument of measure; the curl options follow it (curl accepts the URL anywhere).
+# 3. /mcp without auth: since plan 03-01 the route is PUBLIC, so HaRP forwards the call
+# and the transport boundary of the ExApp answers the 401 of the discovery flow itself,
+# with the resource_metadata pointer. Until then the spike measured that 401 on a purpose
+# built probe route below /.well-known/, which plan 03-01 removed. The URL is the fourth
+# argument of measure; the curl options follow it (curl accepts the URL anywhere).
 measure "/mcp" "HaRP" "none" "${BASE}${HARP_PREFIX}/mcp" \
   -X POST -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+WWWAUTH_MCP_HARP="${MEASURED_WWWAUTH}"
 measure "/mcp" "PHP-Proxy" "none" "${BASE}${PHP_PREFIX}/mcp" \
   -X POST -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
@@ -128,13 +133,15 @@ else
   fail=1
 fi
 
-# HARD 2: the probe over HaRP carries a WWW-Authenticate header with resource_metadata.
-case "${WWWAUTH_PROBE_HARP}" in
+# HARD 2: the unauthenticated /mcp over HaRP carries a WWW-Authenticate header with the
+# resource_metadata pointer. That header is the first step of the OAuth discovery flow,
+# and the reason the route is PUBLIC since plan 03-01.
+case "${WWWAUTH_MCP_HARP}" in
   *resource_metadata=*)
-    printf 'PASS  probe over HaRP carries WWW-Authenticate with resource_metadata\n'
+    printf 'PASS  /mcp over HaRP carries WWW-Authenticate with resource_metadata\n'
     ;;
   *)
-    printf 'FAIL  probe over HaRP has no resource_metadata pointer (got: %s)\n' "${WWWAUTH_PROBE_HARP:-none}"
+    printf 'FAIL  /mcp over HaRP has no resource_metadata pointer (got: %s)\n' "${WWWAUTH_MCP_HARP:-none}"
     fail=1
     ;;
 esac

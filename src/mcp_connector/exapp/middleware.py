@@ -31,11 +31,9 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from ..errors import ToolError
 from .auth import AppApiRejected, require_appapi
+from .responses import NO_STORE
 
 __all__ = ["RequireAppApi"]
-
-#: Same header the lifecycle routes set, and for the same reason (pitfall 4).
-_NO_STORE = {"Cache-Control": "no-store"}
 
 
 class RequireAppApi:
@@ -59,7 +57,7 @@ class RequireAppApi:
             # No detail and no WWW-Authenticate: the caller behind these headers is a
             # proxy, and every hint would only say which of the checks rejected the
             # request (T-02-03).
-            response = Response(status_code=401, headers=_NO_STORE)
+            response = Response(status_code=401, headers=NO_STORE)
             await response(scope, receive, send)
             return
 

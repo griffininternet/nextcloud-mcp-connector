@@ -20,6 +20,7 @@ configuration unnoticed).
 import base64
 import json
 
+import pytest
 from starlette.applications import Starlette
 from starlette.testclient import TestClient
 
@@ -34,7 +35,18 @@ APP_SECRET = "a8e934cd9e8d19e49db290ab1e529f4d9fed314388579d612eb01644beb7cacc"
 PRM_PATH = "/.well-known/oauth-protected-resource/mcp"
 OPENID_PATH = "/.well-known/openid-configuration"
 AUTHORIZATION_SERVER_PATH = "/.well-known/oauth-authorization-server"
-PROBE_PATH = "/.well-known/mcp-discovery-probe"
+
+#: Neighbours of the three documents. HaRP matches route patterns with ``re.match``, so a
+#: manifest pattern without an end anchor would let these through to the app (pitfall 14,
+#: AR-02-06). None of them is a route here either, which is the second half of that guard.
+#: The measurement probe of the phase 2 spike lived among them and is gone with this plan;
+#: the wiring test below is what proves that, by set equality over the registered paths.
+FORBIDDEN_NEIGHBOURS = [
+    "/.well-known/",
+    "/.well-known/oauth-protected-resource",
+    "/.well-known/oauth-protected-resource/mcpx",
+    "/.well-known/openid-configuration/exapps/mcp_connector",
+]
 
 ENV = {
     config.ENV_PUBLIC_URL: PUBLIC_URL,
@@ -289,14 +301,17 @@ def test_build_exapp_app_registers_exactly_the_three_well_known_routes() -> None
     assert well_known == sorted([PRM_PATH, OPENID_PATH, AUTHORIZATION_SERVER_PATH])
 
 
-def test_the_spike_probe_route_is_gone() -> None:
-    """The measurement probe of phase 2 was written to be replaced, not extended, and the
-    401 of the discovery flow comes out of /mcp itself from this plan on."""
+@pytest.mark.parametrize("path", FORBIDDEN_NEIGHBOURS)
+def test_no_neighbour_below_well_known_is_served(path: str) -> None:
+    """Three documents and nothing else below the prefix, the spike probe included.
+
+    The probe of phase 2 was written to be replaced rather than extended, and the 401 of the
+    discovery flow comes out of /mcp itself from this plan on. The wiring test above proves
+    its absence by set equality; this one proves that no near miss answers either, which is
+    the property the anchored manifest routes rely on (pitfall 14).
+    """
     with client() as http:
-        assert http.get(PROBE_PATH).status_code == 404
-    assert PROBE_PATH not in {
-        getattr(route, "path", "") for route in build_exapp_app(ENV).router.routes
-    }
+        assert http.get(path).status_code == 404
 
 
 def test_the_standalone_http_app_knows_none_of_the_routes() -> None:

@@ -40,6 +40,16 @@ health
 _.verify_token
 _.auth_flow
 
+# --- Fields of an SDK model that only the serialised document reads --------------------
+# scopes_supported, authorization_response_iss_parameter_supported: two of the three fields
+#   oauth/metadata.py sets on the OAuthMetadata model of the SDK after build_metadata built
+#   it. Nothing in this repository reads them back; they are written, dumped to JSON and
+#   answered to the client, which is exactly what tests/unit/test_oauth_metadata.py asserts
+#   on. Assigning them on the model instead of on the dumped dict keeps the field names
+#   checked by pydantic and pyright, which is why the write looks unused to vulture.
+_.scopes_supported
+_.authorization_response_iss_parameter_supported
+
 # --- Read from outside the production call graph --------------------------------------
 # deck_api_versions: a capabilities field the Deck integration test asserts on; it exists so
 #   an instance that only offers API 1.1 is a named finding instead of a mystery 404.

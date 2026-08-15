@@ -23,15 +23,15 @@ Three rules that come straight from the AppAPI source:
 
 import logging
 from collections.abc import Mapping
-from typing import Any
 
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import Response
 from starlette.routing import Route
 
 from ..errors import ToolError
 from . import status
 from .auth import AppApiRejected, require_appapi
+from .responses import NO_STORE, json_response
 
 __all__ = ["lifecycle_routes"]
 
@@ -43,9 +43,6 @@ INIT_PROGRESS = 100
 
 #: Set on the proxy path, never by HaRP and never by a client that reached us directly.
 HEADER_ORIGIN_IP = "x-origin-ip"
-
-#: On every answer of this module, including the failures (pitfall 4).
-_NO_STORE = {"Cache-Control": "no-store"}
 
 logger = logging.getLogger("mcp_connector.exapp.lifecycle")
 
@@ -59,7 +56,7 @@ def lifecycle_routes(env: Mapping[str, str] | None = None) -> list[Route]:
 
     async def heartbeat(request: Request) -> Response:
         """Liveness for the AppAPI registration. Unauthenticated by contract."""
-        return _json({"status": "ok"})
+        return json_response({"status": "ok"})
 
     async def init(request: Request) -> Response:
         """Accept the install call, then report progress 100 out of band."""
@@ -73,7 +70,7 @@ def lifecycle_routes(env: Mapping[str, str] | None = None) -> list[Route]:
             # Nothing that happens on the way to Nextcloud may turn this into a 500:
             # AppAPI aborts the whole installation on a failing /init (pitfall 3).
             logger.error("the init progress push failed, the installation may stay below 100")
-        return _json({})
+        return json_response({})
 
     async def enabled(request: Request) -> Response:
         """Confirm the enable or disable call with an empty ``error`` field."""
@@ -83,8 +80,8 @@ def lifecycle_routes(env: Mapping[str, str] | None = None) -> list[Route]:
 
         value = request.query_params.get("enabled", "")
         if value not in ENABLED_VALUES:
-            return _json({"error": "enabled must be 0 or 1"}, status_code=400)
-        return _json({"error": ""})
+            return json_response({"error": "enabled must be 0 or 1"}, status_code=400)
+        return json_response({"error": ""})
 
     return [
         Route("/heartbeat", heartbeat, methods=["GET"]),
@@ -111,13 +108,8 @@ def _guard(request: Request, env: Mapping[str, str] | None) -> str | Response:
         # every call and exapp_settings raises it when a variable is missing (IN-02). main
         # validates that at startup, so the branch is unreachable in a deployed process,
         # but a boundary that cannot decide has to refuse rather than answer 500.
-        return _json({}, status_code=401)
-
-
-def _json(payload: dict[str, Any], status_code: int = 200) -> JSONResponse:
-    """One helper for every answer, so ``no-store`` cannot be forgotten on one branch."""
-    return JSONResponse(payload, status_code=status_code, headers=_NO_STORE)
+        return json_response({}, status_code=401)
 
 
 def _text(body: str, status_code: int) -> Response:
-    return Response(body, status_code=status_code, media_type="text/plain", headers=_NO_STORE)
+    return Response(body, status_code=status_code, media_type="text/plain", headers=NO_STORE)
