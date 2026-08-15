@@ -115,6 +115,23 @@ def test_init_with_a_wrong_secret_is_401(pushes: list[int]) -> None:
     assert pushes == []
 
 
+@pytest.mark.parametrize("path", ["/init", "/enabled"])
+def test_a_broken_deploy_environment_is_401_not_500(pushes: list[int], path: str) -> None:
+    """IN-02: require_appapi reads the environment per call, and exapp_settings raises
+    ToolError when a variable is missing. _guard used to let that escape as a 500, which
+    the module docstring already claimed could not happen."""
+    broken = {key: value for key, value in ENV.items() if key != config.ENV_APP_SECRET}
+    with TestClient(Starlette(routes=lifecycle.lifecycle_routes(broken))) as http:
+        response = http.request(
+            "POST" if path == "/init" else "PUT", path, headers=appapi_headers()
+        )
+
+    assert response.status_code == 401
+    assert response.json() == {}
+    assert response.headers["cache-control"] == "no-store"
+    assert pushes == []
+
+
 def test_init_reports_progress_once_and_answers_200(pushes: list[int]) -> None:
     """Pitfall 3: a 200 without the status push leaves the installation at zero percent."""
     with client() as http:

@@ -372,6 +372,14 @@ def test_the_frpc_download_is_checksum_verified() -> None:
     assert "FRP_ARM64_SHA256" in text
 
 
+def test_the_frpc_checksums_cannot_be_replaced_from_the_command_line() -> None:
+    """IN-03: as ARGs they were overridable with --build-arg, so the pin only held for a
+    build nobody tampered with."""
+    args = instruction_values(DOCKERFILE.read_text(encoding="utf-8"), "ARG")
+    for name in ("FRP_AMD64_SHA256", "FRP_ARM64_SHA256", "FRP_VERSION"):
+        assert not any(value.startswith(name) for value in args), f"{name} is still an ARG"
+
+
 @pytest.mark.parametrize("name", FORBIDDEN_ENV_NAMES)
 def test_no_secret_is_baked_into_the_image(name: str) -> None:
     """T-02-23: secrets come from the deploy environment, never from a layer."""

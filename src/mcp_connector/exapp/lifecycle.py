@@ -29,6 +29,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
+from ..errors import ToolError
 from . import status
 from .auth import AppApiRejected, require_appapi
 
@@ -102,9 +103,14 @@ def _guard(request: Request, env: Mapping[str, str] | None) -> str | Response:
         return _text("Not Found", status_code=404)
     try:
         return require_appapi(request, env=env)
-    except AppApiRejected:
+    except (AppApiRejected, ToolError):
         # No detail, no WWW-Authenticate: the caller is a proxy, and every hint here would
         # only tell an attacker which of the checks rejected the request (T-02-03).
+        #
+        # ToolError is in the tuple because require_appapi reads the deploy environment on
+        # every call and exapp_settings raises it when a variable is missing (IN-02). main
+        # validates that at startup, so the branch is unreachable in a deployed process,
+        # but a boundary that cannot decide has to refuse rather than answer 500.
         return _json({}, status_code=401)
 
 

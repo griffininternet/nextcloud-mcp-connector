@@ -119,6 +119,15 @@ def normalize_base_url(raw: str) -> str:
             message=f"{ENV_URL} has no host ({candidate!r}).",
             hint=_URL_HINT,
         )
+    if parts.username or parts.password:
+        # The value neither belongs in a URL nor in this message: base_url is logged with
+        # its full value in exapp/status.py, so a password in there would end up in the
+        # log of a failed progress push (IN-04). This project takes credentials from
+        # NC_MCP_USER and NC_MCP_APP_PASSWORD, or from the AppAPI header, never from here.
+        raise ToolError(
+            message=f"{ENV_URL} carries credentials in the URL.",
+            hint=_URL_HINT,
+        )
     return candidate
 
 

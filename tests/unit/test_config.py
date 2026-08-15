@@ -69,6 +69,26 @@ def test_invalid_base_url_is_rejected(raw: str) -> None:
     assert excinfo.value.hint
 
 
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "https://admin:hunter2@cloud.test",
+        "https://admin@cloud.test",
+        "http://:hunter2@cloud.test/nextcloud",
+    ],
+    ids=["user and password", "user only", "password only"],
+)
+def test_credentials_in_the_base_url_are_rejected_without_repeating_them(raw: str) -> None:
+    """IN-04: the value passed the scheme and netloc checks and landed in
+    settings.base_url, which exapp/status.py writes into two logger.error lines in full."""
+    with pytest.raises(ToolError) as excinfo:
+        config.normalize_base_url(raw)
+
+    assert "credentials" in excinfo.value.message
+    assert "hunter2" not in excinfo.value.message
+    assert "hunter2" not in excinfo.value.hint
+
+
 def test_redirect_hint_is_available_for_client_errors() -> None:
     """The 3xx path in the client layer reuses one wording, defined here."""
     assert "redirect" in config.REDIRECT_HINT.lower()

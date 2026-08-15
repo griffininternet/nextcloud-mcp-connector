@@ -59,11 +59,15 @@ RUN apt-get update \
 # ExApps to use HaRP" (github.com/nextcloud/HaRP, branch main, retrieved 2026-08-15), the
 # same section that publishes start.sh. sha256sum -c turns a tampered or replaced release
 # asset into a failed build instead of a running foreign binary (T-02-SC).
+#
+# Version and checksums are constants of this RUN, not ARGs (IN-03). As build arguments
+# they could be replaced from the command line with --build-arg, so the pinning statement
+# only held for a build nobody tampered with, which is not what a pin is for.
 ARG TARGETARCH
-ARG FRP_VERSION=0.61.1
-ARG FRP_AMD64_SHA256=bff260b68ca7b1461182a46c4f34e9709ba32764eed30a15dd94ac97f50a2c40
-ARG FRP_ARM64_SHA256=af6366f2b43920ebfe6235dba6060770399ed1fb18601e5818552bd46a7621f8
 RUN set -eux; \
+    FRP_VERSION=0.61.1; \
+    FRP_AMD64_SHA256=bff260b68ca7b1461182a46c4f34e9709ba32764eed30a15dd94ac97f50a2c40; \
+    FRP_ARM64_SHA256=af6366f2b43920ebfe6235dba6060770399ed1fb18601e5818552bd46a7621f8; \
     case "${TARGETARCH:-amd64}" in \
         arm64) FRP_ARCH=arm64; FRP_SHA256="${FRP_ARM64_SHA256}" ;; \
         amd64) FRP_ARCH=amd64; FRP_SHA256="${FRP_AMD64_SHA256}" ;; \
