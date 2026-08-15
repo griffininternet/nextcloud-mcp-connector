@@ -253,6 +253,30 @@ require_hex64() {
   fi
 }
 
+# json_info interpolates the port unquoted and the registry into a string of the
+# registration payload, and all three source variables are overridable from the calling
+# shell (IN-07). A forgotten export in that shell (the same error class WR-07 pinned
+# COMPOSE_FILE against) produces at best invalid JSON, at worst a payload with extra
+# fields that AppAPI adopts silently. APP_SECRET is covered by require_hex64 (CR-02);
+# these two shapes are pinned here, immediately before any of them is used.
+require_port_number() {
+  local name="$1" value="$2"
+  if ! printf '%s' "$value" | grep -Eq '^[0-9]+$'; then
+    echo "ERROR: ${name} is '${value}', not a plain port number." >&2
+    echo "It is interpolated unquoted into the registration JSON (IN-07). Refusing." >&2
+    return 1
+  fi
+}
+
+require_registry_shape() {
+  local value="$1"
+  if ! printf '%s' "$value" | grep -Eq '^[0-9A-Za-z_.:-]+$'; then
+    echo "ERROR: NC_EXAPP_REGISTRY is '${value}', which is not a host[:port] shape." >&2
+    echo "It is interpolated into the registration JSON (IN-07). Refusing." >&2
+    return 1
+  fi
+}
+
 # The shared key is read back from the running HaRP container instead of being invented
 # here. Both sides have to carry the same value, and a generated one would silently drift
 # away from the container that was started before this script ran.
@@ -465,6 +489,9 @@ register_manual_install() {
 
 echo "== ExApp topology bootstrap =="
 ensure_own_topology
+require_port_number NC_EXAPP_APP_PORT "${APP_PORT}"
+require_port_number NC_EXAPP_MANUAL_PORT "${MANUAL_APP_PORT}"
+require_registry_shape "${REGISTRY}"
 wait_for_install
 
 # Notes and Deck are optional apps; the tool plans of the later phases need both.

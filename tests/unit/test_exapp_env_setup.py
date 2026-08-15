@@ -696,6 +696,57 @@ def test_the_topology_guard_refuses_a_foreign_compose_file(
     assert result.returncode == expected_code, result.stderr
 
 
+@needs_bash
+@pytest.mark.parametrize(
+    ("call", "expected_code"),
+    [
+        ("require_port_number NC_EXAPP_APP_PORT '23000'", 0),
+        ("require_port_number NC_EXAPP_APP_PORT '23000,\"system\":true'", 1),
+        ("require_port_number NC_EXAPP_APP_PORT ''", 1),
+        ("require_port_number NC_EXAPP_APP_PORT '23000 '", 1),
+        ("require_registry_shape '127.0.0.1:5000'", 0),
+        ("require_registry_shape 'ghcr.io'", 0),
+        ('require_registry_shape \'127.0.0.1:5000","image":"evil\'', 1),
+        ("require_registry_shape ''", 1),
+    ],
+    ids=[
+        "a plain port",
+        "a port with a JSON injection",
+        "an empty port",
+        "a port with trailing whitespace",
+        "a registry with a port",
+        "a bare registry host",
+        "a registry with a JSON injection",
+        "an empty registry",
+    ],
+)
+def test_the_registration_inputs_are_pinned_before_json_info(call: str, expected_code: int) -> None:
+    """IN-07: json_info interpolates the port unquoted and the registry into a string,
+    and both come from overridable variables. A value outside the pinned shape must stop
+    the bootstrap instead of reaching AppAPI as extra JSON fields."""
+    script = (
+        "set -euo pipefail\n"
+        f"{shell_function('require_port_number')}\n"
+        f"{shell_function('require_registry_shape')}\n"
+        f"{call}\n"
+    )
+
+    result = run_bash(script)
+
+    assert result.returncode == expected_code, result.stderr
+
+
+def test_the_bootstrap_calls_both_registration_validators() -> None:
+    """The functions only protect anything if the main flow actually runs them."""
+    text = BOOTSTRAP.read_text(encoding="utf-8")
+    for call in (
+        'require_port_number NC_EXAPP_APP_PORT "${APP_PORT}"',
+        'require_port_number NC_EXAPP_MANUAL_PORT "${MANUAL_APP_PORT}"',
+        'require_registry_shape "${REGISTRY}"',
+    ):
+        assert call in text, f"the bootstrap never runs {call!r}"
+
+
 @pytest.mark.parametrize(
     "forbidden",
     [
