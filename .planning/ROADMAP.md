@@ -83,7 +83,30 @@ Plans:
   3. Discovery-Endpunkte (well-known/PRM, WWW-Authenticate) sind unauthentifiziert von außen erreichbar, auch über den AppAPI-Proxy-Pfad; das Spike-Ergebnis inkl. Fallback-Route ist dokumentiert, bevor Phase 3 startet
   4. Der DAV-über-AppAPI-Spike ist entschieden: Die Provider-Aufteilung (Impersonation vs. App-Passwort je API-Familie) ist getestet und dokumentiert
 
-**Plans**: TBD
+**Plans**: 7 plans in 5 waves
+
+Plans:
+**Wave 1**
+
+- [ ] 02-01-PLAN.md - AppAPI-Handshake, Lifecycle-Endpunkte und ExApp-Entrypoint (Wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 02-02-PLAN.md - Vierter Credential-Modus bis in die 20 Client-Aufrufstellen (Wave 2)
+- [ ] 02-03-PLAN.md - Container-Image, Startskript und ExApp-Manifest mit zwei engen Routen (Wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 02-04-PLAN.md - Testtopologie mit Reverse-Proxy und HaRP plus Installation über AppAPI (Wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 02-05-PLAN.md - Discovery-Spike AUTH-06 mit Messmatrix und Phase-3-Empfehlung (Wave 4)
+- [ ] 02-06-PLAN.md - DAV-Spike D-30: Impersonations-Matrix je API-Familie (Wave 4)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 02-07-PLAN.md - Permission-Parity über die volle Kette, Doku, AIO-Entscheidung, Abnahme (Wave 5)
 
 ### Phase 3: OAuth 2.1
 
@@ -141,7 +164,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Server-Kern | 14/14 | Complete    | 2026-08-14 |
-| 2. ExApp-Shell | 0/TBD | Not started | - |
+| 2. ExApp-Shell | 0/7 | Planned | - |
 | 3. OAuth 2.1 | 0/TBD | Not started | - |
 | 4. Per-User-Verwaltung und prepare_context | 0/TBD | Not started | - |
 | 5. Hardening und Store-Einreichung | 0/TBD | Not started | - |
