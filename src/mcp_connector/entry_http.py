@@ -41,6 +41,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from . import __version__, config
+from .errors import ToolError
 from .nextcloud.http import configure_logging
 from .server import mcp
 
@@ -60,7 +61,31 @@ async def health(request: Request) -> JSONResponse:
 
 
 def build_app(env: Mapping[str, str] | None = None) -> Starlette:
-    """Build the ASGI application with the host allowlist of this deployment."""
+    """Build the ASGI application with the host allowlist of this deployment.
+
+    The first thing it does is refuse to be an ExApp by accident (WR-03). ``APP_ID`` and
+    ``APP_SECRET`` are the only two mode switches without an ``NC_MCP_`` prefix, because
+    the AppAPI deploy daemon dictates their names, and they are common enough that a base
+    image, a systemd drop-in or a CI variable can set them for something else entirely.
+    ``config.select_mode`` then picks the ExApp mode per request, the credential source
+    changes from the Basic header of the caller to an ``AUTHORIZATION-APP-API`` header
+    this deployment never receives, and every user is locked out with "no valid AppAPI
+    authentication" although nothing in the configuration of this server was touched.
+    ``entry_exapp.main`` guards the opposite direction the same way, with exit code 2.
+    """
+    if config.exapp_configured(env):
+        raise ToolError(
+            message=(
+                f"{config.ENV_APP_ID} and {config.ENV_APP_SECRET} are set in a standalone "
+                "HTTP process."
+            ),
+            hint=(
+                "Those two select the ExApp credential mode, so this server would look for "
+                "an AppAPI header it never gets and lock out every user. Unset them here, "
+                "or run the entry point AppAPI deploys, 'nc-mcp-exapp', which serves the "
+                "same MCP endpoint plus the three lifecycle routes."
+            ),
+        )
     security = TransportSecuritySettings(
         allowed_hosts=config.allowed_hosts(env),
         enable_dns_rebinding_protection=config.dns_rebinding_protection(env),

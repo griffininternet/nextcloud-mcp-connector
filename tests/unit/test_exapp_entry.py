@@ -15,6 +15,7 @@ import pytest
 from starlette.testclient import TestClient
 
 from mcp_connector import config, entry_exapp, entry_http
+from mcp_connector.errors import ToolError
 
 APP_ID = "mcp_connector"
 APP_SECRET = "app-secret-test"
@@ -140,6 +141,40 @@ def test_the_standalone_http_app_serves_mcp_without_any_appapi_header() -> None:
 
     assert response.status_code == 200
     assert "protocolVersion" in response.text
+
+
+# --- the other direction of the mode switch (WR-03) -------------------------------
+
+
+def test_ambient_appapi_variables_stop_the_standalone_http_app() -> None:
+    """WR-03: APP_ID and APP_SECRET are the two mode switches without an NC_MCP_ prefix,
+    and they are common names. A base image or a CI variable that sets them used to flip
+    a phase 1 server into the ExApp credential mode without touching its configuration,
+    which locks out every user of a passthrough deployment."""
+    env = {config.ENV_APP_ID: "some-github-app", config.ENV_APP_SECRET: "some-other-thing"}
+    assert config.select_mode(env, headers={}) == "exapp", "the counter probe stopped working"
+
+    with pytest.raises(ToolError) as excinfo:
+        entry_http.build_app(env)
+
+    assert config.ENV_APP_SECRET in excinfo.value.message
+    assert "nc-mcp-exapp" in excinfo.value.hint
+
+
+@pytest.mark.parametrize(
+    "env",
+    [
+        {},
+        {config.ENV_APP_ID: "mcp_connector"},
+        {config.ENV_APP_SECRET: "app-secret-test"},
+        {config.ENV_APP_ID: "mcp_connector", config.ENV_APP_SECRET: "   "},
+    ],
+    ids=["nothing set", "only the id", "only the secret", "a blank secret"],
+)
+def test_the_guard_leaves_every_other_http_deployment_alone(env: dict[str, str]) -> None:
+    """A blank value is a typo in a compose file, not a request to change the mode, and
+    one of the two variables alone never selected the ExApp mode either."""
+    assert "/mcp" in paths(entry_http.build_app(env))
 
 
 # --- the startup validation ------------------------------------------------------
