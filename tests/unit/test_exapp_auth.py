@@ -17,6 +17,7 @@ import inspect
 import logging
 
 import pytest
+from starlette.datastructures import Headers
 
 from mcp_connector import config
 from mcp_connector.exapp import auth
@@ -137,6 +138,54 @@ def test_a_wrong_secret_is_rejected() -> None:
     headers = appapi_headers(secret="the-wrong-secret")
     with pytest.raises(auth.AppApiRejected):
         auth.verify_appapi_headers(headers, APP_ID, APP_SECRET)
+
+
+# --- duplicate headers (WR-01) ---------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "duplicated",
+    ["ex-app-id", "ex-app-version", "authorization-app-api"],
+)
+def test_a_header_sent_twice_is_rejected(duplicated: str) -> None:
+    """WR-01: which of two values wins used to depend on the proxy in front of us.
+
+    A dict comprehension over ``items()`` keeps the last value, ``Headers.get`` returns
+    the first, so a client set copy next to the proxy set one made the verified value a
+    property of a component outside this repository. Both are refused now.
+    """
+    raw = [(key.lower().encode(), value.encode()) for key, value in appapi_headers().items()]
+    forged = dict(appapi_headers(user="attacker", secret="wrongsecret"))
+    raw.append((duplicated.encode(), forged[duplicated.upper()].encode()))
+
+    with pytest.raises(auth.AppApiRejected):
+        auth.verify_appapi_headers(Headers(raw=raw), APP_ID, APP_SECRET)
+
+
+def test_a_prepended_duplicate_is_rejected_as_well() -> None:
+    """Order must not matter: the proxy may prepend or append its own copy."""
+    forged = appapi_headers(user="attacker", secret="wrongsecret")
+    raw = [(b"authorization-app-api", forged["AUTHORIZATION-APP-API"].encode())]
+    raw += [(key.lower().encode(), value.encode()) for key, value in appapi_headers().items()]
+
+    with pytest.raises(auth.AppApiRejected):
+        auth.verify_appapi_headers(Headers(raw=raw), APP_ID, APP_SECRET)
+
+
+def test_two_spellings_of_the_same_header_in_a_plain_dict_are_rejected() -> None:
+    """The fallback scan of ``_single``: a dict cannot hold a duplicate key, but it can
+    hold two casings of the same header name, and HTTP treats those as one header."""
+    headers = dict(appapi_headers())
+    headers["ex-app-id"] = "some_other_app"
+
+    with pytest.raises(auth.AppApiRejected):
+        auth.verify_appapi_headers(headers, APP_ID, APP_SECRET)
+
+
+def test_a_single_header_object_still_passes() -> None:
+    """The counter probe: the duplicate check must not reject a normal request."""
+    raw = [(key.lower().encode(), value.encode()) for key, value in appapi_headers().items()]
+    assert auth.verify_appapi_headers(Headers(raw=raw), APP_ID, APP_SECRET) == USER
 
 
 @pytest.mark.parametrize(

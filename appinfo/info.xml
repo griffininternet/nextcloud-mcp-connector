@@ -56,19 +56,25 @@ Every request runs under the identity of the signed in user, so an assistant nev
 		  - No bruteforce_protection on the MCP route. The OAuth discovery flow of phase 3
 		  - begins with a rejected request by specification, so a throttler armed on that
 		  - status would lock out legitimate first connections (T-02-21).
+		  -
+		  - headers_to_exclude lists exactly the headers the proxy sets itself. An empty
+		  - list let a client send its own AUTHORIZATION-APP-API next to the one the proxy
+		  - attached, and which of the two a reader sees then depends on whether the proxy
+		  - prepends or appends. The app refuses such a request outright since WR-01; this
+		  - list makes sure it never has to (WR-01, IN-01).
 		-->
 		<routes>
 			<route>
 				<url>^/mcp/?$</url>
 				<verb>GET,POST,DELETE</verb>
 				<access_level>USER</access_level>
-				<headers_to_exclude>[]</headers_to_exclude>
+				<headers_to_exclude>["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERSION","X-ORIGIN-IP"]</headers_to_exclude>
 			</route>
 			<route>
 				<url>^/\.well-known/</url>
 				<verb>GET</verb>
 				<access_level>PUBLIC</access_level>
-				<headers_to_exclude>[]</headers_to_exclude>
+				<headers_to_exclude>["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERSION","X-ORIGIN-IP"]</headers_to_exclude>
 			</route>
 		</routes>
 	</external-app>

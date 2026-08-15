@@ -271,9 +271,13 @@ ensure_image() {
 # heredoc consumes one pair, and JSON needs the remaining one so the route regex reaches
 # AppAPI as ^/\.well-known/ with an escaped dot. Two backslashes here produce the invalid
 # JSON escape \. and AppAPI answers "Invalid app info provided in JSON format".
+#
+# headers_to_exclude mirrors appinfo/info.xml: the proxy strips the headers it sets itself,
+# so a client cannot send a second AUTHORIZATION-APP-API next to the real one (WR-01).
+EXCLUDED_HEADERS='["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERSION","X-ORIGIN-IP"]'
 json_info() {
   cat <<JSON
-{"id":"${APP_ID}","name":"${APP_NAME}","daemon_config_name":"${DAEMON_NAME}","version":"${APP_VERSION}","secret":"${APP_SECRET}","port":${APP_PORT},"docker-install":{"registry":"${REGISTRY}","image":"${IMAGE_NAME}","image-tag":"${APP_VERSION}"},"routes":[{"url":"^/mcp/?$","verb":"GET,POST,DELETE","access_level":1,"headers_to_exclude":[]},{"url":"^/\\\\.well-known/","verb":"GET","access_level":0,"headers_to_exclude":[]}]}
+{"id":"${APP_ID}","name":"${APP_NAME}","daemon_config_name":"${DAEMON_NAME}","version":"${APP_VERSION}","secret":"${APP_SECRET}","port":${APP_PORT},"docker-install":{"registry":"${REGISTRY}","image":"${IMAGE_NAME}","image-tag":"${APP_VERSION}"},"routes":[{"url":"^/mcp/?$","verb":"GET,POST,DELETE","access_level":1,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/\\\\.well-known/","verb":"GET","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}}]}
 JSON
 }
 

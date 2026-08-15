@@ -18,7 +18,8 @@ for that case belongs to the credential layer, not to this parser.
 import base64
 import binascii
 import secrets
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from typing import cast
 
 from starlette.requests import Request
 
@@ -44,14 +45,12 @@ class AppApiRejected(Exception):
 def verify_appapi_headers(headers: Mapping[str, str], app_id: str, app_secret: str) -> str:
     """Return the Nextcloud user id this request runs as, or raise :class:`AppApiRejected`.
 
-    The first step builds a case insensitive lookup: Starlette headers are case
-    insensitive by themselves, a plain dict from a unit test is not, and AppAPI spells
-    the names in upper case.
+    Each of the three is read with :func:`_single`, which refuses a request that carries
+    the same header twice.
     """
-    lookup = {key.lower(): value for key, value in headers.items()}
-    received_app_id = lookup.get(HEADER_APP_ID, "")
-    app_version = lookup.get(HEADER_APP_VERSION, "")
-    raw_auth = lookup.get(HEADER_AUTHORIZATION, "")
+    received_app_id = _single(headers, HEADER_APP_ID)
+    app_version = _single(headers, HEADER_APP_VERSION)
+    raw_auth = _single(headers, HEADER_AUTHORIZATION)
     if not received_app_id or not app_version or not raw_auth:
         raise AppApiRejected
 
@@ -81,6 +80,35 @@ def require_appapi(request: Request, *, env: Mapping[str, str] | None = None) ->
     """
     settings = config.exapp_settings(env)
     return verify_appapi_headers(request.headers, settings.app_id, settings.app_secret)
+
+
+def _single(headers: Mapping[str, str], name: str) -> str:
+    """Return the one value of this header, or reject a request that carries it twice.
+
+    HTTP allows a header to appear more than once, and every reader of such a message
+    picks one. Which one differs: a dict comprehension over ``items()`` keeps the last
+    value, ``starlette.datastructures.Headers.get`` returns the first (both measured).
+    While this module resolved duplicates implicitly, the answer to "which value did we
+    verify" depended on whether the proxy in front of us prepends or appends its own copy,
+    which is a component outside this repository (WR-01).
+
+    So duplicates are refused instead of resolved. A legitimate AppAPI request never
+    carries one, the manifest additionally has the proxy strip the client set copies, and
+    a request that still arrives with two is answered like any other rejection: 401,
+    empty, no hint about which check fired.
+
+    ``getlist`` is used where the mapping has it, because two values of the same header
+    are invisible in ``items()`` of a real Starlette ``Headers`` object; the fallback scan
+    covers the plain dict a unit test hands in.
+    """
+    getlist = getattr(headers, "getlist", None)
+    if callable(getlist):
+        values = list(cast("Sequence[str]", getlist(name)))
+    else:
+        values = [value for key, value in headers.items() if key.lower() == name]
+    if len(values) > 1:
+        raise AppApiRejected
+    return values[0] if values else ""
 
 
 def _same(received: str, expected: str) -> bool:

@@ -62,6 +62,17 @@ WIDE_URLS = frozenset({".*", "^.*$", "/", ".+", "^.+$"})
 #: with valid AppAPI headers attached.
 LIFECYCLE_PATHS = ("/heartbeat", "/init", "/enabled")
 
+#: Headers the proxy sets itself. A route that does not have them stripped lets a client
+#: send its own copy next to the real one, and which of the two a reader sees depends on
+#: whether the proxy prepends or appends (WR-01, IN-01).
+PROXY_OWNED_HEADERS = (
+    "AUTHORIZATION-APP-API",
+    "EX-APP-ID",
+    "EX-APP-VERSION",
+    "AA-VERSION",
+    "X-ORIGIN-IP",
+)
+
 
 def instruction_values(text: str, keyword: str) -> list[str]:
     """Every value of a Dockerfile instruction, in file order, comments removed."""
@@ -104,9 +115,13 @@ def manifest_problems(root: etree._Element) -> list[str]:
         url = (route.findtext("url") or "").strip()
         access_level = (route.findtext("access_level") or "").strip()
         bruteforce = (route.findtext("bruteforce_protection") or "").strip()
+        excluded = (route.findtext("headers_to_exclude") or "").strip()
 
         if url in WIDE_URLS:
             problems.append(f"route {url!r} matches everything")
+        for header in PROXY_OWNED_HEADERS:
+            if f'"{header}"' not in excluded:
+                problems.append(f"route {url!r} does not have {header} stripped by the proxy")
         if access_level == "PUBLIC" and not url.startswith("^/"):
             problems.append(f"public route {url!r} is not anchored at a path")
         if "401" in bruteforce:
@@ -344,6 +359,29 @@ def test_the_manifest_gate_rejects_a_wide_public_route(manifest_root: etree._Ele
 
     assert any("matches everything" in problem for problem in problems)
     assert any("/enabled" in problem for problem in problems)
+
+
+def test_the_manifest_gate_rejects_a_route_that_keeps_the_client_headers(
+    manifest_root: etree._Element,
+) -> None:
+    """WR-01: an empty headers_to_exclude is what made the desync reachable at all."""
+    route = manifest_root.find(".//route")
+    assert route is not None
+    element = route.find("headers_to_exclude")
+    assert element is not None
+    element.text = "[]"
+
+    problems = manifest_problems(manifest_root)
+
+    assert any("AUTHORIZATION-APP-API stripped" in problem for problem in problems)
+
+
+def test_the_bootstrap_registration_strips_the_same_headers() -> None:
+    """The json-info registration overrides the manifest, so it has to carry the list."""
+    text = BOOTSTRAP.read_text(encoding="utf-8")
+    assert '"headers_to_exclude":[]' not in text
+    for header in PROXY_OWNED_HEADERS:
+        assert f'"{header}"' in text, f"{header} is not stripped by the registration"
 
 
 def test_the_manifest_gate_rejects_a_throttler_on_401(manifest_root: etree._Element) -> None:
