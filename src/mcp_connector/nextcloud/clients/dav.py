@@ -190,12 +190,20 @@ def search_scope(creds: Credentials, folder: str = "/") -> str:
     channel and the folder part runs through :func:`safe_path` first, so a search cannot
     reach into another account (threat T-01-32).
 
-    The href stays unescaped text on purpose: the verified example in the Nextcloud
-    documentation writes the plain path, and lxml escapes whatever XML would need.
+    ``creds.user`` is quoted like everywhere else in this package (WR-10). This was the
+    single place that wrote it into a path unquoted, which was harmless while the value
+    came from the environment and stopped being harmless in the ExApp mode, where it comes
+    out of ``AUTHORIZATION-APP-API``: a slash or a dot segment in the user id would have
+    produced a scope outside the caller's own home. Nextcloud forbids a slash in a user
+    id, so the chain hung on a promise of a foreign component; a space, which Nextcloud
+    does allow, already produced two different spellings of the same path in one request.
+
+    The XML text around it stays unescaped on purpose: the verified example in the
+    Nextcloud documentation writes the plain path, and lxml escapes whatever XML needs.
     """
     target = safe_path(folder)
     suffix = "" if target == "/" else target
-    return f"/files/{creds.user}{suffix}"
+    return f"/files/{quote(creds.user, safe='')}{suffix}"
 
 
 def build_search_body(

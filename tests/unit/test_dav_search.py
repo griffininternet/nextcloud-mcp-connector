@@ -97,6 +97,32 @@ def test_search_scope_is_the_home_or_one_folder_below_it(creds: Credentials) -> 
         dav.search_scope(creds, "/Docs/../../etc")
 
 
+@pytest.mark.parametrize(
+    ("user", "expected"),
+    [
+        ("alice", "/files/alice/Docs"),
+        ("../bob", "/files/..%2Fbob/Docs"),
+        ("a/b", "/files/a%2Fb/Docs"),
+        ("first last", "/files/first%20last/Docs"),
+    ],
+    ids=["plain", "a dot segment", "a slash", "a space Nextcloud allows"],
+)
+def test_the_user_id_cannot_leave_its_home_through_the_scope(user: str, expected: str) -> None:
+    """WR-10: in the ExApp mode the user id comes out of AUTHORIZATION-APP-API, so this
+    was the one place where a request supplied value reached a path unquoted."""
+    creds = Credentials(BASE, user, SECRET)
+
+    assert dav.search_scope(creds, "/Docs") == expected
+
+
+def test_the_scope_is_quoted_like_every_other_path_in_this_package() -> None:
+    """The counter probe: files_url quoted from the start, the scope did not."""
+    creds = Credentials(BASE, "a/b", SECRET)
+
+    assert "a%2Fb" in dav.files_url(creds, "/x.txt")
+    assert "a%2Fb" in dav.search_scope(creds)
+
+
 @pytest.mark.anyio
 async def test_search_goes_to_the_dav_root_as_text_xml(
     client: httpx.AsyncClient, creds: Credentials
