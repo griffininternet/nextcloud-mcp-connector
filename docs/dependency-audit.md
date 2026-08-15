@@ -122,3 +122,17 @@ top-level entry, which is the machine-checkable form of the policy above. The un
 - No `npx --yes` and no auto-substitution of packages: a failing install is a human checkpoint,
   never a "try a similar name" retry.
 - Re-run the audit whenever a direct dependency is added or a major version bumps.
+
+## Upgrade check at phase 1 closing (T-01-SC, plan 14)
+
+Executed on 2026-08-15 as required by the plan 14 threat register:
+
+```
+$ uv lock --upgrade-package mcp --dry-run
+Resolved 60 packages in 591ms
+No lockfile changes detected
+```
+
+Result: `mcp` 2.0.0 is current, no pending upstream release, the lockfile stays frozen.
+The check is repeated at every phase closing; the lockfile is tracked and CI installs
+with `uv sync --frozen`, so any drift fails the build instead of slipping in silently.
