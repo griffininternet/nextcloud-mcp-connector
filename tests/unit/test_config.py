@@ -78,3 +78,82 @@ def test_http_mode_variable_names_are_declared_but_unused() -> None:
     """Plan 04 evaluates these; plan 02 only reserves the names (no silent defaults)."""
     assert config.ENV_ALLOWED_HOSTS == "NC_MCP_ALLOWED_HOSTS"
     assert config.ENV_STATIC_BEARER == "NC_MCP_STATIC_BEARER"
+
+
+# --- the ExApp mode (EXAPP-01) ----------------------------------------------------
+
+APP_ID = "mcp_connector"
+APP_SECRET = "app-secret-test"
+APP_VERSION = "0.1.0"
+
+
+def _exapp_env() -> dict[str, str]:
+    return {
+        config.ENV_APP_ID: APP_ID,
+        config.ENV_APP_SECRET: APP_SECRET,
+        config.ENV_APP_VERSION: APP_VERSION,
+        config.ENV_AA_VERSION: "34.0.3",
+        config.ENV_NEXTCLOUD_URL: "http://nc.test/",
+    }
+
+
+def test_appapi_variable_names_keep_the_names_appapi_dictates() -> None:
+    """These four carry no NC_MCP_ prefix on purpose: the deploy daemon sets them."""
+    assert config.ENV_APP_ID == "APP_ID"
+    assert config.ENV_APP_SECRET == "APP_SECRET"
+    assert config.ENV_APP_VERSION == "APP_VERSION"
+    assert config.ENV_NEXTCLOUD_URL == "NEXTCLOUD_URL"
+
+
+def test_exapp_configured_needs_both_id_and_secret() -> None:
+    assert config.exapp_configured(_exapp_env()) is True
+    assert config.exapp_configured({config.ENV_APP_ID: APP_ID}) is False
+    assert config.exapp_configured({config.ENV_APP_SECRET: APP_SECRET}) is False
+    assert config.exapp_configured({}) is False
+
+
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_a_blank_appapi_variable_is_treated_as_unset(blank: str) -> None:
+    env = _exapp_env()
+    env[config.ENV_APP_SECRET] = blank
+    assert config.exapp_configured(env) is False
+
+
+def test_exapp_settings_reads_the_deploy_environment() -> None:
+    settings = config.exapp_settings(_exapp_env())
+    assert settings.app_id == APP_ID
+    assert settings.app_secret == APP_SECRET
+    assert settings.app_version == APP_VERSION
+    assert settings.aa_version == "34.0.3"
+    assert settings.base_url == "http://nc.test", "the trailing slash is normalised away"
+
+
+def test_exapp_settings_falls_back_to_the_phase_one_url_variable() -> None:
+    env = _exapp_env()
+    del env[config.ENV_NEXTCLOUD_URL]
+    env[config.ENV_URL] = "https://cloud.test/nextcloud/"
+    assert config.exapp_settings(env).base_url == "https://cloud.test/nextcloud"
+
+
+def test_exapp_settings_treats_a_missing_aa_version_as_empty() -> None:
+    """HaRP writes a placeholder into AA-VERSION anyway, so it is never required."""
+    env = _exapp_env()
+    del env[config.ENV_AA_VERSION]
+    assert config.exapp_settings(env).aa_version == ""
+
+
+@pytest.mark.parametrize("missing", ["APP_ID", "APP_SECRET", "APP_VERSION", "NEXTCLOUD_URL"])
+def test_a_missing_appapi_variable_names_itself(missing: str) -> None:
+    env = _exapp_env()
+    del env[missing]
+    with pytest.raises(ToolError) as excinfo:
+        config.exapp_settings(env)
+    assert missing in excinfo.value.message
+    assert excinfo.value.hint
+
+
+def test_the_settings_repr_masks_the_app_secret() -> None:
+    """T-02-03: the secret must not show up in a traceback or a container repr."""
+    settings = config.exapp_settings(_exapp_env())
+    assert APP_SECRET not in repr(settings)
+    assert "***" in repr(settings)

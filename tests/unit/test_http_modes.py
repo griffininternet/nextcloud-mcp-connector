@@ -74,6 +74,28 @@ def test_static_bearer_wins_over_headers_but_never_over_stdio() -> None:
     assert config.select_mode(env, headers=None) == "stdio"
 
 
+def test_select_mode_with_the_appapi_deploy_variables_is_exapp() -> None:
+    env = {config.ENV_APP_ID: "mcp_connector", config.ENV_APP_SECRET: "app-secret-test"}
+    assert config.select_mode(env, headers={}) == "exapp"
+
+
+def test_exapp_wins_over_the_static_bearer_but_never_over_stdio() -> None:
+    """A process with both is a misconfiguration that entry_exapp rejects at startup
+    (D-27, no silent fallbacks); per request the deploy environment decides."""
+    env = {
+        config.ENV_APP_ID: "mcp_connector",
+        config.ENV_APP_SECRET: "app-secret-test",
+        config.ENV_STATIC_BEARER: BEARER,
+    }
+    assert config.select_mode(env, headers={}) == "exapp"
+    assert config.select_mode(env, headers=None) == "stdio"
+
+
+def test_a_blank_appapi_variable_does_not_select_the_exapp_mode() -> None:
+    env = {config.ENV_APP_ID: "mcp_connector", config.ENV_APP_SECRET: "   "}
+    assert config.select_mode(env, headers={}) == "http_passthrough"
+
+
 # --- stdio mode ------------------------------------------------------------------
 
 
