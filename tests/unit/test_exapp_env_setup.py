@@ -32,6 +32,7 @@ from mcp_connector.nextcloud.clients.xml import hardened_parser
 ROOT = Path(__file__).resolve().parents[2]
 ENV_EXAMPLE = ROOT / ".env.exapp.example"
 DOCKERFILE = ROOT / "Dockerfile"
+ENTRYPOINT = ROOT / "entrypoint.sh"
 START = ROOT / "start.sh"
 HEALTHCHECK = ROOT / "healthcheck.sh"
 DOCKERIGNORE = ROOT / ".dockerignore"
@@ -40,7 +41,7 @@ COMPOSE_EXAPP = ROOT / "compose.exapp.yml"
 CADDYFILE = ROOT / "deploy" / "Caddyfile"
 BOOTSTRAP = ROOT / "scripts" / "bootstrap_exapp.sh"
 
-CONTAINER_FILES = (DOCKERFILE, START, HEALTHCHECK)
+CONTAINER_FILES = (DOCKERFILE, ENTRYPOINT, START, HEALTHCHECK)
 
 #: The second half of this file guards the test topology of plan 02-04. Same reason as
 #: above: docker compose exec breaks on a CR, a port that lost its 127.0.0.1 prefix
@@ -227,6 +228,7 @@ def find_bash() -> str | None:
 
 
 BASH = find_bash()
+needs_bash = pytest.mark.skipif(BASH is None, reason="no usable bash on this host")
 
 
 def run_bash(script: str) -> subprocess.CompletedProcess[str]:
@@ -253,7 +255,9 @@ def manifest_root() -> etree._Element:
     return etree.parse(str(INFO_XML), hardened_parser()).getroot()
 
 
-@pytest.mark.parametrize("path", [DOCKERFILE, START, HEALTHCHECK, DOCKERIGNORE, INFO_XML])
+@pytest.mark.parametrize(
+    "path", [DOCKERFILE, ENTRYPOINT, START, HEALTHCHECK, DOCKERIGNORE, INFO_XML]
+)
 def test_the_exapp_package_is_checked_in(path: Path) -> None:
     assert path.is_file(), f"{path.name} is missing"
 
@@ -281,11 +285,82 @@ def test_the_image_runs_unprivileged() -> None:
     assert final.split(":")[0] not in {"root", "0"}, f"USER {final} is root"
 
 
-def test_the_entrypoint_is_the_harp_start_script() -> None:
+def test_the_entrypoint_is_the_wrapper_that_execs_the_harp_start_script() -> None:
+    """WR-02, WR-04: the guards run first, then the upstream script, with the same arg."""
     entrypoints = instruction_values(DOCKERFILE.read_text(encoding="utf-8"), "ENTRYPOINT")
     assert entrypoints, "the Dockerfile declares no ENTRYPOINT"
-    assert "/start.sh" in entrypoints[-1]
+    assert "/entrypoint.sh" in entrypoints[-1]
     assert "nc-mcp-exapp" in entrypoints[-1]
+    assert 'exec /start.sh "$@"' in ENTRYPOINT.read_text(encoding="utf-8")
+
+
+def test_the_image_arms_no_transport_switch_in_a_layer() -> None:
+    """WR-02: the switch disables the Host and the Origin check of the MCP transport, and
+    in a layer it did so for every deployment mode, HaRP or not."""
+    for value in instruction_values(DOCKERFILE.read_text(encoding="utf-8"), "ENV"):
+        assert "NC_MCP_DISABLE_DNS_REBINDING_PROTECTION" not in value
+
+
+def test_the_transport_switch_is_bound_to_the_harp_path() -> None:
+    text = ENTRYPOINT.read_text(encoding="utf-8")
+    switch = "export NC_MCP_DISABLE_DNS_REBINDING_PROTECTION=1"
+    assert switch in text
+    before = text.split(switch, 1)[0]
+    assert 'if [ -n "${HP_SHARED_KEY:-}" ]; then' in before, "the switch is not HaRP bound"
+    code = [line for line in text.splitlines() if not line.lstrip().startswith("#")]
+    assert not any("NC_MCP_ALLOWED_HOSTS=" in line for line in code), (
+        "the host allowlist stays a deployment decision, the entrypoint never sets it"
+    )
+
+
+def test_the_entrypoint_refuses_a_plaintext_frp_tunnel() -> None:
+    """WR-04: without /certs/frp start.sh writes transport.tls.enable = false and sends
+    HP_SHARED_KEY in the clear. The downgrade is refused, with a documented opt-in."""
+    text = ENTRYPOINT.read_text(encoding="utf-8")
+    assert "/certs/frp" in text
+    assert "exit 1" in text
+    assert "ALLOW_PLAINTEXT_FRP" in text
+
+
+@needs_bash
+@pytest.mark.parametrize(
+    ("env", "expected_code"),
+    [
+        ({"HP_SHARED_KEY": "x" * 64, "FRP_CERT_WAIT_SECONDS": "0"}, 1),
+        (
+            {
+                "HP_SHARED_KEY": "x" * 64,
+                "FRP_CERT_WAIT_SECONDS": "0",
+                "ALLOW_PLAINTEXT_FRP": "1",
+            },
+            0,
+        ),
+        ({"FRP_CERT_WAIT_SECONDS": "0"}, 0),
+    ],
+    ids=["harp without a certificate", "explicit opt-in", "no harp at all"],
+)
+def test_the_plaintext_guard_decides_by_the_shared_key(
+    tmp_path: Path, env: dict[str, str], expected_code: int
+) -> None:
+    """The guard runs for real, with /start.sh replaced by a stub that only records that
+    it was reached. A container without HP_SHARED_KEY has no tunnel and must not be
+    blocked by a certificate it does not need."""
+    stub = tmp_path / "start.sh"
+    stub.write_text('#!/bin/sh\necho REACHED_START "$@"\n', encoding="utf-8", newline="\n")
+    absent = (tmp_path / "absent").as_posix()
+    body = (
+        ENTRYPOINT.read_text(encoding="utf-8")
+        .replace('FRP_CERT_DIR="/certs/frp"', f'FRP_CERT_DIR="{absent}"')
+        .replace('exec /start.sh "$@"', f'exec sh "{stub.as_posix()}" "$@"')
+    )
+    assert absent in body, "the certificate directory is not a single literal any more"
+    exports = "".join(f'export {name}="{value}"\n' for name, value in env.items())
+    script = f"{exports}{body}"
+
+    result = run_bash(script)
+
+    assert result.returncode == expected_code, result.stderr
+    assert ("REACHED_START" in result.stdout) is (expected_code == 0)
 
 
 def test_the_frpc_download_is_checksum_verified() -> None:
@@ -301,6 +376,15 @@ def test_no_secret_is_baked_into_the_image(name: str) -> None:
     """T-02-23: secrets come from the deploy environment, never from a layer."""
     for value in instruction_values(DOCKERFILE.read_text(encoding="utf-8"), "ENV"):
         assert name not in value, f"the image sets {name} in an ENV instruction"
+
+
+def test_the_runtime_user_does_not_own_its_own_code() -> None:
+    """WR-13: a writable site-packages turns any single file write into persistence, and
+    AppAPI restarts this container rather than recreating it."""
+    for value in instruction_values(DOCKERFILE.read_text(encoding="utf-8"), "COPY"):
+        if "/app/.venv" not in value:
+            continue
+        assert "--chown" not in value, f"the virtual environment is chowned: COPY {value}"
 
 
 def test_the_build_context_excludes_the_history_and_any_env_file() -> None:
@@ -437,8 +521,6 @@ def test_the_bootstrap_never_reaches_into_the_other_topology() -> None:
 
 
 # --- the secret handling around the registration (CR-02) --------------------------
-
-needs_bash = pytest.mark.skipif(BASH is None, reason="no usable bash on this host")
 
 #: What the example file used to hand over as a working APP_SECRET, plus the shapes a
 #: hand written value takes. None of them may survive into a registration.

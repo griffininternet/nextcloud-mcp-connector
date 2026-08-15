@@ -82,8 +82,8 @@ RUN set -eux; \
 RUN groupadd --gid 10001 exapp \
     && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin exapp
 
-COPY start.sh healthcheck.sh /
-RUN chmod 0755 /start.sh /healthcheck.sh \
+COPY entrypoint.sh start.sh healthcheck.sh /
+RUN chmod 0755 /entrypoint.sh /start.sh /healthcheck.sh \
     # start.sh writes /frpc.toml, and an unprivileged process cannot create a file in /.
     # It can truncate one it owns, which is exactly what the redirect in start.sh does,
     # so the file is pre-created here instead of loosening the permissions of /.
@@ -101,19 +101,26 @@ RUN chmod 0755 /start.sh /healthcheck.sh \
     # in plan 02-04 against the real deploy daemon; start.sh reads the same path.
     && install -d -o 10001 -g 10001 -m 0700 /certs
 
-COPY --from=build --chown=10001:10001 /app/.venv /app/.venv
+# No --chown: the runtime user reads its own code, it never writes it (WR-13). With the
+# environment owned by uid 10001, any bug that yields a single file write turns into
+# persistence, because AppAPI restarts this container instead of recreating it, and the
+# next start would run the replaced module with APP_SECRET in its environment. The three
+# paths that do have to be writable are /nc_app_mcp_connector_data, /certs and /frpc.toml,
+# and they are prepared above with 0700 and 0600.
+COPY --from=build /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:${PATH}"
 
-# Behind HaRP the Host header is the one of the reverse proxy, so a host allowlist would be
-# a permanent 421 trap here, and the process is reachable through the deploy daemon only.
-# This is the single configuration value the image sets. No APP_SECRET, no
-# NC_MCP_APP_PASSWORD, no NC_MCP_STATIC_BEARER: secrets come from the deploy environment
-# and never from a layer (T-02-23).
-ENV NC_MCP_DISABLE_DNS_REBINDING_PROTECTION=1
+# The image sets no configuration at all, and no secret either (T-02-23). The DNS
+# rebinding switch used to live here, unconditionally, which disarmed the Host and Origin
+# check for every deployment mode and not only for the HaRP path it was meant for (WR-02).
+# entrypoint.sh exports it when HP_SHARED_KEY says that HaRP is in front of us, and leaves
+# it alone otherwise, where the check is the defence that belongs there.
 
 WORKDIR /app
 USER 10001:10001
 
 HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=6 CMD ["/healthcheck.sh"]
 
-ENTRYPOINT ["/start.sh", "nc-mcp-exapp"]
+# entrypoint.sh, not start.sh: two guards run first, then the verbatim upstream script is
+# exec'd with the same argument it always got (WR-02, WR-04).
+ENTRYPOINT ["/entrypoint.sh", "nc-mcp-exapp"]
