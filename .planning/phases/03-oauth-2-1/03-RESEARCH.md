@@ -1172,7 +1172,7 @@ Retry). Schritt 3 darf Schritt 1 und 2 nicht blockieren.
 
 ## Open Questions
 
-1. **Findet Claude.ai den AS ohne Reverse-Proxy-Regeln?**
+1. **(RESOLVED: Messung in 03-01/03-09) Findet Claude.ai den AS ohne Reverse-Proxy-Regeln?**
    - Was wir wissen: Der MCP-SDK-Client probiert alle drei Wege; Claude verlangt laut Doku
      nur "RFC 8414 oder OIDC Discovery an den `/.well-known/`-Pfaden".
    - Was unklar ist: Ob Claudes Implementierung die OIDC-Pfad-Anhängung enthält.
@@ -1180,7 +1180,7 @@ Retry). Schritt 3 darf Schritt 1 und 2 nicht blockieren.
      Regeln gegenmessen und das Ergebnis in `docs/` festhalten. Das ist die Aussage, die
      später jeder Selfhoster braucht.
 
-2. **Ein App-Passwort je Authorization oder Impersonation?**
+2. **(RESOLVED: D-34, ein App-Passwort je Authorization) Ein App-Passwort je Authorization oder Impersonation?**
    - Was wir wissen: D-34 legt das App-Passwort fest. Technisch ginge auch reine
      AppAPI-Impersonation mit der aus dem Token bekannten Nutzer-ID, ganz ohne
      App-Passwort.
@@ -1191,14 +1191,14 @@ Retry). Schritt 3 darf Schritt 1 und 2 nicht blockieren.
      `docs/spike-dav.md` (Fall A) mit Basic-App-Passwort dieselben Ergebnisse liefert wie
      mit Impersonation; falls nicht, ist das ein Plan-Task.
 
-3. **Wie erfährt der Nutzer von einer Verbindung, bevor Phase 4 die UI liefert?**
+3. **(RESOLVED: D-36, /connect-Strecke; Admin-UI folgt Phase 4) Wie erfährt der Nutzer von einer Verbindung, bevor Phase 4 die UI liefert?**
    - Was wir wissen: Das App-Passwort erscheint in Nextcloud unter "Geräte und Sitzungen"
      mit dem Namen, den wir als User-Agent gesetzt haben.
    - Was unklar ist: ob das für Phase 3 als Sichtbarkeit reicht.
    - Empfehlung: Ja, mit einem sprechenden Präfix; die Verwaltungsoberfläche ist
      ausdrücklich Phase 4 (EXAPP-02).
 
-4. **Scope-Modell: brauchen wir überhaupt zwei Scopes?**
+4. **(RESOLVED: D-42, genau ein Scope) Scope-Modell: brauchen wir überhaupt zwei Scopes?**
    - Was wir wissen: v1 ist read-first, `TOOL-09` verbietet destruktive Operationen; die
      Spec empfiehlt Scope-Minimierung.
    - Was unklar ist: ob `nextcloud:write` (Upload, Termin anlegen, Notiz anlegen, Karte
@@ -1209,7 +1209,7 @@ Retry). Schritt 3 darf Schritt 1 und 2 nicht blockieren.
      kostet wenig. Falls das zu viel Mechanik für mvp ist: ein Scope, aber die Felder von
      Anfang an vorsehen.
 
-5. **Gnadenfenster bei der Refresh-Rotation (siehe A4).**
+5. **(RESOLVED: D-41, 10-s-Idempotenzfenster) Gnadenfenster bei der Refresh-Rotation (siehe A4).**
    - Empfehlung: Im discuss-Schritt vom Owner bestätigen lassen, weil es die einzige
      bewusste Aufweichung der konservativen Auslegung wäre.
 
