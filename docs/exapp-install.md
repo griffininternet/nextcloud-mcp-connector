@@ -189,8 +189,28 @@ a locally started process serves the requests:
 
 ```
 set -a && . ./.env.exapp && set +a
-APP_PORT=23001 APP_HOST=0.0.0.0 nc-mcp-exapp
+APP_PORT=23001 nc-mcp-exapp
 ```
+
+**Do not add `APP_HOST=0.0.0.0` here.** That is what this document used to print, and it
+contradicts the loopback rule two sections above (WR-12). The default of `entry_exapp` is
+already `127.0.0.1`, and it has to stay that way: in this mode there is no HaRP and no
+manifest filter in front of the process, so `/init` and `/enabled` are reachable directly and
+are guarded by `APP_SECRET` alone, which sits in `.env.exapp` in the same directory.
+`/heartbeat` authenticates nothing at all by contract.
+
+Docker Desktop reaches a service bound to the host's loopback through
+`host.docker.internal`, which is the address the manual daemon is registered with, so
+nothing else is needed on Windows or macOS. On a plain Linux Docker, where
+`host.docker.internal` is not a loopback path, forward the port explicitly instead of
+opening the process to the LAN:
+
+```
+socat TCP-LISTEN:23001,fork,bind=172.29.42.1 TCP:127.0.0.1:23001
+```
+
+`172.29.42.1` is the gateway of the compose network from `compose.exapp.yml`, so the
+listener is reachable for the containers of this topology and for nothing else.
 
 Restart that process after every re-registration. `APP_SECRET` is handed out at registration
 time, and a process that still holds the previous one answers 401 to everything while

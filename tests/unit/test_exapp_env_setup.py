@@ -31,6 +31,7 @@ from mcp_connector.nextcloud.clients.xml import hardened_parser
 
 ROOT = Path(__file__).resolve().parents[2]
 ENV_EXAMPLE = ROOT / ".env.exapp.example"
+INSTALL_DOC = ROOT / "docs" / "exapp-install.md"
 DOCKERFILE = ROOT / "Dockerfile"
 ENTRYPOINT = ROOT / "entrypoint.sh"
 START = ROOT / "start.sh"
@@ -751,6 +752,18 @@ def test_the_shared_key_is_validated_like_the_app_secret() -> None:
     """Same class of secret, same gate: a foreign FRP client can attach with it."""
     body = shell_function("harp_shared_key")
     assert "require_hex64 HP_SHARED_KEY" in body
+
+
+def test_the_documented_development_loop_stays_on_loopback() -> None:
+    """WR-12: the same document explains at length why every port binds to 127.0.0.1 and
+    then handed out APP_HOST=0.0.0.0, which publishes /init and /enabled to the LAN with
+    APP_SECRET as their only guard, and that file sits in the same directory."""
+    text = INSTALL_DOC.read_text(encoding="utf-8")
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("**Do not"):
+            continue
+        assert "APP_HOST=0.0.0.0" not in stripped, f"the doc still prescribes {stripped!r}"
 
 
 def test_the_reverse_proxy_routes_the_exapps_prefix() -> None:
