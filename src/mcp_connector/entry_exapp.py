@@ -25,6 +25,7 @@ from starlette.routing import Route
 
 from . import config
 from .errors import ToolError
+from .exapp.discovery import discovery_routes
 from .exapp.lifecycle import lifecycle_routes
 from .exapp.middleware import RequireAppApi
 from .nextcloud.http import configure_logging
@@ -78,7 +79,12 @@ def build_exapp_app(env: Mapping[str, str] | None = None) -> Starlette:
             f"the ExApp application has {guarded} guarded {MCP_PATH} routes instead of one; "
             "the MCP transport would be served without the AppAPI handshake"
         )
-    for route in lifecycle_routes(env):
+    # The lifecycle routes and the discovery spike routes both come from a factory and are
+    # attached here, never on the shared server object. A registration on the singleton
+    # would make them appear in the standalone HTTP mode of phase 1 as well, and D-23 says
+    # that mode stays as it was. The discovery routes are the measurement probe of the
+    # spike (D-29, AUTH-06); they live below /.well-known/ and are public by contract.
+    for route in (*lifecycle_routes(env), *discovery_routes(env)):
         app.router.routes.append(route)
     return app
 
