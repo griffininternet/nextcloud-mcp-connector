@@ -7,6 +7,31 @@
 # failed. Make sure that Nextcloud instance and ExApp can reach it other."
 # (02-RESEARCH.md, pitfall 7).
 :80 {
+	# The two canonical discovery paths of RFC 9728 and RFC 8414, mapped back onto the
+	# ExApp. Both sit on the domain root and belong to Nextcloud: RFC 9728 pushes the
+	# well-known segment between host and resource path, RFC 8414 does the same for the
+	# issuer, and Nextcloud's WellKnownController matches a single path segment only, so
+	# both answer 404 (measured, spike-discovery.md). HaRP routes /exapps/* alone, so the
+	# ExApp never sees these paths without a rule like this one.
+	#
+	# The rules are optional. A spec compliant client reads the resource_metadata pointer
+	# out of our 401 first and finds the protected resource document without them, and the
+	# authorization server document is served at the path appended OpenID variant below our
+	# own prefix as well. They exist for clients that try the canonical path only.
+	#
+	# Both matchers are exact paths, not prefixes (T-03-07): they rewrite these two strings
+	# and nothing else, and no Nextcloud path outside them changes behaviour. Order matters,
+	# the first matching route wins, so they stand before the /exapps/* block.
+	route /.well-known/oauth-protected-resource/exapps/mcp_connector/mcp {
+		rewrite * /exapps/mcp_connector/.well-known/oauth-protected-resource/mcp
+		reverse_proxy appapi-harp:8780
+	}
+
+	route /.well-known/oauth-authorization-server/exapps/mcp_connector {
+		rewrite * /exapps/mcp_connector/.well-known/oauth-authorization-server
+		reverse_proxy appapi-harp:8780
+	}
+
 	route /exapps/* {
 		reverse_proxy appapi-harp:8780 {
 			# Streamable HTTP holds a response open for the lifetime of an MCP session.

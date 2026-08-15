@@ -121,6 +121,62 @@ fits an installation, the connector still runs as the standalone HTTP server of 
 behind an own hostname, where the canonical path is served by the app itself because there
 is no stripped prefix. This is the escape hatch, not the recommendation.
 
+### What plan 03-01 implemented, and in which order a client walks it
+
+An OAuth capable client looks for the discovery documents in this order. Only the first and
+the third work without any action by an administrator, and the connector serves both.
+
+1. **The protected resource document, through the pointer in the 401.** The client calls
+   `/mcp`, gets 401 with
+   `WWW-Authenticate: Bearer error="invalid_token", ..., resource_metadata="<public url>/.well-known/oauth-protected-resource/mcp"`
+   and follows that URL. The document is served below our own prefix, where the request
+   arrives after HaRP stripped it. **Works out of the box.**
+2. **The authorization server document at its canonical root paths.**
+   `/.well-known/oauth-authorization-server/exapps/mcp_connector` and
+   `/.well-known/openid-configuration/exapps/mcp_connector` both carry two path segments,
+   Nextcloud's `WellKnownController` matches one, so both answer 404. **Needs the reverse
+   proxy rules below.**
+3. **The authorization server document at the path appended OpenID variant.**
+   `<public url>/.well-known/openid-configuration` lies below our prefix and survives the
+   stripping. The MCP Python SDK client tries this one on its own after the two canonical
+   spellings. **Works out of the box.**
+
+Not measured yet: whether the Claude.ai and the ChatGPT connector try way 3 themselves, or
+stop after the canonical paths. That measurement belongs to plan 03-09, which reads the
+access log of the staging instance during a real connect.
+
+The rules for both canonical root paths, ready to copy. Caddy, as shipped in
+[../deploy/Caddyfile](../deploy/Caddyfile):
+
+```
+route /.well-known/oauth-protected-resource/exapps/mcp_connector/mcp {
+	rewrite * /exapps/mcp_connector/.well-known/oauth-protected-resource/mcp
+	reverse_proxy appapi-harp:8780
+}
+
+route /.well-known/oauth-authorization-server/exapps/mcp_connector {
+	rewrite * /exapps/mcp_connector/.well-known/oauth-authorization-server
+	reverse_proxy appapi-harp:8780
+}
+```
+
+The equivalent for nginx, with the HaRP upstream named `harp`:
+
+```
+location = /.well-known/oauth-protected-resource/exapps/mcp_connector/mcp {
+    proxy_pass http://harp:8780/exapps/mcp_connector/.well-known/oauth-protected-resource/mcp;
+    proxy_read_timeout 1800s;
+}
+
+location = /.well-known/oauth-authorization-server/exapps/mcp_connector {
+    proxy_pass http://harp:8780/exapps/mcp_connector/.well-known/oauth-authorization-server;
+    proxy_read_timeout 1800s;
+}
+```
+
+Both use an exact path match, `route /path` in Caddy and `location =` in nginx, so they
+rewrite these two strings and change no other Nextcloud path.
+
 ## Streaming
 
 A real MCP session over the HaRP path, with the modern SDK client, streaming included:
@@ -144,18 +200,24 @@ statement in app_api#825 against a running instance.
 
 ## Open items for phase 3
 
-* **Switch `/mcp` from `access_level` USER to PUBLIC, with an own token verifier.** In phase
-  2 `/mcp` is USER on purpose: HaRP resolves the user from an app password and the 401 of the
-  OAuth flow would never reach our code. Phase 3 needs `/mcp` on PUBLIC so the ExApp answers
-  the 401 itself, and that only becomes safe together with the SDK `TokenVerifier` that
-  checks the own bearer token. Until then, opening `/mcp` would serve the MCP preamble
-  unauthenticated.
+* **Done in plan 03-01: `/mcp` switched from `access_level` USER to PUBLIC, together with an
+  own bearer check.** In phase 2 `/mcp` was USER on purpose: HaRP resolves the user from an
+  app password and the 401 of the OAuth flow would never reach our code. The route is PUBLIC
+  now, so the ExApp answers that 401 itself, and the protection was replaced in the same
+  change rather than dropped: `exapp/middleware.py` reads the user id out of the AppAPI
+  header, and an empty one has to pass a token verifier. While no verifier is configured
+  (plan 03-06 builds it) every bearer is invalid, so the route stays closed by default.
+* **Done in plan 03-01: the measurement probe is gone.** The three production documents of
+  `oauth/metadata.py` replaced it, and `appinfo/info.xml` declares one fully anchored route
+  per document instead of the broad `^/\.well-known/` prefix, which closes the accepted risk
+  AR-02-06 of 02-SECURITY.md.
 * **Unknown bearer token over HaRP (research Open Question 4).** Measured: a request to
   `/mcp` over HaRP with a bearer token Nextcloud does not know is answered **403**, a clean
   4xx, not a 5xx. HaRP turns the 4xx from `nc_get_user` into "no user" and the USER route
-  then rejects with 403. This matters for phase 3: once `/mcp` is PUBLIC, that same 4xx lets
-  HaRP forward the request to our own token verifier instead of turning into a 401, which is
-  exactly what the OAuth flow needs. A 5xx would have become a 401 and broken it; it does not.
+  then rejects with 403. This is the measurement the switch above rests on: with `/mcp` on
+  PUBLIC that same 4xx lets HaRP forward the request to our own bearer check instead of
+  turning into a 401. A 5xx would have become a 401 and broken it; it does not. The finding
+  stands as measured, on the topology of phase 2.
 
 ## Limitations of this spike
 
@@ -168,9 +230,18 @@ measures the proxy behaviour for a 401 and its header without opening `/mcp`. Th
 spike artifact: it is replaced, not extended, when phase 3 wires the real Protected Resource
 Metadata, and its removal is one of the open items above.
 
+That limitation is closed. Plan 03-01 removed the probe route with the module it lived in,
+and the 401 with the `WWW-Authenticate` pointer now comes out of `/mcp` itself, where a
+client meets it. The numbers in the matrix above stay as they were measured, on the phase 2
+topology with `/mcp` still on `access_level` USER; `scripts/spike_discovery.sh` reads the
+pointer off `/mcp` from now on, and the next measurement of the whole table happens against
+the staging instance in plan 03-09.
+
 ## Related
 
-- Probe and metadata route: [../src/mcp_connector/exapp/discovery.py](../src/mcp_connector/exapp/discovery.py)
+- Discovery documents (the production path, plan 03-01): [../src/mcp_connector/oauth/metadata.py](../src/mcp_connector/oauth/metadata.py)
+- The 401 with the pointer: [../src/mcp_connector/exapp/middleware.py](../src/mcp_connector/exapp/middleware.py)
+- Reverse proxy rules for both canonical root paths: [../deploy/Caddyfile](../deploy/Caddyfile)
 - Measurement script: [../scripts/spike_discovery.sh](../scripts/spike_discovery.sh)
 - Manifest and routes: [../appinfo/info.xml](../appinfo/info.xml)
 - Topology and install: [exapp-install.md](exapp-install.md)
