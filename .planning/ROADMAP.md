@@ -92,7 +92,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 02-02-PLAN.md - Vierter Credential-Modus bis in die 20 Client-Aufrufstellen (Wave 2)
+- [x] 02-02-PLAN.md - Vierter Credential-Modus bis in die 20 Client-Aufrufstellen (Wave 2)
 - [ ] 02-03-PLAN.md - Container-Image, Startskript und ExApp-Manifest mit zwei engen Routen (Wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
@@ -164,7 +164,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Server-Kern | 14/14 | Complete    | 2026-08-14 |
-| 2. ExApp-Shell | 1/7 | In Progress|  |
+| 2. ExApp-Shell | 2/7 | In Progress|  |
 | 3. OAuth 2.1 | 0/TBD | Not started | - |
 | 4. Per-User-Verwaltung und prepare_context | 0/TBD | Not started | - |
 | 5. Hardening und Store-Einreichung | 0/TBD | Not started | - |
