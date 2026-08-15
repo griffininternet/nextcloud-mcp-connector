@@ -180,15 +180,15 @@ def published_ports(text: str) -> list[str]:
     return ports
 
 
-def shell_function(name: str) -> str:
-    """Cut one function out of the bootstrap script so a test can run it on its own.
+def shell_function(name: str, path: Path | None = None) -> str:
+    """Cut one function out of a shell script so a test can run it on its own.
 
-    The alternative would be sourcing the whole file, and the whole file talks to Docker.
-    The cut is exact: the script writes every function as ``name() {`` on its own line and
-    closes it with a ``}`` in column one, and the assertions below fail loudly if that
-    ever stops being true.
+    The alternative would be sourcing the whole file, and the bootstrap talks to Docker
+    from its first line. The cut is exact: every script here writes a function as
+    ``name() {`` on its own line and closes it with a ``}`` in column one, and the
+    assertions below fail loudly if that ever stops being true.
     """
-    text = BOOTSTRAP.read_text(encoding="utf-8")
+    text = (path or BOOTSTRAP).read_text(encoding="utf-8")
     opening = f"\n{name}() {{\n"
     start = text.index(opening)
     end = text.index("\n}\n", start)
@@ -409,6 +409,44 @@ def test_the_healthcheck_knows_both_transports() -> None:
     assert "APP_PORT" in text
     assert "--unix-socket" in text
     assert "/heartbeat" in text
+
+
+def test_the_healthcheck_notices_a_dead_tunnel_client() -> None:
+    """WR-05: frpc is an unsupervised background child with loginFailExit = false, so the
+    socket answers and the container reports healthy while HaRP has no backend."""
+    text = HEALTHCHECK.read_text(encoding="utf-8")
+    assert "frpc_is_running" in text
+    harp_branch = text.split('if [ -n "${HP_SHARED_KEY:-}" ]; then', 1)[1]
+    assert "if ! frpc_is_running; then" in harp_branch
+    assert harp_branch.index("frpc_is_running") < harp_branch.index("exec curl"), (
+        "the tunnel check has to run before the probe that would answer anyway"
+    )
+
+
+@needs_bash
+@pytest.mark.parametrize(
+    ("second_process", "expected_code"),
+    [("uvicorn", 1), ("frpc", 0)],
+    ids=["frpc is dead", "frpc is alive"],
+)
+def test_the_tunnel_probe_reads_the_process_table(
+    tmp_path: Path, second_process: str, expected_code: int
+) -> None:
+    """The helper runs for real, against a process table built for this test: a container
+    always has PID 1, and the question is whether frpc sits next to it."""
+    fake_proc = tmp_path / "process-table"
+    for pid, comm in (("1", "sh"), ("42", second_process)):
+        entry = fake_proc / pid
+        entry.mkdir(parents=True)
+        (entry / "comm").write_text(f"{comm}\n", encoding="utf-8", newline="\n")
+
+    body = shell_function("frpc_is_running", HEALTHCHECK).replace(
+        "/proc/[0-9]*", f"{fake_proc.as_posix()}/[0-9]*"
+    )
+    assert fake_proc.as_posix() in body, "the process table path is not a single literal"
+    result = run_bash(f"set -eu\n{body}\nfrpc_is_running\n")
+
+    assert result.returncode == expected_code, result.stderr
 
 
 def test_the_manifest_declares_exactly_the_two_routes_of_this_phase(

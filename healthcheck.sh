@@ -17,7 +17,27 @@
 # retries belong to the HEALTHCHECK instruction, not here.
 set -eu
 
+# Is frpc still running? Only asked on the HaRP path, where it is the transport (WR-05).
+# start.sh launches it as an unsupervised background child of PID 1 and configures
+# `loginFailExit = false`, so a dead or never logged in frpc leaves uvicorn answering
+# happily on the socket while HaRP has no backend at all: the container reports healthy and
+# every request from outside is a 503. /proc instead of pgrep, because the image carries no
+# procps and one probe is not worth a package.
+frpc_is_running() {
+    for entry in /proc/[0-9]*; do
+        [ -r "${entry}/comm" ] || continue
+        if [ "$(cat "${entry}/comm" 2>/dev/null)" = "frpc" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 if [ -n "${HP_SHARED_KEY:-}" ]; then
+    if ! frpc_is_running; then
+        echo "frpc is not running; HaRP has no backend for this container" >&2
+        exit 1
+    fi
     exec curl -fsS -o /dev/null \
         --unix-socket "${HP_EXAPP_SOCK:-/tmp/exapp.sock}" \
         http://localhost/heartbeat
