@@ -78,10 +78,16 @@ def parse(response: Response) -> Document:
 
 
 def body(response: Response) -> str:
-    return response.body.decode("utf-8")
+    return bytes(response.body).decode("utf-8")
 
 
-def sample_page(name: str = BENIGN_NAME, **kwargs: object) -> Response:
+def sample_page(
+    name: str = BENIGN_NAME,
+    *,
+    status_code: int = 200,
+    headers: dict[str, str] | None = None,
+    footer: str | None = None,
+) -> Response:
     """One page that uses every component, so a single render covers the whole surface."""
     blocks = [
         layout.paragraph(strings.SIGNIN_BODY.format(client=layout.client_name(name), host=HOST)),
@@ -107,8 +113,13 @@ def sample_page(name: str = BENIGN_NAME, **kwargs: object) -> Response:
         layout.action(strings.ACTION_START_OVER, "/authorize"),
     ]
     return layout.page(
-        strings.CONSENT_TITLE.format(client=layout.client_name(name)), blocks, env=ENV, **kwargs
-    )  # type: ignore[arg-type]
+        strings.CONSENT_TITLE.format(client=layout.client_name(name)),
+        blocks,
+        env=ENV,
+        status_code=status_code,
+        headers=headers,
+        footer=footer,
+    )
 
 
 # --- headers ---------------------------------------------------------------------------
