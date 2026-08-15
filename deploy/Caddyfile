@@ -1,0 +1,24 @@
+# Reverse proxy for the ExApp test topology (compose.exapp.yml).
+#
+# This file rebuilds what Nextcloud AIO does out of the box: the Caddy it ships routes
+# /exapps/* to HaRP and everything else to the Nextcloud container. AppAPI reaches an
+# ExApp through the public Nextcloud URL, never through the container name, so without
+# the /exapps/ rule the registration already fails at the heartbeat with "heartbeat check
+# failed. Make sure that Nextcloud instance and ExApp can reach it other."
+# (02-RESEARCH.md, pitfall 7).
+:80 {
+	route /exapps/* {
+		reverse_proxy appapi-harp:8780 {
+			# Streamable HTTP holds a response open for the lifetime of an MCP session.
+			# The default read timeout would cut such a stream, and the client would see
+			# a truncated body instead of an error.
+			transport http {
+				read_timeout 1800s
+			}
+		}
+	}
+
+	route {
+		reverse_proxy nextcloud:80
+	}
+}

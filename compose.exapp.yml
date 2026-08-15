@@ -1,0 +1,126 @@
+# Local HaRP topology for the real ExApp installation (D-31).
+#
+#   docker compose -f compose.exapp.yml up -d --wait   # start and wait for healthy
+#   bash scripts/bootstrap_exapp.sh                    # AppAPI, daemon, image, ExApp
+#   docker compose -f compose.exapp.yml down           # stop, keep the data volume
+#   docker compose -f compose.exapp.yml down -v        # stop and throw the data away
+#
+# This is a second and independent topology next to compose.test.yml, not an extension of
+# it. It carries its own project name, its own volume, its own network and its own port,
+# so the instance from compose.test.yml keeps running untouched while this one is created,
+# used and thrown away.
+#
+# The credentials below are throwaway values for an instance that only ever listens on
+# loopback. They are not a deployment secret; the shared key and the app secret of the
+# registration are generated at bootstrap time and land in .env.exapp, which is
+# git-ignored.
+name: nc-mcp-exapp
+
+services:
+  caddy:
+    # AppAPI reaches an ExApp through the public Nextcloud URL, so a reverse proxy that
+    # knows /exapps/* is not decoration here: without it the registration fails at the
+    # heartbeat (02-RESEARCH.md, pitfall 7). Nextcloud AIO ships exactly this rule.
+    image: caddy:2
+    container_name: nc-mcp-exapp-caddy
+    ports:
+      # Loopback only (WR-06): the admin password below is a throwaway value and the
+      # bruteforce guard is disabled at bootstrap, so a 0.0.0.0 binding would expose a
+      # trivially ownable instance to the developer's or the runner's LAN.
+      - "127.0.0.1:${NC_EXAPP_PORT:-8081}:80"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      nextcloud:
+        condition: service_healthy
+    restart: unless-stopped
+
+  nextcloud:
+    image: nextcloud:34-apache
+    container_name: nc-mcp-exapp-nc
+    # No published port on purpose: this instance is reachable through Caddy only, because
+    # every request from AppAPI to the ExApp has to take the same way a browser takes.
+    environment:
+      SQLITE_DATABASE: nextcloud
+      NEXTCLOUD_ADMIN_USER: "${NC_EXAPP_ADMIN_USER:-admin}"
+      NEXTCLOUD_ADMIN_PASSWORD: "${NC_EXAPP_ADMIN_PASSWORD:-admin-exapp-pw}"
+      # caddy is in the list because the deploy daemon calls Nextcloud under that name
+      # from inside the network, and Nextcloud rejects an unknown Host outright.
+      NEXTCLOUD_TRUSTED_DOMAINS: "localhost 127.0.0.1 caddy"
+      # AppAPI builds the ExApp URL from the public Nextcloud URL, so Nextcloud has to
+      # know what it is called from the outside (02-RESEARCH.md, pitfall 7). Without the
+      # overwrite it would generate http://caddy links and occ would print them, too.
+      OVERWRITEHOST: "127.0.0.1:${NC_EXAPP_PORT:-8081}"
+      OVERWRITEPROTOCOL: http
+      OVERWRITECLIURL: "http://127.0.0.1:${NC_EXAPP_PORT:-8081}"
+      # Only the proxy in front of it may rewrite the client address, and the proxy lives
+      # in this subnet. The value matches the ipam block at the end of this file.
+      TRUSTED_PROXIES: "172.29.42.0/24"
+    healthcheck:
+      # status.php answers as soon as the web server is up. That is not the same as
+      # "installed", so the bootstrap script polls `occ status` before it does any work.
+      test: ["CMD", "php", "-r", "exit(file_get_contents('http://localhost/status.php') ? 0 : 1);"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+    volumes:
+      - nextcloud-exapp-data:/var/www/html
+    restart: unless-stopped
+
+  appapi-harp:
+    # The deploy daemon. It starts the ExApp container over the Docker socket and routes
+    # every /exapps/ request to it, past the PHP process (research: HaRP is the
+    # recommended daemon from Nextcloud 32 on, the Docker Socket Proxy is deprecated).
+    image: ghcr.io/nextcloud/nextcloud-appapi-harp:release
+    container_name: nc-mcp-exapp-harp
+    # No ports section: Caddy reaches 8780 inside this network, and publishing the port
+    # would weaken the WR-06 rule without buying anything.
+    environment:
+      # Throwaway default so that `up` works without any preparation. Whoever wants a
+      # random one exports it before `up`:
+      #   export HP_SHARED_KEY="$(openssl rand -hex 32)"
+      # The bootstrap script does not guess this value, it reads it back from this
+      # running container, so the daemon registration can never drift away from it.
+      HP_SHARED_KEY: "${HP_SHARED_KEY:-nc-mcp-exapp-local-harp-key}"
+      NC_INSTANCE_URL: "http://caddy"
+      HP_TRUSTED_PROXY_IPS: "172.29.42.0/24"
+    volumes:
+      # T-02-31, accepted: the Docker socket is effectively root on the host. The deploy
+      # daemon cannot create the ExApp container without it. This topology listens on
+      # loopback only and is stopped after the test; docs/exapp-install.md carries the
+      # production note.
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./.harp-certs:/certs
+    depends_on:
+      nextcloud:
+        condition: service_healthy
+    restart: unless-stopped
+
+  registry:
+    # The ExApp image is not published before phase 5 (D-25), but the deploy daemon can
+    # only pull what a registry serves. It uses the Docker daemon of the host, and that
+    # daemon treats 127.0.0.1:5000 as an allowed insecure registry without any extra
+    # configuration. Without this service the container deploy would have nothing to pull.
+    image: registry:2
+    container_name: nc-mcp-exapp-registry
+    ports:
+      # Loopback only (WR-06): an unauthenticated, unencrypted registry on 0.0.0.0 is an
+      # open write target for everyone on the same network.
+      - "127.0.0.1:5000:5000"
+    volumes:
+      - registry-exapp-data:/var/lib/registry
+    restart: unless-stopped
+
+networks:
+  default:
+    # Named explicitly because `occ app_api:daemon:register --net` needs the name, and a
+    # fixed subnet because both the Nextcloud proxy list and HaRP have to trust exactly
+    # this range and nothing wider.
+    name: nc-mcp-exapp-net
+    ipam:
+      config:
+        - subnet: 172.29.42.0/24
+
+volumes:
+  nextcloud-exapp-data:
+  registry-exapp-data:

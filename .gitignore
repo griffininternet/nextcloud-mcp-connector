@@ -3,6 +3,8 @@ __pycache__/
 .venv/
 .env
 .env.test
+.env.exapp
+.harp-certs/
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
