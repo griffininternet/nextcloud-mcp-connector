@@ -1,7 +1,12 @@
 name: CI
 
+# push is limited to the default branch (IN-08): an unrestricted `on: push` next to
+# `on: pull_request` ran all four jobs twice for every branch push with an open PR,
+# including the full ExApp topology build. The default branch of this repository is
+# main, not master.
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:
