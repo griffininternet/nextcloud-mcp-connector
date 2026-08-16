@@ -40,7 +40,7 @@ Every request runs under the identity of the signed in user, so an assistant nev
 			<image-tag>0.1.0</image-tag>
 		</docker-install>
 		<!--
-		  - Exactly four routes, and they are the whole external attack surface of this app.
+		  - Exactly six routes, and they are the whole external attack surface of this app.
 		  -
 		  - The three AppAPI lifecycle paths (/heartbeat, /init and /enabled) are deliberately
 		  - absent, and this comment is the only place they appear here. A path that matches no
@@ -82,6 +82,15 @@ Every request runs under the identity of the signed in user, so an assistant nev
 		  - client walks the discovery: the protected resource document first, then the
 		  - authorization server document at the path appended OpenID variant a client finds
 		  - on its own, then at the RFC 8414 spelling the reverse proxy rules rewrite to.
+		  -
+		  - The two /connect routes are the browser onboarding of AUTH-02, added in plan
+		  - 03-04. They are PUBLIC because the person using them is not necessarily signed
+		  - in to Nextcloud at that moment, which is the whole point of the flow, and because
+		  - HaRP answers an anonymous request to a USER route itself instead of letting this
+		  - app show a page. They take nothing but one unguessable flow id and a form field
+		  - that is either start or cancel: no credential, no redirect target, no client id.
+		  - The sign in itself happens on Nextcloud's own pages, and no page below /connect
+		  - has an input a user could type a password into.
 		-->
 		<routes>
 			<route>
@@ -105,6 +114,18 @@ Every request runs under the identity of the signed in user, so an assistant nev
 			<route>
 				<url>^/\.well-known/oauth-authorization-server$</url>
 				<verb>GET</verb>
+				<access_level>PUBLIC</access_level>
+				<headers_to_exclude>["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERSION","X-ORIGIN-IP"]</headers_to_exclude>
+			</route>
+			<route>
+				<url>^/connect/wait/?$</url>
+				<verb>GET</verb>
+				<access_level>PUBLIC</access_level>
+				<headers_to_exclude>["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERSION","X-ORIGIN-IP"]</headers_to_exclude>
+			</route>
+			<route>
+				<url>^/connect/?$</url>
+				<verb>GET,POST</verb>
 				<access_level>PUBLIC</access_level>
 				<headers_to_exclude>["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERSION","X-ORIGIN-IP"]</headers_to_exclude>
 			</route>

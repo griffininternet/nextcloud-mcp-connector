@@ -27,6 +27,7 @@ itself with three lines of fake page copy and a fake button label (T-03-20).
 """
 
 import html
+import re
 import secrets
 from collections.abc import Mapping, Sequence
 from urllib.parse import urlsplit
@@ -40,6 +41,7 @@ from . import icons, strings
 __all__ = [
     "CLIENT_NAME_LIMIT",
     "CSP_TEMPLATE",
+    "HEAD_EXTRA_PATTERN",
     "STYLESHEET",
     "action",
     "button_primary",
@@ -47,11 +49,13 @@ __all__ = [
     "callout",
     "client_name",
     "detail_list",
+    "external_action",
     "form",
     "link",
     "page",
     "paragraph",
     "section_heading",
+    "status_line",
     "unordered_list",
 ]
 
@@ -69,6 +73,17 @@ NONCE_BYTES = 16
 
 #: The rendered client name is cut here (03-UI-SPEC.md, Component Inventory).
 CLIENT_NAME_LIMIT = 80
+
+#: The only fragment a caller may add to the head of a page: the meta refresh of a waiting
+#: screen (03-UI-SPEC.md, S2). An open head parameter would be a hole in the one rule this
+#: module exists for, so the value is matched against this pattern and refused otherwise.
+#: A second reason to keep it this narrow: with a refresh target of its own, a page could
+#: send a user somewhere else without a link they could read first.
+HEAD_EXTRA_PATTERN = re.compile(r'<meta http-equiv="refresh" content="\d{1,3}">')
+
+#: The two schemes an outbound link may carry. The one place this project links out of the
+#: application is the Nextcloud sign in, and that value comes from a Nextcloud answer.
+_EXTERNAL_SCHEMES = frozenset({"https", "http"})
 
 _TRUNCATION_MARK = "..."
 
@@ -164,6 +179,15 @@ button {
 .btn-secondary { background: #FFFFFF; color: #1F3A5F; }
 .action { margin-top: 32px; margin-bottom: 0; }
 .action a { display: inline-block; min-height: 44px; padding: 8px 0; }
+.btn-link {
+  background: #1F3A5F;
+  color: #FFFFFF;
+  border-radius: 8px;
+  font-weight: 600;
+  padding: 8px 24px;
+  text-decoration: none;
+}
+.status { font-weight: 600; }
 :focus-visible { outline: 3px solid #1F3A5F; outline-offset: 2px; }
 @media (min-width: 600px) { body { padding: 64px 24px; } }
 """
@@ -179,6 +203,7 @@ def page(
     footer: str | None = None,
     heading_icon: str = "",
     heading_tone: str = "",
+    head_extra: str = "",
 ) -> Response:
     """Render one page of this phase, with the headers every page of this phase carries.
 
@@ -190,11 +215,18 @@ def page(
     never from the request, exactly like the discovery documents of 03-01 (T-03-02): a
     forged Host header must not be able to relabel who is asking for access. That is also
     why this function takes an environment and not a request.
+
+    ``head_extra`` exists for exactly one caller, the waiting screen of the browser
+    onboarding, and accepts exactly one shape of value (:data:`HEAD_EXTRA_PATTERN`). It is
+    not a general escape hatch: everything else raises, because a head a caller can fill
+    freely would end the property that this function is the only way a page can exist.
     """
     nonce = secrets.token_urlsafe(NONCE_BYTES)
     tone = _TONES.get(heading_tone)
     if tone is None:
         raise ValueError(f"unknown heading tone {heading_tone!r}")
+    if head_extra and not HEAD_EXTRA_PATTERN.fullmatch(head_extra):
+        raise ValueError(f"{head_extra!r} is not the one head fragment a page may carry")
     closing = _escape(footer or strings.FOOTER_PASSWORD_PROMPT)
 
     document = (
@@ -203,6 +235,7 @@ def page(
         "<head>\n"
         '<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+        f"{head_extra}"
         f"<title>{_escape(title)} - {_escape(strings.WORDMARK)}</title>\n"
         f'<style nonce="{nonce}">{STYLESHEET}</style>\n'
         "</head>\n"
@@ -285,20 +318,59 @@ def form(
     buttons: Sequence[str],
     *,
     hidden: Mapping[str, str] | None = None,
+    method: str = "post",
 ) -> str:
-    """Wrap the buttons in a POST form, because a GET must never grant anything.
+    """Wrap the buttons in a form. POST by default, because a GET must never grant anything.
 
     The hidden fields carry the values that bind the decision to one authorization request,
     including the anti forgery token that the plan owning the route puts in.
+
+    ``method="get"`` exists for one case, the "Check now" button of the waiting screen
+    (03-UI-SPEC.md, S2). That button changes nothing: it asks the same question the meta
+    refresh asks, for a browser where the refresh is switched off. A GET form is what makes
+    it a button without making it a state change, and it is the reason this whole surface
+    needs no JavaScript.
     """
+    if method not in ("post", "get"):
+        raise ValueError(f"unknown form method {method!r}")
     target = _local(action_path)
     fields = "".join(
         f'<input type="hidden" name="{_escape(key)}" value="{_escape(value)}">'
         for key, value in (hidden or {}).items()
     )
     return (
-        f'<form method="post" action="{_escape(target)}">'
+        f'<form method="{method}" action="{_escape(target)}">'
         f'{fields}<div class="actions">{"".join(buttons)}</div></form>'
+    )
+
+
+def status_line(text: str) -> str:
+    """The one live region of this phase (03-UI-SPEC.md, Accessibility).
+
+    A screen reader has to hear that the page is waiting, and it has to hear it once. Every
+    other part of the surface is static, which is why nothing else carries a live role.
+    """
+    return f'<p class="status" role="status" aria-live="polite">{_escape(text)}</p>'
+
+
+def external_action(label: str, href: str) -> str:
+    """The one link that leaves this application: the sign in page of Nextcloud itself.
+
+    Everything else goes through :func:`link`, which refuses a foreign target. This one
+    exists because the whole point of the flow is to hand the user over to Nextcloud, and it
+    carries the two attributes that make that handover safe: ``rel="noopener noreferrer"``
+    so the opened page can neither reach back into this one nor read where it came from, and
+    ``target="_blank"`` so the waiting page stays open behind it.
+
+    The value comes from a Nextcloud answer and is checked here as well as at the boundary
+    that read it: only http and https, because a link with another scheme in a page that
+    asks for trust is the phishing step this surface exists against (T-03-30).
+    """
+    if urlsplit(href).scheme not in _EXTERNAL_SCHEMES:
+        raise ValueError(f"{href!r} is not an http address of a sign in page")
+    return (
+        f'<p class="action"><a class="btn-link" href="{_escape(href)}" '
+        f'target="_blank" rel="noopener noreferrer">{_escape(label)}</a></p>'
     )
 
 

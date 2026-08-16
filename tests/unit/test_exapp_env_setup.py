@@ -78,8 +78,15 @@ PROXY_OWNED_HEADERS = (
     "X-ORIGIN-IP",
 )
 
-#: What this phase opens: the MCP transport plus the three discovery documents (D-38).
-DECLARED_ROUTES = 4
+#: What this phase opens: the MCP transport, the three discovery documents and the two pages
+#: of the browser onboarding (D-38, AUTH-02).
+DECLARED_ROUTES = 6
+
+#: The onboarding paths the application registers, compared with the manifest below. Set
+#: equality for the same reason as the well-known documents: a page that is declared but not
+#: served is a 404 nobody can explain, and one that is served but not declared is unreachable
+#: through the proxy.
+CONNECT_PATHS = ("/connect", "/connect/wait")
 
 #: Enough of a deploy environment to build the application the manifest is compared against.
 MANIFEST_ENV = {
@@ -125,7 +132,7 @@ def manifest_problems(root: etree._Element) -> list[str]:
 
     routes = root.findall(".//route")
     if len(routes) != DECLARED_ROUTES:
-        problems.append(f"{len(routes)} routes declared, this phase opens exactly four")
+        problems.append(f"{len(routes)} routes declared, this phase opens exactly six")
 
     for route in routes:
         url = (route.findtext("url") or "").strip()
@@ -140,13 +147,15 @@ def manifest_problems(root: etree._Element) -> list[str]:
                 problems.append(f"route {url!r} does not have {header} stripped by the proxy")
         if access_level == "PUBLIC" and not url.startswith("^/"):
             problems.append(f"public route {url!r} is not anchored at a path")
-        if "well-known" in url and not url.endswith("$"):
+        if not url.endswith("$"):
             # HaRP matches with re.match, which anchors at the start only, so a pattern
             # without an end anchor also matches every neighbour that starts the same way:
             # the old ^/\.well-known/ covered the whole tree, and even a per document
             # pattern without the $ would still cover /.well-known/openid-configuration.evil
-            # (pitfall 14, AR-02-06).
-            problems.append(f"well-known route {url!r} has no end anchor")
+            # (pitfall 14, AR-02-06). The rule holds for every route of this app since plan
+            # 03-04, not only for the well-known ones: /connect without the anchor would
+            # publish every path that begins with it.
+            problems.append(f"route {url!r} has no end anchor")
         if "401" in bruteforce:
             problems.append(f"route {url!r} throttles on 401, which breaks OAuth discovery")
         for path in LIFECYCLE_PATHS:
@@ -154,6 +163,21 @@ def manifest_problems(root: etree._Element) -> list[str]:
                 problems.append(f"route {url!r} exposes the lifecycle path {path}")
 
     return problems
+
+
+def declared_connect_paths(root: etree._Element) -> set[str]:
+    """The literal path behind every onboarding route pattern of the manifest.
+
+    Same reduction as for the well-known documents, plus the optional trailing slash that
+    lets ``/connect/`` reach the same page as ``/connect``.
+    """
+    paths = set()
+    for route in root.findall(".//route"):
+        url = (route.findtext("url") or "").strip()
+        if not url.startswith("^/connect"):
+            continue
+        paths.add(url.removeprefix("^").removesuffix("$").removesuffix("/?").replace("\\", ""))
+    return paths
 
 
 def declared_well_known_paths(root: etree._Element) -> set[str]:
@@ -537,11 +561,12 @@ def test_the_tunnel_probe_reads_the_process_table(
     assert result.returncode == expected_code, result.stderr
 
 
-def test_the_manifest_declares_exactly_the_four_routes_of_this_phase(
+def test_the_manifest_declares_exactly_the_six_routes_of_this_phase(
     manifest_root: etree._Element,
 ) -> None:
-    """D-38: /mcp is PUBLIC since plan 03-01, and the one broad well-known route that
-    carried the accepted risk AR-02-06 is three fully anchored ones now."""
+    """D-38: /mcp is PUBLIC since plan 03-01, the one broad well-known route that carried the
+    accepted risk AR-02-06 is three fully anchored ones now, and plan 03-04 adds the two
+    pages of the browser onboarding, both anchored and both PUBLIC by the same reasoning."""
     routes = [
         ((route.findtext("url") or "").strip(), (route.findtext("access_level") or "").strip())
         for route in manifest_root.findall(".//route")
@@ -551,7 +576,38 @@ def test_the_manifest_declares_exactly_the_four_routes_of_this_phase(
         ("^/\\.well-known/oauth-protected-resource/mcp$", "PUBLIC"),
         ("^/\\.well-known/openid-configuration$", "PUBLIC"),
         ("^/\\.well-known/oauth-authorization-server$", "PUBLIC"),
+        ("^/connect/wait/?$", "PUBLIC"),
+        ("^/connect/?$", "PUBLIC"),
     ]
+
+
+def test_the_declared_onboarding_routes_are_the_registered_ones(
+    manifest_root: etree._Element,
+) -> None:
+    """Set equality again, for the second family of pages this app publishes (AUTH-02)."""
+    registered = {
+        path
+        for path in (
+            getattr(route, "path", "") for route in build_exapp_app(MANIFEST_ENV).router.routes
+        )
+        if path.startswith("/connect")
+    }
+
+    assert declared_connect_paths(manifest_root) == registered == set(CONNECT_PATHS)
+
+
+def test_the_onboarding_route_declares_the_verb_that_starts_a_sign_in(
+    manifest_root: etree._Element,
+) -> None:
+    """A GET only declaration would leave the start of a flow unreachable through HaRP, and
+    a POST on the waiting page would let a proxy replay a page that polls (T-03-34)."""
+    verbs = {
+        (route.findtext("url") or "").strip(): (route.findtext("verb") or "").strip()
+        for route in manifest_root.findall(".//route")
+    }
+
+    assert verbs["^/connect/?$"] == "GET,POST"
+    assert verbs["^/connect/wait/?$"] == "GET"
 
 
 def test_the_declared_well_known_routes_are_the_registered_ones(
@@ -652,7 +708,7 @@ def test_the_bootstrap_registration_strips_the_same_headers() -> None:
         assert f'"{header}"' in text, f"{header} is not stripped by the registration"
 
 
-def test_the_bootstrap_registration_declares_the_same_four_routes(
+def test_the_bootstrap_registration_declares_the_same_six_routes(
     manifest_root: etree._Element,
 ) -> None:
     """The json-info payload overrides the manifest, so a route that only lives in
@@ -665,6 +721,8 @@ def test_the_bootstrap_registration_declares_the_same_four_routes(
         # The payload carries the pattern with a doubled backslash escape, so the literal
         # path is compared without the dot escape (see the comment above json_info).
         assert path.replace("/.well-known/", "well-known/") in text, path
+    for path in declared_connect_paths(manifest_root):
+        assert f'"^{path}/?$"' in text, path
 
 
 def test_the_manifest_gate_rejects_a_throttler_on_401(manifest_root: etree._Element) -> None:

@@ -28,6 +28,7 @@ from .errors import ToolError
 from .exapp.lifecycle import lifecycle_routes
 from .exapp.middleware import RequireAppApi
 from .nextcloud.http import configure_logging
+from .oauth.connect import connect_routes
 from .oauth.metadata import metadata_routes
 from .server import mcp
 
@@ -85,8 +86,11 @@ def build_exapp_app(env: Mapping[str, str] | None = None) -> Starlette:
     # that mode stays as it was. The metadata routes replace the measurement probe of the
     # spike (D-29, AUTH-06) with the production path of AUTH-03; they live below
     # /.well-known/, they are public by contract, and they are what the 401 of the transport
-    # boundary points a client at.
-    for route in (*lifecycle_routes(env), *metadata_routes(env)):
+    # boundary points a client at. The onboarding routes of AUTH-02 hang here for the same
+    # reason twice over: they are the browser half of this deployment mode, and a page that
+    # hands out a Nextcloud credential has no business appearing in the standalone HTTP
+    # server of phase 1, which has no store, no data key and no AppAPI identity (D-23, D-36).
+    for route in (*lifecycle_routes(env), *metadata_routes(env), *connect_routes(env)):
         app.router.routes.append(route)
     return app
 

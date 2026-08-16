@@ -71,14 +71,11 @@ get_board
 # and tokens, the verifier (03-06) reads access tokens, and the rotation with reuse
 # detection (03-07) is the whole reason redeem_refresh_token and revoke_family exist.
 # Every name below is exercised by tests/unit/test_oauth_store.py, which fails if one of
-# them stops behaving; none of them is reachable from the production call graph yet.
-_.save_client
+# them stops behaving; none of them is reachable from the production call graph yet. The six
+# names the browser onboarding of plan 03-04 calls for real (save_client, touch_client,
+# create_flow, load_flow, delete_flow and purge_expired) left this list with that plan.
 _.load_client
-_.touch_client
 _.delete_client
-_.create_flow
-_.load_flow
-_.delete_flow
 _.create_authorization
 _.load_authorization
 _.revoke_authorization
@@ -90,7 +87,6 @@ _.create_refresh_token
 _.load_refresh_token
 _.redeem_refresh_token
 _.revoke_family
-_.purge_expired
 
 # Fields of the row objects above that this phase writes and a later plan reads:
 # client_secret_hash (03-06 authenticates a confidential client with it), created_at and
@@ -102,10 +98,3 @@ _.created_at
 _.revoked_at
 _.issued_at
 _.used_at
-
-# --- The login flow of phase 3, plan 03-04 ----------------------------------------------
-# credentials: the second field of PollResult, filled only when a poll answered 200. Its
-# production reader is the waiting page of the same plan (oauth/connect.py, task 2), so this
-# entry exists between the two commits of that plan and goes again with the second one.
-# tests/unit/test_oauth_loginflow.py reads the field in every outcome.
-_.credentials

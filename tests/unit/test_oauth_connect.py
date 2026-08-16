@@ -109,7 +109,7 @@ def start_a_flow(client: TestClient) -> str:
     respx.post(INIT_URL).mock(return_value=httpx.Response(200, json=start_body()))
     response = client.post(connect.CONNECT_PATH, data={connect.ACTION_FIELD: connect.ACTION_START})
     assert response.status_code == 200, response.text
-    match = re.search(rf"{connect.FLOW_PARAM}=([A-Za-z0-9_-]+)", response.text)
+    match = re.search(rf'name="{connect.FLOW_PARAM}" value="([A-Za-z0-9_-]+)"', response.text)
     assert match is not None, response.text
     return match.group(1)
 
@@ -120,6 +120,8 @@ def wait_url(flow_id: str) -> str:
 
 def flow_ids(store: OAuthStore) -> list[str]:
     """Every flow id in the file, read beside the store on purpose."""
+    if not store.path.is_file():
+        return []
     conn = sqlite3.connect(store.path)
     try:
         return [row[0] for row in conn.execute("SELECT flow_id FROM flows").fetchall()]
@@ -364,6 +366,7 @@ def test_a_sign_in_that_ran_out_of_time_is_the_timeout_page(
     """Never an endless refresh: the deadline is ours, because Nextcloud answers 404 for
     "not yet" and for "expired" alike (pitfall 7)."""
     long_ago = int(time.time()) - FLOW_TTL - 10
+    asyncio.run(store.save_client(connect.CONNECT_CLIENT_ID, metadata_json="{}", allowed=False))
     asyncio.run(
         store.create_flow(
             "an-old-flow",

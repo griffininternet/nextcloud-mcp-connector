@@ -32,6 +32,19 @@ __all__ = [
     "ACTION_CHECK_NOW",
     "ACTION_START_OVER",
     "CLIENT_NAME_FALLBACK",
+    "CONNECT_BODY",
+    "CONNECT_DETAIL_CREDENTIAL",
+    "CONNECT_DETAIL_USER",
+    "CONNECT_HANDOFF_BODY",
+    "CONNECT_HANDOFF_TITLE",
+    "CONNECT_RESULT_BODY",
+    "CONNECT_RESULT_HOWTO",
+    "CONNECT_RESULT_ONCE",
+    "CONNECT_RESULT_ONCE_TITLE",
+    "CONNECT_RESULT_REVOKE",
+    "CONNECT_TITLE",
+    "CONNECT_WAIT_BODY",
+    "CONNECT_WAIT_TITLE",
     "CONSENT_APPROVE",
     "CONSENT_DENY",
     "CONSENT_DETAIL_APP_NAME",
@@ -114,6 +127,62 @@ ACTION_CANCEL_SIGN_IN = "Cancel sign in"
 ACTION_CHECK_NOW = "Check now"
 
 ACTION_START_OVER = "Start over"
+
+# --- The browser onboarding of AUTH-02 (plan 03-04) ---------------------------------------
+#
+# The same three screens as S1, S2 and the out of band variant of S4, for the user who has no
+# OAuth capable client: an invitation, then the handoff with the Nextcloud link, then the
+# waiting state, then the one time result. The wording never calls the credential a password
+# of the user, because it is not one: it is an app password this connection owns, and the
+# user can end it on its own in Nextcloud.
+
+CONNECT_TITLE = "Connect an assistant app"
+
+CONNECT_BODY = (
+    "This creates a credential for an assistant app that cannot sign in at {host} by itself. "
+    "The sign in happens at {host}, on its own pages, including your second factor. This page "
+    "never asks for your password."
+)
+
+CONNECT_HANDOFF_TITLE = "Sign in at {host}"
+
+CONNECT_HANDOFF_BODY = (
+    "The sign in opens in a new window. Approve the connection there, then come back to this "
+    "page. It is waiting for the result and needs nothing else from you."
+)
+
+CONNECT_WAIT_TITLE = "Waiting for your sign in"
+
+CONNECT_WAIT_BODY = (
+    "Finish the sign in in the other window. This page checks every few seconds and shows the "
+    "result as soon as it arrives. If the other window is gone, start over."
+)
+
+CONNECT_DETAIL_USER = "Signed in as"
+
+CONNECT_DETAIL_CREDENTIAL = "Credential for your assistant app"
+
+CONNECT_RESULT_BODY = (
+    "The connection is ready. Copy the credential below into your assistant app, together with "
+    "the user name above."
+)
+
+CONNECT_RESULT_ONCE_TITLE = "Shown once"
+
+CONNECT_RESULT_ONCE = (
+    "This is the only time the credential is shown. Nothing of it is stored on this server. If "
+    "you lose it, start over and create a new one."
+)
+
+CONNECT_RESULT_HOWTO = (
+    "In your assistant app, use the user name and the credential as Basic credentials for the "
+    "connector endpoint, exactly as described in the client setup guide."
+)
+
+CONNECT_RESULT_REVOKE = (
+    "You can end this connection at any time in Nextcloud under Settings, Security, Devices and "
+    "sessions. It is listed there under the name of this connector."
+)
 
 # --- S3, consent -------------------------------------------------------------------------
 
