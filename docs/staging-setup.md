@@ -150,6 +150,13 @@ machine:
 cat .env.staging
 ```
 
+Plan 03-09 checks the same two things from the workstation that writes the report, and it
+reads the base from one variable. Export it there, without a trailing slash:
+
+```bash
+export NC_MCP_STAGING_URL=https://nc-staging.example.com/exapps/mcp_connector
+```
+
 ## 5. During the measurement
 
 The access log is the instrument. It shows which discovery path a connector tries, in which
