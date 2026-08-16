@@ -30,7 +30,7 @@
 - [x] **AUTH-01**: Nutzer kann sich mit App-Passwort verbinden (Bearer/Basic, für stdio und Remote)
 - [x] **AUTH-02**: Nutzer kann sich per Login Flow v2 onboarden (Browser-Login, Client sieht nie das echte Passwort)
 - [x] **AUTH-03**: MCP-Client verbindet per OAuth 2.1 nach MCP-Authorization-Spec: Protected Resource Metadata (RFC 9728), Dynamic Client Registration, PKCE S256, Token-Widerruf
-- [ ] **AUTH-04**: Claude.ai-Connector und ChatGPT-Connector verbinden nachweislich plug-and-play gegen eine öffentliche Staging-Instanz (E2E-Erfolgskriterium)
+- [x] **AUTH-04**: Claude.ai-Connector und ChatGPT-Connector verbinden nachweislich plug-and-play gegen eine öffentliche Staging-Instanz (E2E-Erfolgskriterium). Beleg: beide am 16.08.2026 gegen https://nc-staging.infranode.dev verbunden, Access-Log-Ketten und Zeiten in docs/oauth-setup.md, Abschnitt "End to end with hosted connectors", Rohmessungen in 03-09-MEASUREMENTS.md. ChatGPT erst nach einem echten Fehler unsererseits (invalid_scope, Fix 5793fc3/eb5b6b9/8724d57). Cursor wurde zusätzlich geprüft und wird abgewiesen, das ist kein Teil von AUTH-04 und liegt als BL-04 im Backlog.
 - [x] **AUTH-05**: Jede Nextcloud-Anfrage läuft unter der Identität des angemeldeten Nutzers (ExApp-Impersonation bzw. Nutzer-Credentials); der Assistent sieht nie mehr als der Nutzer in der Weboberfläche
 - [x] **AUTH-06**: Discovery-Endpunkte (well-known/PRM, WWW-Authenticate) sind unauthentifiziert erreichbar, auch durch den AppAPI-Proxy-Pfad (früher Spike, Hauptrisiko)
 - [x] **AUTH-07**: Admin kann steuern, welche OAuth-Clients sich verbinden dürfen: Client-Registry mit allowed-Flag als Enforcement-Punkt im AS-Design von Anfang an, Dynamic Client Registration global abschaltbar (Owner-Entscheid 14.08.2026; Admin-UI dafür darf in Phase 4 folgen)
@@ -102,7 +102,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AUTH-06 | Phase 2 | Complete |
 | AUTH-02 | Phase 3 | Complete |
 | AUTH-03 | Phase 3 | Complete |
-| AUTH-04 | Phase 3 | Pending |
+| AUTH-04 | Phase 3 | Complete |
 | AUTH-07 | Phase 3 | Complete |
 | EXAPP-02 | Phase 4 | Pending |
 | TOOL-08 | Phase 4 | Pending |

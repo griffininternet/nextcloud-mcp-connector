@@ -313,6 +313,64 @@ The connection appears under **Settings, Security, Devices and sessions** with t
 the client, prefixed by `MCP Connector:`. Ending it there ends it immediately, and so does
 the client's own disconnect button.
 
+### Claude.ai, step by step
+
+Measured on 2026-08-16 against a public instance.
+
+1. Connectors have moved out of Settings into **Customize**. Two ways in: Customize,
+   Connectors, "Add", "Add custom connector"; or, in the composer, the attachment menu,
+   "Add connector".
+2. The form asks for a name, the "Remote MCP Server URL", and optionally an OAuth client id
+   and secret. **Leave both OAuth fields empty**, the client registers itself.
+3. Nextcloud's sign in page appears with its own security warning and names the client
+   "MCP Connector: Claude". Then comes this connector's own consent page, which shows an
+   "Unverified client" note (correct, the client registered itself), the app name, the
+   return address and the client id.
+4. After "Approve access" the browser returns to claude.ai and the connector is connected.
+   The tools show up grouped into read only and write, both set to ask for approval.
+
+**On a Team or Enterprise account the button does not exist.** Only owners may add custom
+connectors there, so an account whose role is "user" never sees it. Use a personal account;
+the free plan allows one custom connector, which is enough.
+
+**Removing the connector in Claude.ai does not revoke access.** If you add the same URL
+again afterwards, the old authorization is still there and the client goes straight back to
+work without asking you anything. To really end it, revoke the connection in Nextcloud
+(Settings, Security, Devices and sessions, or this app's connections page).
+
+### ChatGPT, step by step
+
+1. Custom MCP servers need **developer mode**: Settings, "Security and sign in",
+   "Developer mode". It carries an "increased risk" badge.
+2. The plugins page then shows "Create app", which opens the connector form: name,
+   description, server URL, authentication (OAuth is the default) and a mandatory
+   "I understand and want to continue" checkbox.
+3. The rest is the same as above: Nextcloud's sign in page, then this connector's consent
+   page, then back to ChatGPT.
+
+ChatGPT mints its return address per connector, in the shape
+`https://chatgpt.com/connector/oauth/<token>`. That matters only if your administrator runs
+the allowlist mode, because the address cannot be known before the connector exists.
+
+**If a connection has to be repeated**, tell the existing connector to connect again rather
+than deleting and recreating it; a re-run picks up the changed server side without losing
+the entry.
+
+### Cursor and other clients with a `cursor://` style callback
+
+Cursor is configured by writing `~/.cursor/mcp.json`, no button involved:
+
+```json
+{ "mcpServers": { "nextcloud": { "url": "https://<nextcloud>/exapps/mcp_connector/mcp" } } }
+```
+
+It will not connect. Cursor's log says
+`redirect_uris must use https, except loopback addresses of native clients`, and that
+sentence is this server's. Cursor registers a private-use URI scheme
+(`cursor://anysphere.cursor-mcp/oauth/callback`) alongside two acceptable addresses, and
+this server refuses a registration that contains an address it does not admit. There is no
+setting that changes this today. Use the app password way above for such clients.
+
 ### If the client cannot find the authorization server
 
 Symptom: the client reports "could not discover authorization server", "authorization
@@ -325,9 +383,14 @@ to Nextcloud, which answers 404 there. Two reverse proxy rules map it back onto 
 they are in the Install section of [oauth-setup.md](./oauth-setup.md), for Caddy and for
 nginx, and they are the administrator's part.
 
-**Claude Code is not in this group.** It identifies itself with a client id metadata
-document instead of registering, and its callback port changes per run, which exact
-redirect URI matching cannot accept. Use the app password way above for it.
+Claude.ai turned out **not** to be in this group: measured with both rules switched off, it
+falls back to the path below the app's own prefix and connects anyway. Keep the rules for
+clients that give up earlier.
+
+**Claude Code is a separate case.** It identifies itself with a client id metadata document
+instead of registering, which this server does not accept yet. A loopback callback as such
+is fine here (`http://127.0.0.1:<port>` registers without complaint), but the port is
+matched exactly, so a client that picks a new port per run needs the app password way above.
 
 ## Three things that will go wrong
 

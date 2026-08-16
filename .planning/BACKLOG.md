@@ -89,3 +89,20 @@ seinem eigenen Log an und verbindet sich nicht.
 Loopback-Port an unserem exakten Matching scheitert. Wer das beantworten will,
 braucht einen Client, der den Port je Lauf neu wählt (Claude Code ist der
 Kandidat).
+
+## BL-05: Client ID Metadata Documents als Nachfolger von DCR
+
+**Anlass (Plan 03-09):** Die MCP-Authorization-Spec fuehrt Client ID Metadata
+Documents (CIMD) und markiert Dynamic Client Registration als ueberholt. Heute
+traegt dieser Server ausschliesslich DCR; ein Client, der sich per CIMD ausweist
+(Claude Code tut das), kann sich hier nicht anmelden.
+
+**Was zu tun waere:** Die Client-Identitaet zusaetzlich aus einem vom Client
+genannten Metadatendokument beziehen duerfen, mit denselben Kontrollen wie heute
+bei DCR: Rueckkehradressen pruefen, Allowlist-Modus (AUTH-07) greift auch hier,
+und ein abgeschaltetes DCR darf nicht ueber CIMD umgangen werden. Die Abholung
+des Dokuments ist ein ausgehender Request der Instanz und braucht deshalb eine
+eigene Betrachtung (SSRF, Zwischenspeicher, Groessengrenze).
+
+**Warum nicht in v1:** AUTH-04 ist mit DCR erfuellt, beide gehosteten Connectoren
+verbinden. CIMD ist die Zukunftssicherung, nicht die Voraussetzung.

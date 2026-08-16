@@ -93,11 +93,13 @@ guessing.
 
 ### 3. The two reverse proxy rules for the canonical root paths
 
-These are **optional**. A specification compliant client reads the `resource_metadata`
-pointer out of the `401` and finds everything from there; path 3 of the discovery table
-needs no rule at all. Add them if a client reports that it cannot find the authorization
-server, and add them before a first public launch, because they cost nothing and remove a
-whole class of support requests.
+These are **optional**, and that is measured, not assumed: with both rules switched off,
+Claude.ai still connects, because it falls back to path 3 of the discovery table (see "Are
+the two reverse proxy rules required?" in the section on hosted connectors). A
+specification compliant client reads the `resource_metadata` pointer out of the `401` and
+finds everything from there. Add the rules if a client reports that it cannot find the
+authorization server, and add them before a first public launch, because they cost nothing
+and remove a whole class of support requests.
 
 Caddy:
 
@@ -243,7 +245,9 @@ docker exec nc-mcp-exapp-caddy caddy reload --config /etc/caddy/Caddyfile --adap
 
 Without the rules the two canonical root paths are answered by Nextcloud with 404, exactly
 as the third discovery path predicted, and the path appended variant keeps working either
-way. That is what makes the rules an improvement rather than a requirement.
+way. That is what makes the rules an improvement rather than a requirement. The same
+measurement was repeated with a real hosted client instead of curl, see "Are the two
+reverse proxy rules required?" below: Claude.ai connects without them.
 
 ### 3. Success Criterion 5: the number of Nextcloud round trips
 
@@ -437,6 +441,135 @@ signed in, it is who they are signed in as.
 of its normal operation, it must not be declared `USER`. `HP_BLACKLIST_COUNT` and
 `HP_BLACKLIST_WINDOW` are environment variables of the HaRP container and can be raised,
 but that is the deploy daemon's configuration and not something this app may assume.
+
+## End to end with hosted connectors
+
+Everything above was measured through a proxy chain that we control on both ends. This
+section is the other proof: three real clients, none of which knows anything about this
+project, pointed at a public instance and left to do whatever they do.
+
+Instance: `https://nc-staging.infranode.dev`, a throwaway machine, Nextcloud 34.0.2,
+AppAPI 34.0.0, ExApp 0.1.0. All runs on **2026-08-16**. The user entered nothing but the
+resource URL; both OAuth fields of the client stayed empty and dynamic client registration
+did the rest.
+
+### Claude.ai: connected
+
+| | |
+|---|---|
+| Result | connected, 15 tools listed, tool calls answer 200 |
+| Client id issued by our DCR | one per connection, a UUID |
+| Redirect URI | `https://claude.ai/api/mcp/auth_callback`, fixed |
+| Discovery path used | canonical root path when it exists, otherwise the path appended variant, see below |
+| `POST /token` | 23 ms |
+| `POST /register` | 8 ms |
+| `GET /authorize` | 143 ms, the redirect to the consent page |
+
+```
+POST 401  /exapps/mcp_connector/mcp
+GET  200  /exapps/mcp_connector/.well-known/oauth-protected-resource/mcp
+GET  200  /.well-known/oauth-authorization-server/exapps/mcp_connector
+POST 201  /exapps/mcp_connector/register
+POST 200  /index.php/login/v2                  (client name "MCP Connector: Claude")
+GET  302  /exapps/mcp_connector/authorize
+GET  200  /exapps/mcp_connector/authorize/consent
+POST 200  /login/v2/poll                       (exactly one poll)
+POST 200  /exapps/mcp_connector/authorize/decide
+POST 200  /exapps/mcp_connector/token
+POST 200  /exapps/mcp_connector/mcp            (repeatedly)
+```
+
+Nextcloud shows its own sign in page with its own security warning and names the client
+"MCP Connector: Claude". The connection then appears in the account's Nextcloud sessions
+under that name and can be ended there.
+
+### ChatGPT: connected, after this server was fixed
+
+The first attempt failed, and the failure was ours. The authorization request carried
+`scope=offline_access nextcloud`, which is exactly what our metadata advertises, and our
+own server answered `error=invalid_scope, error_description=Client was not registered with
+scope offline_access`: registration granted only `nextcloud`. A client that believes the
+metadata was refused by the server that published it. Claude.ai never asked for
+`offline_access`, which is why it never hit this.
+
+After the fix, the same connector was told to connect again, without being recreated, and
+the run completed.
+
+| | |
+|---|---|
+| Result | connected |
+| Redirect URI | `https://chatgpt.com/connector/oauth/<token>`, minted per connector |
+| `scope` at `/authorize` | `offline_access nextcloud`, both advertised entries |
+| Extra document it reads | `<public url>/.well-known/openid-configuration` |
+| `POST /token` | 37 ms |
+| `iss` on the way back | our issuer, as required |
+
+Custom MCP servers need developer mode in ChatGPT: Settings, Security and sign in,
+"Developer mode", which carries an "increased risk" badge.
+
+### Cursor: refused, and the refusal is ours
+
+Cursor 3.2.16 needs no button either, it picks up `~/.cursor/mcp.json` on its own. Its
+registration is refused with `400 invalid_redirect_uri`, and Cursor prints our sentence
+verbatim in its log: `redirect_uris must use https, except loopback addresses of native
+clients`.
+
+The reason is not the loopback address. Cursor registers three return addresses at once:
+
+```
+cursor://anysphere.cursor-mcp/oauth/callback
+https://www.cursor.com/agents/mcp/oauth/callback
+http://localhost:8787/callback
+```
+
+The first is a private-use URI scheme. This server admits https and loopback only, and it
+reads the whole field: one inadmissible entry refuses a registration that also carries two
+admissible ones. Measured against the live instance: the payload above is refused, the same
+payload without the first entry is accepted, and `http://127.0.0.1:49731/callback` on its
+own is accepted as well.
+
+That is a deliberate rule, not an oversight. RFC 8252 lists private-use schemes as one of
+three legitimate forms for native clients, but on a desktop no application owns a scheme
+exclusively, so another program can claim it and receive the authorization code. The price
+of the rule is now measured: a whole client class stays out. If you need those clients, the
+question to decide is whether to drop inadmissible entries instead of refusing the whole
+registration; it is written up in the project backlog.
+
+### Are the two reverse proxy rules required?
+
+**No, they are a courtesy.** With both rules commented out and Caddy restarted, a fresh
+Claude.ai connection was forced (the stored authorization was cleared server side first,
+see the note below) and it succeeded:
+
+```
+POST 401  /exapps/mcp_connector/mcp
+GET  200  /exapps/mcp_connector/.well-known/oauth-protected-resource/mcp
+GET  404  /.well-known/oauth-authorization-server/exapps/mcp_connector
+GET  404  /.well-known/openid-configuration/exapps/mcp_connector
+GET  200  /exapps/mcp_connector/.well-known/openid-configuration     <- the fallback
+POST 201  /exapps/mcp_connector/register
+… consent, token, tool calls, all 200
+```
+
+Claude.ai tries three locations in order and settles on the OIDC style path below the
+issuer, which is ours and needs no rule. Keep the rules for clients that stop after the
+canonical path; do not treat them as a prerequisite.
+
+A trap when running this measurement yourself: the Caddyfile is bind mounted as a single
+file, so an editor that replaces the inode (`sed -i` does) changes the file on the host
+while the container keeps reading the old one, and `caddy reload` reloads the unchanged
+file. Verify the edit arrived inside the container before believing the result.
+
+### Removing a connector in the client does not revoke anything
+
+Measured with Claude.ai: the connector was removed in the UI, then added again with the
+same server URL. The first request afterwards was a tool call that answered 200. No 401,
+no discovery, no registration, and the entry even kept its old id. The stored authorization
+had simply survived on the provider side.
+
+Tell your users the same thing this project's consent page says: access ends when it is
+revoked in Nextcloud. `occ user:auth-tokens:list <user>` shows the connection under its
+client name, and the app's own connections page ends it.
 
 ## Known pitfalls
 
