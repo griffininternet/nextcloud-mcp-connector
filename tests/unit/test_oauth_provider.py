@@ -14,12 +14,15 @@ Nothing here starts a container or opens a socket: the store is a SQLite file in
 ``tmp_path`` and no Nextcloud is called at all.
 """
 
+import base64
+import hashlib
 import json
 import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 import pytest
+import respx
 from mcp.server.auth.provider import (
     AccessToken,
     AuthorizationCode,
@@ -36,7 +39,13 @@ from mcp_connector import config, entry_http
 from mcp_connector.entry_exapp import build_exapp_app
 from mcp_connector.oauth import metadata, registry
 from mcp_connector.oauth import provider as provider_module
-from mcp_connector.oauth.store import IDLE_CLIENT_TTL, UNUSED_CLIENT_TTL, OAuthStore, token_hash
+from mcp_connector.oauth.store import (
+    ACCESS_TOKEN_TTL,
+    IDLE_CLIENT_TTL,
+    UNUSED_CLIENT_TTL,
+    OAuthStore,
+    token_hash,
+)
 
 PUBLIC_URL = "https://cloud.example.com/exapps/mcp_connector"
 BASE_URL = "http://nc.test"
@@ -274,6 +283,258 @@ async def test_a_stored_row_that_cannot_be_read_is_refused_and_not_raised(
     await store.save_client(CLIENT_ID, metadata_json="not json at all")
 
     assert await subject.get_client(CLIENT_ID) is None
+
+
+# --- the code exchange -------------------------------------------------------------------
+
+AUTH_ID = "the-flow-this-authorization-was-born-in"
+NC_USER = "alice"
+APP_PASSWORD = "aaaaa-bbbbb-ccccc-ddddd-eeeee"
+CODE = "the-authorization-code-of-this-consent"
+RESOURCE = f"{PUBLIC_URL}/mcp"
+VERIFIER = "a-code-verifier-of-the-client-that-is-long-enough"
+CHALLENGE = (
+    base64.urlsafe_b64encode(hashlib.sha256(VERIFIER.encode()).digest()).decode().rstrip("=")
+)
+
+
+async def approved(
+    tmp_path: Path,
+    *,
+    resource: str = RESOURCE,
+    secret: str | None = None,
+    **env: str,
+) -> tuple[provider_module.NextcloudOAuthProvider, OAuthStore]:
+    """A registered client, a consent that happened and the code it produced."""
+    subject, store = build(tmp_path, **env)
+    await subject.register_client(registration(secret=secret))
+    await store.create_authorization(
+        AUTH_ID,
+        client_id=CLIENT_ID,
+        nc_user=NC_USER,
+        app_password=APP_PASSWORD,
+        scopes=metadata.TOOL_SCOPE,
+        resource=resource,
+    )
+    await store.create_auth_code(
+        CODE,
+        auth_id=AUTH_ID,
+        redirect_uri=REDIRECT,
+        code_challenge=CHALLENGE,
+        resource=resource,
+    )
+    return subject, store
+
+
+@pytest.mark.anyio
+async def test_a_code_is_loaded_with_everything_the_token_endpoint_compares(
+    tmp_path: Path,
+) -> None:
+    subject, _store = await approved(tmp_path)
+
+    loaded = await subject.load_authorization_code(registration(), CODE)
+
+    assert loaded is not None
+    assert loaded.code == CODE
+    assert loaded.client_id == CLIENT_ID
+    assert loaded.subject == NC_USER, "the resource owner travels into the access token"
+    assert loaded.code_challenge == CHALLENGE
+    assert str(loaded.redirect_uri) == REDIRECT
+    assert loaded.redirect_uri_provided_explicitly is True
+    assert loaded.resource == RESOURCE
+    assert loaded.scopes == [metadata.TOOL_SCOPE]
+    assert 0 < loaded.expires_at - time.time() <= 60
+
+
+@pytest.mark.anyio
+async def test_a_code_that_is_unknown_used_or_expired_is_not_loaded(tmp_path: Path) -> None:
+    subject, store = await approved(tmp_path)
+
+    assert await subject.load_authorization_code(registration(), "never-issued") is None
+    await store.redeem_auth_code(CODE)
+    assert await subject.load_authorization_code(registration(), CODE) is None
+
+
+@pytest.mark.anyio
+async def test_the_exchange_issues_an_opaque_pair_and_stores_only_their_digests(
+    tmp_path: Path,
+) -> None:
+    subject, store = await approved(tmp_path)
+    code = await subject.load_authorization_code(registration(), CODE)
+    assert code is not None
+
+    issued = await subject.exchange_authorization_code(registration(), code)
+
+    assert issued.token_type == "Bearer"
+    assert issued.expires_in == ACCESS_TOKEN_TTL
+    assert issued.refresh_token is not None
+    assert issued.access_token != issued.refresh_token
+    access = await store.load_access_token(issued.access_token)
+    refresh = await store.load_refresh_token(issued.refresh_token)
+    assert access is not None
+    assert refresh is not None
+    assert access.auth_id == AUTH_ID
+    assert access.nc_user == NC_USER
+    assert access.resource == RESOURCE
+    assert access.family_id == refresh.family_id, "one connection, one family"
+    file_bytes = (tmp_path / "oauth.sqlite3").read_bytes()
+    assert issued.access_token.encode() not in file_bytes
+    assert issued.refresh_token.encode() not in file_bytes
+
+
+@pytest.mark.anyio
+async def test_the_code_is_spent_and_a_second_exchange_fails(tmp_path: Path) -> None:
+    """RFC 6749 §10.5: one code, one exchange, and the second one is invalid_grant."""
+    subject, _store = await approved(tmp_path)
+    code = await subject.load_authorization_code(registration(), CODE)
+    assert code is not None
+
+    await subject.exchange_authorization_code(registration(), code)
+    with pytest.raises(TokenError) as raised:
+        await subject.exchange_authorization_code(registration(), code)
+
+    assert raised.value.error == "invalid_grant"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("resource", ["", "https://other.example.com/mcp"])
+async def test_a_code_without_this_audience_never_becomes_a_token(
+    tmp_path: Path, resource: str
+) -> None:
+    """T-03-51: a token without an audience is valid at every other MCP server."""
+    subject, store = await approved(tmp_path, resource=resource)
+    code = await subject.load_authorization_code(registration(), CODE)
+    assert code is not None
+
+    with pytest.raises(TokenError) as raised:
+        await subject.exchange_authorization_code(registration(), code)
+
+    assert raised.value.error == "invalid_target"
+    assert await store.load_auth_code(CODE) is not None, "a refusal does not spend the code"
+
+
+@pytest.mark.anyio
+async def test_a_client_blocked_between_authorize_and_token_gets_nothing(
+    tmp_path: Path,
+) -> None:
+    """T-03-55, pitfall 9: a block in the middle of a flow must not slip through."""
+    subject, store = await approved(tmp_path)
+    code = await subject.load_authorization_code(registration(), CODE)
+    assert code is not None
+    await store.save_client(CLIENT_ID, metadata_json='{"client_id": "x"}', allowed=False)
+
+    with pytest.raises(TokenError) as raised:
+        await subject.exchange_authorization_code(registration(), code)
+
+    assert raised.value.error == "invalid_client"
+
+
+@pytest.mark.anyio
+async def test_the_exchange_asks_nextcloud_nothing_at_all(tmp_path: Path) -> None:
+    """T-03-58, pitfall 13: the token endpoint of a connector has ten seconds."""
+    subject, _store = await approved(tmp_path)
+    code = await subject.load_authorization_code(registration(), CODE)
+    assert code is not None
+
+    with respx.mock:
+        await subject.exchange_authorization_code(registration(), code)
+        assert len(respx.calls) == 0
+
+
+@pytest.mark.anyio
+async def test_the_exchange_marks_the_registration_as_used(tmp_path: Path) -> None:
+    """A registration that produced a token lives on the long window, not the short one."""
+    subject, store = await approved(tmp_path)
+    code = await subject.load_authorization_code(registration(), CODE)
+    assert code is not None
+
+    await subject.exchange_authorization_code(registration(), code)
+
+    row = await store.load_client(CLIENT_ID)
+    assert row is not None
+    assert row.last_used_at is not None
+
+
+# --- the client authenticator of this server ----------------------------------------------
+
+
+def token_request(**fields: str) -> dict[str, str]:
+    payload = {
+        "grant_type": "authorization_code",
+        "code": CODE,
+        "code_verifier": VERIFIER,
+        "redirect_uri": REDIRECT,
+        "client_id": CLIENT_ID,
+    }
+    payload.update(fields)
+    return payload
+
+
+def serving(subject: provider_module.NextcloudOAuthProvider, **env: str) -> TestClient:
+    return TestClient(Starlette(routes=provider_module.auth_routes(ENV | env, provider=subject)))
+
+
+@pytest.mark.anyio
+async def test_a_public_client_walks_the_whole_token_endpoint(tmp_path: Path) -> None:
+    """The end to end shape: a real code, a real PKCE verifier, a real pair of tokens."""
+    subject, _store = await approved(tmp_path)
+
+    with serving(subject) as http:
+        response = http.post("/token", data=token_request())
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["token_type"] == "Bearer"
+    assert body["expires_in"] == ACCESS_TOKEN_TTL
+    assert body["refresh_token"]
+    assert response.headers["cache-control"] == "no-store"
+
+
+@pytest.mark.anyio
+async def test_a_confidential_client_authenticates_against_the_stored_digest(
+    tmp_path: Path,
+) -> None:
+    """The SDK compares a plaintext secret, and this store keeps none (plan 03-05)."""
+    subject, _store = await approved(tmp_path, secret=SECRET)
+
+    with serving(subject) as http:
+        good = http.post("/token", data=token_request(client_secret=SECRET))
+
+    assert good.status_code == 200, good.text
+
+
+@pytest.mark.anyio
+async def test_a_wrong_client_secret_is_a_401_and_no_token(tmp_path: Path) -> None:
+    subject, store = await approved(tmp_path, secret=SECRET)
+
+    with serving(subject) as http:
+        response = http.post("/token", data=token_request(client_secret="not-the-secret"))
+
+    assert response.status_code == 401
+    assert response.json()["error"] == "invalid_client"
+    assert await store.load_auth_code(CODE) is not None, "the code was not spent"
+
+
+@pytest.mark.anyio
+async def test_a_confidential_client_without_its_secret_is_refused(tmp_path: Path) -> None:
+    subject, _store = await approved(tmp_path, secret=SECRET)
+
+    with serving(subject) as http:
+        response = http.post("/token", data=token_request())
+
+    assert response.status_code == 401
+
+
+@pytest.mark.anyio
+async def test_a_wrong_pkce_verifier_is_refused_by_the_sdk(tmp_path: Path) -> None:
+    """The checks the SDK owns stay the SDK's, and this proves they are still in the path."""
+    subject, _store = await approved(tmp_path)
+
+    with serving(subject) as http:
+        response = http.post("/token", data=token_request(code_verifier="another-verifier"))
+
+    assert response.status_code == 400
+    assert response.json()["error"] == "invalid_grant"
 
 
 # --- the methods the later plans fill ----------------------------------------------------

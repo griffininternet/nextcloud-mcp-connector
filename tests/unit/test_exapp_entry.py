@@ -26,6 +26,7 @@ from mcp_connector import config, entry_exapp, entry_http
 from mcp_connector.errors import ToolError
 from mcp_connector.exapp.middleware import RequireAppApi
 from mcp_connector.oauth.metadata import PRM_SUFFIX, TOOL_SCOPE
+from mcp_connector.oauth.verifier import OAUTH_STATE_ATTR, OAuthIdentity, StoreTokenVerifier
 
 APP_ID = "mcp_connector"
 APP_SECRET = "app-secret-test"
@@ -79,8 +80,9 @@ def appapi_headers(user: str = "alice", secret: str = APP_SECRET) -> dict[str, s
 class StubVerifier:
     """The one method of the SDK ``TokenVerifier`` protocol, over one accepted token.
 
-    Plan 03-06 puts the real verifier here. Until then the boundary is built with ``None``,
-    which is the fail-closed state: no verifier means no valid bearer exists.
+    A verifier that answers nothing about the identity behind a token, which is what the
+    SDK protocol is: the boundary may let such a token through, and the credential layer
+    then has nothing to act on. ``None`` instead of a verifier stays the fail-closed state.
     """
 
     def __init__(self, accepted: str | None = None) -> None:
@@ -94,16 +96,28 @@ class StubVerifier:
         return None
 
 
+class StubSource(StubVerifier):
+    """The verifier of this app: it also says whose connection a token is (plan 03-06)."""
+
+    def __init__(self, accepted: str | None = None, identity: OAuthIdentity | None = None) -> None:
+        super().__init__(accepted)
+        self._identity = identity
+
+    async def resolve_identity(self, access: AccessToken) -> OAuthIdentity | None:
+        del access
+        return self._identity
+
+
 def guarded_app(verifier: StubVerifier | None = None) -> Starlette:
     """One route behind the real boundary, so a verifier can be handed in.
 
-    ``build_exapp_app`` builds the MCP transport behind the same wrapper but takes no
-    verifier yet (plan 03-06 wires it). This little application drives the branches of the
-    wrapper itself, including the one that hands a token to a verifier.
+    The route answers with the identity the boundary deposited, when there is one: that is
+    the hand over the credential layer of ``deps.py`` reads on every tool call.
     """
 
     async def served(request: Request) -> Response:
-        return PlainTextResponse("served")
+        identity = getattr(request.state, OAUTH_STATE_ATTR, None)
+        return PlainTextResponse("served" if identity is None else f"served as {identity.nc_user}")
 
     app = Starlette(routes=[Route("/mcp", served, methods=["GET", "POST"])])
     for route in app.router.routes:
@@ -259,6 +273,51 @@ def test_a_rejected_bearer_stops_at_the_boundary() -> None:
     assert response.status_code == 401
     assert "resource_metadata=" in response.headers["www-authenticate"]
     assert verifier.seen == ["a-stolen-token"]
+
+
+def test_a_verified_bearer_leaves_its_identity_for_the_credential_layer() -> None:
+    """The hand over of plan 03-06: the boundary resolves, the tool call reads (D-26)."""
+    identity = OAuthIdentity(
+        nc_user="alice", app_password="app-password", auth_id="auth-1", client_id="client-1"
+    )
+    source = StubSource(accepted="a-good-token", identity=identity)
+
+    with TestClient(guarded_app(source)) as client:
+        response = client.get(
+            "/mcp", headers={**appapi_headers(user=""), "Authorization": "Bearer a-good-token"}
+        )
+
+    assert response.status_code == 200
+    assert response.text == "served as alice"
+
+
+def test_a_token_whose_connection_is_gone_stops_at_the_boundary() -> None:
+    """Fail closed: a token this server cannot turn into an identity is not a valid one."""
+    source = StubSource(accepted="a-good-token", identity=None)
+
+    with TestClient(guarded_app(source)) as client:
+        response = client.get(
+            "/mcp", headers={**appapi_headers(user=""), "Authorization": "Bearer a-good-token"}
+        )
+
+    assert response.status_code == 401
+    assert "resource_metadata=" in response.headers["www-authenticate"]
+
+
+def test_the_mcp_route_is_guarded_with_the_verifier_of_this_deployment() -> None:
+    """Plan 03-06 wires the real verifier, at the one place the boundary is built."""
+    app = entry_exapp.build_exapp_app(OAUTH_ENV)
+
+    guards = [
+        route.app
+        for route in app.router.routes
+        if isinstance(route, Route) and route.path == entry_exapp.MCP_PATH
+    ]
+
+    assert len(guards) == 1
+    guard = guards[0]
+    assert isinstance(guard, RequireAppApi)
+    assert isinstance(guard._token_verifier, StoreTokenVerifier)
 
 
 def test_a_resolved_user_is_never_asked_for_a_bearer() -> None:
