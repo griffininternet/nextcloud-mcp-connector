@@ -1,0 +1,243 @@
+"""The screens of the OAuth authorization: hand over, wait, decide (03-UI-SPEC.md S1 to S3).
+
+The routes that drive them live in :mod:`mcp_connector.oauth.consent`; this module only
+renders, and it renders through :func:`mcp_connector.exapp.ui.layout.page` like every other
+page of this phase, so the security headers, the style nonce and the escaping have exactly
+one source.
+
+Every value on these pages comes from a dynamic client registration and is therefore
+attacker input: the name, the return address, the client id. They are shown anyway, and
+that is the point of the screen. What makes it safe is that ``layout`` cleans and escapes
+each of them at the single place it writes them, and that the page says plainly which of
+them nobody verified (03-UI-SPEC.md, S3, T-03-42).
+
+No JavaScript, deliberately and completely. The waiting screen refreshes itself with one
+``meta http-equiv="refresh"`` and every load asks Nextcloud exactly once, which is also the
+whole throttling of this route (T-03-34).
+
+The four screens, in the order a user meets them:
+
+1. :func:`empty_page` for a bare ``/authorize``: nothing is being asked, so nothing is
+   granted. It is also where "Start over" of the timeout page leads.
+2. :func:`handoff_page` right after the authorization request: who is asking, and the link
+   into the Nextcloud sign in, in a window of its own. It carries no refresh, because a
+   link that disappears three seconds after it appeared is worse than one a user can reach
+   again (the lesson of plan 03-04).
+3. :func:`waiting_page` while the sign in runs: the refreshing screen, one poll per load.
+4. :func:`consent_page` once Nextcloud knows who the user is: the decision screen.
+
+The decision buttons themselves arrive in plan 03-06 together with the route that acts on
+them. What this plan renders is the screen a user reads before they press anything, which
+is the half that has to be right first: a person who cannot tell who is asking cannot make
+the decision the buttons record.
+
+The paths and parameter names of the route are declared here, next to the links and forms
+that write them into the document, and :mod:`mcp_connector.oauth.consent` imports them for
+its route declarations, so a link and its route cannot drift apart.
+"""
+
+from collections.abc import Mapping
+from urllib.parse import urlencode, urlsplit
+
+from starlette.responses import Response
+
+from ... import config
+from . import layout, strings
+
+__all__ = [
+    "CONSENT_PATH",
+    "FLOW_PARAM",
+    "LOGIN_PARAM",
+    "REFRESH_SECONDS",
+    "STEP_PARAM",
+    "STEP_WAIT",
+    "consent_page",
+    "consent_url",
+    "empty_page",
+    "handoff_page",
+    "meta_refresh",
+    "wait_path",
+    "waiting_page",
+]
+
+#: Where the consent surface lives. Declared in ``appinfo/info.xml`` fully anchored, like
+#: every other route of this app (D-38, pitfall 14). ``/authorize`` itself is the endpoint
+#: of the specification and is declared separately.
+CONSENT_PATH = "/authorize/consent"
+
+#: The flow id travels as a query parameter. It is what connects this page to one running
+#: authorization request, which is why every page here carries ``Referrer-Policy:
+#: no-referrer``: the sign in link opens another origin (T-03-32).
+FLOW_PARAM = "flow"
+
+#: The address of the Nextcloud sign in, carried in the same query. Nextcloud hands it to
+#: us once, during the authorization request, and this is how it reaches the page that
+#: shows it. The route checks that it belongs to the configured Nextcloud before it is ever
+#: rendered, because a link on a page that asks for trust is the phishing step this whole
+#: surface exists against (T-03-42).
+LOGIN_PARAM = "login"
+
+#: Which of the two states of the same page is meant. Without it the page is the handoff,
+#: with it the waiting screen, which is also the one state that polls. One route instead of
+#: two, because every declared route is a line of external attack surface (D-38).
+STEP_PARAM = "step"
+STEP_WAIT = "wait"
+
+#: The pace of the waiting screen (03-UI-SPEC.md, S2). One poll per load, so this number is
+#: also the load a running sign in puts on Nextcloud: one request every three seconds, for
+#: at most the twenty minutes a flow lives.
+REFRESH_SECONDS = 3
+
+
+def consent_url(public_base: str, flow_id: str, login_url: str) -> str:
+    """The absolute address the authorization endpoint redirects a browser to.
+
+    Absolute and built from the configured public URL, not from the path this application
+    sees: HaRP strips the prefix, so a redirect to ``/authorize/consent`` would send the
+    browser to the root of the Nextcloud domain, where this app is not.
+    """
+    query = urlencode({FLOW_PARAM: flow_id, LOGIN_PARAM: login_url})
+    return f"{public_base}{CONSENT_PATH}?{query}"
+
+
+def meta_refresh(seconds: int = REFRESH_SECONDS) -> str:
+    """The whole automation of the waiting screen, as one tag without a target.
+
+    Without a URL the browser reloads the address it is on, which already carries the flow
+    id and the step. That is why this page needs no script, and why it cannot be talked
+    into reloading somewhere else.
+    """
+    return f'<meta http-equiv="refresh" content="{int(seconds)}">'
+
+
+def empty_page(*, env: Mapping[str, str] | None = None) -> Response:
+    """Nothing is being asked. The honest landing point of a link and of a stale tab."""
+    return layout.page(
+        strings.EMPTY_TITLE,
+        [layout.paragraph(strings.EMPTY_BODY)],
+        env=env,
+        status_code=400,
+    )
+
+
+def handoff_page(
+    client_name: str,
+    login_url: str,
+    flow_id: str,
+    *,
+    env: Mapping[str, str] | None = None,
+) -> Response:
+    """S1: who is asking, and the one link that leaves this application."""
+    name = layout.client_name(client_name)
+    return layout.page(
+        strings.SIGNIN_TITLE,
+        [
+            layout.paragraph(strings.SIGNIN_BODY.format(client=name, host=_host(env))),
+            layout.external_action(strings.SIGNIN_CTA, login_url),
+            _onwards(flow_id, env),
+        ],
+        env=env,
+    )
+
+
+def waiting_page(flow_id: str, *, env: Mapping[str, str] | None = None) -> Response:
+    """S2: the refreshing screen. Every load of it is exactly one poll at Nextcloud."""
+    return layout.page(
+        strings.WAIT_TITLE,
+        [
+            layout.status_line(strings.WAIT_STATUS.format(host=_host(env))),
+            layout.paragraph(strings.WAIT_BODY),
+            _onwards(flow_id, env),
+        ],
+        env=env,
+        head_extra=meta_refresh(),
+    )
+
+
+def consent_page(
+    client_name: str,
+    client_id: str,
+    redirect_uri: str,
+    user: str,
+    *,
+    unverified: bool,
+    env: Mapping[str, str] | None = None,
+) -> Response:
+    """S3: everything a person needs to decide, and the warning when nobody vouched.
+
+    The three details are a definition list and the return address is never shortened: a
+    redirect target cut off in the middle hides exactly the part an attacker would have
+    changed (03-UI-SPEC.md, S3).
+
+    The two buttons of the decision are built in plan 03-06, together with the route that
+    records what they mean. This page is the reading half, and it is complete: the
+    identity, the warning, the details and what the access would cover.
+    """
+    name = layout.client_name(client_name)
+    blocks = [
+        layout.paragraph(strings.CONSENT_IDENTITY.format(user=user, host=_host(env))),
+    ]
+    if unverified:
+        blocks.append(
+            layout.callout("warning", strings.CONSENT_WARNING_TITLE, strings.CONSENT_WARNING_BODY)
+        )
+    blocks.extend(
+        [
+            layout.detail_list(
+                [
+                    (strings.CONSENT_DETAIL_APP_NAME, name),
+                    (strings.CONSENT_DETAIL_REDIRECT, redirect_uri),
+                    (strings.CONSENT_DETAIL_CLIENT_ID, client_id),
+                ]
+            ),
+            layout.section_heading(strings.CONSENT_GRANT_TITLE),
+            layout.unordered_list(
+                [
+                    strings.CONSENT_GRANT_READ,
+                    strings.CONSENT_GRANT_WRITE,
+                    strings.CONSENT_GRANT_NO_REMOVAL,
+                    strings.CONSENT_GRANT_REVOKE,
+                ]
+            ),
+        ]
+    )
+    return layout.page(
+        strings.CONSENT_TITLE.format(client=name),
+        blocks,
+        env=env,
+        footer=strings.CONSENT_FOOTER.format(host=_host(env)),
+    )
+
+
+def wait_path(flow_id: str) -> str:
+    """The address of the waiting state of one flow, as this application sees it."""
+    return f"{CONSENT_PATH}?{urlencode({FLOW_PARAM: flow_id, STEP_PARAM: STEP_WAIT})}"
+
+
+def _onwards(flow_id: str, env: Mapping[str, str] | None) -> str:
+    """The two ways on that every screen of a running sign in offers.
+
+    "Check now" is a GET form and asks the same question the refresh asks, for a browser
+    where the refresh is switched off. "Start over" is a link to the bare authorization
+    endpoint, which answers the empty state: the honest end for a user whose sign in window
+    is gone, because the connection has to be started again in the app that asked for it.
+    """
+    return layout.form(
+        CONSENT_PATH,
+        [layout.button_secondary(strings.ACTION_CHECK_NOW, name="check", value="now")],
+        hidden={FLOW_PARAM: flow_id, STEP_PARAM: STEP_WAIT},
+        method="get",
+        env=env,
+    ) + layout.action(strings.ACTION_START_OVER, _AUTHORIZATION_PATH, env=env)
+
+
+def _host(env: Mapping[str, str] | None) -> str:
+    """The configured public host, never the Host header of the request (T-03-02)."""
+    configured = config.public_url(env)
+    return urlsplit(configured).netloc or configured
+
+
+#: Where "Start over" leads, which is the same path ``exapp/ui/errors.py`` uses for the
+#: timeout page. Spelled here as a constant rather than imported from the SDK, so this
+#: module keeps rendering without an authorization server on the import path.
+_AUTHORIZATION_PATH = "/authorize"

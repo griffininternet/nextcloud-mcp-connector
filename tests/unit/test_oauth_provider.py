@@ -309,8 +309,19 @@ def routes(**env: str) -> list[str]:
     return [route.path for route in provider_module.auth_routes(ENV | env, provider=subject)]
 
 
-def test_the_authorization_server_routes_are_the_four_of_the_specification() -> None:
-    assert sorted(routes()) == sorted(AS_PATHS)
+def test_the_authorization_server_routes_are_the_three_the_sdk_serves() -> None:
+    """``/authorize`` is the fourth endpoint and is served by ``oauth/consent.py``: a
+    refused authorization request has to end on a page a person can read, not in the JSON
+    the SDK answers a machine with (plan 03-05, task 3)."""
+    assert sorted(routes()) == ["/register", "/revoke", "/token"]
+
+
+def test_the_application_serves_the_four_endpoints_exactly_once_each() -> None:
+    """Set equality over the deployed application, which is where the two factories meet."""
+    paths = [getattr(route, "path", "") for route in _exapp_routes()]
+
+    for path in AS_PATHS:
+        assert paths.count(path) == 1, path
 
 
 def test_without_dynamic_registration_the_register_route_does_not_exist() -> None:

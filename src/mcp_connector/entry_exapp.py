@@ -29,6 +29,7 @@ from .exapp.lifecycle import lifecycle_routes
 from .exapp.middleware import RequireAppApi
 from .nextcloud.http import configure_logging
 from .oauth.connect import connect_routes
+from .oauth.consent import consent_routes
 from .oauth.metadata import metadata_routes
 from .oauth.provider import NextcloudOAuthProvider, auth_routes
 from .oauth.registry import client_policy
@@ -94,9 +95,11 @@ def build_exapp_app(env: Mapping[str, str] | None = None) -> Starlette:
     # hands out a Nextcloud credential has no business appearing in the standalone HTTP
     # server of phase 1, which has no store, no data key and no AppAPI identity (D-23, D-36).
     #
-    # The authorization server of plan 03-05 joins the same line, and the same rule is the
-    # reason it is not passed to the MCPServer constructor as auth_server_provider: that
-    # would attach these routes to the MCP application, where the standalone mode would
+    # The authorization server of plan 03-05 joins the same line: auth_routes builds the
+    # endpoints of the SDK with create_auth_routes and our own provider, and consent_routes
+    # adds the authorization endpoint in front of it plus the consent screen. The same rule
+    # is why the provider is not passed to the MCPServer constructor as auth_server_provider:
+    # that would attach these routes to the MCP application, where the standalone mode would
     # inherit them (03-RESEARCH.md, anti patterns).
     #
     # The policy is read once here, and the two places that answer to it read the same
@@ -112,6 +115,7 @@ def build_exapp_app(env: Mapping[str, str] | None = None) -> Starlette:
         *metadata_routes(env, dcr_enabled=policy.dcr_enabled),
         *connect_routes(env, store_provider=store),
         *auth_routes(env, provider=provider),
+        *consent_routes(env, provider=provider),
     ):
         app.router.routes.append(route)
     return app

@@ -34,6 +34,7 @@ answer that separates them is an information service for whoever is guessing (T-
 
 import json
 import logging
+import secrets
 import time
 from collections.abc import Awaitable, Callable, Mapping
 
@@ -48,9 +49,10 @@ from mcp.server.auth.provider import (
     RegistrationError,
     TokenError,
 )
-from mcp.server.auth.routes import create_auth_routes
+from mcp.server.auth.routes import AUTHORIZATION_PATH, create_auth_routes
 from mcp.server.auth.settings import ClientRegistrationOptions, RevocationOptions
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
+from mcp.shared.auth_utils import check_resource_allowed
 from pydantic import AnyHttpUrl, ValidationError
 from starlette.datastructures import MutableHeaders
 from starlette.routing import Route
@@ -58,6 +60,8 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from .. import config
 from ..errors import ToolError
+from ..exapp.ui.consent import consent_url
+from . import loginflow
 from .metadata import AS_METADATA_SUFFIX, REFRESH_SCOPE, RESOURCE_SUFFIX, TOOL_SCOPE
 from .registry import (
     IDLE_REGISTRATION_TTL,
@@ -98,6 +102,11 @@ _HINT_ISSUER = (
     "https://cloud.example.com/exapps/mcp_connector. RFC 8414 requires https for an issuer, "
     "with the loopback exception for a local test."
 )
+
+#: 32 bytes of entropy behind a flow id, which ``token_urlsafe`` renders as 43 characters.
+#: The value is the whole authorisation of the consent screen for the length of one sign
+#: in, so it is drawn from the same generator as every other secret of this phase.
+FLOW_ID_BYTES = 32
 
 logger = logging.getLogger("mcp_connector.oauth.provider")
 
@@ -212,8 +221,50 @@ class NextcloudOAuthProvider(
     async def authorize(
         self, client: OAuthClientInformationFull, params: AuthorizationParams
     ) -> str:
-        """The bridge into the Nextcloud sign in. Built in the third task of this plan."""
-        raise AuthorizeError("temporarily_unavailable", _NOT_YET)
+        """Open a Nextcloud sign in and send the browser to our own consent screen.
+
+        The audience is decided here and not at the token endpoint, and it is required
+        rather than defaulted: a token without an audience would be accepted by every other
+        MCP server a user connects, which is the confused deputy this parameter exists
+        against (RFC 8707, T-03-46). The second half of that check, at the moment the token
+        is issued, is plan 03-06; refusing here means no sign in is even opened for a
+        request that could never be granted.
+
+        The Nextcloud round trip happens on this path and never on the token path. The
+        browser has a generous timeout, the token endpoint of a connector has ten seconds
+        (pitfall 13), and a Nextcloud call under load is exactly the sporadic timeout
+        nobody can reproduce afterwards.
+        """
+        resource = (params.resource or "").strip()
+        if not resource:
+            raise AuthorizeError("invalid_target", "the resource parameter is required")
+        if not check_resource_allowed(resource, self._resource):
+            raise AuthorizeError("invalid_target", "the resource does not match this server")
+
+        started = await loginflow.start_flow(client.client_name or "", env=self._env)
+        if started is None:
+            # loginflow logged what happened; nothing of the request is repeated here.
+            raise AuthorizeError("temporarily_unavailable", "the sign in could not be started")
+
+        flow_id = secrets.token_urlsafe(FLOW_ID_BYTES)
+        try:
+            store = await self.store()
+            await store.create_flow(
+                flow_id,
+                client_id=client.client_id,
+                redirect_uri=str(params.redirect_uri),
+                redirect_uri_explicit=params.redirect_uri_provided_explicitly,
+                code_challenge=params.code_challenge,
+                state=params.state,
+                scopes=" ".join(params.scopes or []),
+                resource=resource,
+                poll_token=started.poll_token,
+            )
+        except Exception:
+            logger.exception("the authorization request could not be written to the store")
+            raise AuthorizeError("server_error", "the request could not be remembered") from None
+
+        return consent_url(config.public_url(self._env), flow_id, started.login_url)
 
     async def load_authorization_code(
         self, client: OAuthClientInformationFull, authorization_code: str
@@ -279,11 +330,14 @@ def auth_routes(
 ) -> list[Route]:
     """The routes of the authorization server, with ``no-store`` over all of them.
 
-    The metadata route of the SDK is dropped: ``oauth/metadata.py`` serves the same path
-    with the document this deployment actually publishes, including the fields the SDK does
-    not set and the issuer spelled exactly as it was configured (03-01). Two routes on one
-    path would answer whichever was registered first, which is not a property to leave to
-    registration order.
+    Two of the routes the SDK builds are dropped here, and both because this app already
+    serves the same path with more than the SDK can know. ``oauth/metadata.py`` publishes
+    the authorization server document with the fields the SDK does not set and the issuer
+    spelled exactly as it was configured (03-01), and ``oauth/consent.py`` serves
+    ``/authorize`` in front of the SDK handler, so that a refused request ends on a page a
+    person can read instead of in JSON a browser displays raw. Two routes on one path would
+    answer whichever was registered first, which is not a property to leave to registration
+    order.
 
     The issuer is the configured public URL. The SDK requires https for it, with the
     loopback exception that makes the local test topology work; a value that fails that
@@ -306,7 +360,7 @@ def auth_routes(
             message=f"{config.ENV_PUBLIC_URL} is not a usable issuer: {exc}", hint=_HINT_ISSUER
         ) from None
 
-    kept = [route for route in routes if route.path != AS_METADATA_SUFFIX]
+    kept = [route for route in routes if route.path not in (AS_METADATA_SUFFIX, AUTHORIZATION_PATH)]
     for route in kept:
         route.app = NoStore(route.app)
     return kept

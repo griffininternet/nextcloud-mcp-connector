@@ -40,7 +40,7 @@ Every request runs under the identity of the signed in user, so an assistant nev
 			<image-tag>0.1.0</image-tag>
 		</docker-install>
 		<!--
-		  - Exactly ten routes, and they are the whole external attack surface of this app.
+		  - Exactly eleven routes, and they are the whole external attack surface of this app.
 		  -
 		  - The three AppAPI lifecycle paths (/heartbeat, /init and /enabled) are deliberately
 		  - absent, and this comment is the only place they appear here. A path that matches no
@@ -108,6 +108,14 @@ Every request runs under the identity of the signed in user, so an assistant nev
 		  - three switches of AUTH-07 instead. All three take POST only; the OPTIONS the SDK
 		  - would also answer is not declared, because no browser calls them cross origin in
 		  - this topology.
+		  -
+		  - /authorize/consent is the consent screen and the bridge into the Nextcloud sign
+		  - in: it shows who is asking, hands the user over to Nextcloud's own pages and
+		  - waits for the result. It is PUBLIC for the reason /authorize is, and it takes
+		  - GET and POST because the decision of plan 03-06 is a POST on the same address;
+		  - the verb is declared now so the manifest changes once instead of twice. The page
+		  - takes one unguessable flow id and the sign in address Nextcloud handed us, and
+		  - it refuses to render an address that does not belong to this instance.
 		-->
 		<routes>
 			<route>
@@ -148,6 +156,12 @@ Every request runs under the identity of the signed in user, so an assistant nev
 			</route>
 			<route>
 				<url>^/authorize/?$</url>
+				<verb>GET,POST</verb>
+				<access_level>PUBLIC</access_level>
+				<headers_to_exclude>["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERSION","X-ORIGIN-IP"]</headers_to_exclude>
+			</route>
+			<route>
+				<url>^/authorize/consent/?$</url>
 				<verb>GET,POST</verb>
 				<access_level>PUBLIC</access_level>
 				<headers_to_exclude>["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERSION","X-ORIGIN-IP"]</headers_to_exclude>

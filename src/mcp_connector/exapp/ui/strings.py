@@ -84,7 +84,9 @@ __all__ = [
     "SIGNIN_BODY",
     "SIGNIN_CTA",
     "SIGNIN_TITLE",
+    "WAIT_BODY",
     "WAIT_STATUS",
+    "WAIT_TITLE",
     "WORDMARK",
 ]
 
@@ -116,7 +118,14 @@ SIGNIN_CTA = "Continue to Nextcloud sign in"
 
 # --- S2, waiting for the sign in ---------------------------------------------------------
 
+WAIT_TITLE = "Waiting for your sign in"
+
 WAIT_STATUS = "Waiting for your sign in at {host}."
+
+WAIT_BODY = (
+    "Finish the sign in in the other window. This page checks every few seconds and "
+    "continues on its own as soon as you are signed in."
+)
 
 # --- Secondary actions, shared across the screens ----------------------------------------
 

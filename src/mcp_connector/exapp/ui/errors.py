@@ -113,7 +113,7 @@ def error_page(
     )
     blocks = [layout.paragraph(text)]
     if spec.action_label:
-        blocks.append(layout.action(spec.action_label, spec.action_href))
+        blocks.append(layout.action(spec.action_label, spec.action_href, env=env))
 
     headers = {"Retry-After": str(wait)} if spec.status == 429 else None
     response = layout.page(

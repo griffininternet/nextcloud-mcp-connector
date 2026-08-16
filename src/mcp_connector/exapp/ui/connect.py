@@ -94,6 +94,7 @@ def invitation_page(*, env: Mapping[str, str] | None = None) -> Response:
             layout.form(
                 CONNECT_PATH,
                 [layout.button_primary(strings.SIGNIN_CTA, name=ACTION_FIELD, value=ACTION_START)],
+                env=env,
             ),
         ],
         env=env,
@@ -113,7 +114,7 @@ def handoff_page(login_url: str, flow_id: str, *, env: Mapping[str, str] | None 
         [
             layout.paragraph(strings.CONNECT_HANDOFF_BODY),
             layout.external_action(strings.SIGNIN_CTA, login_url),
-            _onwards(flow_id),
+            _onwards(flow_id, env),
         ],
         env=env,
     )
@@ -126,7 +127,7 @@ def waiting_page(flow_id: str, *, env: Mapping[str, str] | None = None) -> Respo
         [
             layout.status_line(strings.WAIT_STATUS.format(host=_host(env))),
             layout.paragraph(strings.CONNECT_WAIT_BODY),
-            _onwards(flow_id),
+            _onwards(flow_id, env),
         ],
         env=env,
         head_extra=meta_refresh(),
@@ -167,7 +168,7 @@ def result_page(
     )
 
 
-def _onwards(flow_id: str) -> str:
+def _onwards(flow_id: str, env: Mapping[str, str] | None = None) -> str:
     """The two ways on that every screen after the start offers: check now, or start over.
 
     "Check now" is a GET form and asks the same question the refresh asks, for a browser
@@ -180,7 +181,8 @@ def _onwards(flow_id: str) -> str:
         [layout.button_secondary(strings.ACTION_CHECK_NOW, name="check", value="now")],
         hidden={FLOW_PARAM: flow_id},
         method="get",
-    ) + layout.action(strings.ACTION_START_OVER, CONNECT_PATH)
+        env=env,
+    ) + layout.action(strings.ACTION_START_OVER, CONNECT_PATH, env=env)
 
 
 def _host(env: Mapping[str, str] | None) -> str:

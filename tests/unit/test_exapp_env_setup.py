@@ -79,9 +79,9 @@ PROXY_OWNED_HEADERS = (
 )
 
 #: What this phase opens: the MCP transport, the three discovery documents, the two pages
-#: of the browser onboarding and the four endpoints of the authorization server (D-38,
-#: AUTH-02, AUTH-03).
-DECLARED_ROUTES = 10
+#: of the browser onboarding, the four endpoints of the authorization server and the
+#: consent screen behind /authorize (D-38, AUTH-02, AUTH-03).
+DECLARED_ROUTES = 11
 
 #: The onboarding paths the application registers, compared with the manifest below. Set
 #: equality for the same reason as the well-known documents: a page that is declared but not
@@ -93,6 +93,12 @@ CONNECT_PATHS = ("/connect", "/connect/wait")
 #: A declared endpoint the application does not serve is a 404 during a first connection,
 #: and a served one that is not declared is unreachable through HaRP (AUTH-03, D-38).
 AS_PATHS = ("/authorize", "/token", "/register", "/revoke")
+
+#: The consent screen of plan 03-05. Declared with the four above and compared with them,
+#: because it is the page /authorize sends every browser to.
+CONSENT_PATH = "/authorize/consent"
+
+AUTHORIZATION_PATHS = (*AS_PATHS, CONSENT_PATH)
 
 #: Enough of a deploy environment to build the application the manifest is compared against.
 MANIFEST_ENV = {
@@ -192,7 +198,7 @@ def declared_authorization_paths(root: etree._Element) -> set[str]:
     for route in root.findall(".//route"):
         url = (route.findtext("url") or "").strip()
         literal = url.removeprefix("^").removesuffix("$").removesuffix("/?").replace("\\", "")
-        if literal in AS_PATHS:
+        if literal in AUTHORIZATION_PATHS:
             paths.add(literal)
     return paths
 
@@ -578,13 +584,14 @@ def test_the_tunnel_probe_reads_the_process_table(
     assert result.returncode == expected_code, result.stderr
 
 
-def test_the_manifest_declares_exactly_the_ten_routes_of_this_phase(
+def test_the_manifest_declares_exactly_the_eleven_routes_of_this_phase(
     manifest_root: etree._Element,
 ) -> None:
     """D-38: /mcp is PUBLIC since plan 03-01, the one broad well-known route that carried the
     accepted risk AR-02-06 is three fully anchored ones now, plan 03-04 adds the two pages of
     the browser onboarding, and plan 03-05 adds the four endpoints of the authorization
-    server. Every one of them is anchored at both ends and PUBLIC for a reason of its own."""
+    server plus the consent screen behind /authorize. Every one of them is anchored at both
+    ends and PUBLIC for a reason of its own."""
     routes = [
         ((route.findtext("url") or "").strip(), (route.findtext("access_level") or "").strip())
         for route in manifest_root.findall(".//route")
@@ -597,6 +604,7 @@ def test_the_manifest_declares_exactly_the_ten_routes_of_this_phase(
         ("^/connect/wait/?$", "PUBLIC"),
         ("^/connect/?$", "PUBLIC"),
         ("^/authorize/?$", "PUBLIC"),
+        ("^/authorize/consent/?$", "PUBLIC"),
         ("^/token/?$", "PUBLIC"),
         ("^/register/?$", "PUBLIC"),
         ("^/revoke/?$", "PUBLIC"),
@@ -641,10 +649,10 @@ def test_the_declared_authorization_routes_are_the_registered_ones(
         for path in (
             getattr(route, "path", "") for route in build_exapp_app(MANIFEST_ENV).router.routes
         )
-        if path in AS_PATHS
+        if path in AUTHORIZATION_PATHS
     }
 
-    assert declared_authorization_paths(manifest_root) == registered == set(AS_PATHS)
+    assert declared_authorization_paths(manifest_root) == registered == set(AUTHORIZATION_PATHS)
 
 
 def test_the_authorization_routes_declare_exactly_the_verbs_they_answer(
@@ -658,6 +666,7 @@ def test_the_authorization_routes_declare_exactly_the_verbs_they_answer(
     }
 
     assert verbs["^/authorize/?$"] == "GET,POST"
+    assert verbs["^/authorize/consent/?$"] == "GET,POST"
     assert verbs["^/token/?$"] == "POST"
     assert verbs["^/register/?$"] == "POST"
     assert verbs["^/revoke/?$"] == "POST"
@@ -667,7 +676,9 @@ def test_no_authorization_route_is_declared_twice(manifest_root: etree._Element)
     """The SDK registers a metadata document of its own at a path this app already serves,
     and two routes on one path answer whichever was registered first (plan 03-05)."""
     paths = [getattr(route, "path", "") for route in build_exapp_app(MANIFEST_ENV).router.routes]
-    served = [path for path in paths if path.startswith("/.well-known/") or path in AS_PATHS]
+    served = [
+        path for path in paths if path.startswith("/.well-known/") or path in AUTHORIZATION_PATHS
+    ]
 
     assert len(served) == len(set(served)), f"a path is served twice: {sorted(served)}"
 
@@ -770,7 +781,7 @@ def test_the_bootstrap_registration_strips_the_same_headers() -> None:
         assert f'"{header}"' in text, f"{header} is not stripped by the registration"
 
 
-def test_the_bootstrap_registration_declares_the_same_ten_routes(
+def test_the_bootstrap_registration_declares_the_same_eleven_routes(
     manifest_root: etree._Element,
 ) -> None:
     """The json-info payload overrides the manifest, so a route that only lives in

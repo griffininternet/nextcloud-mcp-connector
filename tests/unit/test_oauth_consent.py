@@ -18,6 +18,7 @@ import re
 import sqlite3
 import time
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
@@ -126,12 +127,17 @@ def authorize_query(**overrides: str) -> dict[str, str]:
     return {key: value for key, value in query.items() if value}
 
 
-def start(client: TestClient, **overrides: str) -> httpx.Response:
-    """The authorization request itself, without following the redirect."""
+def start(client: TestClient, **overrides: str) -> Any:
+    """The authorization request itself, without following the redirect.
+
+    The return type stays loose on purpose: the test client of Starlette answers with the
+    response model of the httpx fork the SDK brings, which is a different class than the
+    one this project imports (docs/dependency-audit.md).
+    """
     return client.get("/authorize", params=authorize_query(**overrides), follow_redirects=False)
 
 
-def flow_of(response: httpx.Response) -> str:
+def flow_of(response: Any) -> str:
     location = response.headers["location"]
     match = re.search(r"flow=([A-Za-z0-9_-]+)", location)
     assert match is not None, location
@@ -343,10 +349,12 @@ def test_the_waiting_page_polls_exactly_once_per_load(store: OAuthStore) -> None
     register(provider)
     client, _flow_id, target = opened(provider)
 
+    wait_target = f"{target}&{ui_consent.STEP_PARAM}={ui_consent.STEP_WAIT}"
     with respx.mock:
         poll = respx.post(POLL_URL).mock(return_value=httpx.Response(404))
-        for _ in range(3):
-            response = client.get(f"{target}&{ui_consent.STEP_PARAM}={ui_consent.STEP_WAIT}")
+        client.get(wait_target)
+        client.get(wait_target)
+        response = client.get(wait_target)
 
     assert poll.call_count == 3
     assert response.status_code == 200

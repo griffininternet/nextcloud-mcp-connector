@@ -44,6 +44,7 @@ __all__ = [
     "HEAD_EXTRA_PATTERN",
     "STYLESHEET",
     "action",
+    "app_path",
     "button_primary",
     "button_secondary",
     "callout",
@@ -313,12 +314,31 @@ def button_secondary(label: str, *, name: str, value: str) -> str:
     return _button(label, name=name, value=value, css="btn-secondary")
 
 
+def app_path(target: str, env: Mapping[str, str] | None = None) -> str:
+    """The address of one of our own routes, as a browser has to spell it.
+
+    Inside the container a route is ``/connect``; in a browser the very same route is
+    ``https://cloud.example.com/exapps/mcp_connector/connect``, because HaRP strips the
+    prefix before this application ever sees a request. A link or a form action that
+    skipped the prefix would point at the root of the Nextcloud domain, where this app is
+    not, and every button of this surface would end in a 404 nobody can explain.
+
+    The prefix comes from the configured public URL and never from the request, which is
+    the same rule the discovery pointer of plan 03-01 follows (T-03-02). A deployment
+    without a configured public URL has no prefix, which is exactly right for the local
+    test topology and for every check in this repository.
+    """
+    prefix = urlsplit(config.public_url(env)).path.rstrip("/")
+    return f"{prefix}{_local(target)}"
+
+
 def form(
     action_path: str,
     buttons: Sequence[str],
     *,
     hidden: Mapping[str, str] | None = None,
     method: str = "post",
+    env: Mapping[str, str] | None = None,
 ) -> str:
     """Wrap the buttons in a form. POST by default, because a GET must never grant anything.
 
@@ -333,7 +353,7 @@ def form(
     """
     if method not in ("post", "get"):
         raise ValueError(f"unknown form method {method!r}")
-    target = _local(action_path)
+    target = app_path(action_path, env)
     fields = "".join(
         f'<input type="hidden" name="{_escape(key)}" value="{_escape(value)}">'
         for key, value in (hidden or {}).items()
@@ -374,14 +394,14 @@ def external_action(label: str, href: str) -> str:
     )
 
 
-def link(label: str, href: str) -> str:
+def link(label: str, href: str, *, env: Mapping[str, str] | None = None) -> str:
     """An inline link to a path of this application. Link text names the destination."""
-    return f'<a href="{_escape(_local(href))}">{_escape(label)}</a>'
+    return f'<a href="{_escape(app_path(href, env))}">{_escape(label)}</a>'
 
 
-def action(label: str, href: str) -> str:
+def action(label: str, href: str, *, env: Mapping[str, str] | None = None) -> str:
     """A link as the standalone next step of a page, for example on the timeout page."""
-    return f'<p class="action">{link(label, href)}</p>'
+    return f'<p class="action">{link(label, href, env=env)}</p>'
 
 
 def client_name(raw: str) -> str:
