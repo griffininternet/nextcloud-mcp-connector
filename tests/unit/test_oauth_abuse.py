@@ -69,7 +69,7 @@ from mcp_connector.oauth import consent, loginflow, registry
 from mcp_connector.oauth import provider as provider_module
 from mcp_connector.oauth import throttle as throttle_module
 from mcp_connector.oauth import verifier as verifier_module
-from mcp_connector.oauth.metadata import TOOL_SCOPE
+from mcp_connector.oauth.metadata import REFRESH_SCOPE, TOOL_SCOPE
 from mcp_connector.oauth.store import ROTATION_GRACE, OAuthStore
 
 BASE_URL = "http://nc.test"
@@ -628,6 +628,136 @@ def test_a_hostile_client_name_reaches_neither_nextcloud_nor_our_page(
     assert "<script" not in page.text
     assert "<img" not in page.text
     assert page.status_code == 200
+
+
+# --- the interop case the live run of AUTH-04 found -----------------------------------------
+
+#: The return address of a ChatGPT connector, measured against the staging instance. It is
+#: minted per connector and not a fixed path, which is why nothing here matches on it.
+CHATGPT_REDIRECT = "https://chatgpt.com/connector/oauth/GxdvJstdJeOS"
+
+#: What ChatGPT sends to ``/register``, field for field as it was measured. The absence of
+#: ``scope`` is the whole point of this section: the SDK fills it with the default scopes,
+#: and everything the client asks for at ``/authorize`` is compared against that one value.
+CHATGPT_REGISTRATION: dict[str, object] = {
+    "client_name": "ChatGPT",
+    "redirect_uris": [CHATGPT_REDIRECT],
+    "grant_types": ["authorization_code", "refresh_token"],
+    "response_types": ["code"],
+    "token_endpoint_auth_method": "none",
+}
+
+
+def register_over_http(deployment: Deployment, **fields: object) -> dict[str, Any]:
+    """Register the way a connector does, over the endpoint, not over the provider method.
+
+    The helper above calls :meth:`register_client` directly, which skips everything the SDK
+    handler does to a registration before it arrives, and the scope default is exactly that.
+    A regression test that took the short way would not have seen this bug.
+    """
+    payload = dict(CHATGPT_REGISTRATION)
+    payload.update(fields)
+    answer = deployment.client.post("/register", json=payload)
+    assert answer.status_code == 201, answer.text
+    return dict(answer.json())
+
+
+def test_a_self_registered_client_may_ask_for_the_scopes_we_advertise(tmp_path: Path) -> None:
+    """The bug of the live run: our own metadata advertised a scope our own AS refused.
+
+    ChatGPT reads ``scopes_supported``, asks for both entries and was answered with
+    ``invalid_scope``, because the registration had been recorded with the tool scope alone.
+    Claude never asked for ``offline_access`` and therefore never hit it.
+    """
+    deployment = Deployment(tmp_path)
+    registered = register_over_http(deployment)
+
+    response = ask(
+        deployment,
+        client_id=str(registered["client_id"]),
+        redirect_uri=CHATGPT_REDIRECT,
+        scope=f"{REFRESH_SCOPE} {TOOL_SCOPE}",
+    )
+
+    assert set(str(registered["scope"]).split()) == {TOOL_SCOPE, REFRESH_SCOPE}
+    assert response.status_code == 302, response.text
+    assert "error" not in query_of(response), returned_to(response)
+    assert ui_consent.CONSENT_PATH in returned_to(response)
+
+
+def test_a_scope_this_server_does_not_have_is_still_refused(tmp_path: Path) -> None:
+    """The counter probe: the fix grants the advertised scopes and not a wildcard (D-42)."""
+    deployment = Deployment(tmp_path)
+    registered = register_over_http(deployment)
+
+    with respx.mock:
+        init = respx.post(INIT_URL).mock(return_value=httpx.Response(200, json=start_body()))
+        response = deployment.client.get(
+            "/authorize",
+            params=authorize_query(
+                client_id=str(registered["client_id"]),
+                redirect_uri=CHATGPT_REDIRECT,
+                scope=f"{TOOL_SCOPE} nextcloud:admin",
+            ),
+            follow_redirects=False,
+        )
+
+    assert init.call_count == 0, "no sign in is opened for a request that cannot be granted"
+    assert query_of(response)["error"] == ["invalid_scope"]
+    assert "code" not in query_of(response)
+
+
+def test_a_registration_that_names_an_unknown_scope_is_refused(tmp_path: Path) -> None:
+    """The other half of the counter probe, one endpoint earlier (RFC 7591 §3.2.2)."""
+    deployment = Deployment(tmp_path)
+
+    refused = deployment.client.post(
+        "/register", json={**CHATGPT_REGISTRATION, "scope": "nextcloud:admin"}
+    )
+
+    assert refused.status_code == 400
+    assert refused.json()["error"] == "invalid_client_metadata"
+
+
+def test_offline_access_changes_nothing_about_the_tokens_that_are_issued(
+    tmp_path: Path,
+) -> None:
+    """What the refresh switch does here: it is accepted, echoed, and grants no data.
+
+    This server rotates refresh tokens for every authorization it grants (D-41), so the
+    scope is not the switch that decides whether one is issued. It is recorded and echoed
+    because a client compares the granted scope against the one it asked for, and it is
+    never a second data scope: what the access token reaches is the tool surface either way.
+    """
+    deployment = Deployment(tmp_path)
+    registered = register_over_http(deployment)
+    client_id = str(registered["client_id"])
+    asked = f"{REFRESH_SCOPE} {TOOL_SCOPE}"
+
+    opened = ask(deployment, client_id=client_id, redirect_uri=CHATGPT_REDIRECT, scope=asked)
+    flow_id = flow_of(opened)
+    sign_in(deployment, flow_id)
+    granted = approve(deployment, flow_id)
+    code = query_of(granted)["code"][0]
+    answer = deployment.client.post(
+        "/token",
+        data=token_request(code=code, client_id=client_id, redirect_uri=CHATGPT_REDIRECT),
+    )
+    rotated = deployment.client.post(
+        "/token",
+        data={
+            "grant_type": "refresh_token",
+            "refresh_token": answer.json()["refresh_token"],
+            "client_id": client_id,
+        },
+    )
+
+    assert answer.status_code == 200, answer.text
+    assert set(answer.json()["scope"].split()) == {TOOL_SCOPE, REFRESH_SCOPE}
+    assert answer.json()["refresh_token"]
+    assert rotated.status_code == 200, rotated.text
+    assert rotated.json()["refresh_token"] != answer.json()["refresh_token"]
+    assert tool_call(deployment, rotated.json()["access_token"]).status_code == 200
 
 
 # --- the three gates no behaviour test can see ----------------------------------------------

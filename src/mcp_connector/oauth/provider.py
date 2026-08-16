@@ -95,6 +95,7 @@ from .metadata import (
     AS_METADATA_SUFFIX,
     PUBLIC_CLIENT_AUTH_METHOD,
     REFRESH_SCOPE,
+    REGISTERED_SCOPE,
     RESOURCE_SUFFIX,
     TOOL_SCOPE,
 )
@@ -358,6 +359,27 @@ class NextcloudOAuthProvider(
         the one that holds if the route is ever reachable another way. The second check is
         the one the SDK does not do at all: it accepts any address a registration sends,
         including ``http://`` on a host somebody else controls (T-03-41).
+
+        **Why the scope is overwritten here.** The registration handler of the SDK writes
+        the default scopes into a registration that names none, and ``validate_scope``
+        later compares everything a client asks for at ``/authorize`` against that one
+        recorded value. A client that reads ``scopes_supported`` out of our own metadata
+        and asks for both entries was then refused by our own authorization server with
+        ``invalid_scope``, which is what the live run of AUTH-04 measured against ChatGPT:
+        it asks for ``offline_access nextcloud``, Claude asks for the tool scope alone and
+        never saw it. The advertised set and the granted set have to be the same set, so
+        every registration is recorded with both entries whatever it sent.
+
+        This is not a widening: the two scopes are the two this server has, an unknown one
+        is still refused one endpoint earlier by the SDK handler and at ``/authorize`` by
+        ``validate_scope``, and D-42 still holds because ``offline_access`` names no data.
+        It is the refresh switch of RFC 6749 §1.5, and what an access token of this server
+        may reach is the curated tool surface either way.
+
+        The value is written into the object rather than only into the record, because the
+        handler echoes this very object back as the registration response (RFC 7591 §3.2.1
+        asks a server to answer with the metadata it registered, not with the metadata it
+        was sent), and a client that compares the two must see what it actually got.
         """
         if not self._policy.dcr_enabled:
             raise RegistrationError("invalid_client_metadata", _DCR_OFF)
@@ -367,6 +389,7 @@ class NextcloudOAuthProvider(
             if not redirect_uri_allowed(address):
                 raise RegistrationError("invalid_redirect_uri", _REDIRECT_RULE)
 
+        client_info.scope = REGISTERED_SCOPE
         secret = client_info.client_secret
         store = await self.store()
         await store.save_client(
@@ -498,6 +521,16 @@ class NextcloudOAuthProvider(
         the consent screen must not be outrun by a code that was already issued (pitfall 9,
         T-03-55). Only then is the code spent, in the one atomic statement that makes a
         second exchange impossible, and only after that do the tokens exist.
+
+        **What ``offline_access`` does here, and what it does not.** A refresh token is
+        issued for every code this method spends, whether or not the authorization named
+        the refresh scope. That is deliberate and it is the reliable reading: Claude does
+        not ask for the scope and refreshes anyway, ChatGPT asks for it, and a connector
+        that silently lost its refresh token would look like a connection that expires
+        after an hour for no reason. The scope is recorded and echoed back because a client
+        compares the granted scope against the one it asked for; it is never a second data
+        scope, and what this access token reaches is the curated tool surface either way
+        (D-42).
 
         Nothing here talks to Nextcloud. The whole Nextcloud round trip of this phase
         happens in the browser path, where a person is waiting and a second costs nothing;

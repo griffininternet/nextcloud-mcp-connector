@@ -52,6 +52,8 @@ __all__ = [
     "AS_METADATA_SUFFIX",
     "OPENID_CONFIGURATION_SUFFIX",
     "PRM_SUFFIX",
+    "REFRESH_SCOPE",
+    "REGISTERED_SCOPE",
     "RESOURCE_SUFFIX",
     "TOOL_SCOPE",
     "metadata_routes",
@@ -84,6 +86,13 @@ TOOL_SCOPE = "nextcloud"
 #: The MCP specification says a server SHOULD NOT list it in the protected resource metadata
 #: or in the WWW-Authenticate scope, and Claude appends it on its own when it sees it here.
 REFRESH_SCOPE = "offline_access"
+
+#: What every dynamic registration is recorded with, and the reason it is a constant: a
+#: client compares what it may ask for against ``scopes_supported`` below, and the
+#: authorization endpoint compares what it did ask for against the registration. Whoever
+#: changes one of the two lists has to change the other in the same edit, or a client reads
+#: an offer this server then refuses (the live run of AUTH-04 against ChatGPT).
+REGISTERED_SCOPE = f"{TOOL_SCOPE} {REFRESH_SCOPE}"
 
 #: What a user sees in the consent dialog of the client. A fixed name, no version and no
 #: host: the document is public and says nothing about the installation (T-03-04).
