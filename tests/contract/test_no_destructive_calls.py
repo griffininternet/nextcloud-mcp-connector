@@ -47,6 +47,19 @@ FORBIDDEN: dict[str, str] = {
 FILES_WITH_OWN_SQL = frozenset({"oauth/store.py"})
 SQL_DELETE_FORMS = ("DELETE FROM ", "ON DELETE CASCADE")
 
+# The second file where DELETE is not a tool deleting user data: the login flow revokes the
+# app password it created itself, authenticated with exactly that app password (D-34 and
+# D-36, plan 03-04). Nothing of the user is removed, only the credential this server was
+# handed, and being unable to hand it back would mean a connection a user revoked stays
+# usable in Nextcloud. The exemption is one exact call form in one file, so a DELETE written
+# against any other target in the same module is still reported, and ``.delete(`` above is
+# never exempt anywhere.
+FILES_WITH_OWN_APP_PASSWORD = frozenset({"oauth/loginflow.py"})
+
+#: The verb on a line of its own, which is how the formatter writes the one call that is
+#: meant. A DELETE written inline, against any target, does not match and stays a finding.
+APP_PASSWORD_DELETE_FORM = '"DELETE",'
+
 # Module level mutable state is forbidden as a rule, because a dictionary that outlives a
 # request is one refactor away from being a session store, and a session store is what
 # breaks the restart proof (D-20). These two are the documented exceptions: both are pure
@@ -114,6 +127,8 @@ def test_the_production_code_contains_no_destructive_request() -> None:
                     continue
                 if needle == "DELETE" and _is_own_sql(relative, text):
                     continue
+                if needle == "DELETE" and _is_own_app_password(relative, text):
+                    continue
                 findings.append(f"{relative}:{number}: {needle!r} ({why}): {text.strip()}")
 
     assert findings == [], "destructive call found:\n" + "\n".join(findings)
@@ -122,6 +137,11 @@ def test_the_production_code_contains_no_destructive_request() -> None:
 def _is_own_sql(relative: str, text: str) -> bool:
     """True for a statement against our own store file, false for anything else."""
     return relative in FILES_WITH_OWN_SQL and any(form in text for form in SQL_DELETE_FORMS)
+
+
+def _is_own_app_password(relative: str, text: str) -> bool:
+    """True for the one call that revokes the app password of this server's own connection."""
+    return relative in FILES_WITH_OWN_APP_PASSWORD and text.strip() == APP_PASSWORD_DELETE_FORM
 
 
 def test_the_gate_would_notice_a_destructive_call_in_real_code() -> None:
@@ -154,8 +174,23 @@ def test_the_sql_exemption_covers_sql_and_nothing_else() -> None:
     assert not _is_own_sql(store, 'await client.request("DELETE", url)')
     assert not _is_own_sql("tools/files.py", 'conn.execute("DELETE FROM flows")')
 
-    for relative in FILES_WITH_OWN_SQL:
+    for relative in FILES_WITH_OWN_SQL | FILES_WITH_OWN_APP_PASSWORD:
         assert (SRC / relative).is_file(), f"{relative} is exempt but does not exist"
+
+
+def test_the_app_password_exemption_covers_one_call_form_and_nothing_else() -> None:
+    """Counter proof for the second exemption: only the revocation of our own credential.
+
+    The login flow deletes the app password it created itself (D-34, D-36). Written as
+    "ignore DELETE in that file", the exemption would also hide a request that deletes a
+    file of the user from the same module, so it matches the verb on a line of its own and
+    nothing else.
+    """
+    flow = "oauth/loginflow.py"
+    assert _is_own_app_password(flow, '            "DELETE",')
+    assert not _is_own_app_password(flow, 'await client.request("DELETE", files_url)')
+    assert not _is_own_app_password(flow, '            "DELETE", files_url,')
+    assert not _is_own_app_password("tools/files.py", '            "DELETE",')
 
 
 def test_no_module_level_mutable_state_outside_the_two_documented_caches() -> None:

@@ -102,3 +102,10 @@ _.created_at
 _.revoked_at
 _.issued_at
 _.used_at
+
+# --- The login flow of phase 3, plan 03-04 ----------------------------------------------
+# credentials: the second field of PollResult, filled only when a poll answered 200. Its
+# production reader is the waiting page of the same plan (oauth/connect.py, task 2), so this
+# entry exists between the two commits of that plan and goes again with the second one.
+# tests/unit/test_oauth_loginflow.py reads the field in every outcome.
+_.credentials

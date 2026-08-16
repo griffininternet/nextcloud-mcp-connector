@@ -72,7 +72,7 @@ def code_lines() -> list[str]:
     ("raw", "expected"),
     [
         ("Claude", "Claude"),
-        ("Claude\r\nX-Evil: yes", "Claude X-Evil: yes"),
+        ("Claude\r\nX-Evil: yes", "ClaudeX-Evil: yes"),
         ("Claude\x00Code", "ClaudeCode"),
         ("Grüße", "Gre"),
         ("Claude \U0001f600 Code", "Claude Code"),
@@ -140,7 +140,7 @@ async def test_the_start_sends_the_cleaned_client_name_as_the_user_agent() -> No
     await loginflow.start_flow("Claude\r\nX-Evil: yes", env=ENV)
 
     sent = route.calls[0].request.headers["user-agent"]
-    assert sent == f"{loginflow.AGENT_PREFIX}Claude X-Evil: yes"
+    assert sent == f"{loginflow.AGENT_PREFIX}ClaudeX-Evil: yes"
     assert "evil" not in {name.lower() for name in route.calls[0].request.headers}
 
 
