@@ -635,6 +635,63 @@ class OAuthStore:
 
         await self._write(work)
 
+    async def authorizations_of_client(self, client_id: str, limit: int) -> list[AuthorizationRow]:
+        """The connections booked under one client, oldest first (WR-04).
+
+        Read before a client row is deleted, because ``authorizations`` points at
+        ``clients`` with ``ON DELETE CASCADE`` and the delete takes the encrypted app
+        password of every one of them with it. A caller that does not hand the credentials
+        back first leaves them at Nextcloud with no record left that they exist, so no
+        later sweep can find them either.
+
+        ``limit`` is not optional, for the reason it is not optional on the sweep: the
+        caller pays for every row with one Nextcloud request.
+        """
+
+        def work(conn: sqlite3.Connection) -> list[AuthorizationRow]:
+            rows = conn.execute(
+                "SELECT auth_id, client_id, nc_user, scopes, resource, created_at, "
+                "revoked_at, cleanup_at FROM authorizations WHERE client_id = ? "
+                "ORDER BY created_at LIMIT ?",
+                (client_id, limit),
+            ).fetchall()
+            return [
+                AuthorizationRow(
+                    auth_id=row[0],
+                    client_id=row[1],
+                    nc_user=row[2],
+                    scopes=row[3],
+                    resource=row[4],
+                    created_at=row[5],
+                    revoked_at=row[6],
+                    cleanup_at=row[7],
+                )
+                for row in rows
+            ]
+
+        return await self._read(work)
+
+    async def expired_clients(self, limit: int, *, now: int | None = None) -> list[str]:
+        """The client ids :meth:`purge_expired` would remove, read before anything is (WR-04).
+
+        The same two windows as the purge below, and deliberately the same SQL shape: a
+        caller reads this list, hands the credentials of those clients back to Nextcloud and
+        deletes them, and the purge is then the backstop that removes what is left over.
+        """
+        moment = _moment(now)
+
+        def work(conn: sqlite3.Connection) -> list[str]:
+            rows = conn.execute(
+                "SELECT client_id FROM clients WHERE "
+                "(last_used_at IS NULL AND registered_at < ?) OR "
+                "(last_used_at IS NOT NULL AND last_used_at < ?) "
+                "ORDER BY registered_at LIMIT ?",
+                (moment - UNUSED_CLIENT_TTL, moment - IDLE_CLIENT_TTL, limit),
+            ).fetchall()
+            return [str(row[0]) for row in rows]
+
+        return await self._read(work)
+
     async def abandoned_authorizations(
         self, limit: int, *, now: int | None = None
     ) -> list[AuthorizationRow]:
@@ -959,17 +1016,30 @@ class OAuthStore:
         expired rows of the four short lived tables are already removed by every write, so
         what this adds is the client policy, which is kept out of the write path because
         deleting a client deletes its authorizations through the cascade.
+
+        And that cascade is why a client with authorizations left is not removed here
+        (WR-04). The delete takes the encrypted app password of every connection under it
+        along, and this method cannot hand a credential back: it runs in a worker thread on
+        one SQLite connection and talks to nobody. So the row survives one more round and
+        :meth:`OAuthStore.expired_clients` hands it to the caller that can, which revokes
+        the app passwords, deletes the authorizations and then deletes the client. What is
+        left for this method is the ordinary case, a registration nobody ever signed in
+        under.
         """
         moment = _moment(now)
 
         def work(conn: sqlite3.Connection) -> None:
             _purge_expired_rows(conn, moment)
             conn.execute(
-                "DELETE FROM clients WHERE last_used_at IS NULL AND registered_at < ?",
+                "DELETE FROM clients WHERE last_used_at IS NULL AND registered_at < ? "
+                "AND NOT EXISTS (SELECT 1 FROM authorizations AS a "
+                "WHERE a.client_id = clients.client_id)",
                 (moment - UNUSED_CLIENT_TTL,),
             )
             conn.execute(
-                "DELETE FROM clients WHERE last_used_at IS NOT NULL AND last_used_at < ?",
+                "DELETE FROM clients WHERE last_used_at IS NOT NULL AND last_used_at < ? "
+                "AND NOT EXISTS (SELECT 1 FROM authorizations AS a "
+                "WHERE a.client_id = clients.client_id)",
                 (moment - IDLE_CLIENT_TTL,),
             )
 

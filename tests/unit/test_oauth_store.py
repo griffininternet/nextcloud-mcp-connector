@@ -656,9 +656,13 @@ async def test_a_registration_nobody_ever_used_expires(tmp_path: Path) -> None:
 
 
 @pytest.mark.anyio
-async def test_a_client_that_went_quiet_for_a_season_expires_with_its_tokens(
+async def test_a_client_that_went_quiet_for_a_season_keeps_its_row_while_it_has_connections(
     tmp_path: Path,
 ) -> None:
+    """WR-04: this purge cannot hand a credential back, and deleting the client row takes
+    the encrypted app password of every connection under it along through the cascade. So
+    the row stays until somebody who can talk to Nextcloud has handed them back, and the
+    client is listed for exactly that caller."""
     subject = open_store(tmp_path)
     long_ago = int(time.time()) - store.IDLE_CLIENT_TTL - 1
     await with_authorization(subject, now=long_ago)
@@ -666,8 +670,42 @@ async def test_a_client_that_went_quiet_for_a_season_expires_with_its_tokens(
 
     await subject.purge_expired()
 
+    assert await subject.load_client(CLIENT_ID) is not None
+    assert await subject.load_authorization(AUTH_ID) is not None
+    assert await subject.expired_clients(10) == [CLIENT_ID]
+
+
+@pytest.mark.anyio
+async def test_a_client_without_connections_still_expires_with_its_tokens(
+    tmp_path: Path,
+) -> None:
+    """The other half: once the connections are gone the row goes on its own, which is what
+    keeps the table from growing forever (T-03-44)."""
+    subject = open_store(tmp_path)
+    long_ago = int(time.time()) - store.IDLE_CLIENT_TTL - 1
+    await with_authorization(subject, now=long_ago)
+    await subject.touch_client(CLIENT_ID, now=long_ago)
+    await subject.delete_authorization(AUTH_ID)
+
+    await subject.purge_expired()
+
     assert await subject.load_client(CLIENT_ID) is None
-    assert await subject.load_authorization(AUTH_ID) is None
+
+
+@pytest.mark.anyio
+async def test_the_connections_of_a_client_are_readable_before_it_is_deleted(
+    tmp_path: Path,
+) -> None:
+    """WR-04: what the caller needs to hand the credentials back is the nc_user and the
+    auth_id of every connection, and it has to be readable while the row still exists."""
+    subject = open_store(tmp_path)
+    await with_authorization(subject)
+
+    rows = await subject.authorizations_of_client(CLIENT_ID, 10)
+
+    assert [row.auth_id for row in rows] == [AUTH_ID]
+    assert rows[0].nc_user == NC_USER
+    assert await subject.authorizations_of_client("no-such-client", 10) == []
 
 
 @pytest.mark.anyio

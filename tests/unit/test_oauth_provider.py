@@ -1070,6 +1070,116 @@ async def test_the_sweep_takes_at_most_a_handful_per_call(tmp_path: Path) -> Non
     assert swept == provider_module.SWEEP_LIMIT
 
 
+# --- WR-04: a client that runs out gives its app passwords back before its row goes --------
+
+
+@pytest.mark.anyio
+async def test_an_expired_client_hands_its_app_passwords_back_before_it_is_deleted(
+    tmp_path: Path,
+) -> None:
+    """WR-04, the reachable case: a registration whose user signed in and approved while
+    the client never exchanged the code has last_used_at IS NULL, so after a day the row
+    went, and the cascade took the encrypted app password with it. The credential kept
+    working at Nextcloud and no later sweep could find it, because the ciphertext was gone.
+    """
+    subject, store = build(tmp_path)
+    await store.save_client(
+        CLIENT_ID,
+        metadata_json=registration().model_dump_json(),
+        now=int(time.time()) - UNUSED_CLIENT_TTL - 1,
+    )
+    await store.create_authorization(
+        AUTH_ID,
+        client_id=CLIENT_ID,
+        nc_user=NC_USER,
+        app_password=APP_PASSWORD,
+        scopes=metadata.TOOL_SCOPE,
+        resource=RESOURCE,
+    )
+
+    with respx.mock:
+        deletion = deletion_route()
+        swept = await subject.sweep_expired_clients()
+
+    assert swept == 1
+    assert deletion.call_count == 1, "the app password went back to Nextcloud"
+    assert await store.load_client(CLIENT_ID) is None
+    assert await store.load_authorization(AUTH_ID) is None
+
+
+@pytest.mark.anyio
+async def test_the_client_lookup_hands_the_credentials_back_when_it_expires_a_row(
+    tmp_path: Path,
+) -> None:
+    """The second place a client row is deleted, and it is the one on the request path."""
+    subject, store = build(tmp_path)
+    await store.save_client(
+        CLIENT_ID,
+        metadata_json=registration().model_dump_json(),
+        now=int(time.time()) - UNUSED_CLIENT_TTL - 1,
+    )
+    await store.create_authorization(
+        AUTH_ID,
+        client_id=CLIENT_ID,
+        nc_user=NC_USER,
+        app_password=APP_PASSWORD,
+        scopes=metadata.TOOL_SCOPE,
+        resource=RESOURCE,
+    )
+
+    with respx.mock:
+        deletion = deletion_route()
+        assert await subject.get_client(CLIENT_ID) is None
+
+    assert deletion.call_count == 1
+    assert await store.load_authorization(AUTH_ID) is None
+
+
+@pytest.mark.anyio
+async def test_a_client_that_did_not_run_out_keeps_its_connections(tmp_path: Path) -> None:
+    """The counter probe: the sweep must not touch a registration that is in use."""
+    subject, store = await approved(tmp_path)
+
+    with respx.mock:
+        deletion = deletion_route()
+        swept = await subject.sweep_expired_clients()
+
+    assert swept == 0
+    assert not deletion.called
+    assert await store.load_authorization(AUTH_ID) is not None
+    assert await store.load_client(CLIENT_ID) is not None
+
+
+@pytest.mark.anyio
+async def test_a_revocation_that_fails_still_removes_the_expired_client(
+    tmp_path: Path,
+) -> None:
+    """The rule of every cleanup path of this phase: the row goes even when the credential
+    could not be handed back, and the failure is loud in the log rather than silent."""
+    subject, store = build(tmp_path)
+    await store.save_client(
+        CLIENT_ID,
+        metadata_json=registration().model_dump_json(),
+        now=int(time.time()) - UNUSED_CLIENT_TTL - 1,
+    )
+    await store.create_authorization(
+        AUTH_ID,
+        client_id=CLIENT_ID,
+        nc_user=NC_USER,
+        app_password=APP_PASSWORD,
+        scopes=metadata.TOOL_SCOPE,
+        resource=RESOURCE,
+    )
+
+    with respx.mock:
+        deletion_route(500)
+        swept = await subject.sweep_expired_clients()
+
+    assert swept == 1
+    assert await store.load_client(CLIENT_ID) is None
+    assert await store.load_authorization(AUTH_ID) is None
+
+
 # --- the throttle of our own authorization paths (SC 5, D-37) ------------------------------
 
 

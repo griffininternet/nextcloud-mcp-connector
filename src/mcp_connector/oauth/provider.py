@@ -324,6 +324,11 @@ class NextcloudOAuthProvider(
             return None
 
         if _has_expired(row.registered_at, row.last_used_at):
+            # The credentials first, then the row (WR-04): ``authorizations`` points at
+            # ``clients`` with ON DELETE CASCADE, so the delete would take the ciphertext of
+            # every app password under this client along and leave the credentials working
+            # at Nextcloud with no record that they exist.
+            await self._hand_back_client(store, client_id)
             await store.delete_client(client_id)
             return None
 
@@ -428,10 +433,12 @@ class NextcloudOAuthProvider(
 
         try:
             # The chore of this project, on the one path that has a reason to pay for it:
-            # a new connection hands back the credentials of the sign ins nobody finished.
-            # It can never break an authorization, so it never raises out of here.
+            # a new connection hands back the credentials of the sign ins nobody finished
+            # and of the registrations that ran out. Neither can break an authorization, so
+            # neither raises out of here.
             await self.sweep_abandoned()
-        except Exception as exc:  # pragma: no cover - the sweep guards itself already
+            await self.sweep_expired_clients()
+        except Exception as exc:  # pragma: no cover - the sweeps guard themselves already
             logger.error("the sweep of abandoned sign ins failed: %s", type(exc).__name__)
 
         return consent_url(config.public_url(self._env), flow_id, started.login_url)
@@ -899,6 +906,65 @@ class NextcloudOAuthProvider(
                 logger.warning("an abandoned sign in was dropped without handing its password back")
             await store.delete_authorization(row.auth_id)
         return swept
+
+    async def sweep_expired_clients(self) -> int:
+        """Hand back the credentials of the registrations that ran out, then remove them.
+
+        The counterpart of :meth:`sweep_abandoned`, and it exists for the same rule stated
+        the other way round (WR-04, D-34): a connection that ends gives its Nextcloud app
+        password back. ``purge_expired`` used to remove client rows on its own, and
+        ``authorizations`` cascades on that delete, so the credential of a user who signed
+        in and approved while their client never exchanged the code was deleted out of the
+        store after a day and kept working at Nextcloud forever, unfindable for any later
+        sweep because the ciphertext was gone with the row.
+
+        The store leaves such a client alone now and this hands its credentials back first.
+        Bounded like the other sweep: whoever connects pays for at most
+        :data:`SWEEP_LIMIT` of them, which is what keeps this off the critical path of one
+        request.
+        """
+        try:
+            store = await self.store()
+            expired = await store.expired_clients(SWEEP_LIMIT, now=self._now())
+        except Exception as exc:
+            logger.error("the sweep of expired clients found no store: %s", type(exc).__name__)
+            return 0
+
+        swept = 0
+        for client_id in expired:
+            await self._hand_back_client(store, client_id)
+            await store.delete_client(client_id)
+            swept += 1
+        return swept
+
+    async def _hand_back_client(self, store: OAuthStore, client_id: str) -> None:
+        """Revoke and remove the connections of one client, before its row is deleted.
+
+        The row goes even when the revocation fails, which is the rule of every other
+        cleanup path of this phase: keeping the ciphertext of a credential nobody may use
+        is worse than losing the record of it, and the failure is logged and counted
+        nowhere else (D-34, plan 03-06). What must not happen is the silent case, and that
+        is exactly what the cascade used to do.
+        """
+        try:
+            rows = await store.authorizations_of_client(client_id, SWEEP_LIMIT)
+        except Exception as exc:
+            logger.error(
+                "the connections of an expired client could not be read: %s", type(exc).__name__
+            )
+            return
+
+        for row in rows:
+            try:
+                password = await store.app_password(row.auth_id)
+            except Exception:
+                logger.error("the app password of an expired client could not be read back")
+                password = None
+            if not password or not await loginflow.revoke_app_password(
+                row.nc_user, password, env=self._env
+            ):
+                logger.warning("an expired client was removed without handing its password back")
+            await store.delete_authorization(row.auth_id)
 
     async def exchange_identity_assertion(
         self, client: OAuthClientInformationFull, params: IdentityAssertionParams
