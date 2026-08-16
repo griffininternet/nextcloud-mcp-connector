@@ -185,5 +185,50 @@ Every request runs under the identity of the signed in user, so an assistant nev
 				<headers_to_exclude>["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERSION","X-ORIGIN-IP"]</headers_to_exclude>
 			</route>
 		</routes>
+		<!--
+		  - The four variables an administrator may set, and the only way to set them: the
+		  - deploy daemon injects a variable into the container if, and only if, the
+		  - manifest declares it here (AppAPI ExAppService::getAppInfo, measured in plan
+		  - 03-08). Without the declaration, the "env" option of `occ app_api:app:register`
+		  - is accepted and silently dropped, and the app then runs on the defaults of
+		  - src/mcp_connector/config.py and src/mcp_connector/oauth/registry.py.
+		  -
+		  - NC_MCP_PUBLIC_URL is the one that has to be set on every installation. The
+		  - authorization server calls itself by it: it is the issuer of the metadata
+		  - document, the resource of the protected resource document and the target of the
+		  - resource_metadata pointer in every 401. Left empty, all three name the
+		  - documented default http://127.0.0.1:8765 and no client can complete a
+		  - connection (docs/oauth-setup.md).
+		  -
+		  - The three switches of AUTH-07 are declared for the administrator who needs
+		  - them, with their shipped defaults empty so nothing here overrides the code:
+		  - AppAPI drops a variable with an empty value instead of exporting it blank.
+		-->
+		<environment-variables>
+			<variable>
+				<name>NC_MCP_PUBLIC_URL</name>
+				<display-name>Public URL of this app</display-name>
+				<description>The address this app is reachable under from the internet, without a trailing slash, for example https://cloud.example.com/exapps/mcp_connector. Required for OAuth.</description>
+				<default></default>
+			</variable>
+			<variable>
+				<name>NC_MCP_OAUTH_DCR</name>
+				<display-name>Allow clients to register themselves</display-name>
+				<description>Dynamic client registration (RFC 7591). On unless set to off. Claude.ai and ChatGPT need it to connect without an administrator.</description>
+				<default></default>
+			</variable>
+			<variable>
+				<name>NC_MCP_OAUTH_ALLOWLIST_ONLY</name>
+				<display-name>Only allow listed clients</display-name>
+				<description>Off unless set to on. With it on, only the clients named below may authorize, and an empty list closes the door for everyone.</description>
+				<default></default>
+			</variable>
+			<variable>
+				<name>NC_MCP_OAUTH_ALLOWED_CLIENTS</name>
+				<display-name>Allowed clients</display-name>
+				<description>Comma separated client ids or redirect URIs. Only read when the allowlist above is on.</description>
+				<default></default>
+			</variable>
+		</environment-variables>
 	</external-app>
 </info>

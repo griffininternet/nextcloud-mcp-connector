@@ -35,6 +35,9 @@ ENV = {
 }
 
 CONFIG_URL = f"{BASE_URL}{crypto.EXAPP_CONFIG_PATH}"
+#: The read is its own route and its own verb (measured against AppAPI 34.0.0 in plan
+#: 03-08): a POST to /get-values with a JSON body, not a GET with a query parameter.
+READ_URL = f"{CONFIG_URL}{crypto.CONFIG_READ_SUFFIX}"
 
 #: A key that is not secret, because it never leaves this file.
 KEY = bytes(range(32))
@@ -52,7 +55,8 @@ def ocs_body(data: object) -> dict[str, object]:
 
 
 def stored(value: str) -> dict[str, object]:
-    return ocs_body([{"configKey": crypto.CONFIG_KEY, "configValue": value}])
+    """The shape a running AppAPI 34.0.0 answers with: the column names, lower case."""
+    return ocs_body([{"configkey": crypto.CONFIG_KEY, "configvalue": value}])
 
 
 # --- the two crypto functions -----------------------------------------------------
@@ -138,15 +142,13 @@ def test_the_refusal_carries_neither_the_key_nor_the_ciphertext() -> None:
 @respx.mock
 async def test_the_first_start_creates_the_key_and_stores_it_as_sensitive() -> None:
     """D-43: our own 32 byte key, in Nextcloud's config, marked sensitive."""
-    read = respx.route(method="GET", url__startswith=CONFIG_URL).mock(
+    read = respx.post(READ_URL).mock(
         side_effect=[
             httpx.Response(200, json=ocs_body([])),
             httpx.Response(200, json=stored(STORED_KEY_HEX)),
         ]
     )
-    write = respx.route(method="POST", url__startswith=CONFIG_URL).mock(
-        return_value=httpx.Response(200, json=ocs_body([]))
-    )
+    write = respx.post(CONFIG_URL).mock(return_value=httpx.Response(200, json=ocs_body([])))
 
     key = await crypto.data_key(ENV)
 
@@ -163,12 +165,8 @@ async def test_the_first_start_creates_the_key_and_stores_it_as_sensitive() -> N
 @respx.mock
 async def test_an_existing_key_is_read_and_never_overwritten() -> None:
     """T-03-14: a second key would make every stored app password unreadable."""
-    respx.route(method="GET", url__startswith=CONFIG_URL).mock(
-        return_value=httpx.Response(200, json=stored(STORED_KEY_HEX))
-    )
-    write = respx.route(method="POST", url__startswith=CONFIG_URL).mock(
-        return_value=httpx.Response(200, json=ocs_body([]))
-    )
+    respx.post(READ_URL).mock(return_value=httpx.Response(200, json=stored(STORED_KEY_HEX)))
+    write = respx.post(CONFIG_URL).mock(return_value=httpx.Response(200, json=ocs_body([])))
 
     assert await crypto.data_key(ENV) == bytes.fromhex(STORED_KEY_HEX)
     assert not write.called
@@ -177,9 +175,7 @@ async def test_an_existing_key_is_read_and_never_overwritten() -> None:
 @pytest.mark.anyio
 @respx.mock
 async def test_the_read_carries_the_ocs_and_the_appapi_headers() -> None:
-    read = respx.route(method="GET", url__startswith=CONFIG_URL).mock(
-        return_value=httpx.Response(200, json=stored(STORED_KEY_HEX))
-    )
+    read = respx.post(READ_URL).mock(return_value=httpx.Response(200, json=stored(STORED_KEY_HEX)))
 
     await crypto.data_key(ENV)
 
@@ -189,19 +185,46 @@ async def test_the_read_carries_the_ocs_and_the_appapi_headers() -> None:
     assert sent.headers["EX-APP-ID"] == APP_ID
     assert sent.headers["EX-APP-VERSION"] == APP_VERSION
     assert sent.headers["AUTHORIZATION-APP-API"], "the app context token of an ExApp"
-    assert crypto.CONFIG_KEY in str(sent.url), "the read names the one key it wants"
+    assert json.loads(sent.content) == {crypto.CONFIG_READ_FIELD: [crypto.CONFIG_KEY]}, (
+        "the read names the one key it wants, in the body of the POST AppAPI declares"
+    )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [{"configkey": crypto.CONFIG_KEY, "configvalue": STORED_KEY_HEX}],
+        [{"configKey": crypto.CONFIG_KEY, "configValue": STORED_KEY_HEX}],
+        [
+            {"configkey": "another_key", "configvalue": "00" * 32},
+            {"configkey": crypto.CONFIG_KEY, "configvalue": STORED_KEY_HEX},
+        ],
+        {crypto.CONFIG_KEY: STORED_KEY_HEX},
+    ],
+    ids=["the measured shape", "camel case", "next to another entry", "a mapping"],
+)
+@pytest.mark.anyio
+@respx.mock
+async def test_every_answer_shape_this_api_has_produced_is_read(data: object) -> None:
+    """The lower case list is what AppAPI 34.0.0 answers (measured, plan 03-08).
+
+    The other three stay accepted next to it: camel case is the spelling of the write side
+    of the same API, an entry of another key must be stepped over rather than refused, and
+    the mapping is the shape an earlier reading of this API expected.
+    """
+    respx.post(READ_URL).mock(return_value=httpx.Response(200, json=ocs_body(data)))
+    write = respx.post(CONFIG_URL).mock(return_value=httpx.Response(200, json=ocs_body([])))
+
+    assert await crypto.data_key(ENV) == bytes.fromhex(STORED_KEY_HEX)
+    assert not write.called
 
 
 @pytest.mark.anyio
 @respx.mock
 async def test_a_transport_error_stops_the_process_instead_of_inventing_a_key() -> None:
     """Pitfall 11: a random key looks like it works and kills every existing connection."""
-    respx.route(method="GET", url__startswith=CONFIG_URL).mock(
-        side_effect=httpx.ConnectError("no route to host")
-    )
-    write = respx.route(method="POST", url__startswith=CONFIG_URL).mock(
-        return_value=httpx.Response(200, json=ocs_body([]))
-    )
+    respx.post(READ_URL).mock(side_effect=httpx.ConnectError("no route to host"))
+    write = respx.post(CONFIG_URL).mock(return_value=httpx.Response(200, json=ocs_body([])))
 
     with pytest.raises(ToolError) as excinfo:
         await crypto.data_key(ENV)
@@ -213,9 +236,7 @@ async def test_a_transport_error_stops_the_process_instead_of_inventing_a_key() 
 @pytest.mark.anyio
 @respx.mock
 async def test_a_rejected_read_is_a_named_failure(status: int) -> None:
-    respx.route(method="GET", url__startswith=CONFIG_URL).mock(
-        return_value=httpx.Response(status, json=ocs_body([]))
-    )
+    respx.post(READ_URL).mock(return_value=httpx.Response(status, json=ocs_body([])))
 
     with pytest.raises(ToolError) as excinfo:
         await crypto.data_key(ENV)
@@ -230,19 +251,24 @@ async def test_a_rejected_read_is_a_named_failure(status: int) -> None:
         {"ocs": {"meta": {}}},
         {"ocs": {"meta": {}, "data": "a string"}},
         {"ocs": {"meta": {}, "data": [{"configKey": crypto.CONFIG_KEY}]}},
+        {"ocs": {"meta": {}, "data": [{"configkey": crypto.CONFIG_KEY}]}},
+        {"ocs": {"meta": {}, "data": [{"value": STORED_KEY_HEX}]}},
     ],
-    ids=["no envelope", "no data", "data is not a collection", "entry without a value"],
+    ids=[
+        "no envelope",
+        "no data",
+        "data is not a collection",
+        "entry without a value",
+        "entry without a value, lower case",
+        "entry without a key at all",
+    ],
 )
 @pytest.mark.anyio
 @respx.mock
 async def test_an_unreadable_answer_never_counts_as_an_absent_key(body: dict) -> None:
     """Fail closed: 'I could not read it' must never turn into 'there is none yet'."""
-    respx.route(method="GET", url__startswith=CONFIG_URL).mock(
-        return_value=httpx.Response(200, json=body)
-    )
-    write = respx.route(method="POST", url__startswith=CONFIG_URL).mock(
-        return_value=httpx.Response(200, json=ocs_body([]))
-    )
+    respx.post(READ_URL).mock(return_value=httpx.Response(200, json=body))
+    write = respx.post(CONFIG_URL).mock(return_value=httpx.Response(200, json=ocs_body([])))
 
     with pytest.raises(ToolError):
         await crypto.data_key(ENV)
@@ -257,9 +283,7 @@ async def test_an_unreadable_answer_never_counts_as_an_absent_key(body: dict) ->
 @pytest.mark.anyio
 @respx.mock
 async def test_a_stored_value_that_is_not_a_32_byte_key_is_refused(value: str) -> None:
-    respx.route(method="GET", url__startswith=CONFIG_URL).mock(
-        return_value=httpx.Response(200, json=stored(value))
-    )
+    respx.post(READ_URL).mock(return_value=httpx.Response(200, json=stored(value)))
 
     with pytest.raises(ToolError) as excinfo:
         await crypto.data_key(ENV)
@@ -270,12 +294,8 @@ async def test_a_stored_value_that_is_not_a_32_byte_key_is_refused(value: str) -
 @pytest.mark.anyio
 @respx.mock
 async def test_a_rejected_write_is_a_named_failure() -> None:
-    respx.route(method="GET", url__startswith=CONFIG_URL).mock(
-        return_value=httpx.Response(200, json=ocs_body([]))
-    )
-    respx.route(method="POST", url__startswith=CONFIG_URL).mock(
-        return_value=httpx.Response(403, json=ocs_body([]))
-    )
+    respx.post(READ_URL).mock(return_value=httpx.Response(200, json=ocs_body([])))
+    respx.post(CONFIG_URL).mock(return_value=httpx.Response(403, json=ocs_body([])))
 
     with pytest.raises(ToolError) as excinfo:
         await crypto.data_key(ENV)
@@ -286,12 +306,8 @@ async def test_a_rejected_write_is_a_named_failure() -> None:
 @respx.mock
 async def test_a_key_that_disappears_between_write_and_read_back_is_a_named_failure() -> None:
     """Two workers may race; the loser must not run on a key nobody stored."""
-    respx.route(method="GET", url__startswith=CONFIG_URL).mock(
-        return_value=httpx.Response(200, json=ocs_body([]))
-    )
-    respx.route(method="POST", url__startswith=CONFIG_URL).mock(
-        return_value=httpx.Response(200, json=ocs_body([]))
-    )
+    respx.post(READ_URL).mock(return_value=httpx.Response(200, json=ocs_body([])))
+    respx.post(CONFIG_URL).mock(return_value=httpx.Response(200, json=ocs_body([])))
 
     with pytest.raises(ToolError) as excinfo:
         await crypto.data_key(ENV)
@@ -304,9 +320,7 @@ async def test_nothing_of_the_key_or_the_plaintext_reaches_the_log(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """T-03-16: not on DEBUG, not truncated, not in the successful case either."""
-    respx.route(method="GET", url__startswith=CONFIG_URL).mock(
-        return_value=httpx.Response(200, json=stored(STORED_KEY_HEX))
-    )
+    respx.post(READ_URL).mock(return_value=httpx.Response(200, json=stored(STORED_KEY_HEX)))
 
     with caplog.at_level(logging.DEBUG):
         key = await crypto.data_key(ENV)
@@ -324,9 +338,7 @@ async def test_nothing_of_the_key_or_the_plaintext_reaches_the_log(
 async def test_a_failure_log_line_repeats_no_value_of_the_request(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    respx.route(method="GET", url__startswith=CONFIG_URL).mock(
-        side_effect=httpx.ConnectError("boom")
-    )
+    respx.post(READ_URL).mock(side_effect=httpx.ConnectError("boom"))
 
     with caplog.at_level(logging.DEBUG), pytest.raises(ToolError):
         await crypto.data_key(ENV)

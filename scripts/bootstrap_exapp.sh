@@ -65,6 +65,11 @@ ALICE_PASSWORD="${NC_EXAPP_ALICE_PASSWORD:-alice-test-pw-01}"
 BOB_PASSWORD="${NC_EXAPP_BOB_PASSWORD:-bob-test-pw-01}"
 TOKEN_NAME="mcp-exapp"
 ENV_FILE="${ENV_FILE:-.env.exapp}"
+# The address this app is reachable under from the outside, which is also the issuer of
+# its authorization server and the resource of its protected resource document. It is
+# handed to the container at registration time (see register_exapp) and it is the one
+# value an administrator has to get right for OAuth (docs/oauth-setup.md).
+PUBLIC_URL="${NC_EXAPP_PUBLIC_URL:-http://127.0.0.1:${HOST_PORT}/exapps/${APP_ID}}"
 # Filled by ensure_image and read by verify_image_digest right before the registration.
 IMAGE_DIGEST=""
 
@@ -417,11 +422,24 @@ verify_image_digest() {
 #
 # Daemon and port are parameters, so the development loop builds its payload the same way
 # instead of rewriting this one with sed.
+# The one deploy option this topology sets, and it is not cosmetic: the authorization
+# server calls itself by NC_MCP_PUBLIC_URL, so without it every discovery document, every
+# issuer and every resource_metadata pointer names the documented default
+# http://127.0.0.1:8765 and no client can complete a connection (measured in plan 03-08).
+#
+# It travels in the payload and not as `--env`, because the two registration paths of
+# AppAPI are not equivalent: the info.xml path normalises
+# external-app/environment-variables into the map the deploy daemon reads and lets `--env`
+# override a declared variable, while the json-info path hands the decoded object through
+# untouched (ExAppService::getAppInfo, verified in the running AppAPI 34.0.0). So the
+# already normalised shape is what a json-info registration has to carry, and `--env`
+# alone is accepted and silently dropped. appinfo/info.xml declares the same four
+# variables for the installation that registers from the manifest.
 EXCLUDED_HEADERS='["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERSION","X-ORIGIN-IP"]'
 json_info() {
   local daemon="$1" port="$2"
   cat <<JSON
-{"id":"${APP_ID}","name":"${APP_NAME}","daemon_config_name":"${daemon}","version":"${APP_VERSION}","secret":"${APP_SECRET}","port":${port},"docker-install":{"registry":"${REGISTRY}","image":"${IMAGE_NAME}","image-tag":"${APP_VERSION}"},"routes":[{"url":"^/mcp/?$","verb":"GET,POST,DELETE","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/\\\\.well-known/oauth-protected-resource/mcp$","verb":"GET","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/\\\\.well-known/openid-configuration$","verb":"GET","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/\\\\.well-known/oauth-authorization-server$","verb":"GET","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/connect/wait/?$","verb":"GET","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/connect/?$","verb":"GET,POST","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/authorize/?$","verb":"GET,POST","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/authorize/consent/?$","verb":"GET,POST","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/token/?$","verb":"POST","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/register/?$","verb":"POST","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/revoke/?$","verb":"POST","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}}]}
+{"external-app":{"environment-variables":{"NC_MCP_PUBLIC_URL":{"name":"NC_MCP_PUBLIC_URL","value":"${PUBLIC_URL}"}}},"id":"${APP_ID}","name":"${APP_NAME}","daemon_config_name":"${daemon}","version":"${APP_VERSION}","secret":"${APP_SECRET}","port":${port},"docker-install":{"registry":"${REGISTRY}","image":"${IMAGE_NAME}","image-tag":"${APP_VERSION}"},"routes":[{"url":"^/mcp/?$","verb":"GET,POST,DELETE","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/\\\\.well-known/oauth-protected-resource/mcp$","verb":"GET","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/\\\\.well-known/openid-configuration$","verb":"GET","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/\\\\.well-known/oauth-authorization-server$","verb":"GET","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/connect/wait/?$","verb":"GET","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/connect/?$","verb":"GET,POST","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/authorize/?$","verb":"GET,POST","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/authorize/consent/?$","verb":"GET,POST","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/token/?$","verb":"POST","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/register/?$","verb":"POST","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/revoke/?$","verb":"POST","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}}]}
 JSON
 }
 
@@ -556,11 +574,17 @@ umask 077
 cat >"${ENV_FILE}" <<EOF
 # Written by scripts/bootstrap_exapp.sh. Never commit this file.
 NC_MCP_URL=http://127.0.0.1:${HOST_PORT}
-NC_MCP_EXAPP_BASE=http://127.0.0.1:${HOST_PORT}/exapps/${APP_ID}
+NC_MCP_EXAPP_BASE=${PUBLIC_URL}
+NC_MCP_PUBLIC_URL=${PUBLIC_URL}
 NC_MCP_TEST_USER=alice
 NC_MCP_TEST_APP_PASSWORD=${ALICE_APP_PASSWORD}
 NC_MCP_TEST_USER2=bob
 NC_MCP_TEST_APP_PASSWORD2=${BOB_APP_PASSWORD}
+# The account passwords of the two throwaway users. The OAuth flow check of plan 03-08
+# needs them because it walks the Nextcloud sign in of the Login Flow v2 without a
+# browser; nothing in src/ ever reads a user password, and this file is git-ignored.
+NC_MCP_TEST_PASSWORD=${ALICE_PASSWORD}
+NC_MCP_TEST_PASSWORD2=${BOB_PASSWORD}
 APP_ID=${APP_ID}
 APP_SECRET=${APP_SECRET}
 APP_VERSION=${APP_VERSION}

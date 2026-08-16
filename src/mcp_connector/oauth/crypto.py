@@ -44,7 +44,8 @@ from ..nextcloud.http import shared_client
 
 __all__ = [
     "CONFIG_KEY",
-    "CONFIG_READ_PARAM",
+    "CONFIG_READ_FIELD",
+    "CONFIG_READ_SUFFIX",
     "EXAPP_CONFIG_PATH",
     "KEY_BYTES",
     "NONCE_BYTES",
@@ -75,10 +76,16 @@ _FORM_TOKEN_LABEL = b"consent-form-v1:"
 #: Nextcloud must not show in any administrative interface.
 EXAPP_CONFIG_PATH = "/ocs/v2.php/apps/app_api/api/v1/ex-app/config"
 
-#: The query parameter the read uses. This is the one form in this module that has not yet
-#: been confirmed against a running AppAPI; plan 03-08 does that against the real thing.
-#: It is a single constant on purpose, so the correction is one line plus its test.
-CONFIG_READ_PARAM = "configKeys[]"
+#: How the read is asked, measured against a running AppAPI 34.0.0 in plan 03-08. The
+#: route table of that app declares three verbs on this resource and none of them is a
+#: ``GET``: ``POST /ex-app/config`` writes, ``DELETE /ex-app/config`` removes, and the read
+#: is ``POST /ex-app/config/get-values`` with a JSON body ``{"configKeys": [...]}``
+#: (``AppConfigController::getAppConfigValues``). The shape this module carried until then
+#: was a ``GET`` with a ``configKeys[]`` query parameter, which the server has no route for
+#: and answers with 401 and "Current user is not logged in", because the request never
+#: reaches the AppAPI authentication of a declared route.
+CONFIG_READ_SUFFIX = "/get-values"
+CONFIG_READ_FIELD = "configKeys"
 
 _KEY_HINT = (
     "The data key of this app lives in the ExApp configuration of Nextcloud "
@@ -185,11 +192,11 @@ async def _read_key(settings: config.ExAppSettings) -> bytes | None:
     answer we cannot read raises, because treating it as "no key yet" is what would make
     the caller store a second key over a first one that was merely unreadable to us.
     """
-    url = f"{settings.base_url}{EXAPP_CONFIG_PATH}"
+    url = f"{settings.base_url}{EXAPP_CONFIG_PATH}{CONFIG_READ_SUFFIX}"
     client = shared_client()
     try:
-        response = await client.get(
-            url, params={CONFIG_READ_PARAM: CONFIG_KEY}, headers=_headers(settings)
+        response = await client.post(
+            url, json={CONFIG_READ_FIELD: [CONFIG_KEY]}, headers=_headers(settings)
         )
     except httpx.HTTPError:
         # No value from the request is repeated here: the headers carry the app secret.
@@ -264,9 +271,14 @@ def _payload(response: httpx.Response) -> Any:
 def _config_value(payload: Any) -> str | None:
     """Pull our one value out of the OCS envelope, or refuse to guess.
 
-    Two shapes are accepted because AppAPI has answered in both: a list of entries with
-    ``configKey`` and ``configValue``, and a mapping of key to value. Everything else
-    raises rather than being read as an empty result (fail closed, D-37).
+    Three shapes are accepted. The one a running AppAPI 34.0.0 answers with is a list of
+    entries whose field names are lower case, ``configkey`` and ``configvalue``: they are
+    the column names of the ``ex_apps_config`` table, serialised straight out of the
+    entity (measured in plan 03-08, and the second reason the read never worked before).
+    The camel case spelling of the same list is accepted next to it, because it is what
+    the write side of this API takes and what a later version may answer with, and so is a
+    mapping of key to value. Everything else raises rather than being read as an empty
+    result (fail closed, D-37).
     """
     if not isinstance(payload, dict):
         raise _unreadable()
@@ -277,11 +289,14 @@ def _config_value(payload: Any) -> str | None:
     data = ocs["data"]
     if isinstance(data, list):
         for entry in data:
-            if not isinstance(entry, dict) or "configKey" not in entry:
+            if not isinstance(entry, dict):
                 raise _unreadable()
-            if entry["configKey"] != CONFIG_KEY:
+            name = entry.get("configkey", entry.get("configKey"))
+            if name is None:
+                raise _unreadable()
+            if name != CONFIG_KEY:
                 continue
-            value = entry.get("configValue")
+            value = entry.get("configvalue", entry.get("configValue"))
             if not isinstance(value, str):
                 raise _unreadable()
             return value

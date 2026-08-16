@@ -106,3 +106,12 @@ _.load_refresh_token
 _.exchange_refresh_token
 _.revoke_token
 _.exchange_identity_assertion
+
+# --- The two methods of the cookie jar that refuses to be one ---------------------------
+# nextcloud/http.NoCookieJar overrides both halves of http.cookiejar.CookieJar. They are
+# called by urllib through httpx and by nothing in this repository, and their whole job is
+# to do nothing: a shared client must not keep or send a Nextcloud session cookie, which is
+# the identity mix up plan 03-08 measured. tests/unit/test_credentials_http.py drives both.
+_.set_cookie
+_.add_cookie_header
+_.cookie

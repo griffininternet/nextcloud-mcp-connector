@@ -64,6 +64,46 @@ async def test_shared_client_is_hardened() -> None:
 
 
 @pytest.mark.anyio
+async def test_the_shared_client_neither_keeps_nor_sends_a_session_cookie() -> None:
+    """The measured defect of plan 03-08: a shared jar is a session shared between users.
+
+    Nextcloud answers every request, including one that authenticated with an app
+    password, with ``oc<instanceid>`` and ``oc_sessionPassphrase``. On a client that lives
+    for the whole process, the first user's session cookie reaches every later request of
+    every other user, and Nextcloud resolves the session before the credentials of the
+    request. Measured symptom on the running topology: a WebDAV SEARCH with the scope of
+    one user and the Nextcloud identity of another.
+    """
+    client = nc_http.shared_client()
+    assert isinstance(client.cookies.jar, nc_http.NoCookieJar)
+
+    response = httpx.Response(
+        200,
+        headers=[
+            ("set-cookie", "ocinstanceid=deadbeef; path=/; HttpOnly"),
+            ("set-cookie", "oc_sessionPassphrase=whatever; path=/; HttpOnly"),
+        ],
+        request=httpx.Request("PROPFIND", "http://nc.test/remote.php/dav/"),
+    )
+    client.cookies.extract_cookies(response)
+    assert len(client.cookies.jar) == 0, "a shared client must remember no session"
+
+    request = httpx.Request("PROPFIND", "http://nc.test/remote.php/dav/")
+    client.cookies.set_cookie_header(request)
+    assert "cookie" not in request.headers, "a shared client must send no session"
+
+
+@pytest.mark.anyio
+async def test_a_cookie_set_by_hand_is_still_never_sent() -> None:
+    """The guard is on the way out as well, so a later refactor cannot re-open the hole."""
+    cookies = httpx.Cookies(nc_http.NoCookieJar())
+    cookies.set("ocinstanceid", "deadbeef", domain="nc.test")
+    request = httpx.Request("GET", "http://nc.test/ocs/v2.php/cloud/user")
+    cookies.set_cookie_header(request)
+    assert "cookie" not in request.headers
+
+
+@pytest.mark.anyio
 async def test_shared_client_is_replaced_after_close() -> None:
     first = nc_http.shared_client()
     await first.aclose()
