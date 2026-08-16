@@ -1,0 +1,288 @@
+"""The token verifier of the transport boundary: the store, a short cache, two extra checks.
+
+This module answers one question on every single tool call: is this bearer a token this
+server issued, is it still valid, and whose Nextcloud account does it act as. It is the
+production form of ``deps.StaticBearerVerifier``, which implements the same SDK protocol
+for the single user deployment of phase 1, and it keeps the three properties that one was
+written for: ``None`` instead of an exception on every failure, a comparison in constant
+time on bytes, and a token that appears in no log record and in no answer.
+
+**Why the store and not a Nextcloud round trip (D-34, D-37).** Validating a token against
+Nextcloud would put a network call in the hot path of every tool call, and it would make
+this server unavailable whenever Nextcloud is slow. The token is ours, so the answer is
+ours: one indexed lookup by digest in a local SQLite file.
+
+**Why a cache of five seconds and not of one hour.** Success criterion 5 says the store must
+not sit in the hot path, and D-34 says a revocation takes effect at once. Five seconds is
+the compromise between the two, spelled out as
+:data:`mcp_connector.oauth.store.VALIDATION_CACHE_TTL`: long enough that a burst of tool
+calls of one conversation costs one lookup, short enough that a user who ends a connection
+does not wait. Only positive results are cached, because a cached refusal would outlive the
+repair of whatever caused it, and :meth:`StoreTokenVerifier.invalidate` empties it in the
+same process the moment something is revoked (plan 03-07 calls it).
+
+**The two checks the SDK does not make.** The SDK verifies that a token exists; it does not
+ask what the token was issued for and it does not ask whether the client behind it may
+still act. Both are refusals here: a token whose audience is another MCP server is refused
+even though it is perfectly valid (RFC 8707, pitfall 3, T-03-51), and a client that an
+administrator blocked after its token was issued is refused although the token has not
+expired (pitfall 9, T-03-55).
+
+**Why the identity is resolved here and not in the credential layer.** ``deps.py`` runs
+inside a tool call and is synchronous, while reading the authorization and decrypting its
+app password is asynchronous work against the store. So the boundary resolves it once per
+request and leaves it in the request state, and the credential layer reads a value instead
+of doing I/O in the middle of a tool. The app password never enters the cache: it is read
+per request, lives for that request and is masked in every repr (T-03-54).
+"""
+
+import logging
+import secrets
+import time
+from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import dataclass
+from typing import Protocol, runtime_checkable
+
+from mcp.server.auth.provider import AccessToken
+from mcp.shared.auth import OAuthClientInformationFull
+from mcp.shared.auth_utils import check_resource_allowed
+
+from .. import config
+from .metadata import RESOURCE_SUFFIX
+from .store import VALIDATION_CACHE_TTL, OAuthStore, token_hash
+
+__all__ = [
+    "AUTH_ID_CLAIM",
+    "CACHE_LIMIT",
+    "OAUTH_STATE_ATTR",
+    "IdentitySource",
+    "OAuthIdentity",
+    "StoreTokenVerifier",
+]
+
+#: How a caller hands in the store of this application, the same shape ``provider.py`` uses.
+type StoreProvider = Callable[[], Awaitable[OAuthStore]]
+
+#: The enforcement point of AUTH-07, handed in rather than imported: the verifier asks the
+#: very same ``get_client`` the authorization endpoints ask, so one block covers all of them.
+type ClientLookup = Callable[[str], Awaitable[OAuthClientInformationFull | None]]
+
+#: Where the id of the authorization travels inside the SDK token model. The model has no
+#: field for it, and ``claims`` is what it offers for exactly this (RFC 7662 style claims).
+#: The value is an internal id, never a secret: it is the flow id of a consent that already
+#: happened, and by itself it grants nothing.
+AUTH_ID_CLAIM = "auth_id"
+
+#: The name the transport boundary deposits the resolved identity under, and the name
+#: ``deps.py`` reads. One constant, so the two sides cannot drift apart.
+OAUTH_STATE_ATTR = "oauth_identity"
+
+#: The hard ceiling of the process cache. A dictionary that grows with every token somebody
+#: presents is a denial of service with a delay, so it is emptied when it is full rather
+#: than trimmed cleverly: the entries live five seconds anyway, and a simpler rule is one
+#: that cannot leak (T-03-56).
+CACHE_LIMIT = 1024
+
+logger = logging.getLogger("mcp_connector.oauth.verifier")
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class OAuthIdentity:
+    """Who a verified token acts as, and with which Nextcloud credential.
+
+    The app password is a live Nextcloud credential, so this object masks its repr like
+    every other credential carrier of this project (``nextcloud/credentials.py``). It is
+    built per request and never cached.
+
+    ``revoked`` is carried rather than turned into a refusal here, because the two sides
+    answer differently: the transport boundary refuses a token whose connection is gone,
+    while the credential layer turns a connection that was ended into a sentence the user
+    can act on ("connect the app again").
+    """
+
+    nc_user: str
+    app_password: str
+    auth_id: str
+    client_id: str
+    revoked: bool = False
+
+    def __repr__(self) -> str:
+        return (
+            f"OAuthIdentity(nc_user={self.nc_user!r}, auth_id={self.auth_id!r}, "
+            f"client_id={self.client_id!r}, revoked={self.revoked!r}, app_password='***')"
+        )
+
+
+@runtime_checkable
+class IdentitySource(Protocol):
+    """A token verifier that can also say whose connection a token is.
+
+    The SDK protocol ends at :meth:`verify_token`; this one adds the half this application
+    needs to run a tool call as the right Nextcloud user. It is a protocol and not a base
+    class so the transport boundary keeps taking any ``TokenVerifier``: a verifier without
+    an identity half simply deposits nothing, which is the fail-closed reading.
+    """
+
+    async def verify_token(self, token: str) -> AccessToken | None: ...
+
+    async def resolve_identity(self, access: AccessToken) -> OAuthIdentity | None: ...
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class _Cached:
+    """One positive answer, its deadline and the digest it was given for."""
+
+    digest: str
+    access: AccessToken
+    expires_at: float
+
+    def __repr__(self) -> str:
+        return f"_Cached(expires_at={self.expires_at!r}, digest='***')"
+
+
+class StoreTokenVerifier:
+    """Verify a bearer against the store of this deployment, and say who it is.
+
+    Built once per application, next to the provider and sharing its store and its client
+    lookup, so a revocation on one side is visible on the other without a second source of
+    truth.
+    """
+
+    def __init__(
+        self,
+        *,
+        store_provider: StoreProvider,
+        get_client: ClientLookup,
+        env: Mapping[str, str] | None = None,
+        clock: Callable[[], float] | None = None,
+    ) -> None:
+        self._store = store_provider
+        self._get_client = get_client
+        #: The audience every token of this server carries, built from the configured
+        #: public URL and never from a request (T-03-02), exactly like the provider's.
+        self._resource = f"{config.public_url(env)}{RESOURCE_SUFFIX}"
+        #: Monotonic by default: a cache window must not grow or shrink because somebody
+        #: corrected the system clock.
+        self._clock = clock if clock is not None else time.monotonic
+        self._cache: dict[str, _Cached] = {}
+
+    def __repr__(self) -> str:
+        return f"StoreTokenVerifier(resource={self._resource!r}, cached={len(self._cache)})"
+
+    def invalidate(self) -> None:
+        """Forget every cached answer at once.
+
+        Called when something is revoked in this process (plan 03-07): the window is five
+        seconds, and five seconds of a connection the user just ended is five seconds too
+        many. Emptying everything instead of one entry keeps the caller from having to know
+        which tokens belonged to the family it just killed.
+        """
+        self._cache.clear()
+
+    async def verify_token(self, token: str) -> AccessToken | None:
+        """The SDK protocol: a valid token becomes an ``AccessToken``, everything else None.
+
+        Unknown, expired, revoked, issued for another resource and issued to a client that
+        is blocked by now are one answer from outside, and that is deliberate: an answer
+        that separated them would say which of the checks fired (T-03-47).
+        """
+        if not token:
+            return None
+
+        digest = token_hash(token)
+        cached = self._cached(digest)
+        if cached is not None:
+            return cached
+
+        try:
+            store = await self._store()
+            row = await store.load_access_token(token)
+            if row is None:
+                return None
+            authorization = await store.load_authorization(row.auth_id)
+        except Exception as exc:
+            # A store that cannot be opened or read is never a reason to let a caller in
+            # (D-37, T-03-56). The kind of the failure is logged, no value of the request.
+            logger.error("a token could not be verified against the store: %s", type(exc).__name__)
+            return None
+
+        if authorization is None or authorization.revoked_at is not None:
+            return None
+        if not row.resource or not check_resource_allowed(row.resource, self._resource):
+            # RFC 8707: a token for another MCP server, or one without an audience at all,
+            # which would be valid at every server a user connects (pitfall 3, T-03-51).
+            return None
+        if await self._get_client(authorization.client_id) is None:
+            # The fourth enforcement point of AUTH-07: a block has to reach tokens that
+            # were issued before it (pitfall 9, T-03-55).
+            return None
+
+        access = AccessToken(
+            token=token,
+            client_id=authorization.client_id,
+            scopes=row.scopes.split(),
+            expires_at=row.expires_at,
+            resource=row.resource,
+            subject=row.nc_user,
+            claims={AUTH_ID_CLAIM: row.auth_id},
+        )
+        self._remember(digest, access)
+        return access
+
+    async def resolve_identity(self, access: AccessToken) -> OAuthIdentity | None:
+        """The Nextcloud identity behind a verified token, for exactly one request.
+
+        Read fresh every time and never cached, for two reasons at once: the value is a
+        live Nextcloud credential, and it is the one lookup that still sees a revocation
+        that happened inside the cache window of :meth:`verify_token`.
+        """
+        auth_id = str((access.claims or {}).get(AUTH_ID_CLAIM) or "")
+        if not auth_id:
+            # A token from another verifier. Nothing here may act on it.
+            return None
+
+        try:
+            store = await self._store()
+            row = await store.load_authorization(auth_id)
+            if row is None:
+                return None
+            password = await store.app_password(auth_id)
+        except Exception as exc:
+            logger.error("an authorization could not be read back: %s", type(exc).__name__)
+            return None
+
+        if not password:
+            return None
+        return OAuthIdentity(
+            nc_user=row.nc_user,
+            app_password=password,
+            auth_id=auth_id,
+            client_id=row.client_id,
+            revoked=row.revoked_at is not None,
+        )
+
+    def _cached(self, digest: str) -> AccessToken | None:
+        """The cached answer for this digest, or ``None``. Never a stale one.
+
+        ``compare_digest`` and not ``==`` on the way out: the entry repeats the digest it
+        was stored for and it is compared in constant time, so nothing about a lookup can
+        be learned from how long it took. The dictionary is keyed by the digest and never
+        by the token, so the token itself is not a key anywhere in this process.
+        """
+        entry = self._cache.get(digest)
+        if entry is None:
+            return None
+        if entry.expires_at <= self._clock():
+            del self._cache[digest]
+            return None
+        if not secrets.compare_digest(entry.digest, digest):  # pragma: no cover - key equality
+            return None
+        return entry.access
+
+    def _remember(self, digest: str, access: AccessToken) -> None:
+        """Keep one positive answer for the window, inside the ceiling."""
+        if len(self._cache) >= CACHE_LIMIT:
+            self._cache.clear()
+        self._cache[digest] = _Cached(
+            digest=digest, access=access, expires_at=self._clock() + VALIDATION_CACHE_TTL
+        )

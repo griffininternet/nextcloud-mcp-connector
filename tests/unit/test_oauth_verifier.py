@@ -16,7 +16,7 @@ the clock of the cache is a parameter.
 import inspect
 import logging
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path
 
 import pytest
@@ -102,22 +102,23 @@ def build(
     *,
     store: CountingStore | None = None,
     clock: Callable[[], float] | None = None,
-    **env: str,
+    env: Mapping[str, str] | None = None,
 ) -> tuple[verifier_module.StoreTokenVerifier, CountingStore]:
     """A verifier and the store behind it, sharing the policy of one environment."""
     subject = store if store is not None else CountingStore(tmp_path / "oauth.sqlite3", KEY)
+    environment = ENV | dict(env or {})
 
     async def opener() -> OAuthStore:
         return subject
 
     provider = provider_module.NextcloudOAuthProvider(
-        env=ENV | env, policy=registry.client_policy(ENV | env), store_provider=opener
+        env=environment, policy=registry.client_policy(environment), store_provider=opener
     )
     built = verifier_module.StoreTokenVerifier(
-        env=ENV | env,
+        env=environment,
         store_provider=opener,
         get_client=provider.get_client,
-        clock=clock if clock is not None else None,
+        clock=clock,
     )
     return built, subject
 
@@ -239,7 +240,7 @@ async def test_a_client_blocked_after_the_token_was_issued_is_refused(tmp_path: 
 
 @pytest.mark.anyio
 async def test_a_client_that_is_not_on_the_allowlist_is_refused(tmp_path: Path) -> None:
-    subject, store = build(tmp_path, **{registry.ENV_ALLOWLIST_ONLY: "1"})
+    subject, store = build(tmp_path, env={registry.ENV_ALLOWLIST_ONLY: "1"})
     await seed(store)
 
     assert await subject.verify_token(TOKEN) is None
@@ -420,11 +421,16 @@ def test_the_verifier_compares_in_constant_time() -> None:
     assert source.count("compare_digest") >= 1
 
 
-def test_the_verifier_never_becomes_the_thing_it_verifies(tmp_path: Path) -> None:
-    """The store is asked for a hash, so no plaintext token may be written anywhere."""
-    subject, _store = build(tmp_path)
+@pytest.mark.anyio
+async def test_no_token_ever_appears_in_the_repr_of_the_verifier(tmp_path: Path) -> None:
+    """A repr ends up in a log record the moment somebody adds a debug line (T-03-54)."""
+    subject, store = build(tmp_path)
+    await seed(store)
 
-    assert "token" not in repr(subject).lower() or "***" in repr(subject)
+    await subject.verify_token(TOKEN)
+
+    assert TOKEN not in repr(subject)
+    assert TOKEN not in repr(subject._cache), "the cache is keyed by the digest, never by the token"
 
 
 @pytest.mark.anyio

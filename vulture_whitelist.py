@@ -115,3 +115,13 @@ _.load_refresh_token
 _.exchange_refresh_token
 _.revoke_token
 _.exchange_identity_assertion
+
+# --- Two more names the SDK and the next plan call -------------------------------------
+# authenticate_request: the one method of the SDK ClientAuthenticator. The TokenHandler and
+#   the RevocationHandler call it on every request to /token and /revoke; nothing in this
+#   repository does. tests/unit/test_oauth_provider.py drives it through both endpoints.
+# invalidate: empties the process cache of the token verifier. Plan 03-07 calls it from the
+#   revocation path, where a cached answer of up to five seconds would keep a connection
+#   alive that the user just ended (D-34). tests/unit/test_oauth_verifier.py proves it.
+_.authenticate_request
+_.invalidate

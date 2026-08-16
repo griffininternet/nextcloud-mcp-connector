@@ -26,10 +26,16 @@ branches instead of one (03-RESEARCH.md, pattern 4):
   ``WWW-Authenticate`` challenge with the ``resource_metadata`` pointer.
 * invalid handshake: 401 with an empty body and no hint, exactly as before (T-02-03).
 
-The verifier is a parameter and it is still ``None`` in this plan: plan 03-06 builds the
-real one on top of the token store. ``None`` is not an open door but the strictest state
-this boundary has, and it is the meaning of fail-closed here: while no verifier exists, no
-bearer is valid, and every anonymous caller gets the discovery 401 (T-03-01).
+The verifier is a parameter, and ``entry_exapp`` hands in the one of this deployment
+(``oauth/verifier.py``), which checks the token against the store of this app, its audience
+and the client policy. ``None`` stays the strictest state this boundary has and is what the
+phase 1 modes and the tests of this wrapper use: while no verifier exists, no bearer is
+valid, and every anonymous caller gets the discovery 401 (T-03-01).
+
+A verified token is turned into the Nextcloud identity behind it right here, and that
+identity is left in the state of this request. It is the one place that can do it: the
+credential layer of a tool call is synchronous, and reading an authorization and decrypting
+its app password is not (D-26).
 
 Every rejection carries ``Cache-Control: no-store``, like every other answer of this
 package, and none of them repeats the received token in body or header (T-03-06).
@@ -37,7 +43,7 @@ package, and none of them repeats the received token in body or header (T-03-06)
 
 from collections.abc import Mapping
 
-from mcp.server.auth.provider import TokenVerifier
+from mcp.server.auth.provider import AccessToken, TokenVerifier
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -45,6 +51,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from .. import config
 from ..errors import ToolError
 from ..oauth.metadata import PRM_SUFFIX, TOOL_SCOPE
+from ..oauth.verifier import OAUTH_STATE_ATTR, IdentitySource
 from .auth import AppApiRejected, require_appapi
 from .responses import NO_STORE
 
@@ -109,8 +116,9 @@ class RequireAppApi:
         """Whether this request carries a token the configured verifier accepts.
 
         False whenever anything is missing: no verifier, no header, a different scheme, an
-        empty token, or a verifier that answered ``None``. The verifier never sees a value
-        that is not a bearer credential, and the token is never written anywhere.
+        empty token, a verifier that answered ``None``, or a verified token whose
+        connection cannot be resolved any more. The verifier never sees a value that is not
+        a bearer credential, and the token is never written anywhere.
         """
         if self._token_verifier is None:
             return False
@@ -120,7 +128,33 @@ class RequireAppApi:
         token = header[len(_BEARER_PREFIX) :].strip()
         if not token:
             return False
-        return await self._token_verifier.verify_token(token) is not None
+        access = await self._token_verifier.verify_token(token)
+        if access is None:
+            return False
+        return await self._deposit(request, access)
+
+    async def _deposit(self, request: Request, access: AccessToken) -> bool:
+        """Leave the identity of this token where the credential layer reads it.
+
+        This is the hand over of D-26: ``deps.resolve_credentials`` runs inside a tool call
+        and is synchronous, while turning a token into a Nextcloud user and its app
+        password is asynchronous work against the store. So it happens once here, and the
+        result travels in the state of this one request, which the MCP transport hands to
+        the tool as the request of its context.
+
+        A verifier that has no identity half (the SDK protocol is only ``verify_token``)
+        deposits nothing and the request continues: it has no connection to hand over, and
+        the credential layer refuses on its own. A verifier that has one and cannot resolve
+        the identity ends the request, because a token whose authorization is gone is not a
+        token this server may act on (fail closed, D-37).
+        """
+        if not isinstance(self._token_verifier, IdentitySource):
+            return True
+        identity = await self._token_verifier.resolve_identity(access)
+        if identity is None:
+            return False
+        setattr(request.state, OAUTH_STATE_ATTR, identity)
+        return True
 
     def _unauthorized_headers(self) -> dict[str, str]:
         """The 401 headers of the OAuth branch: no-store plus the discovery pointer.

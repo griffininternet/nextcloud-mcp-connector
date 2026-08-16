@@ -632,6 +632,28 @@ class OAuthStore:
 
         await self._write(work)
 
+    async def load_auth_code(self, code: str, *, now: int | None = None) -> AuthCodeRow | None:
+        """A code that is still redeemable, or ``None``. Reads, never consumes.
+
+        The token endpoint of the SDK loads a code, checks four things about it and only
+        then asks the provider to exchange it, so the load has to leave the code alone.
+        The single use is enforced where the tokens are issued, by
+        :meth:`redeem_auth_code`, which is one atomic statement rather than this read
+        followed by a write.
+        """
+        moment = _moment(now)
+
+        def work(conn: sqlite3.Connection) -> AuthCodeRow | None:
+            row = conn.execute(
+                "SELECT auth_id, redirect_uri, redirect_uri_explicit, code_challenge, resource, "
+                "expires_at FROM auth_codes "
+                "WHERE code_hash = ? AND used_at IS NULL AND expires_at > ?",
+                (token_hash(code), moment),
+            ).fetchone()
+            return None if row is None else _auth_code_row(row)
+
+        return await self._read(work)
+
     async def redeem_auth_code(self, code: str, *, now: int | None = None) -> AuthCodeRow | None:
         """Consume the code, or return ``None``. The second caller always gets ``None``.
 

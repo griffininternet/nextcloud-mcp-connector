@@ -34,6 +34,7 @@ from .oauth.metadata import metadata_routes
 from .oauth.provider import NextcloudOAuthProvider, auth_routes
 from .oauth.registry import client_policy
 from .oauth.store import store_opener
+from .oauth.verifier import StoreTokenVerifier
 from .server import mcp
 
 __all__ = ["build_exapp_app", "main"]
@@ -74,10 +75,19 @@ def build_exapp_app(env: Mapping[str, str] | None = None) -> Starlette:
         enable_dns_rebinding_protection=config.dns_rebinding_protection(env),
     )
     app = mcp.streamable_http_app(transport_security=security)
+    # One policy, one store and one provider for the whole application, built before the
+    # transport boundary because the boundary needs the verifier that shares them: a
+    # revocation has to be visible to the endpoint that issued the token and to the check
+    # that lets it act, and two objects with two stores would be two answers to one
+    # question.
+    policy = client_policy(env)
+    store = store_opener(env)
+    provider = NextcloudOAuthProvider(env=env, policy=policy, store_provider=store)
+    verifier = StoreTokenVerifier(store_provider=store, get_client=provider.get_client, env=env)
     guarded = 0
     for route in app.router.routes:
         if isinstance(route, Route) and route.path == MCP_PATH:
-            route.app = RequireAppApi(route.app, env)
+            route.app = RequireAppApi(route.app, env, token_verifier=verifier)
             guarded += 1
     if guarded != 1:
         raise RuntimeError(
@@ -102,14 +112,11 @@ def build_exapp_app(env: Mapping[str, str] | None = None) -> Starlette:
     # that would attach these routes to the MCP application, where the standalone mode would
     # inherit them (03-RESEARCH.md, anti patterns).
     #
-    # The policy is read once here, and the two places that answer to it read the same
-    # object: the discovery document stops advertising a registration endpoint when the
-    # switch is off, and the routes stop containing one (AUTH-07, D-35). One store opener
-    # serves the browser onboarding and the authorization server, so a deployment fetches
-    # its data key once and both halves write to one file.
-    policy = client_policy(env)
-    store = store_opener(env)
-    provider = NextcloudOAuthProvider(env=env, policy=policy, store_provider=store)
+    # The policy read above is what the two places that answer to it read as well: the
+    # discovery document stops advertising a registration endpoint when the switch is off,
+    # and the routes stop containing one (AUTH-07, D-35). One store opener serves the
+    # browser onboarding, the authorization server and the token verifier, so a deployment
+    # fetches its data key once and every half writes to one file.
     for route in (
         *lifecycle_routes(env),
         *metadata_routes(env, dcr_enabled=policy.dcr_enabled),

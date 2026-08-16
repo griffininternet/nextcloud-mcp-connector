@@ -19,11 +19,19 @@ therefore bypasses both the process cache and the audience check that plan 03-06
 The routes are handed out by :func:`auth_routes` and attached by ``entry_exapp`` alone,
 exactly like every other route factory of this project.
 
-**What this plan implements and what refuses.** ``register_client`` and ``get_client`` are
-complete here, and ``authorize`` follows in the same plan. Everything else exists with the
-signature of the protocol and refuses: the code exchange and the verifier are plan 03-06,
-the rotation and the revocation are plan 03-07. A half implemented protocol has to refuse
-rather than pass, which is the owner directive of this phase in its smallest form.
+**What is built here and what still refuses.** ``register_client``, ``get_client``,
+``authorize``, ``load_authorization_code`` and ``exchange_authorization_code`` are complete:
+a client can register, ask, be sent through the sign in and trade its code for a token. The
+refresh rotation with its reuse detection and the revocation are plan 03-07 and refuse until
+then, and ``exchange_identity_assertion`` refuses permanently (D-33). A half implemented
+protocol has to refuse rather than pass, which is the owner directive of this phase in its
+smallest form.
+
+**Why ``load_access_token`` stays a refusal although the tokens exist.** It is the hook of
+the SDK's ``ProviderTokenVerifier``, which this deployment does not install: the bearer of
+every request is checked by ``oauth/verifier.py``, which adds the process cache, the
+audience check of RFC 8707 and the client policy. A second, weaker path to the same
+decision is not a convenience, it is the one that gets forgotten in a review.
 
 **Why ``get_client`` is the enforcement point.** ``/authorize``, ``/token`` and ``/revoke``
 all load their client through it, so one refusal here covers all three (pitfall 9). It
@@ -32,12 +40,18 @@ the allowlist or expired, and those four are indistinguishable from outside on p
 answer that separates them is an information service for whoever is guessing (T-03-47).
 """
 
+import base64
+import binascii
 import json
 import logging
 import secrets
 import time
 from collections.abc import Awaitable, Callable, Mapping
+from urllib.parse import unquote
 
+from mcp.server.auth.handlers.revoke import RevocationHandler
+from mcp.server.auth.handlers.token import TokenHandler
+from mcp.server.auth.middleware.client_auth import AuthenticationError, ClientAuthenticator
 from mcp.server.auth.provider import (
     AccessToken,
     AuthorizationCode,
@@ -49,12 +63,19 @@ from mcp.server.auth.provider import (
     RegistrationError,
     TokenError,
 )
-from mcp.server.auth.routes import AUTHORIZATION_PATH, create_auth_routes
+from mcp.server.auth.routes import (
+    AUTHORIZATION_PATH,
+    REVOCATION_PATH,
+    TOKEN_PATH,
+    cors_middleware,
+    create_auth_routes,
+)
 from mcp.server.auth.settings import ClientRegistrationOptions, RevocationOptions
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 from mcp.shared.auth_utils import check_resource_allowed
-from pydantic import AnyHttpUrl, ValidationError
-from starlette.datastructures import MutableHeaders
+from pydantic import AnyHttpUrl, AnyUrl, ValidationError
+from starlette.datastructures import FormData, MutableHeaders
+from starlette.requests import Request
 from starlette.routing import Route
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -70,14 +91,27 @@ from .registry import (
     client_policy,
     redirect_uri_allowed,
 )
-from .store import OAuthStore, store_opener, token_hash
+from .store import ACCESS_TOKEN_TTL, OAuthStore, store_opener, token_hash
 
 __all__ = [
+    "FAMILY_BYTES",
+    "TOKEN_BYTES",
+    "HashedClientAuthenticator",
     "NextcloudOAuthProvider",
     "NoStore",
     "StoreProvider",
     "auth_routes",
 ]
+
+#: The two client authentication methods of RFC 6749 §2.3.1. Named here so the literal
+#: appears once and so the third method of the registry, ``none``, is the absence of both.
+_AUTH_BASIC = "client_secret_basic"
+_AUTH_POST = "client_secret_post"
+
+#: The two verbs the machine endpoints of the authorization server answer. ``OPTIONS`` is
+#: the CORS preflight the SDK wrapper handles; the manifest declares ``POST`` alone,
+#: because no browser calls these endpoints cross origin in this topology (D-38).
+_MACHINE_VERBS = ["POST", "OPTIONS"]
 
 #: How a caller hands in its own store, which is what the tests of this module do and what
 #: ``entry_exapp`` uses to give the browser onboarding and the authorization server the same
@@ -96,6 +130,22 @@ _REDIRECT_RULE = "redirect_uris must use https, except loopback addresses of nat
 #: The description of every method that is not built yet. One sentence, no internal detail:
 #: a client cannot act on the plan number, and an attacker should not read one.
 _NOT_YET = "this authorization server cannot complete the request"
+
+#: What a refused exchange says. Each names the rule and never a value of the request: the
+#: developer on the other end has to be able to fix the call, and nothing more is owed.
+_NO_AUDIENCE = "the grant carries no resource, which this server requires (RFC 8707)"
+_WRONG_AUDIENCE = "the grant was issued for another resource"
+_CLIENT_GONE = "this client may not use this authorization server"
+_CODE_SPENT = "the authorization code is not valid"
+
+#: 32 bytes of entropy behind every token this server issues, which ``token_urlsafe``
+#: renders as 43 characters. The token is the whole authorisation of a connection, and it
+#: exists on disk only as its SHA-256 digest.
+TOKEN_BYTES = 32
+
+#: The id that ties an access token to the refresh token it was issued with. Not a secret,
+#: never handed out, and the unit a reuse detection kills in plan 03-07.
+FAMILY_BYTES = 16
 
 _HINT_ISSUER = (
     f"{config.ENV_PUBLIC_URL} is the address clients reach this app under, for example "
@@ -183,6 +233,22 @@ class NextcloudOAuthProvider(
 
         return client
 
+    async def client_secret_hash(self, client_id: str) -> str | None:
+        """The stored digest of this client's secret, or ``None`` for a public client.
+
+        Deliberately not part of what :meth:`get_client` returns: the SDK model carries a
+        plaintext secret field, and a digest in it would be compared against a presented
+        secret as if it were one. Whoever needs the digest asks for it, which is exactly
+        one caller, :class:`HashedClientAuthenticator`.
+
+        A store that cannot answer raises out of here instead of answering ``None``: the
+        caller turns that into a refused authentication, and ``None`` would mean "this
+        client has no secret", which is the one reading that would let a caller in.
+        """
+        store = await self.store()
+        row = await store.load_client(client_id)
+        return None if row is None else row.client_secret_hash
+
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
         """Store a self registered client, once the two checks of D-35 pass.
 
@@ -269,16 +335,98 @@ class NextcloudOAuthProvider(
     async def load_authorization_code(
         self, client: OAuthClientInformationFull, authorization_code: str
     ) -> AuthorizationCode | None:
-        """Plan 03-06 redeems codes. Until then no code exists, so none can be loaded."""
-        del client, authorization_code
-        return None
+        """Read a code back, with everything the token endpoint compares against it.
+
+        Reads and does not consume: the SDK loads a code, checks four things about it (it
+        belongs to this client, it has not expired, the return address is the one of the
+        authorization request, the PKCE verifier matches the challenge) and only then asks
+        for the exchange. Spending the code inside this method would burn it on every
+        failed check.
+
+        Two of the fields come from the authorization rather than from the code: the client
+        and the user. The code points at its authorization, and the authorization is the
+        row that knows whose connection this is, which is also why a revoked one answers
+        ``None`` here already.
+        """
+        del client
+        try:
+            store = await self.store()
+            row = await store.load_auth_code(authorization_code)
+            if row is None:
+                return None
+            authorization = await store.load_authorization(row.auth_id)
+        except Exception as exc:
+            # Fail closed (D-37): a store that cannot answer is not a code that exists.
+            logger.error("an authorization code could not be read: %s", type(exc).__name__)
+            return None
+
+        if authorization is None or authorization.revoked_at is not None:
+            return None
+
+        return AuthorizationCode(
+            code=authorization_code,
+            scopes=authorization.scopes.split(),
+            expires_at=float(row.expires_at),
+            client_id=authorization.client_id,
+            code_challenge=row.code_challenge,
+            redirect_uri=AnyUrl(row.redirect_uri),
+            redirect_uri_provided_explicitly=row.redirect_uri_explicit,
+            resource=row.resource,
+            subject=authorization.nc_user,
+        )
 
     async def exchange_authorization_code(
         self, client: OAuthClientInformationFull, authorization_code: AuthorizationCode
     ) -> OAuthToken:
-        """Plan 03-06 issues tokens, with the audience check of RFC 8707 in front."""
-        del client, authorization_code
-        raise TokenError("invalid_grant", _NOT_YET)
+        """Turn one consent into one opaque access token and one refresh token.
+
+        The order of this method is the order of its risks. The audience is checked first
+        and fails closed on a missing value, because a token without one would be accepted
+        by every other MCP server the user connects (RFC 8707, pitfall 3, T-03-51). The
+        client policy is asked second, because a block that arrived while the user was on
+        the consent screen must not be outrun by a code that was already issued (pitfall 9,
+        T-03-55). Only then is the code spent, in the one atomic statement that makes a
+        second exchange impossible, and only after that do the tokens exist.
+
+        Nothing here talks to Nextcloud. The whole Nextcloud round trip of this phase
+        happens in the browser path, where a person is waiting and a second costs nothing;
+        a connector gives its token endpoint about ten seconds (pitfall 13, T-03-58).
+        """
+        resource = (authorization_code.resource or "").strip()
+        if not resource:
+            raise TokenError("invalid_target", _NO_AUDIENCE)
+        if not check_resource_allowed(resource, self._resource):
+            raise TokenError("invalid_target", _WRONG_AUDIENCE)
+
+        if await self.get_client(client.client_id) is None:
+            raise TokenError("invalid_client", _CLIENT_GONE)
+
+        store = await self.store()
+        spent = await store.redeem_auth_code(authorization_code.code)
+        if spent is None:
+            # Used, expired or never issued. One answer for all three, which is also the
+            # answer a client expects for a grant it may not use again (RFC 6749 §5.2).
+            raise TokenError("invalid_grant", _CODE_SPENT)
+
+        access = secrets.token_urlsafe(TOKEN_BYTES)
+        refresh = secrets.token_urlsafe(TOKEN_BYTES)
+        family = secrets.token_urlsafe(FAMILY_BYTES)
+        scopes = " ".join(authorization_code.scopes)
+        await store.create_access_token(
+            access, auth_id=spent.auth_id, family_id=family, scopes=scopes, resource=resource
+        )
+        await store.create_refresh_token(refresh, auth_id=spent.auth_id, family_id=family)
+        # A registration that produced a token is a connection somebody made, and it lives
+        # on the long expiry window from here on (AUTH-07, T-03-44).
+        await store.touch_client(client.client_id)
+
+        return OAuthToken(
+            access_token=access,
+            token_type="Bearer",  # noqa: S106 - the token type of RFC 6750, not a secret
+            expires_in=ACCESS_TOKEN_TTL,
+            scope=scopes,
+            refresh_token=refresh,
+        )
 
     async def load_refresh_token(
         self, client: OAuthClientInformationFull, refresh_token: str
@@ -298,7 +446,14 @@ class NextcloudOAuthProvider(
         raise TokenError("invalid_grant", _NOT_YET)
 
     async def load_access_token(self, token: str) -> AccessToken | None:
-        """Plan 03-06 builds the verifier, on the store and a short process cache."""
+        """Refused on purpose: the bearer of a request is checked by ``oauth/verifier.py``.
+
+        This method exists because the protocol has it, and it answers ``None`` because the
+        only caller it would ever have is the SDK's ``ProviderTokenVerifier``, which this
+        application does not install. That verifier knows neither the process cache nor the
+        audience check nor the client policy, so a token accepted through here would be one
+        accepted by a weaker path than the one at the transport boundary (T-03-51).
+        """
         del token
         return None
 
@@ -360,10 +515,115 @@ def auth_routes(
             message=f"{config.ENV_PUBLIC_URL} is not a usable issuer: {exc}", hint=_HINT_ISSUER
         ) from None
 
-    kept = [route for route in routes if route.path not in (AS_METADATA_SUFFIX, AUTHORIZATION_PATH)]
+    dropped = (AS_METADATA_SUFFIX, AUTHORIZATION_PATH, TOKEN_PATH, REVOCATION_PATH)
+    kept = [route for route in routes if route.path not in dropped]
+    # The two endpoints that authenticate a client are rebuilt with our own authenticator.
+    # Everything else about them stays the SDK's: the same handler, the same CORS wrapper
+    # and the same methods, because only the comparison of the secret is ours.
+    authenticator = HashedClientAuthenticator(provider)
+    kept.append(
+        Route(
+            TOKEN_PATH,
+            endpoint=cors_middleware(TokenHandler(provider, authenticator).handle, _MACHINE_VERBS),
+            methods=_MACHINE_VERBS,
+        )
+    )
+    kept.append(
+        Route(
+            REVOCATION_PATH,
+            endpoint=cors_middleware(
+                RevocationHandler(provider, authenticator).handle, _MACHINE_VERBS
+            ),
+            methods=_MACHINE_VERBS,
+        )
+    )
     for route in kept:
         route.app = NoStore(route.app)
     return kept
+
+
+class HashedClientAuthenticator(ClientAuthenticator):
+    """Authenticate a client at ``/token`` and ``/revoke`` against the stored digest.
+
+    The SDK compares ``client.client_secret`` with the presented secret in plaintext, which
+    means the store would have to keep one. It does not: plan 03-02 stores a SHA-256 digest
+    for the same reason every other credential of this phase is stored as one, so that a
+    stolen store file cannot be replayed against this server (T-03-11). This class is the
+    other half of that decision, and without it the token endpoint would refuse every
+    confidential client.
+
+    What it does not change: which clients exist and which of them may act. Both come from
+    ``get_client``, which is the one enforcement point of AUTH-07 (pitfall 9). A public
+    client, which is what Claude.ai and ChatGPT are, has no secret at all and is
+    authenticated by PKCE alone, exactly as the SDK does it.
+    """
+
+    def __init__(self, provider: "NextcloudOAuthProvider") -> None:
+        super().__init__(provider)
+        self._provider = provider
+
+    async def authenticate_request(self, request: Request) -> OAuthClientInformationFull:
+        form = await request.form()
+        client_id = str(form.get("client_id") or "")
+        if not client_id:
+            raise AuthenticationError("Missing client_id")
+
+        client = await self._provider.get_client(client_id)
+        if client is None:
+            raise AuthenticationError("Invalid client_id")
+
+        try:
+            stored = await self._provider.client_secret_hash(client_id)
+        except Exception as exc:
+            # A store that cannot be read is a refused authentication, never an accepted
+            # one (D-37). The kind of the failure is logged, no value of the request is.
+            logger.error("a client could not be authenticated: %s", type(exc).__name__)
+            raise AuthenticationError("The client could not be authenticated") from None
+        if stored is None:
+            # A public client. The SDK treats a registration without a secret the same way,
+            # and PKCE is what authenticates the exchange (OAuth 2.1, S256 enforced).
+            return client
+
+        presented = _presented_secret(request, form, client_id, client)
+        if not presented:
+            raise AuthenticationError("Client secret is required")
+        # The comparison runs on the digests and in constant time, for the same reason the
+        # AppAPI handshake compares that way: the value comes from a request, and a
+        # comparison that stops early leaks its prefix over enough attempts (T-01-24).
+        if not secrets.compare_digest(token_hash(presented), stored):
+            raise AuthenticationError("Invalid client_secret")
+        return client
+
+
+def _presented_secret(
+    request: Request,
+    form: FormData,
+    client_id: str,
+    client: OAuthClientInformationFull,
+) -> str:
+    """The secret this request carries, in the form the registration asked for.
+
+    The two methods of RFC 6749 §2.3.1 and nothing else. A client that registered for
+    ``none`` and then sends a secret is not authenticated by it: the method decides, not
+    the request, because anything else would let a caller pick the weaker of two paths.
+    """
+    if client.token_endpoint_auth_method == _AUTH_BASIC:
+        header = request.headers.get("Authorization", "")
+        if not header.startswith("Basic "):
+            raise AuthenticationError("Missing or invalid Basic authentication")
+        try:
+            decoded = base64.b64decode(header[6:]).decode("utf-8")
+        except (ValueError, binascii.Error, UnicodeDecodeError):
+            # The offending value is credential material and stays out of the message.
+            raise AuthenticationError("Invalid Basic authentication header") from None
+        name, separator, secret = decoded.partition(":")
+        if not separator or unquote(name) != client_id:
+            raise AuthenticationError("Client ID mismatch in Basic auth")
+        return unquote(secret)
+    if client.token_endpoint_auth_method == _AUTH_POST:
+        value = form.get("client_secret")
+        return value if isinstance(value, str) else ""
+    return ""
 
 
 class NoStore:
