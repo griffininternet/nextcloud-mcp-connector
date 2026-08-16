@@ -40,7 +40,7 @@ Every request runs under the identity of the signed in user, so an assistant nev
 			<image-tag>0.1.0</image-tag>
 		</docker-install>
 		<!--
-		  - Exactly six routes, and they are the whole external attack surface of this app.
+		  - Exactly ten routes, and they are the whole external attack surface of this app.
 		  -
 		  - The three AppAPI lifecycle paths (/heartbeat, /init and /enabled) are deliberately
 		  - absent, and this comment is the only place they appear here. A path that matches no
@@ -91,6 +91,23 @@ Every request runs under the identity of the signed in user, so an assistant nev
 		  - that is either start or cancel: no credential, no redirect target, no client id.
 		  - The sign in itself happens on Nextcloud's own pages, and no page below /connect
 		  - has an input a user could type a password into.
+		  -
+		  - The four routes of the authorization server (plan 03-05) are PUBLIC for the
+		  - reasons D-38 names, one per route:
+		  -
+		  - /authorize is a browser route and takes GET and POST, the two methods RFC 6749
+		  - allows for it. It is PUBLIC and not USER although a person walks through it,
+		  - because HaRP knows no sign in redirect: an anonymous request to a USER route is
+		  - answered with a bare 403, and this page exists precisely to take a user who is
+		  - not signed in yet to Nextcloud's own sign in.
+		  -
+		  - /token, /register and /revoke are machine routes without a user session at all.
+		  - They carry their own controls: /token authenticates the client with the secret it
+		  - was issued and verifies the PKCE verifier, /revoke authenticates the same way, and
+		  - /register is the one endpoint that is open by design (D-35) and is bounded by the
+		  - three switches of AUTH-07 instead. All three take POST only; the OPTIONS the SDK
+		  - would also answer is not declared, because no browser calls them cross origin in
+		  - this topology.
 		-->
 		<routes>
 			<route>
@@ -126,6 +143,30 @@ Every request runs under the identity of the signed in user, so an assistant nev
 			<route>
 				<url>^/connect/?$</url>
 				<verb>GET,POST</verb>
+				<access_level>PUBLIC</access_level>
+				<headers_to_exclude>["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERSION","X-ORIGIN-IP"]</headers_to_exclude>
+			</route>
+			<route>
+				<url>^/authorize/?$</url>
+				<verb>GET,POST</verb>
+				<access_level>PUBLIC</access_level>
+				<headers_to_exclude>["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERSION","X-ORIGIN-IP"]</headers_to_exclude>
+			</route>
+			<route>
+				<url>^/token/?$</url>
+				<verb>POST</verb>
+				<access_level>PUBLIC</access_level>
+				<headers_to_exclude>["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERSION","X-ORIGIN-IP"]</headers_to_exclude>
+			</route>
+			<route>
+				<url>^/register/?$</url>
+				<verb>POST</verb>
+				<access_level>PUBLIC</access_level>
+				<headers_to_exclude>["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERSION","X-ORIGIN-IP"]</headers_to_exclude>
+			</route>
+			<route>
+				<url>^/revoke/?$</url>
+				<verb>POST</verb>
 				<access_level>PUBLIC</access_level>
 				<headers_to_exclude>["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERSION","X-ORIGIN-IP"]</headers_to_exclude>
 			</route>

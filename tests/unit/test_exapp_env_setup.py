@@ -78,15 +78,21 @@ PROXY_OWNED_HEADERS = (
     "X-ORIGIN-IP",
 )
 
-#: What this phase opens: the MCP transport, the three discovery documents and the two pages
-#: of the browser onboarding (D-38, AUTH-02).
-DECLARED_ROUTES = 6
+#: What this phase opens: the MCP transport, the three discovery documents, the two pages
+#: of the browser onboarding and the four endpoints of the authorization server (D-38,
+#: AUTH-02, AUTH-03).
+DECLARED_ROUTES = 10
 
 #: The onboarding paths the application registers, compared with the manifest below. Set
 #: equality for the same reason as the well-known documents: a page that is declared but not
 #: served is a 404 nobody can explain, and one that is served but not declared is unreachable
 #: through the proxy.
 CONNECT_PATHS = ("/connect", "/connect/wait")
+
+#: The four endpoints of the authorization server, compared with the manifest the same way.
+#: A declared endpoint the application does not serve is a 404 during a first connection,
+#: and a served one that is not declared is unreachable through HaRP (AUTH-03, D-38).
+AS_PATHS = ("/authorize", "/token", "/register", "/revoke")
 
 #: Enough of a deploy environment to build the application the manifest is compared against.
 MANIFEST_ENV = {
@@ -132,7 +138,7 @@ def manifest_problems(root: etree._Element) -> list[str]:
 
     routes = root.findall(".//route")
     if len(routes) != DECLARED_ROUTES:
-        problems.append(f"{len(routes)} routes declared, this phase opens exactly six")
+        problems.append(f"{len(routes)} routes declared, this phase opens exactly ten")
 
     for route in routes:
         url = (route.findtext("url") or "").strip()
@@ -177,6 +183,17 @@ def declared_connect_paths(root: etree._Element) -> set[str]:
         if not url.startswith("^/connect"):
             continue
         paths.add(url.removeprefix("^").removesuffix("$").removesuffix("/?").replace("\\", ""))
+    return paths
+
+
+def declared_authorization_paths(root: etree._Element) -> set[str]:
+    """The literal path behind every authorization server route of the manifest."""
+    paths = set()
+    for route in root.findall(".//route"):
+        url = (route.findtext("url") or "").strip()
+        literal = url.removeprefix("^").removesuffix("$").removesuffix("/?").replace("\\", "")
+        if literal in AS_PATHS:
+            paths.add(literal)
     return paths
 
 
@@ -561,12 +578,13 @@ def test_the_tunnel_probe_reads_the_process_table(
     assert result.returncode == expected_code, result.stderr
 
 
-def test_the_manifest_declares_exactly_the_six_routes_of_this_phase(
+def test_the_manifest_declares_exactly_the_ten_routes_of_this_phase(
     manifest_root: etree._Element,
 ) -> None:
     """D-38: /mcp is PUBLIC since plan 03-01, the one broad well-known route that carried the
-    accepted risk AR-02-06 is three fully anchored ones now, and plan 03-04 adds the two
-    pages of the browser onboarding, both anchored and both PUBLIC by the same reasoning."""
+    accepted risk AR-02-06 is three fully anchored ones now, plan 03-04 adds the two pages of
+    the browser onboarding, and plan 03-05 adds the four endpoints of the authorization
+    server. Every one of them is anchored at both ends and PUBLIC for a reason of its own."""
     routes = [
         ((route.findtext("url") or "").strip(), (route.findtext("access_level") or "").strip())
         for route in manifest_root.findall(".//route")
@@ -578,6 +596,10 @@ def test_the_manifest_declares_exactly_the_six_routes_of_this_phase(
         ("^/\\.well-known/oauth-authorization-server$", "PUBLIC"),
         ("^/connect/wait/?$", "PUBLIC"),
         ("^/connect/?$", "PUBLIC"),
+        ("^/authorize/?$", "PUBLIC"),
+        ("^/token/?$", "PUBLIC"),
+        ("^/register/?$", "PUBLIC"),
+        ("^/revoke/?$", "PUBLIC"),
     ]
 
 
@@ -608,6 +630,46 @@ def test_the_onboarding_route_declares_the_verb_that_starts_a_sign_in(
 
     assert verbs["^/connect/?$"] == "GET,POST"
     assert verbs["^/connect/wait/?$"] == "GET"
+
+
+def test_the_declared_authorization_routes_are_the_registered_ones(
+    manifest_root: etree._Element,
+) -> None:
+    """Set equality for the third family of routes, and the one that hands out tokens."""
+    registered = {
+        path
+        for path in (
+            getattr(route, "path", "") for route in build_exapp_app(MANIFEST_ENV).router.routes
+        )
+        if path in AS_PATHS
+    }
+
+    assert declared_authorization_paths(manifest_root) == registered == set(AS_PATHS)
+
+
+def test_the_authorization_routes_declare_exactly_the_verbs_they_answer(
+    manifest_root: etree._Element,
+) -> None:
+    """A missing POST on /authorize breaks the form post of RFC 6749, and a GET on /token
+    would publish a credential endpoint to every crawler that follows a link."""
+    verbs = {
+        (route.findtext("url") or "").strip(): (route.findtext("verb") or "").strip()
+        for route in manifest_root.findall(".//route")
+    }
+
+    assert verbs["^/authorize/?$"] == "GET,POST"
+    assert verbs["^/token/?$"] == "POST"
+    assert verbs["^/register/?$"] == "POST"
+    assert verbs["^/revoke/?$"] == "POST"
+
+
+def test_no_authorization_route_is_declared_twice(manifest_root: etree._Element) -> None:
+    """The SDK registers a metadata document of its own at a path this app already serves,
+    and two routes on one path answer whichever was registered first (plan 03-05)."""
+    paths = [getattr(route, "path", "") for route in build_exapp_app(MANIFEST_ENV).router.routes]
+    served = [path for path in paths if path.startswith("/.well-known/") or path in AS_PATHS]
+
+    assert len(served) == len(set(served)), f"a path is served twice: {sorted(served)}"
 
 
 def test_the_declared_well_known_routes_are_the_registered_ones(
@@ -708,7 +770,7 @@ def test_the_bootstrap_registration_strips_the_same_headers() -> None:
         assert f'"{header}"' in text, f"{header} is not stripped by the registration"
 
 
-def test_the_bootstrap_registration_declares_the_same_six_routes(
+def test_the_bootstrap_registration_declares_the_same_ten_routes(
     manifest_root: etree._Element,
 ) -> None:
     """The json-info payload overrides the manifest, so a route that only lives in
@@ -722,6 +784,8 @@ def test_the_bootstrap_registration_declares_the_same_six_routes(
         # path is compared without the dot escape (see the comment above json_info).
         assert path.replace("/.well-known/", "well-known/") in text, path
     for path in declared_connect_paths(manifest_root):
+        assert f'"^{path}/?$"' in text, path
+    for path in declared_authorization_paths(manifest_root):
         assert f'"^{path}/?$"' in text, path
 
 

@@ -34,10 +34,12 @@ import asyncio
 import hashlib
 import sqlite3
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from .. import config
+from . import crypto
 from .crypto import decrypt, encrypt
 
 #: What every method below hands to the worker thread: one function, one connection, one
@@ -70,6 +72,7 @@ __all__ = [
     "OAuthStore",
     "RefreshRedemption",
     "RefreshTokenRow",
+    "store_opener",
     "token_hash",
 ]
 
@@ -849,6 +852,44 @@ class OAuthStore:
             return result
         finally:
             conn.close()
+
+
+def store_opener(env: Mapping[str, str] | None = None) -> Callable[[], Awaitable["OAuthStore"]]:
+    """One store per application, opened at its first use and swept when it opens.
+
+    The store cannot be built when the routes are: the data key comes from Nextcloud over
+    HTTP, which needs a running event loop, and a deployment that is not complete has to
+    end in a page rather than in a failed import. So the callers get a function, and the
+    first request that needs the store pays for opening it.
+
+    The first open is also where :meth:`OAuthStore.purge_expired` runs. This project has no
+    cron and no scheduler, so the sweep that removes what ran out hangs on the first use of
+    the store and on every write after that (T-03-17).
+
+    The cache lives in this closure and not in a module global, for the reason D-20 gives:
+    a dictionary that outlives a request is one refactor away from being a session store.
+    Two applications in one process, which is what every test builds, get one store each
+    unless the caller passes the same opener to both.
+    """
+    opened: dict[str, OAuthStore] = {}
+    lock = asyncio.Lock()
+
+    async def open_once() -> OAuthStore:
+        ready = opened.get("store")
+        if ready is not None:
+            return ready
+        async with lock:
+            ready = opened.get("store")
+            if ready is None:
+                # The key first: it is the one step that can fail with a named error, and
+                # it fails before anything creates a directory.
+                key = await crypto.data_key(env)
+                ready = OAuthStore(config.persistent_storage(env) / STORE_FILENAME, key)
+                await ready.purge_expired()
+                opened["store"] = ready
+            return ready
+
+    return open_once
 
 
 def _connect(path: Path) -> sqlite3.Connection:

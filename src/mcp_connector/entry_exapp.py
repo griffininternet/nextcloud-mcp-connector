@@ -30,6 +30,9 @@ from .exapp.middleware import RequireAppApi
 from .nextcloud.http import configure_logging
 from .oauth.connect import connect_routes
 from .oauth.metadata import metadata_routes
+from .oauth.provider import NextcloudOAuthProvider, auth_routes
+from .oauth.registry import client_policy
+from .oauth.store import store_opener
 from .server import mcp
 
 __all__ = ["build_exapp_app", "main"]
@@ -90,7 +93,26 @@ def build_exapp_app(env: Mapping[str, str] | None = None) -> Starlette:
     # reason twice over: they are the browser half of this deployment mode, and a page that
     # hands out a Nextcloud credential has no business appearing in the standalone HTTP
     # server of phase 1, which has no store, no data key and no AppAPI identity (D-23, D-36).
-    for route in (*lifecycle_routes(env), *metadata_routes(env), *connect_routes(env)):
+    #
+    # The authorization server of plan 03-05 joins the same line, and the same rule is the
+    # reason it is not passed to the MCPServer constructor as auth_server_provider: that
+    # would attach these routes to the MCP application, where the standalone mode would
+    # inherit them (03-RESEARCH.md, anti patterns).
+    #
+    # The policy is read once here, and the two places that answer to it read the same
+    # object: the discovery document stops advertising a registration endpoint when the
+    # switch is off, and the routes stop containing one (AUTH-07, D-35). One store opener
+    # serves the browser onboarding and the authorization server, so a deployment fetches
+    # its data key once and both halves write to one file.
+    policy = client_policy(env)
+    store = store_opener(env)
+    provider = NextcloudOAuthProvider(env=env, policy=policy, store_provider=store)
+    for route in (
+        *lifecycle_routes(env),
+        *metadata_routes(env, dcr_enabled=policy.dcr_enabled),
+        *connect_routes(env, store_provider=store),
+        *auth_routes(env, provider=provider),
+    ):
         app.router.routes.append(route)
     return app
 
@@ -145,11 +167,15 @@ def main() -> None:
         # (pitfall 12, T-03-15). The data key is not fetched here; that needs a running
         # event loop and a reachable Nextcloud, and the store asks for it when it opens.
         config.persistent_storage()
+        # The public URL is what the authorization server calls itself, and the SDK refuses
+        # an issuer that is not https unless it is loopback. Building the application here
+        # turns that refusal into the same named exit as a missing volume, instead of into
+        # a traceback in a container log.
+        app = build_exapp_app()
     except ToolError as exc:
         logger.error("%s %s", exc.message, exc.hint)
         raise SystemExit(2) from None
 
-    app = build_exapp_app()
     if (os.environ.get(config.ENV_HP_SHARED_KEY) or "").strip():
         # HaRP with the FRP tunnel: the unix socket is the transport, frpc runs beside us.
         socket_path = os.environ.get(config.ENV_HP_EXAPP_SOCK) or DEFAULT_EXAPP_SOCK

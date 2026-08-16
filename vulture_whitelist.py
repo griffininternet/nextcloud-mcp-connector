@@ -99,8 +99,19 @@ _.revoked_at
 _.issued_at
 _.used_at
 
-# --- The policy of AUTH-07, between two commits of plan 03-05 --------------------------
-# allows: the question the enforcement point asks. Its production caller is get_client in
-# oauth/provider.py, which is the next task of the same plan; until then only
-# tests/unit/test_oauth_registry.py drives it. This entry leaves the list with that task.
-_.allows
+# --- The eleven methods of the SDK provider protocol -----------------------------------
+# oauth/provider.py implements OAuthAuthorizationServerProvider. Every method below is
+# called by the SDK handlers of /authorize, /token, /register and /revoke, and by nothing
+# in this repository: create_auth_routes takes the object and wires the calls itself, the
+# same shape as verify_token above. All of them are driven directly by
+# tests/unit/test_oauth_provider.py, which is what keeps them honest. load_access_token is
+# absent from this list because it already stands in the store block above.
+_.get_client
+_.register_client
+_.authorize
+_.load_authorization_code
+_.exchange_authorization_code
+_.load_refresh_token
+_.exchange_refresh_token
+_.revoke_token
+_.exchange_identity_assertion

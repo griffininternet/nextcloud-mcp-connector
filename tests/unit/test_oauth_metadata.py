@@ -27,7 +27,7 @@ from starlette.testclient import TestClient
 from mcp_connector import config, entry_http
 from mcp_connector.entry_exapp import build_exapp_app
 from mcp_connector.exapp import responses
-from mcp_connector.oauth import metadata
+from mcp_connector.oauth import metadata, registry
 
 PUBLIC_URL = "https://cloud.example.com/exapps/mcp_connector"
 APP_SECRET = "a8e934cd9e8d19e49db290ab1e529f4d9fed314388579d612eb01644beb7cacc"
@@ -299,6 +299,37 @@ def test_build_exapp_app_registers_exactly_the_three_well_known_routes() -> None
         if "well-known" in path
     )
     assert well_known == sorted([PRM_PATH, OPENID_PATH, AUTHORIZATION_SERVER_PATH])
+
+
+def test_the_switch_of_auth_07_reaches_the_document_and_the_route_together() -> None:
+    """AUTH-07 end to end through the deployed application, not through a parameter.
+
+    One policy object feeds both halves in ``build_exapp_app``: a document that advertised
+    a registration endpoint the application does not serve would send every new client into
+    a 404 it cannot act on, and a route that exists while the document is silent would be
+    an open registration nobody sees (plan 03-05, D-35).
+    """
+    app = build_exapp_app(ENV | {registry.ENV_DCR: "off"})
+
+    with TestClient(app) as http:
+        document = http.get(OPENID_PATH).json()
+        registration = http.post("/register", json={})
+
+    assert "registration_endpoint" not in document
+    assert registration.status_code == 404
+    assert document["issuer"] == PUBLIC_URL
+
+
+def test_the_delivery_state_serves_the_registration_endpoint_and_its_route() -> None:
+    """D-35: registration is on when nobody switched it off, which is what makes the
+    connectors of success criteria 1 and 2 work without an administrator."""
+    app = build_exapp_app(ENV)
+
+    with TestClient(app) as http:
+        document = http.get(OPENID_PATH).json()
+
+    assert document["registration_endpoint"] == f"{PUBLIC_URL}/register"
+    assert "/register" in {getattr(route, "path", "") for route in app.router.routes}
 
 
 @pytest.mark.parametrize("path", FORBIDDEN_NEIGHBOURS)
