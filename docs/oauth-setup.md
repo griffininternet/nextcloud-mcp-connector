@@ -167,29 +167,36 @@ uv run --no-sync python scripts/oauth_flow_check.py \
 [step 2] both proxy paths serve all three documents byte for byte the same
 [step 3] GET root:/.well-known/oauth-protected-resource/exapps/mcp_connector/mcp -> 200 | content_type=application/json | rewrite=active
 [step 3] GET root:/.well-known/oauth-authorization-server/exapps/mcp_connector -> 200 | content_type=application/json | rewrite=active
-[step 4] POST /register -> 201 | cache_control=no-store | client_id=c98a2e57-314...
+[step 4] POST /register -> 201 | cache_control=no-store | client_id=cf25d0ac-030...
 [step 5] GET /authorize -> 302
 [step 5] GET /authorize/consent -> 200 | cache_control=no-store | signed_in=True
-[step 5] POST /authorize/consent -> 302 | code=present | state=matches | iss=http://127.0.0.1:8081/exapps/mcp_connector
+[step 5] POST /authorize/decide -> 400 | identity=none
+[step 5] POST /authorize/decide -> 200 | identity=the session cookie of the sign in | code=present | state=matches | iss=http://127.0.0.1:8081/exapps/mcp_connector
 [step 6] POST /token -> 200 | cache_control=no-store | fields=access_token,expires_in,refresh_token,scope,token_type | seconds=0.04
 [step 7] POST /mcp -> 200 | tools=15 | transport=streamable-http
-[step 7] tool notes_create -> 200 | note_id=note:275 | as_user=alice
+[step 7] tool notes_create -> 200 | note_id=note:354 | as_user=alice
 ```
 
 The code exchange took **0.04 seconds**. A connector allows ten, and this path makes no
 Nextcloud call at all, which is the reason.
 
-**One line of this run is older than the code it describes.** The decision was a `POST` on
-`/authorize/consent` answering `302` when this was measured. Two things changed since. It
-is `POST /authorize/decide` now, the one route of the app with `access_level` `USER`, and
-the walker sends it twice: once without a Nextcloud account, which has to be refused, and
-once with the account that signed in (CR-01). And its answer is `200` with a page that
-carries the return address as a link and as a `meta refresh`, not a `302`: Chromium and
-WebKit check `form-action` against the target of a redirect that follows a form
-submission, and every page here carries `form-action 'self'`, so the redirect never
-arrived in those browsers (CR-03). The address, the code, the state and the `iss` are the
-same as the line above shows. The numbers of every other step are unaffected; the run is
-repeated against the staging instance in plan 03-09.
+**Every line above is from one run against the current code** (2026-08-16, Nextcloud
+34.0.2, AppAPI HaRP `release`). Two of them are worth reading twice.
+
+The decision is `POST /authorize/decide` and it appears **twice**, which is the CR-01 relay
+walked over the full chain. The first one is sent by the caller that started the flow: it
+holds the flow id and the anti forgery value derived from it, which used to be the entire
+authorisation of this request, and it has no Nextcloud account. It is refused with `400`
+and no code exists. The second is sent by the browser that just signed in, carrying nothing
+but its Nextcloud session cookies, and that one is granted. The walker refuses to continue
+if the first is granted.
+
+The answer is `200` with a page that carries the return address as a link and as a
+`meta refresh`, not a `302`: Chromium and WebKit check `form-action` against the target of
+a redirect that follows a form submission, and every page here carries `form-action 'self'`,
+so a redirect never arrived in those browsers (CR-03). The address, the code, the state and
+the `iss` are what the line shows. The run is repeated against the staging instance in plan
+03-09.
 
 ### 2. The canonical root paths, with and without the two rules
 
@@ -247,7 +254,7 @@ Nextcloud, so nobody is locked out by a flood.
 
 ```
 uv run --no-sync pytest -m integration tests/integration/test_oauth_flow_exapp.py -q
-5 passed
+6 passed
 ```
 
 `test_the_same_token_still_works_after_the_container_restarted` restarts
@@ -287,10 +294,17 @@ connection can be built right away.
 ```
 [sc 3] GET /connect -> 200 | cache_control=no-store
 [sc 3] POST /connect -> 200
-[sc 3] GET /connect/wait -> 200 | signed_in_as=alice | credential=72 characters, shown once
+[sc 3] GET /connect/wait -> 400 | identity=none | credential_handed_over=False
+[sc 3] GET /connect/wait -> 200 | identity=the session cookie of the sign in | signed_in_as=alice | credential=72 characters, shown once
 [sc 3] GET /connect/wait -> 400 | credential_shown_again=False
 [sc 3] POST /mcp -> 200 | auth=the credential from the page | server=uvicorn
 ```
+
+The first of the three loads is the CR-01 relay on this surface: the caller that started
+the flow asks for its result, holding the flow id and no Nextcloud account. It gets 400 and
+no credential, and the app password the finished sign in produced is handed back to
+Nextcloud in the same request (D-34), which is why the successful half below needs a flow
+of its own rather than a second try on that one.
 
 The credential is shown exactly once: the second load of the same address answers 400 and
 carries no credential, because the flow record is deleted the moment the result is
@@ -325,6 +339,80 @@ handed back by the sweep: [104]
 Entry 104 was the credential of a sign in that never became a connection. Nothing else in
 that list was touched: a running sign in and a live connection are both left alone by
 definition, which is why only one entry moved.
+
+### 9. The CR-01 counter check: what HaRP resolves, and what a refusal costs
+
+The CR-01 fix rests on one assumption, and this section is that assumption measured rather
+than argued: **does HaRP name the Nextcloud account of a request that carries nothing but a
+browser session cookie, and does it do so on a route that is PUBLIC?**
+
+Two oracles were used, both of them routes this app already serves. On the PUBLIC `/mcp`
+route the middleware takes the AUTH-01 path when the AppAPI header names a user and demands
+a bearer when it does not, so `200` means "identity resolved" and `401` means "no identity".
+On `/authorize/decide` a `400` carrying this app's own error page means the request reached
+the app, and anything else means the proxy answered instead.
+
+| Credential of the request | `/mcp` (PUBLIC) | `/authorize/decide` |
+|---|---|---|
+| none | `401`, no identity | `400`, the app's own page |
+| Basic, app password | `200`, identity resolved | `400`, the app's own page |
+| Basic, account password | `200`, identity resolved | `400`, the app's own page |
+| **Nextcloud session cookie** | **`200`, identity resolved** | **`400`, the app's own page** |
+| session cookie plus `requesttoken` | `200`, identity resolved | `400`, the app's own page |
+
+So the answer is yes, and it holds for a PUBLIC route: HaRP signs every request it forwards
+with `AUTHORIZATION-APP-API` and writes the account it resolved into it, empty when the
+caller sent no credential. A browser session is resolved exactly like an app password. The
+whole relay was then walked against the running instance with three actors, and the
+identity check is what separates them:
+
+| Actor | `POST /authorize/decide` | `GET /connect/wait` |
+|---|---|---|
+| the caller that started the flow, no account | `400`, no code | `400`, no credential |
+| `mallory`, a real session, the wrong account | `400`, no code | `400`, no credential |
+| `alice`, the session that signed in | `200`, code issued | `200`, credential shown once |
+
+**The access level this route must not carry.** The first shape of the CR-01 fix declared
+`/authorize/decide` as `access_level` `USER`, which made HaRP refuse the anonymous case
+itself with `403`. That is a denial of service of the whole app, and it was measured from a
+cold HaRP:
+
+```
+attempt  1: anonymous POST /authorize/decide -> 403 | GET /.well-known/oauth-authorization-server -> 200 | POST /mcp -> 401
+...
+attempt  9: anonymous POST /authorize/decide -> 403 | GET /.well-known/oauth-authorization-server -> 200 | POST /mcp -> 401
+attempt 10: anonymous POST /authorize/decide -> 403 | GET /.well-known/oauth-authorization-server -> 502 | POST /mcp -> 502
+attempt 11: anonymous POST /authorize/decide -> 502 | GET /.well-known/oauth-authorization-server -> 502 | POST /mcp -> 502
+```
+
+HaRP records every refusal of a `USER` route in a blacklist of its own
+(`HP_BLACKLIST_COUNT`, ten by default, inside `HP_BLACKLIST_WINDOW`, 300 seconds), and a
+banned address is answered before the access level of the requested route is even looked
+at. The tenth refusal therefore takes **every route of this app** away from that caller,
+discovery documents and `/mcp` included, and it comes back 300 seconds after the last one
+(measured: reachable again after five minutes, no restart needed). Refusals are this route's
+normal traffic, not an anomaly: the relay attempt itself, a browser whose session expired
+behind an open consent screen, a resubmitted form, and the negative probe
+`scripts/oauth_flow_check.py` sends on every run. Two runs of the integration suite were
+enough to lock the runner out, which is how this was found.
+
+With the route PUBLIC, the same sequence stays inside this app's own throttle, which is
+bounded per path class instead of per app:
+
+```
+attempt  1..10: anonymous POST /authorize/decide -> 400 | GET /.well-known/oauth-authorization-server -> 200
+attempt 11..14: anonymous POST /authorize/decide -> 429 | GET /.well-known/oauth-authorization-server -> 200
+```
+
+Nothing is given up for that. HaRP resolves the account either way, and the comparison in
+the app is the only check that can separate the two accounts anyway: the relay attacker of
+CR-01 holds a valid Nextcloud account too, so the question is never whether the caller is
+signed in, it is who they are signed in as.
+
+**What an administrator takes from this.** If a route of an ExApp produces refusals as part
+of its normal operation, it must not be declared `USER`. `HP_BLACKLIST_COUNT` and
+`HP_BLACKLIST_WINDOW` are environment variables of the HaRP container and can be raised,
+but that is the deploy daemon's configuration and not something this app may assume.
 
 ## Known pitfalls
 
@@ -392,14 +480,17 @@ token was issued stops working immediately rather than at the next expiry.
 
 **A connection is granted by the account that signed in, and by nobody else.** The consent
 screen is reachable with a flow id alone, because a browser that has not signed in yet has
-nothing else, but the decision behind it is not. `POST /authorize/decide` is declared
-`USER`, so HaRP resolves the Nextcloud account of that request, and the app compares it
-with the account whose sign in produced the authorization; a mismatch, and an absent
-account, are refused without a code. The same rule guards the one page that shows an app
-password in clear text, `GET /connect/wait`: a credential that cannot be handed to the
-account that signed in is handed back to Nextcloud instead of being shown. Without those
-two checks the flow id was the whole authorisation, and whoever started a flow could finish
-a sign in somebody else performed (CR-01, the Login Flow v2 relay).
+nothing else, but the decision behind it is not. HaRP resolves the Nextcloud account of
+every request it forwards and writes it into the AppAPI header, empty when the caller sent
+no credential, and `POST /authorize/decide` compares it with the account whose sign in
+produced the authorization; a mismatch, and an absent account, are refused without a code.
+The same rule guards the one page that shows an app password in clear text,
+`GET /connect/wait`: a credential that cannot be handed to the account that signed in is
+handed back to Nextcloud instead of being shown. Without those two checks the flow id was
+the whole authorisation, and whoever started a flow could finish a sign in somebody else
+performed (CR-01, the Login Flow v2 relay). Both routes are PUBLIC and both refusals are
+this app's own, deliberately so: see section 9 of the evidence above for what the `USER`
+access level costs and why it buys nothing here.
 
 **The throttle protects the authorization endpoints and never the MCP route.** Ten refused
 attempts per source and path class in five minutes end in `429` with `Retry-After`, and a

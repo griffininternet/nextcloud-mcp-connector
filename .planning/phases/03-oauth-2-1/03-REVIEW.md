@@ -47,6 +47,8 @@ resolved:
   open: 10
   commits:
     - 563e330 CR-01
+    - 6d7dc78 CR-01 amendment, live counter check
+    - 24ebd35 CR-01 amendment, live counter check
     - fdaea5d CR-02, WR-03
     - f6d5ed1 CR-03
     - d3a5450 WR-01
@@ -112,12 +114,53 @@ cascade that drops Nextcloud credentials it promised to hand back).
 
 ### CR-01: A login flow can be finished by a different person than the one who signs in; the consent screen is bypassable
 
-**Resolved:** 563e330, 2026-08-16. The decision is a route of its own, /authorize/decide,
-declared USER; HaRP resolves the signed in Nextcloud account and the route grants nothing
-unless it is the account whose sign in produced the authorization. The result page of the
-browser onboarding applies the same rule and hands the credential back when it cannot be shown
-to that account. Manifest gate pulled along (twelve routes, an access level table with counter
-probes in both directions). Guard tests reproduce the relay on both surfaces.
+**Resolved:** 563e330, 2026-08-16. The decision is a route of its own, /authorize/decide;
+HaRP resolves the signed in Nextcloud account and the route grants nothing unless it is the
+account whose sign in produced the authorization. The result page of the browser onboarding
+applies the same rule and hands the credential back when it cannot be shown to that account.
+Manifest gate pulled along (twelve routes, an access level table with counter probes in both
+directions). Guard tests reproduce the relay on both surfaces.
+
+**Amended:** 6d7dc78 and 24ebd35, 2026-08-16, after the live counter check below. The access
+level of the decision route went back to PUBLIC; the identity check itself is unchanged and
+is where it always was, in the app.
+
+**Live counter check, 2026-08-16** (Nextcloud 34.0.2, AppAPI HaRP `release`, the topology of
+`compose.exapp.yml`). The fix rested on an assumption nothing had measured: that HaRP names
+the Nextcloud account of a request that carries only a browser session cookie. It does, and
+it does so on a PUBLIC route as well, which is what made the amendment possible. Full tables
+in `docs/oauth-setup.md`, section 9 of the evidence. The three actor walk, against the
+running instance:
+
+| Actor | `POST /authorize/decide` | `GET /connect/wait` |
+|---|---|---|
+| the caller that started the flow, no Nextcloud account | `400`, no code | `400`, no credential |
+| `mallory`, a real browser session, the wrong account | `400`, no code | `400`, no credential |
+| `alice`, the session whose sign in produced the row | `200`, code issued and exchanged | `200`, credential shown once |
+
+So the attack of this finding is closed over the full chain, and the browser path of the
+victim works, which the previous proof did not show: `scripts/oauth_flow_check.py` threw the
+sign in session away and re-authenticated the decision with Basic auth, and its onboarding
+walk asked for the result with the caller that started the flow, which has been refused since
+this fix. Both are corrected in 24ebd35; the walker now yields the session of the sign in and
+uses it, so every run exercises the production path.
+
+**Why the access level was withdrawn.** `access_level` `USER` made HaRP refuse the anonymous
+decision itself with `403`, and HaRP records every such refusal in a blacklist of its own
+(`HP_BLACKLIST_COUNT` 10, `HP_BLACKLIST_WINDOW` 300s). Measured from a cold HaRP: refusals
+one to nine leave the app reachable, the tenth answers **every route of this app** with `502`
+for that caller, discovery documents and `/mcp` included, and it clears 300 seconds after the
+last refusal. Refusals are this route's normal traffic (the relay attempt, an expired session
+behind an open consent screen, a resubmitted form, the negative probe the flow check sends on
+every run), so the level intended to harden one route was a remote off switch for the whole
+connector; two runs of the integration suite pulled it by accident, which is how it was
+found. With the route PUBLIC the same sequence stays inside this app's own per path class
+throttle (`400` ten times, then `429` with `Retry-After`) and the discovery documents keep
+answering. Nothing is given up: the comparison in `_decide` is the only check that can
+separate the relay attacker from the victim anyway, because the attacker holds a valid
+Nextcloud account too. Regression guard:
+`tests/integration/test_oauth_flow_exapp.py::test_refused_decisions_do_not_take_the_whole_app_off_the_network`,
+plus the manifest gate, whose counter probe now fails a `USER` decision route.
 
 **File:** `src/mcp_connector/oauth/consent.py:191-345`, `src/mcp_connector/oauth/connect.py:222-261`, `src/mcp_connector/oauth/crypto.py:139-154`
 
@@ -156,7 +199,9 @@ control that answers it (03-UI-SPEC.md S3, T-03-50). It does not: it authenticat
 never the person.
 
 **Fix:** Bind the deciding request to the signed in Nextcloud user, which this topology can
-prove and the code already parses. Concretely:
+prove and the code already parses. Concretely (the `USER` half of this proposal was
+implemented, measured and then withdrawn, see the amendment above; the binding itself is what
+shipped):
 
 ```xml
 <!-- appinfo/info.xml: split the surface. The entry pages stay PUBLIC because the user is
