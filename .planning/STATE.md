@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-03-PLAN.md
-last_updated: "2026-08-15T22:00:00.000Z"
-last_activity: 2026-08-15
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-08-16T00:00:00.000Z"
+last_activity: 2026-08-16
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 30
-  completed_plans: 23
+  completed_plans: 24
   percent: 40
 ---
 
@@ -26,19 +26,19 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 3
-Plan: 2 of 9
+Plan: 4 of 9
 Status: In progress
-Last activity: 2026-08-15
+Last activity: 2026-08-16
 
-Progress: [████████░░] 77%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 29
-- Average duration: -
-- Total execution time: 0.0 hours
+- Total plans completed: 24
+- Average duration: 35 min
+- Total execution time: 13.5 hours
 
 **By Phase:**
 
@@ -46,6 +46,7 @@ Progress: [████████░░] 77%
 |-------|-------|-------|----------|
 | 1 | 14 | - | - |
 | 2 | 7 | 254 min | 36 min |
+| 3 | 3 | 180 min | 60 min |
 
 **Recent Trend:**
 
@@ -75,6 +76,7 @@ Progress: [████████░░] 77%
 | Phase 02-exapp-shell P07 | 55 min | 3 tasks | 6 files |
 | Phase 03 P01 | 65 min | 3 tasks | 15 files |
 | Phase 03 P03 | 20 min | 2 tasks | 6 files |
+| Phase 03 P02 | 95 min | 3 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -192,8 +194,19 @@ Recent decisions affecting current work:
 - [Phase 03-oauth-2-1]: Nutzertexte stehen als Modulkonstanten in __all__: das ist der Katalog fuer eine spaetere Lokalisierung und zugleich der Grund, warum der vulture-Gate ohne Whitelist-Eintrag gruen bleibt
 - [Phase 03-oauth-2-1]: link() und form() lehnen jedes Ziel ab, das kein lokaler Pfad ist: ein Open Redirect im Consent-Umfeld ist im Renderer billiger verboten als in fuenf Route-Handlern geprueft
 - [Phase 03-oauth-2-1]: AUTH-02 und AUTH-03 bleiben Pending: Plan 03-03 haengt bewusst keine Route ein, die Bausteine allein sind weder Browser-Login noch OAuth-Verbindung
+- [Phase 03-oauth-2-1]: Der Datenschluessel wird nach dem Schreiben zurueckgelesen: zwei gleichzeitig startende Worker finden beide keinen Schluessel und schreiben beide einen; ohne Rueckleseschritt verschluesselt der Verlierer alles mit einem Schluessel, den niemand mehr liest (D-43)
+- [Phase 03-oauth-2-1]: Eine nicht lesbare ExApp-Config-Antwort wirft, statt als fehlender Schluessel zu gelten: sonst wuerde ein Parse-Fehler einen lebenden Schluessel ueberschreiben und alle Verbindungen toeten
+- [Phase 03-oauth-2-1]: Die Refresh-Einloesung schreibt den Nachfolger in derselben Transaktion und unterscheidet drei Ausgaenge (unknown, expired, reused): nur der dritte toetet in 03-07 die Familie, und ein Absturz zwischen zwei Schreibvorgaengen darf keinen Nutzer ohne gueltigen Token zuruecklassen
+- [Phase 03-oauth-2-1]: Die Gueltigkeit eines Access-Tokens ist ein Join auf die Autorisierung: ein Widerruf wirkt damit sofort und nicht erst beim naechsten Aufraeumen (SC 4)
+- [Phase 03-oauth-2-1]: Die Schreibbarkeit des Volumes wird durch Schreiben geprueft, nicht durch os.access: Berechtigungsbits sagen nichts ueber einen read-only-Mount oder eine Windows-ACL
+- [Phase 03-oauth-2-1]: Client-Verfall laeuft nur in purge_expired, nie im Schreibpfad: das Loeschen eines Clients nimmt ueber die Kaskade seine Autorisierungen mit
+- [Phase 03-oauth-2-1]: cryptography ist ab 03-02 direkte Dependency (Owner-Freigabe 16.08.); der Lock-Schritt lief mit `uv lock` statt `uv add`, damit die .venv unberuehrt bleibt
+- [Phase 03-oauth-2-1]: Das Destruktiv-Gate bekommt eine eng gefasste, gegengeprobte Ausnahme fuer SQL in oauth/store.py (DELETE FROM, ON DELETE CASCADE): TOOL-09 ist ein Versprechen ueber Daten in Nextcloud, nicht ueber die eigene SQLite-Datei
 
 ### Pending Todos
+
+- **Leseform der ExApp-Config (Plan 03-08):** `oauth/crypto.CONFIG_READ_PARAM` steht auf `configKeys[]` und ist die einzige Stelle dieses Plans, die nicht gegen eine laufende AppAPI bestaetigt ist. Beim Live-Beweis pruefen und, falls noetig, diese eine Konstante samt Test korrigieren.
+- **Verdrahtung des Stores (Plan 03-04):** Es gibt noch keinen Produktionsaufrufer fuer `data_key` und keine `OAuthStore`-Instanz im Prozess. Der Plan, der zuerst einen Store braucht, legt die Instanz an und ruft `purge_expired` beim Start.
 
 - **Owner-Schritt 01-13:** PR an nextcloud/context_agent#227 einreichen. Branch und DCO-Commit liegen im Fork street1983nk/context_agent (fix/stateless-http-session-compat, def1425), der PR-Text in docs/contrib/227-pr-body.md. Kommando und Pruefpunkte stehen in .planning/phases/01-server-kern/01-13-SUMMARY.md. Vorher `git push origin main` im Connector-Repo, damit der verlinkte Regressionstest oeffentlich sichtbar ist. Danach PR-URL nachtragen, ROADMAP 01-13 abhaken, CONTRIB-01 auf Complete.
 - **Owner-Schritt 01-14:** Ein Durchgang mit Claude Desktop selbst nach docs/client-setup.md. Die Anleitung ist gegen die Referenz-Clients der Testsuite verprobt (mcp 2.0 und mcp 1.29 gegen denselben laufenden Endpoint, plus scripts/acceptance_all_tools.py ueber alle 15 Tools per stdio); die Konfigurationspfade fuer Claude Desktop stammen aus der offiziellen Dokumentation und sind auf diesem Rechner nicht verifiziert.
@@ -218,6 +231,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-15T22:00:00.000Z
-Stopped at: Completed 03-03-PLAN.md
+Last session: 2026-08-16T00:00:00.000Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None
