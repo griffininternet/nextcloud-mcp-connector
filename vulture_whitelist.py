@@ -92,12 +92,15 @@ _.revoke_family
 # client_secret_hash (03-06 authenticates a confidential client with it), created_at and
 # revoked_at (03-07 and the admin view of phase 4), issued_at and used_at (the grace window
 # of D-41 is decided on used_at, and the auth code row keeps its own used_at as the record
-# that it was consumed).
+# that it was consumed), cleanup_at (03-07 writes it when a Nextcloud app password could
+# not be handed back; the sweep selects on the column in SQL and the admin view of phase 4
+# is what reads the field).
 _.client_secret_hash
 _.created_at
 _.revoked_at
 _.issued_at
 _.used_at
+_.cleanup_at
 
 # --- The eleven methods of the SDK provider protocol -----------------------------------
 # oauth/provider.py implements OAuthAuthorizationServerProvider. Every method below is

@@ -84,6 +84,11 @@ def build_exapp_app(env: Mapping[str, str] | None = None) -> Starlette:
     store = store_opener(env)
     provider = NextcloudOAuthProvider(env=env, policy=policy, store_provider=store)
     verifier = StoreTokenVerifier(store_provider=store, get_client=provider.get_client, env=env)
+    # The last wire of the pair, and the one that makes "revoked" mean "now": the verifier
+    # answers from a five second process cache, and a revocation, whether it comes from the
+    # user through /revoke or from the reuse detection of the rotation, empties it in the
+    # same process instead of waiting for the window to run out (SC 4, T-03-62).
+    provider.on_revocation(verifier.invalidate)
     guarded = 0
     for route in app.router.routes:
         if isinstance(route, Route) and route.path == MCP_PATH:

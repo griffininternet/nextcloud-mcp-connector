@@ -163,7 +163,8 @@ CREATE TABLE IF NOT EXISTS authorizations (
   scopes TEXT NOT NULL,
   resource TEXT NOT NULL,
   created_at INTEGER NOT NULL,
-  revoked_at INTEGER
+  revoked_at INTEGER,
+  cleanup_at INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS auth_codes (
@@ -260,6 +261,11 @@ class AuthorizationRow:
 
     Reading it is an explicit act with its own method, so a caller cannot end up with a
     plaintext Nextcloud credential just because it wanted the user id.
+
+    ``cleanup_at`` is the one field that is neither identity nor deadline: it is the moment
+    at which somebody noticed that the Nextcloud app password of this connection still has
+    to be handed back. It exists because the revocation must not hang on that deletion
+    (pitfall 13, D-37), and something has to remember the attempt that failed.
     """
 
     auth_id: str
@@ -269,6 +275,7 @@ class AuthorizationRow:
     resource: str
     created_at: int
     revoked_at: int | None
+    cleanup_at: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -534,8 +541,8 @@ class OAuthStore:
     async def load_authorization(self, auth_id: str) -> AuthorizationRow | None:
         def work(conn: sqlite3.Connection) -> AuthorizationRow | None:
             row = conn.execute(
-                "SELECT auth_id, client_id, nc_user, scopes, resource, created_at, revoked_at "
-                "FROM authorizations WHERE auth_id = ?",
+                "SELECT auth_id, client_id, nc_user, scopes, resource, created_at, revoked_at, "
+                "cleanup_at FROM authorizations WHERE auth_id = ?",
                 (auth_id,),
             ).fetchone()
             if row is None:
@@ -548,6 +555,7 @@ class OAuthStore:
                 resource=row[4],
                 created_at=row[5],
                 revoked_at=row[6],
+                cleanup_at=row[7],
             )
 
         return await self._read(work)
@@ -593,6 +601,24 @@ class OAuthStore:
         def work(conn: sqlite3.Connection) -> None:
             conn.execute(
                 "UPDATE authorizations SET revoked_at = ? WHERE auth_id = ? AND revoked_at IS NULL",
+                (moment, auth_id),
+            )
+
+        await self._write(work)
+
+    async def note_cleanup(self, auth_id: str, *, now: int | None = None) -> None:
+        """Record that the Nextcloud app password of this connection is still out there.
+
+        Written whenever a revocation could not hand the credential back, and whenever a
+        revocation happened on a path that may not talk to Nextcloud at all, which is every
+        path of the token endpoint (pitfall 13). Idempotent: the first note stands, because
+        the interesting moment is the one at which the credential became an orphan.
+        """
+        moment = _moment(now)
+
+        def work(conn: sqlite3.Connection) -> None:
+            conn.execute(
+                "UPDATE authorizations SET cleanup_at = ? WHERE auth_id = ? AND cleanup_at IS NULL",
                 (moment, auth_id),
             )
 
@@ -982,6 +1008,9 @@ def _add_missing_columns(conn: sqlite3.Connection) -> None:
         conn.execute(
             "ALTER TABLE auth_codes ADD COLUMN redirect_uri_explicit INTEGER NOT NULL DEFAULT 1"
         )
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(authorizations)")}
+    if "cleanup_at" not in columns:
+        conn.execute("ALTER TABLE authorizations ADD COLUMN cleanup_at INTEGER")
 
 
 def _auth_code_row(row: tuple[Any, ...]) -> AuthCodeRow:

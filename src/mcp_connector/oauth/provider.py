@@ -19,13 +19,18 @@ therefore bypasses both the process cache and the audience check that plan 03-06
 The routes are handed out by :func:`auth_routes` and attached by ``entry_exapp`` alone,
 exactly like every other route factory of this project.
 
-**What is built here and what still refuses.** ``register_client``, ``get_client``,
-``authorize``, ``load_authorization_code`` and ``exchange_authorization_code`` are complete:
-a client can register, ask, be sent through the sign in and trade its code for a token. The
-refresh rotation with its reuse detection and the revocation are plan 03-07 and refuse until
-then, and ``exchange_identity_assertion`` refuses permanently (D-33). A half implemented
-protocol has to refuse rather than pass, which is the owner directive of this phase in its
-smallest form.
+**What is built here and what refuses.** ``register_client``, ``get_client``, ``authorize``,
+``load_authorization_code``, ``exchange_authorization_code``, ``load_refresh_token``,
+``exchange_refresh_token`` and ``revoke_token`` are complete: a client can register, ask, be
+sent through the sign in, trade its code for a token, rotate that token for weeks and end
+the whole connection in one request. Only ``exchange_identity_assertion`` refuses, and it
+refuses permanently rather than until a later plan (D-33).
+
+**The two sentences the rotation is built on.** A refresh token is redeemed exactly once,
+and the redemption is one ``UPDATE`` under ``BEGIN IMMEDIATE`` in the store, so of two
+simultaneous requests exactly one changes a row (pitfall 10). A second use of an already
+redeemed token is a network retry inside :data:`~mcp_connector.oauth.store.ROTATION_GRACE`
+seconds and an attack after them (D-41).
 
 **Why ``load_access_token`` stays a refusal although the tokens exist.** It is the hook of
 the SDK's ``ProviderTokenVerifier``, which this deployment does not install: the bearer of
@@ -47,6 +52,7 @@ import logging
 import secrets
 import time
 from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import dataclass
 from urllib.parse import unquote
 
 from mcp.server.auth.handlers.revoke import RevocationHandler
@@ -91,10 +97,20 @@ from .registry import (
     client_policy,
     redirect_uri_allowed,
 )
-from .store import ACCESS_TOKEN_TTL, OAuthStore, store_opener, token_hash
+from .store import (
+    ACCESS_TOKEN_TTL,
+    REDEEM_OK,
+    REDEEM_REUSED,
+    ROTATION_GRACE,
+    STATE_REVOKED,
+    OAuthStore,
+    store_opener,
+    token_hash,
+)
 
 __all__ = [
     "FAMILY_BYTES",
+    "HELD_ANSWER_LIMIT",
     "TOKEN_BYTES",
     "HashedClientAuthenticator",
     "NextcloudOAuthProvider",
@@ -127,8 +143,9 @@ _DCR_OFF = "dynamic client registration is disabled on this instance"
 #: came from the request and is echoed nowhere.
 _REDIRECT_RULE = "redirect_uris must use https, except loopback addresses of native clients"
 
-#: The description of every method that is not built yet. One sentence, no internal detail:
-#: a client cannot act on the plan number, and an attacker should not read one.
+#: The description of the one grant type this server refuses on purpose. One sentence, no
+#: internal detail: a client cannot act on a design decision, and an attacker should not
+#: read one either.
 _NOT_YET = "this authorization server cannot complete the request"
 
 #: What a refused exchange says. Each names the rule and never a value of the request: the
@@ -137,6 +154,13 @@ _NO_AUDIENCE = "the grant carries no resource, which this server requires (RFC 8
 _WRONG_AUDIENCE = "the grant was issued for another resource"
 _CLIENT_GONE = "this client may not use this authorization server"
 _CODE_SPENT = "the authorization code is not valid"
+
+#: The one sentence every refused refresh grant gets, and deliberately the only one.
+#: Unknown, expired, already redeemed outside the window, redeemed inside the window with
+#: no held answer left and belonging to a connection that was ended are five different
+#: events; an answer that told them apart would say which check fired, which is exactly the
+#: information a replay is looking for (RFC 6749 §5.2, T-03-47, T-03-66).
+_GRANT_GONE = "the refresh token is not valid"
 
 #: 32 bytes of entropy behind every token this server issues, which ``token_urlsafe``
 #: renders as 43 characters. The token is the whole authorisation of a connection, and it
@@ -158,7 +182,37 @@ _HINT_ISSUER = (
 #: in, so it is drawn from the same generator as every other secret of this phase.
 FLOW_ID_BYTES = 32
 
+#: How many answers of a rotation may be held for the grace window at once. The ceiling is
+#: hard and the reaction to it is to empty the whole dictionary, exactly like the process
+#: cache of the verifier: the entries live ten seconds anyway, and a rule that cannot leak
+#: beats a clever one that can (T-03-67).
+HELD_ANSWER_LIMIT = 256
+
 logger = logging.getLogger("mcp_connector.oauth.provider")
+
+
+def _nothing() -> None:
+    """The cache eraser of a provider that was never given one (the tests, phase 1 modes)."""
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class _Held:
+    """One answer of a rotation, kept for the length of the grace window and no longer.
+
+    **Why this is a cache and not session state (SRV-05).** It holds an answer that was
+    already sent, for ten seconds, in one process. Losing it, through a restart, a second
+    worker or the hard ceiling, costs a network retry its repeat answer and nothing else:
+    the retry gets ``invalid_grant`` and the client reconnects, which is the same path it
+    walks when a refresh token finally expires. Nothing in this server reads it to decide
+    who somebody is.
+    """
+
+    digest: str
+    answer: OAuthToken
+    expires_at: float
+
+    def __repr__(self) -> str:
+        return f"_Held(expires_at={self.expires_at!r}, digest='***')"
 
 
 class NextcloudOAuthProvider(
@@ -172,6 +226,7 @@ class NextcloudOAuthProvider(
         env: Mapping[str, str] | None = None,
         policy: ClientPolicy | None = None,
         store_provider: StoreProvider | None = None,
+        clock: Callable[[], float] | None = None,
     ) -> None:
         self._env = env
         self._policy = policy if policy is not None else client_policy(env)
@@ -180,6 +235,17 @@ class NextcloudOAuthProvider(
         #: the configured public URL and never from a request, like every other identity
         #: statement of this app (T-03-02).
         self._resource = f"{config.public_url(env)}{RESOURCE_SUFFIX}"
+        #: Wall clock and not ``monotonic``: the grace window compares against ``used_at``
+        #: of a row, which is written in seconds since the epoch and has to survive the
+        #: second worker on the same file. A parameter, so a test can stand on both sides
+        #: of a ten second window without sleeping.
+        self._clock = clock if clock is not None else time.time
+        self._held: dict[str, _Held] = {}
+        #: The process cache of the verifier, handed in by ``entry_exapp`` through
+        #: :meth:`on_revocation`. Without it a revocation would take effect at the next
+        #: store lookup instead of at once, which is up to five seconds of a connection the
+        #: user just ended (T-03-62).
+        self._invalidate: Callable[[], None] = _nothing
 
     def __repr__(self) -> str:
         return f"NextcloudOAuthProvider(resource={self._resource!r}, policy={self._policy!r})"
@@ -192,6 +258,19 @@ class NextcloudOAuthProvider(
     async def store(self) -> OAuthStore:
         """The store of this application, opened at its first use."""
         return await self._store()
+
+    def on_revocation(self, invalidate: Callable[[], None]) -> None:
+        """Take the cache eraser of the verifier that shares this store.
+
+        Handed in rather than imported, for the reason the verifier takes ``get_client``
+        the same way: the two objects are built next to each other in ``entry_exapp`` and
+        neither may reach into the other's internals to find the same answer twice.
+        """
+        self._invalidate = invalidate
+
+    def _now(self) -> int:
+        """Whole seconds, from the one clock this provider reads."""
+        return int(self._clock())
 
     # --- the two halves this plan builds ------------------------------------------------
 
@@ -402,24 +481,188 @@ class NextcloudOAuthProvider(
             raise TokenError("invalid_client", _CLIENT_GONE)
 
         store = await self.store()
-        spent = await store.redeem_auth_code(authorization_code.code)
+        moment = self._now()
+        spent = await store.redeem_auth_code(authorization_code.code, now=moment)
         if spent is None:
             # Used, expired or never issued. One answer for all three, which is also the
             # answer a client expects for a grant it may not use again (RFC 6749 §5.2).
             raise TokenError("invalid_grant", _CODE_SPENT)
 
-        access = secrets.token_urlsafe(TOKEN_BYTES)
         refresh = secrets.token_urlsafe(TOKEN_BYTES)
         family = secrets.token_urlsafe(FAMILY_BYTES)
         scopes = " ".join(authorization_code.scopes)
-        await store.create_access_token(
-            access, auth_id=spent.auth_id, family_id=family, scopes=scopes, resource=resource
+        await store.create_refresh_token(
+            refresh, auth_id=spent.auth_id, family_id=family, now=moment
         )
-        await store.create_refresh_token(refresh, auth_id=spent.auth_id, family_id=family)
         # A registration that produced a token is a connection somebody made, and it lives
         # on the long expiry window from here on (AUTH-07, T-03-44).
-        await store.touch_client(client.client_id)
+        await store.touch_client(client.client_id, now=moment)
 
+        return await self._issue(
+            store,
+            auth_id=spent.auth_id,
+            family_id=family,
+            refresh=refresh,
+            scopes=scopes,
+            resource=resource,
+            now=moment,
+        )
+
+    async def load_refresh_token(
+        self, client: OAuthClientInformationFull, refresh_token: str
+    ) -> RefreshToken | None:
+        """Read a refresh token back, including one that has already been redeemed.
+
+        That inclusion is the whole reason this method is not a one line lookup. The SDK
+        answers ``invalid_grant`` and never calls the exchange when this returns ``None``,
+        so a redeemed token that were refused here would never reach the two decisions that
+        belong to it: the repeat answer inside the grace window and the family kill outside
+        it (D-41). What is refused here is what has no decision left: a token this server
+        never issued, one whose family was killed, and one whose connection was ended.
+
+        ``client`` is not compared: the SDK does that itself against ``client_id`` of the
+        returned model, and the value here comes from the authorization rather than from the
+        request, so a stolen token cannot name a different owner than the one it was issued
+        to.
+        """
+        del client
+        try:
+            store = await self.store()
+            row = await store.load_refresh_token(refresh_token)
+            if row is None:
+                return None
+            authorization = await store.load_authorization(row.auth_id)
+        except Exception as exc:
+            # Fail closed (D-37): a store that cannot answer is not a token that exists.
+            logger.error("a refresh token could not be read: %s", type(exc).__name__)
+            return None
+
+        if row.state == STATE_REVOKED:
+            return None
+        if authorization is None or authorization.revoked_at is not None:
+            return None
+
+        return RefreshToken(
+            token=refresh_token,
+            client_id=authorization.client_id,
+            scopes=authorization.scopes.split(),
+            expires_at=row.expires_at,
+            subject=authorization.nc_user,
+        )
+
+    async def exchange_refresh_token(
+        self,
+        client: OAuthClientInformationFull,
+        refresh_token: RefreshToken,
+        scopes: list[str],
+    ) -> OAuthToken:
+        """Rotate one refresh token, and decide what a second use of it was.
+
+        The order is the order of the risks, the same as in the code exchange. The client
+        policy first, because a block that arrived while a connection was running must not
+        be outrun by a token that was issued before it (pitfall 9, T-03-55). The audience
+        second, because a token without one would be accepted by every other MCP server the
+        user connects (RFC 8707). Only then the redemption, which is one ``UPDATE`` under
+        ``BEGIN IMMEDIATE`` in the store and therefore the only place two simultaneous
+        requests can be told apart (pitfall 10).
+
+        The three outcomes of that statement are the three cases of this method:
+
+        * redeemed: a new pair of the same family, and the answer is held for the window,
+        * already used: the retry window of D-41 decides, see below,
+        * unknown or expired: ``invalid_grant``, and no family is touched, because neither
+          of those is evidence of anything.
+
+        **Why the grace window is not a weakening of the reuse detection (D-41).** Claude
+        refreshes reactively on a 401 *and* proactively up to five minutes before an expiry,
+        so a second request with the same token is the normal case and not the exception
+        (03-RESEARCH.md, pitfall 10). Without the window a single retransmitted request
+        would end a healthy connection, which is the reliability half of the owner
+        directive. Inside the window an attacker gains nothing: they receive the very
+        answer the legitimate client already has, no second branch of the family is created,
+        and the window is ten seconds long and belongs to one token. **Outside the window
+        the detection is not negotiable**: a token that was redeemed and is presented again
+        is either a copy or a replay, and both cost the whole family, because the one thing
+        worse than a lost session is a stolen one that keeps working.
+
+        Nothing here talks to Nextcloud, on any of the three paths. A connector gives its
+        token endpoint about ten seconds and its refresh about thirty (pitfall 13, T-03-58),
+        and a family kill under load must not depend on a PHP round trip.
+        """
+        if await self.get_client(client.client_id) is None:
+            raise TokenError("invalid_client", _CLIENT_GONE)
+
+        store = await self.store()
+        moment = self._now()
+        presented = refresh_token.token
+        digest = token_hash(presented)
+
+        row = await store.load_refresh_token(presented)
+        if row is None:
+            raise TokenError("invalid_grant", _GRANT_GONE)
+        authorization = await store.load_authorization(row.auth_id)
+        if authorization is None or authorization.revoked_at is not None:
+            raise TokenError("invalid_grant", _GRANT_GONE)
+
+        resource = (authorization.resource or "").strip()
+        if not resource:
+            raise TokenError("invalid_target", _NO_AUDIENCE)
+        if not check_resource_allowed(resource, self._resource):
+            raise TokenError("invalid_target", _WRONG_AUDIENCE)
+
+        successor = secrets.token_urlsafe(TOKEN_BYTES)
+        redeemed = await store.redeem_refresh_token(presented, successor=successor, now=moment)
+
+        if redeemed.outcome == REDEEM_OK:
+            granted = " ".join(scopes) if scopes else authorization.scopes
+            await store.touch_client(client.client_id, now=moment)
+            answer = await self._issue(
+                store,
+                auth_id=redeemed.auth_id,
+                family_id=redeemed.family_id,
+                refresh=successor,
+                scopes=granted,
+                resource=resource,
+                now=moment,
+            )
+            self._hold(digest, answer, moment)
+            return answer
+
+        if redeemed.outcome == REDEEM_REUSED and _inside_grace(redeemed.used_at, moment):
+            held = self._held_answer(digest, moment)
+            if held is not None:
+                return held
+            # The window is open but this process has no answer for it any more. That is a
+            # lost repeat, not a replay, so the family lives and the client reconnects.
+            raise TokenError("invalid_grant", _GRANT_GONE)
+
+        if redeemed.outcome == REDEEM_REUSED:
+            logger.warning(
+                "a refresh token was presented again outside the grace window; "
+                "the token family of that connection is revoked"
+            )
+            await self._end_connection(
+                store, auth_id=redeemed.auth_id, family_id=redeemed.family_id, now=moment
+            )
+
+        raise TokenError("invalid_grant", _GRANT_GONE)
+
+    async def _issue(
+        self,
+        store: OAuthStore,
+        *,
+        auth_id: str,
+        family_id: str,
+        refresh: str,
+        scopes: str,
+        resource: str,
+        now: int,
+    ) -> OAuthToken:
+        """One opaque access token, in the one shape both grants answer with."""
+        access = secrets.token_urlsafe(TOKEN_BYTES)
+        await store.create_access_token(
+            access, auth_id=auth_id, family_id=family_id, scopes=scopes, resource=resource, now=now
+        )
         return OAuthToken(
             access_token=access,
             token_type="Bearer",  # noqa: S106 - the token type of RFC 6750, not a secret
@@ -428,22 +671,49 @@ class NextcloudOAuthProvider(
             refresh_token=refresh,
         )
 
-    async def load_refresh_token(
-        self, client: OAuthClientInformationFull, refresh_token: str
-    ) -> RefreshToken | None:
-        """Plan 03-07 rotates refresh tokens and detects their reuse."""
-        del client, refresh_token
-        return None
+    async def _end_connection(
+        self, store: OAuthStore, *, auth_id: str, family_id: str, now: int
+    ) -> None:
+        """End one connection in the store, and make it visible in this process at once.
 
-    async def exchange_refresh_token(
-        self,
-        client: OAuthClientInformationFull,
-        refresh_token: RefreshToken,
-        scopes: list[str],
-    ) -> OAuthToken:
-        """Plan 03-07 rotates, with the grace window of D-41 and the family kill after it."""
-        del client, refresh_token, scopes
-        raise TokenError("invalid_grant", _NOT_YET)
+        Three writes and one call, in this order and never another: the family first,
+        because that is what a presented token is checked against; the authorization
+        second, so every token ever issued under it dies with it and the app password
+        behind it is marked as something somebody still has to hand back; the held answers
+        and the verifier cache last, because both are the five to ten seconds in which a
+        revoked token would still work (T-03-62).
+
+        No Nextcloud call. This runs on the token path as well, where a round trip is the
+        sporadic timeout nobody can reproduce afterwards (pitfall 13).
+        """
+        await store.revoke_family(family_id, now=now)
+        await store.revoke_authorization(auth_id, now=now)
+        await store.note_cleanup(auth_id, now=now)
+        self._held.clear()
+        self._invalidate()
+
+    def _hold(self, digest: str, answer: OAuthToken, now: float) -> None:
+        """Keep one answer for the grace window, inside the ceiling."""
+        if len(self._held) >= HELD_ANSWER_LIMIT:
+            self._held.clear()
+        self._held[digest] = _Held(digest=digest, answer=answer, expires_at=now + ROTATION_GRACE)
+
+    def _held_answer(self, digest: str, now: float) -> OAuthToken | None:
+        """The answer this token already received, or ``None``. Never a stale one.
+
+        ``compare_digest`` and not ``==`` on the way out, the rule of the verifier cache:
+        the dictionary is keyed by the digest of a token and the entry repeats the digest
+        it was stored for, so nothing about a lookup can be learned from its duration.
+        """
+        entry = self._held.get(digest)
+        if entry is None:
+            return None
+        if entry.expires_at <= now:
+            del self._held[digest]
+            return None
+        if not secrets.compare_digest(entry.digest, digest):  # pragma: no cover - key equality
+            return None
+        return entry.answer
 
     async def load_access_token(self, token: str) -> AccessToken | None:
         """Refused on purpose: the bearer of a request is checked by ``oauth/verifier.py``.
@@ -669,6 +939,18 @@ def _client_information(metadata_json: str, client_id: str) -> OAuthClientInform
     except (ValidationError, ValueError, json.JSONDecodeError):
         logger.error("the stored registration of a client cannot be read and is refused")
         return None
+
+
+def _inside_grace(used_at: int | None, now: int) -> bool:
+    """Whether a second use of an already redeemed token is still a retry (D-41).
+
+    A row without a redemption time is not one, and neither is a redemption that lies in
+    the future: a clock that jumped backwards must not open a window instead of closing
+    one, because the open state is the one that answers with a token.
+    """
+    if used_at is None:
+        return False
+    return 0 <= now - used_at <= ROTATION_GRACE
 
 
 def _has_expired(registered_at: int, last_used_at: int | None, *, now: int | None = None) -> bool:
