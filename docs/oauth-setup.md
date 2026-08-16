@@ -143,6 +143,30 @@ That string has to match the `resource` of the protected resource document chara
 character. A trailing slash is a different resource and the connection fails before the
 first tool call.
 
+### 5. What the hosted connectors actually send
+
+Measured against the staging instance on **2026-08-16**, one live connection per client,
+read out of the access log and out of the authorization request. This table replaces the
+values the research had taken from community sources; where they differ, the measurement
+wins.
+
+| | Claude.ai | ChatGPT |
+|---|---|---|
+| Where the button is | Settings, Connectors, "Add custom connector" | Settings, Security and sign in, "Developer mode", then the plugins page shows "Create app" |
+| Redirect URI | `https://claude.ai/api/mcp/auth_callback`, one fixed address | **`https://chatgpt.com/connector/oauth/<token>`, minted per connector.** Measured: `https://chatgpt.com/connector/oauth/GxdvJstdJeOS` |
+| `scope` at `/authorize` | `nextcloud` | `offline_access nextcloud`, both entries of `scopes_supported` |
+| `resource` (RFC 8707) | sent | sent |
+| PKCE | `S256` | `S256` |
+| Discovery documents it reads | the protected resource document and the authorization server document | the same two, **plus `<public url>/.well-known/openid-configuration`** |
+
+Two consequences for an administrator. **The ChatGPT redirect URI cannot be put on an
+allowlist in advance**: it does not exist until the connector is created in ChatGPT, so
+with `NC_MCP_OAUTH_ALLOWLIST_ONLY` on, the address has to be read out of the first refused
+attempt (it is in the registration request) and added afterwards. Claude.ai has one fixed
+address and can be listed before the first connection. **And a connector may ask for both
+advertised scopes**, which is why a registration of this server is recorded with both, see
+pitfall 7.
+
 ## Evidence
 
 All commands were run on **2026-08-16** against Nextcloud 34.0.2 and AppAPI 34.0.0. The
@@ -416,7 +440,7 @@ but that is the deploy daemon's configuration and not something this app may ass
 
 ## Known pitfalls
 
-The six things that made this phase expensive, in the words of somebody who runs the
+The seven things that made this phase expensive, in the words of somebody who runs the
 instance.
 
 **1. The canonical root path belongs to Nextcloud, not to this app.** Two of the three
@@ -450,6 +474,20 @@ identifies itself with a client id metadata document instead of registering, and
 callback port changes per run, which exact redirect URI matching cannot accept. That is a
 deliberate limit of v1, not a bug. Those clients use the app password way of
 [client-setup.md](./client-setup.md).
+
+**7. What the metadata advertises is what a registration has to get.** A client reads
+`scopes_supported` and asks for what it finds there, and the authorization endpoint compares
+that request against the scopes the client was registered with. If the two sets differ, the
+server refuses a request its own document invited: measured with ChatGPT, which asks for
+`offline_access nextcloud` and was answered with
+`error=invalid_scope, error_description=Client was not registered with scope offline_access`,
+while Claude.ai asks for the tool scope alone and never saw it. Every dynamic registration
+of this server is therefore recorded with both scopes, whatever it sent, and the
+registration response echoes them. `offline_access` is not a second data scope: it is the
+refresh switch of RFC 6749, this server rotates refresh tokens for every connection either
+way, and what a token reaches is the one tool scope `nextcloud`. A scope this server does
+not have is still refused, at `/register` with `invalid_client_metadata` and at `/authorize`
+with `invalid_scope`.
 
 ## Security notes for production
 

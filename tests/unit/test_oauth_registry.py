@@ -149,7 +149,9 @@ def test_being_listed_is_asked_separately_from_being_allowed() -> None:
     "uri",
     [
         "https://claude.ai/api/mcp/auth_callback",
-        "https://chatgpt.com/connector_platform_oauth_redirect",
+        # Minted per connector rather than fixed, measured on the staging instance
+        # (docs/oauth-setup.md, "What the hosted connectors actually send").
+        "https://chatgpt.com/connector/oauth/GxdvJstdJeOS",
         "https://cloud.example.com/path?query=1",
         "http://127.0.0.1:41234/callback",
         "http://localhost:8080/oauth",
