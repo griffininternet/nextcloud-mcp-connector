@@ -14,13 +14,16 @@ Nothing here starts a container or opens a socket: the store is a SQLite file in
 ``tmp_path`` and no Nextcloud is called at all.
 """
 
+import ast
 import base64
 import hashlib
+import inspect
 import json
 import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
+import httpx
 import pytest
 import respx
 from mcp.server.auth.provider import (
@@ -31,21 +34,28 @@ from mcp.server.auth.provider import (
     RegistrationError,
     TokenError,
 )
-from mcp.shared.auth import OAuthClientInformationFull
+from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 from starlette.applications import Starlette
+from starlette.requests import Request
+from starlette.responses import Response
+from starlette.routing import Route
 from starlette.testclient import TestClient
 
 from mcp_connector import config, entry_http
-from mcp_connector.entry_exapp import build_exapp_app
-from mcp_connector.oauth import metadata, registry
+from mcp_connector.entry_exapp import MCP_PATH, build_exapp_app
+from mcp_connector.exapp.middleware import RequireAppApi
+from mcp_connector.oauth import loginflow, metadata, registry
 from mcp_connector.oauth import provider as provider_module
+from mcp_connector.oauth import throttle as throttle_module
 from mcp_connector.oauth.store import (
     ACCESS_TOKEN_TTL,
+    FLOW_TTL,
     IDLE_CLIENT_TTL,
     UNUSED_CLIENT_TTL,
     OAuthStore,
     token_hash,
 )
+from mcp_connector.oauth.verifier import StoreTokenVerifier
 
 PUBLIC_URL = "https://cloud.example.com/exapps/mcp_connector"
 BASE_URL = "http://nc.test"
@@ -470,8 +480,17 @@ def token_request(**fields: str) -> dict[str, str]:
     return payload
 
 
-def serving(subject: provider_module.NextcloudOAuthProvider, **env: str) -> TestClient:
-    return TestClient(Starlette(routes=provider_module.auth_routes(ENV | env, provider=subject)))
+def serving(
+    subject: provider_module.NextcloudOAuthProvider,
+    *,
+    throttle: throttle_module.Throttle | None = None,
+    **env: str,
+) -> TestClient:
+    return TestClient(
+        Starlette(
+            routes=provider_module.auth_routes(ENV | env, provider=subject, throttle=throttle)
+        )
+    )
 
 
 @pytest.mark.anyio
@@ -537,12 +556,12 @@ async def test_a_wrong_pkce_verifier_is_refused_by_the_sdk(tmp_path: Path) -> No
     assert response.json()["error"] == "invalid_grant"
 
 
-# --- the methods the later plans fill ----------------------------------------------------
+# --- what an empty store answers, and the one grant that refuses for good -----------------
 
 
 @pytest.mark.anyio
-async def test_every_token_path_refuses_until_the_plan_that_builds_it(tmp_path: Path) -> None:
-    """Fail closed: an unimplemented half of a protocol must refuse, never pass."""
+async def test_every_token_path_refuses_what_this_server_never_issued(tmp_path: Path) -> None:
+    """Fail closed: a value nothing in the store knows is never a grant and never a 500."""
     subject, _ = build(tmp_path)
     client = registration()
 
@@ -558,7 +577,7 @@ async def test_every_token_path_refuses_until_the_plan_that_builds_it(tmp_path: 
     with pytest.raises(TokenError) as raised:
         await subject.exchange_identity_assertion(client, _identity_assertion())
 
-    assert raised.value.error == "unsupported_grant_type"
+    assert raised.value.error == "unsupported_grant_type", "and this one refuses for good"
 
 
 # --- the routes --------------------------------------------------------------------------
@@ -707,3 +726,455 @@ def _access_token() -> AccessToken:
 
 def _identity_assertion() -> IdentityAssertionParams:
     return IdentityAssertionParams(assertion="not.a.jwt")
+
+
+# --- the revocation of a whole connection (SC 4) -------------------------------------------
+
+
+async def issued(
+    tmp_path: Path, **env: str
+) -> tuple[provider_module.NextcloudOAuthProvider, OAuthStore, OAuthToken]:
+    """A connection that exists: one access token, one refresh token, one app password."""
+    subject, store = await approved(tmp_path, **env)
+    code = await subject.load_authorization_code(registration(), CODE)
+    assert code is not None
+    return subject, store, await subject.exchange_authorization_code(registration(), code)
+
+
+def deletion_route(status: int = 200) -> respx.Route:
+    """The one Nextcloud call a revocation makes: the app password of this connection."""
+    return respx.delete(f"{BASE_URL}{loginflow.APP_PASSWORD_PATH}").mock(
+        return_value=httpx.Response(status)
+    )
+
+
+def guarded(checker: StoreTokenVerifier) -> TestClient:
+    """The transport boundary alone, so a 401 can be read header by header."""
+
+    async def endpoint(request: Request) -> Response:
+        del request
+        return Response("reached", status_code=200)
+
+    route = Route(MCP_PATH, endpoint, methods=["GET"])
+    route.app = RequireAppApi(route.app, ENV, token_verifier=checker)
+    return TestClient(Starlette(routes=[route]))
+
+
+def appapi_headers(user: str = "") -> dict[str, str]:
+    """What HaRP puts on every request; an empty user id is the OAuth branch (03-01)."""
+    return {
+        "EX-APP-ID": "mcp_connector",
+        "EX-APP-VERSION": "0.1.0",
+        "AUTHORIZATION-APP-API": base64.b64encode(f"{user}:app-secret-test".encode()).decode(),
+    }
+
+
+@pytest.mark.anyio
+async def test_revoking_a_refresh_token_ends_the_whole_family(tmp_path: Path) -> None:
+    subject, store, tokens = await issued(tmp_path)
+
+    with respx.mock:
+        deletion_route()
+        await subject.revoke_token(_presented_refresh(tokens))
+
+    assert await store.load_access_token(tokens.access_token) is None
+    row = await store.load_authorization(AUTH_ID)
+    assert row is not None
+    assert row.revoked_at is not None
+
+
+@pytest.mark.anyio
+async def test_revoking_an_access_token_ends_the_whole_family(tmp_path: Path) -> None:
+    """RFC 7009 lets a client hand in either kind, and several of them hand in this one."""
+    subject, store, tokens = await issued(tmp_path)
+
+    with respx.mock:
+        deletion_route()
+        await subject.revoke_token(_presented_access(tokens))
+
+    assert await store.load_access_token(tokens.access_token) is None
+    assert await subject.load_refresh_token(registration(), tokens.refresh_token or "") is None
+
+
+@pytest.mark.anyio
+async def test_a_revocation_takes_effect_inside_the_cache_window(tmp_path: Path) -> None:
+    """T-03-62: five seconds of a connection the user just ended is five too many."""
+    subject, store, tokens = await issued(tmp_path)
+    checker = StoreTokenVerifier(
+        store_provider=opener(store), get_client=subject.get_client, env=ENV, clock=lambda: 1000.0
+    )
+    subject.on_revocation(checker.invalidate)
+    assert await checker.verify_token(tokens.access_token) is not None, "the cache is warm"
+
+    with respx.mock:
+        deletion_route()
+        await subject.revoke_token(_presented_refresh(tokens))
+
+    assert await checker.verify_token(tokens.access_token) is None
+
+
+@pytest.mark.anyio
+async def test_the_401_after_a_revocation_points_where_an_anonymous_one_points(
+    tmp_path: Path,
+) -> None:
+    """A client that lost its connection has to be able to start discovery again (SC 4)."""
+    subject, store, tokens = await issued(tmp_path)
+    checker = StoreTokenVerifier(
+        store_provider=opener(store), get_client=subject.get_client, env=ENV
+    )
+    subject.on_revocation(checker.invalidate)
+
+    with guarded(checker) as http:
+        allowed = http.get(MCP_PATH, headers=appapi_headers() | _bearer(tokens))
+        anonymous = http.get(MCP_PATH, headers=appapi_headers())
+        assert allowed.status_code == 200
+
+        with respx.mock:
+            deletion_route()
+            await subject.revoke_token(_presented_refresh(tokens))
+
+        refused = http.get(MCP_PATH, headers=appapi_headers() | _bearer(tokens))
+
+    assert refused.status_code == 401
+    assert refused.headers["www-authenticate"] == anonymous.headers["www-authenticate"]
+    assert "resource_metadata=" in refused.headers["www-authenticate"]
+    assert (tokens.access_token or "") not in refused.text
+
+
+@pytest.mark.anyio
+async def test_the_revocation_hands_the_app_password_back_to_nextcloud(tmp_path: Path) -> None:
+    subject, store, tokens = await issued(tmp_path)
+
+    with respx.mock:
+        deletion = deletion_route()
+        await subject.revoke_token(_presented_refresh(tokens))
+        assert deletion.call_count == 1, "one attempt, never a retry (D-37)"
+
+    row = await store.load_authorization(AUTH_ID)
+    assert row is not None
+    assert row.cleanup_at is None, "the credential is gone, so nothing is left to clean up"
+
+
+@pytest.mark.anyio
+async def test_a_failed_deletion_does_not_hold_up_the_revocation(tmp_path: Path) -> None:
+    """Pitfall 13: a revocation that hangs on a cleanup step keeps a user connected."""
+    subject, store, tokens = await issued(tmp_path)
+
+    with respx.mock:
+        deletion = deletion_route(status=500)
+        await subject.revoke_token(_presented_refresh(tokens))
+        assert deletion.call_count == 1
+
+    assert await store.load_access_token(tokens.access_token) is None
+    row = await store.load_authorization(AUTH_ID)
+    assert row is not None
+    assert row.revoked_at is not None
+    assert row.cleanup_at is not None, "the orphaned credential is noted, not forgotten"
+
+
+@pytest.mark.anyio
+async def test_a_token_this_server_never_issued_changes_nothing(tmp_path: Path) -> None:
+    """RFC 7009 section 2.2: 200 for an unknown token, and no hint that it was unknown."""
+    subject, store, tokens = await issued(tmp_path)
+
+    with respx.mock:
+        deletion = deletion_route()
+        await subject.revoke_presented_token(CLIENT_ID, "a-token-of-somebody-else")
+        assert not deletion.called
+
+    assert await store.load_access_token(tokens.access_token) is not None
+
+
+@pytest.mark.anyio
+async def test_a_client_cannot_revoke_the_connection_of_another_client(tmp_path: Path) -> None:
+    subject, store, tokens = await issued(tmp_path)
+
+    with respx.mock:
+        deletion = deletion_route()
+        await subject.revoke_presented_token("some-other-client", tokens.refresh_token or "")
+        assert not deletion.called
+
+    assert await store.load_access_token(tokens.access_token) is not None
+
+
+@pytest.mark.anyio
+async def test_the_revocation_endpoint_answers_200_and_no_store(tmp_path: Path) -> None:
+    subject, store, tokens = await issued(tmp_path)
+
+    with respx.mock:
+        deletion_route()
+        with serving(subject) as http:
+            response = http.post(
+                "/revoke", data={"client_id": CLIENT_ID, "token": tokens.refresh_token}
+            )
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert await store.load_access_token(tokens.access_token) is None
+
+
+@pytest.mark.anyio
+async def test_the_revocation_endpoint_refuses_a_client_it_cannot_authenticate(
+    tmp_path: Path,
+) -> None:
+    subject, store, tokens = await issued(tmp_path, secret=SECRET)
+
+    with serving(subject) as http:
+        response = http.post(
+            "/revoke",
+            data={
+                "client_id": CLIENT_ID,
+                "client_secret": "not-the-secret",
+                "token": tokens.refresh_token,
+            },
+        )
+
+    assert response.status_code == 401
+    assert await store.load_access_token(tokens.access_token) is not None
+
+
+@pytest.mark.anyio
+async def test_the_revocation_endpoint_refuses_a_body_without_a_token(tmp_path: Path) -> None:
+    subject, _store, _tokens = await issued(tmp_path)
+
+    with serving(subject) as http:
+        response = http.post("/revoke", data={"client_id": CLIENT_ID})
+
+    assert response.status_code == 400
+    assert response.json()["error"] == "invalid_request"
+
+
+# --- the sweep of the sign ins nobody finished ---------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_a_sign_in_nobody_finished_hands_its_credential_back(tmp_path: Path) -> None:
+    """Plan 03-05 writes the app password before anybody consents, because the poll of the
+    Login Flow v2 answers 200 exactly once. A browser that is closed at that moment would
+    otherwise leave a working Nextcloud credential behind for good (pitfall 13, D-34)."""
+    subject, store = build(tmp_path)
+    await subject.register_client(registration())
+    await store.create_authorization(
+        "the-flow-nobody-came-back-to",
+        client_id=CLIENT_ID,
+        nc_user=NC_USER,
+        app_password=APP_PASSWORD,
+        scopes=metadata.TOOL_SCOPE,
+        resource=RESOURCE,
+        now=int(time.time()) - FLOW_TTL - 1,
+    )
+
+    with respx.mock:
+        deletion = deletion_route()
+        swept = await subject.sweep_abandoned()
+
+    assert swept == 1
+    assert deletion.call_count == 1
+    assert await store.load_authorization("the-flow-nobody-came-back-to") is None
+
+
+@pytest.mark.anyio
+async def test_the_sweep_leaves_a_running_sign_in_and_a_live_connection_alone(
+    tmp_path: Path,
+) -> None:
+    subject, store, tokens = await issued(tmp_path)
+    await store.create_authorization(
+        "a-sign-in-that-is-still-running",
+        client_id=CLIENT_ID,
+        nc_user=NC_USER,
+        app_password=APP_PASSWORD,
+        scopes=metadata.TOOL_SCOPE,
+        resource=RESOURCE,
+    )
+
+    with respx.mock:
+        deletion = deletion_route()
+        swept = await subject.sweep_abandoned()
+        assert not deletion.called
+
+    assert swept == 0
+    assert await store.load_authorization(AUTH_ID) is not None
+    assert await store.load_access_token(tokens.access_token) is not None
+
+
+@pytest.mark.anyio
+async def test_the_sweep_takes_at_most_a_handful_per_call(tmp_path: Path) -> None:
+    """A browser request pays for this, so the cost of one call is bounded by construction."""
+    subject, store = build(tmp_path)
+    await subject.register_client(registration())
+    for index in range(provider_module.SWEEP_LIMIT + 3):
+        await store.create_authorization(
+            f"abandoned-{index}",
+            client_id=CLIENT_ID,
+            nc_user=NC_USER,
+            app_password=APP_PASSWORD,
+            scopes=metadata.TOOL_SCOPE,
+            resource=RESOURCE,
+            now=int(time.time()) - FLOW_TTL - 1,
+        )
+
+    with respx.mock:
+        deletion_route()
+        swept = await subject.sweep_abandoned()
+
+    assert swept == provider_module.SWEEP_LIMIT
+
+
+# --- the throttle of our own authorization paths (SC 5, D-37) ------------------------------
+
+
+def probe(
+    *, machine: bool, limit: int = 3, ceiling: int = 100
+) -> tuple[TestClient, throttle_module.Throttle]:
+    """One route that answers whatever a caller asks for, behind the throttle wrapper."""
+    box = throttle_module.Throttle(limit=limit, ceiling=ceiling, window=60)
+
+    async def endpoint(request: Request) -> Response:
+        return Response("body", status_code=int(request.query_params.get("status") or 400))
+
+    route = Route("/probe", endpoint, methods=["GET"])
+    route.app = throttle_module.Throttled(route.app, box, "probe", machine=machine, env=ENV)
+    return TestClient(Starlette(routes=[route])), box
+
+
+def test_a_flood_of_failures_ends_in_429_with_a_retry_after() -> None:
+    http, _box = probe(machine=True)
+
+    for _attempt in range(3):
+        assert http.get("/probe").status_code == 400
+
+    throttled = http.get("/probe")
+    assert throttled.status_code == 429
+    assert int(throttled.headers["retry-after"]) >= 1
+    assert throttled.headers["cache-control"] == "no-store"
+
+
+def test_the_json_answer_names_the_same_seconds_as_its_header() -> None:
+    http, _box = probe(machine=True)
+    for _attempt in range(3):
+        http.get("/probe")
+
+    throttled = http.get("/probe")
+
+    body = throttled.json()
+    assert body["error"] == "temporarily_unavailable"
+    assert throttled.headers["retry-after"] in body["error_description"]
+
+
+def test_the_html_answer_names_the_same_seconds_as_its_header() -> None:
+    http, _box = probe(machine=False)
+    for _attempt in range(3):
+        http.get("/probe")
+
+    throttled = http.get("/probe")
+    seconds = throttled.headers["retry-after"]
+
+    assert throttled.status_code == 429
+    assert "text/html" in throttled.headers["content-type"]
+    assert f"Wait {seconds} seconds" in throttled.text
+    assert throttled.headers["cache-control"] == "no-store"
+
+
+def test_a_successful_request_clears_what_the_failures_counted() -> None:
+    http, _box = probe(machine=True)
+
+    for _attempt in range(2):
+        assert http.get("/probe").status_code == 400
+    assert http.get("/probe?status=200").status_code == 200
+    for _attempt in range(3):
+        assert http.get("/probe").status_code == 400
+
+    assert http.get("/probe?status=200").status_code == 200, "success is never throttled"
+
+
+def test_a_forged_forwarded_header_still_meets_the_global_ceiling() -> None:
+    """The per source counter can be split by anybody who can write a header; the ceiling
+    of the path class cannot, and that is what keeps the Nextcloud round trips bounded."""
+    http, _box = probe(machine=True, limit=3, ceiling=5)
+
+    for index in range(5):
+        answer = http.get("/probe", headers={"X-Forwarded-For": f"10.0.0.{index}"})
+        assert answer.status_code == 400
+
+    assert http.get("/probe", headers={"X-Forwarded-For": "10.0.0.99"}).status_code == 429
+
+
+def test_the_throttle_remembers_a_bounded_number_of_sources() -> None:
+    box = throttle_module.Throttle(limit=3, ceiling=1000, window=60)
+
+    for index in range(throttle_module.SOURCE_LIMIT + 50):
+        box.record_failure("probe", f"10.0.0.{index}")
+
+    assert len(box._counters) <= throttle_module.SOURCE_LIMIT
+
+
+def test_the_throttle_stores_neither_a_credential_nor_an_identity() -> None:
+    """T-03-65: a counter that keeps what it counted is itself a source of data."""
+    tree = ast.parse(inspect.getsource(throttle_module))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
+            first = node.body[0] if node.body else None
+            if (
+                isinstance(first, ast.Expr)
+                and isinstance(first.value, ast.Constant)
+                and isinstance(first.value.value, str)
+            ):
+                node.body = node.body[1:] or [ast.Pass()]
+    code = ast.unparse(ast.fix_missing_locations(tree)).lower()
+
+    assert "token" not in code, "no credential value reaches this module"
+    assert "nc_user" not in code
+    assert "sha256" in code, "the source of a request is remembered as a digest"
+
+
+def test_the_authorization_paths_are_throttled_and_the_mcp_route_is_not() -> None:
+    """SC 5: the throttle sits on our own authorization paths, never on the tool call."""
+    throttled = {
+        getattr(route, "path", "")
+        for route in _exapp_routes()
+        if _is_throttled(getattr(route, "app", None))
+    }
+
+    assert {"/token", "/register", "/revoke", "/authorize"} <= throttled
+    assert MCP_PATH not in throttled
+
+
+@pytest.mark.anyio
+async def test_a_flood_against_the_token_endpoint_reaches_no_nextcloud(tmp_path: Path) -> None:
+    """Pitfall 5: every request with an Authorization header costs a Nextcloud round trip,
+    and the throttle is the only thing that bounds how many of them a flood can buy."""
+    subject, _store = await approved(tmp_path, secret=SECRET)
+    box = throttle_module.Throttle(limit=3, ceiling=100, window=60)
+
+    with respx.mock, serving(subject, throttle=box) as http:
+        answers = [
+            http.post("/token", data=token_request(client_secret="wrong")).status_code
+            for _attempt in range(5)
+        ]
+        assert len(respx.calls) == 0
+
+    assert answers[:3] == [401, 401, 401]
+    assert answers[-1] == 429
+
+
+def _is_throttled(app: object) -> bool:
+    """Whether this route carries the throttle, under the ``no-store`` wrapper or not."""
+    while app is not None:
+        if isinstance(app, throttle_module.Throttled):
+            return True
+        app = getattr(app, "_app", None)
+    return False
+
+
+def _bearer(tokens: OAuthToken) -> dict[str, str]:
+    return {"Authorization": f"Bearer {tokens.access_token}"}
+
+
+def _presented_refresh(tokens: OAuthToken) -> RefreshToken:
+    return RefreshToken(
+        token=tokens.refresh_token or "", client_id=CLIENT_ID, scopes=[metadata.TOOL_SCOPE]
+    )
+
+
+def _presented_access(tokens: OAuthToken) -> AccessToken:
+    return AccessToken(token=tokens.access_token, client_id=CLIENT_ID, scopes=[metadata.TOOL_SCOPE])
