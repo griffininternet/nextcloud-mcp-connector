@@ -4,10 +4,15 @@ A missing variable must name itself in the error text: the developer reads that 
 in a client log where nothing else explains what went wrong.
 """
 
+import logging
+from pathlib import Path
+
 import pytest
 
 from mcp_connector import config
 from mcp_connector.errors import ToolError
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _env(nc_env: dict[str, str]) -> dict[str, str]:
@@ -177,3 +182,86 @@ def test_the_settings_repr_masks_the_app_secret() -> None:
     settings = config.exapp_settings(_exapp_env())
     assert APP_SECRET not in repr(settings)
     assert "***" in repr(settings)
+
+
+# --- the persistent volume of the token store (AUTH-03, pitfall 12) ---------------
+
+
+def test_the_store_directory_is_the_volume_appapi_mounted(tmp_path: Path) -> None:
+    env = {**_exapp_env(), config.ENV_APP_PERSISTENT_STORAGE: str(tmp_path)}
+    assert config.persistent_storage(env) == tmp_path
+
+
+@pytest.mark.parametrize("value", [None, "", "   "])
+def test_a_missing_volume_names_the_variable_in_the_exapp_mode(value: str | None) -> None:
+    """T-03-15: without it every authorization dies at the next container restart."""
+    env = _exapp_env()
+    if value is not None:
+        env[config.ENV_APP_PERSISTENT_STORAGE] = value
+
+    with pytest.raises(ToolError) as excinfo:
+        config.persistent_storage(env)
+    assert config.ENV_APP_PERSISTENT_STORAGE in excinfo.value.message
+    assert excinfo.value.hint
+
+
+def test_a_volume_that_does_not_exist_is_never_created_silently(tmp_path: Path) -> None:
+    """A missing mount point is a deployment error, not a directory we may invent."""
+    missing = tmp_path / "not-mounted"
+    env = {**_exapp_env(), config.ENV_APP_PERSISTENT_STORAGE: str(missing)}
+
+    with pytest.raises(ToolError) as excinfo:
+        config.persistent_storage(env)
+    assert config.ENV_APP_PERSISTENT_STORAGE in excinfo.value.message
+    assert not missing.exists()
+
+
+def test_a_volume_that_is_a_file_is_refused(tmp_path: Path) -> None:
+    target = tmp_path / "oauth"
+    target.write_text("not a directory", encoding="utf-8")
+    env = {**_exapp_env(), config.ENV_APP_PERSISTENT_STORAGE: str(target)}
+
+    with pytest.raises(ToolError) as excinfo:
+        config.persistent_storage(env)
+    assert config.ENV_APP_PERSISTENT_STORAGE in excinfo.value.message
+
+
+def test_a_volume_that_cannot_be_written_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A read only mount answers every question right until the first write."""
+    monkeypatch.setattr(config, "_probe_writable", lambda path: False)
+    env = {**_exapp_env(), config.ENV_APP_PERSISTENT_STORAGE: str(tmp_path)}
+
+    with pytest.raises(ToolError) as excinfo:
+        config.persistent_storage(env)
+    assert config.ENV_APP_PERSISTENT_STORAGE in excinfo.value.message
+    assert excinfo.value.hint
+
+
+def test_the_probe_really_writes_and_leaves_nothing_behind(tmp_path: Path) -> None:
+    """os.access lies on Windows and inside containers, so the check writes a file."""
+    assert config._probe_writable(tmp_path) is True
+    assert list(tmp_path.iterdir()) == []
+    assert config._probe_writable(tmp_path / "missing") is False
+
+
+def test_outside_the_exapp_mode_the_store_falls_back_into_the_repository(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The --manual development mode has no volume; the fallback is named, not silent."""
+    monkeypatch.chdir(tmp_path)
+    with caplog.at_level(logging.WARNING, logger="mcp_connector.config"):
+        path = config.persistent_storage({})
+
+    assert path == tmp_path / config.DEV_STORAGE_DIR
+    assert path.is_dir()
+    messages = " ".join(record.getMessage() for record in caplog.records)
+    assert config.DEV_STORAGE_DIR in messages
+    assert config.ENV_APP_PERSISTENT_STORAGE in messages
+
+
+def test_the_development_fallback_directory_is_git_ignored() -> None:
+    """A store full of encrypted app passwords must never become a commit."""
+    ignored = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert f"{config.DEV_STORAGE_DIR}/" in [line.strip() for line in ignored]

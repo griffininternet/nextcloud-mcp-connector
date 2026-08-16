@@ -12,6 +12,7 @@ bearer check or leave with a 401 that points at the metadata (pitfall 6, T-03-01
 """
 
 import base64
+from pathlib import Path
 
 import pytest
 from mcp.server.auth.provider import AccessToken
@@ -389,13 +390,51 @@ def test_the_421_trap_of_a_daemon_without_harp_is_named_at_startup(
     assert any(config.ENV_ALLOWED_HOSTS in message for message in messages) is warned, messages
 
 
+def test_a_missing_persistent_volume_stops_the_start(monkeypatch: pytest.MonkeyPatch) -> None:
+    """T-03-15: a store without a volume loses every authorization on the next restart,
+    and it does so silently in production, weeks after the install looked green."""
+    for name, value in EXAPP_ENV.items():
+        monkeypatch.setenv(name, value)
+    for name in (
+        config.ENV_STATIC_BEARER,
+        config.ENV_APP_PASSWORD,
+        config.ENV_APP_PERSISTENT_STORAGE,
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    with pytest.raises(SystemExit) as excinfo:
+        entry_exapp.main()
+    assert excinfo.value.code == 2
+
+
+def test_the_missing_volume_names_itself_in_the_log(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    for name, value in EXAPP_ENV.items():
+        monkeypatch.setenv(name, value)
+    for name in (
+        config.ENV_STATIC_BEARER,
+        config.ENV_APP_PASSWORD,
+        config.ENV_APP_PERSISTENT_STORAGE,
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    with caplog.at_level("ERROR", logger="mcp_connector.entry_exapp"), pytest.raises(SystemExit):
+        entry_exapp.main()
+
+    messages = " ".join(record.getMessage() for record in caplog.records)
+    assert config.ENV_APP_PERSISTENT_STORAGE in messages
+    assert APP_SECRET not in messages
+
+
 @pytest.mark.parametrize("port", [None, "", "not-a-number"])
 def test_a_missing_or_broken_port_stops_the_start(
-    monkeypatch: pytest.MonkeyPatch, port: str | None
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, port: str | None
 ) -> None:
     """A ValueError traceback out of int() would tell an administrator nothing."""
     for name, value in EXAPP_ENV.items():
         monkeypatch.setenv(name, value)
+    monkeypatch.setenv(config.ENV_APP_PERSISTENT_STORAGE, str(tmp_path))
     for name in (config.ENV_STATIC_BEARER, config.ENV_APP_PASSWORD, config.ENV_HP_SHARED_KEY):
         monkeypatch.delenv(name, raising=False)
     if port is None:
