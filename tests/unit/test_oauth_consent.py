@@ -36,6 +36,7 @@ from mcp_connector.exapp.ui import consent as ui_consent
 from mcp_connector.exapp.ui import strings
 from mcp_connector.oauth import consent, loginflow, registry
 from mcp_connector.oauth import provider as provider_module
+from mcp_connector.oauth import throttle as throttle_module
 from mcp_connector.oauth.store import AUTH_CODE_TTL, FLOW_TTL, OAuthStore, token_hash
 
 BASE_URL = "http://nc.test"
@@ -709,6 +710,63 @@ def test_a_second_decision_on_the_same_flow_creates_nothing_more(store: OAuthSto
     assert second.status_code == 400
     assert len(rows(store, "auth_codes")) == 1
     assert len(rows(store, "authorizations")) == 1
+
+
+# --- CR-02: an authorization request costs a Nextcloud login flow, so it is counted -------
+
+
+def test_a_flood_of_accepted_authorization_requests_ends_in_429(store: OAuthStore) -> None:
+    """CR-02, SC 5: /authorize answers 302 when it works, and every one of those answers
+    opened a Nextcloud login flow. While only refusals were counted, the throttle bounded
+    nothing here, and the SDK answers its own error cases with 302 as well, so not even a
+    PKCE downgrade was ever counted."""
+    provider = make(store)
+    register(provider)
+    counters = throttle_module.Throttle(ceiling=10_000, window=60)
+    client = TestClient(
+        Starlette(
+            routes=[
+                *provider_module.auth_routes(ENV, provider=provider),
+                *consent.consent_routes(ENV, provider=provider, throttle=counters),
+            ]
+        )
+    )
+
+    with respx.mock:
+        init = respx.post(INIT_URL).mock(return_value=httpx.Response(200, json=start_body()))
+        statuses = [start(client).status_code for _ in range(throttle_module.FLOW_LIMIT + 3)]
+
+    assert statuses[: throttle_module.FLOW_LIMIT] == [302] * throttle_module.FLOW_LIMIT
+    assert set(statuses[throttle_module.FLOW_LIMIT :]) == {429}
+    assert init.call_count == throttle_module.FLOW_LIMIT, (
+        "a throttled request must not reach Nextcloud at all"
+    )
+
+
+def test_the_flood_does_not_close_the_consent_screen_behind_it(store: OAuthStore) -> None:
+    """The screen behind the endpoint refreshes itself every three seconds while a user is
+    signing in, so it must not share the counter of the requests that open flows."""
+    provider = make(store)
+    register(provider)
+    counters = throttle_module.Throttle(ceiling=10_000, window=60)
+    client = TestClient(
+        Starlette(
+            routes=[
+                *provider_module.auth_routes(ENV, provider=provider),
+                *consent.consent_routes(ENV, provider=provider, throttle=counters),
+            ]
+        )
+    )
+
+    with respx.mock:
+        respx.post(INIT_URL).mock(return_value=httpx.Response(200, json=start_body()))
+        flow_id = flow_of(start(client))
+        for _ in range(throttle_module.FLOW_LIMIT + 3):
+            start(client)
+        respx.post(POLL_URL).mock(return_value=httpx.Response(404))
+        screen = client.get(consent_url(flow_id, step=ui_consent.STEP_WAIT))
+
+    assert screen.status_code == 200
 
 
 # --- CR-01: the decision belongs to the account that signed in ----------------------------

@@ -12,16 +12,33 @@ is ours to set, and success criterion 5 is measured in Nextcloud round trips rat
 our own response times.
 
 **What is throttled and what is not.** The authorization paths of this application:
-``/token``, ``/register``, ``/revoke``, ``/authorize`` with the consent screen behind it,
-and the browser onboarding of AUTH-02, which is the one route on which an anonymous caller
-can make this server start a Nextcloud login flow. The MCP route is deliberately not among
-them: a tool call arrives with a verified bearer, is answered from the process cache of the
+``/token``, ``/register``, ``/revoke``, ``/authorize`` with the consent surface behind it,
+and the browser onboarding of AUTH-02. The two of them that make this server start a
+Nextcloud login flow, ``/authorize`` and ``POST /connect``, are the reason this module
+exists at all (SC 5). The MCP route is deliberately not among them: a tool call arrives
+with a verified bearer, is answered from the process cache of the
 verifier, and rate limiting the actual work of this server would be a denial of service
 with our own name on it (D-37).
 
-**What is counted and what is stored.** Failed attempts only, per path class and per
-source, in a fixed window. A successful answer clears the counter of its source, so an
-ordinary user who mistypes something four times and then succeeds starts from zero again.
+**What is counted, and why it is not the status of the answer (CR-02).** Two kinds of
+request are counted, and the difference is what each of them costs. On the endpoints whose
+work is a refusal, the counted event is a refusal: an answer of 400 or more, which covers
+every rejection of every endpoint behind this wrapper without this module knowing a single
+one of them. On the two routes that make this server *open a Nextcloud login flow*, the
+counted event is the request itself, before the work, because that is the request that
+costs the round trip. Those are ``POST /connect`` and ``/authorize``, and they answer 200
+and 302 when they succeed, so counting the status would have counted exactly nothing on
+the one path SC 5 exists for. They carry their own path classes and their own limit for
+that reason: a person who connects a second assistant is not an attacker, and the ceiling
+has to sit far above one honest connection and far below a flood.
+
+A successful answer on a refusal counting class pays back one failure instead of clearing
+the counter (WR-03). Clearing it handed a guessing loop the switch that turns the throttle
+off: the path classes are shared surfaces, so one harmless successful request every ninth
+attempt kept the counter at zero forever. Paying back one keeps the ordinary case (a person
+who mistypes something and then succeeds does not carry it around for five minutes) without
+buying an attacker more than the one attempt they actually spent.
+
 Nothing of a request is kept: the counter is keyed by the SHA-256 digest of the path class
 and the source together, so the dictionary of this object contains digests, integers and
 deadlines and nothing that could identify anybody (T-03-65).
@@ -58,11 +75,14 @@ from ..exapp.ui import errors
 
 __all__ = [
     "CLASS_AUTHORIZE",
+    "CLASS_AUTHORIZE_START",
     "CLASS_CONNECT",
+    "CLASS_CONNECT_START",
     "CLASS_REGISTER",
     "CLASS_REVOKE",
     "CLASS_TOKEN",
     "FAILURE_LIMIT",
+    "FLOW_LIMIT",
     "PATH_CEILING",
     "SOURCE_LIMIT",
     "WINDOW",
@@ -71,7 +91,7 @@ __all__ = [
     "source_of",
 ]
 
-#: The five path classes of this application. Separate counters, because a person fighting
+#: The seven path classes of this application. Separate counters, because a person fighting
 #: with the consent screen must not close the endpoint a working connector refreshes at.
 CLASS_TOKEN = "token"  # noqa: S105 - the name of a path class, not a credential
 CLASS_REGISTER = "register"
@@ -79,10 +99,23 @@ CLASS_REVOKE = "revoke"
 CLASS_AUTHORIZE = "authorize"
 CLASS_CONNECT = "connect"
 
+#: The two classes of the requests that open a Nextcloud login flow: the POST that starts
+#: the browser onboarding and the authorization endpoint. Classes of their own, because
+#: every request of them is counted and not only the refused ones, so mixing them with the
+#: screens behind them would close a waiting page that is doing nothing wrong.
+CLASS_CONNECT_START = "connect-start"
+CLASS_AUTHORIZE_START = "authorize-start"
+
 #: How many failed attempts one source may make per path class before it has to wait. Ten
 #: is generous for every legitimate shape of failure (a mistyped link, a stale tab, a
 #: client that retries a rejected grant twice) and short work of a guessing loop.
 FAILURE_LIMIT = 10
+
+#: How many login flows one source may open per window, refused or not. Twenty is far above
+#: what a person does (one connection is one flow, and a retry after a closed browser window
+#: is a second) and far below what makes a Nextcloud work: every one of them is one PHP
+#: round trip plus one record that lives for twenty minutes at Nextcloud (SC 5, T-03-35).
+FLOW_LIMIT = 20
 
 #: The ceiling of a whole path class, whatever a caller writes into a forwarded header.
 #: Two hundred failures in five minutes is far above anything an instance produces by
@@ -146,16 +179,21 @@ class Throttle:
             f"Throttle(limit={self._limit!r}, ceiling={self._ceiling!r}, window={self._window!r})"
         )
 
-    def retry_after(self, path_class: str, source: str) -> int:
+    def retry_after(self, path_class: str, source: str, *, limit: int | None = None) -> int:
         """Seconds this caller has to wait, or ``0`` when it may go ahead.
 
         Never zero when a limit is reached: a page that promises an immediate retry invites
         exactly the request the throttle exists against, which is why the answer is rounded
         up and floored at one second.
+
+        ``limit`` is the per source ceiling of the route that asks, so the two classes that
+        count every request can carry a higher one than the classes that count refusals
+        (CR-02). The ceiling of the path class is not a parameter: it is the limit no
+        forged header can escape, and one route must not be able to raise it.
         """
         now = self._clock()
         pairs = (
-            (self._key(path_class, source), self._limit),
+            (self._key(path_class, source), self._limit if limit is None else limit),
             (self._whole(path_class), self._ceiling),
         )
         for key, limit in pairs:
@@ -166,8 +204,13 @@ class Throttle:
                 return max(1, math.ceil(counter.until - now))
         return 0
 
-    def record_failure(self, path_class: str, source: str) -> None:
-        """Count one refused attempt, for this source and for the path class as a whole."""
+    def record_attempt(self, path_class: str, source: str) -> None:
+        """Count one attempt, for this source and for the path class as a whole.
+
+        What an attempt is belongs to the caller: a refused request on the classes that
+        count refusals, and every request on the two classes that count the cause, because
+        there the cost is paid whether the answer is a 200 or a 400 (CR-02).
+        """
         now = self._clock()
         self._sweep(now)
         for key in (self._key(path_class, source), self._whole(path_class)):
@@ -177,14 +220,21 @@ class Throttle:
             else:
                 counter.seen += 1
 
-    def forget(self, path_class: str, source: str) -> None:
-        """Clear the counter of one source, because it just succeeded.
+    def forgive(self, path_class: str, source: str) -> None:
+        """Pay back one counted failure of this source, because it just succeeded.
 
-        The ceiling of the path class is deliberately not cleared: one success among a
-        thousand failures is what a guessing loop looks like from the inside, and letting
-        it reset the ceiling would hand an attacker the switch that turns the ceiling off.
+        One, and never the whole window (WR-03). Clearing the counter looked forgiving and
+        was an off switch: the path classes are shared surfaces, so a caller guessing flow
+        ids on the consent screen only had to interleave one harmless successful request
+        every ninth attempt to stay at zero forever. Paying back exactly one keeps the case
+        this exists for, a person who mistypes something and then succeeds.
+
+        The ceiling of the path class is deliberately not touched at all: one success among
+        a thousand failures is what a guessing loop looks like from the inside.
         """
-        self._counters.pop(self._key(path_class, source), None)
+        counter = self._counters.get(self._key(path_class, source))
+        if counter is not None and counter.seen > 0:
+            counter.seen -= 1
 
     def _key(self, path_class: str, source: str) -> str:
         """The digest one counter lives under. Never the source, never the path.
@@ -221,10 +271,19 @@ class Throttled:
     authorization server belong to the SDK, and wrapping them leaves their bodies, their
     error shapes and their CORS handling exactly as they are.
 
-    What counts as a failure is the status of the answer: anything from 400 upwards. That
+    Two ways of counting, and the route decides which one it needs (CR-02).
+
+    By default what counts is the status of the answer: anything from 400 upwards. That
     covers every refusal of every endpoint behind this wrapper without this module having
     to know a single one of them, and it counts nothing that worked, including the
     redirects of the authorization endpoint and the pages of the consent screen.
+
+    With ``count_all`` the request itself is counted, before the work and whatever the
+    answer turns out to be. That is the shape the two routes need which make this server
+    open a Nextcloud login flow: they answer 200 and 302 when they succeed, so a status
+    based counter never counted the one thing SC 5 is about. Counting before the work is
+    also the honest moment: the round trip is caused by the request arriving, not by the
+    answer being written, and a request that dies halfway must not be free.
     """
 
     def __init__(
@@ -235,12 +294,16 @@ class Throttled:
         *,
         machine: bool,
         env: Mapping[str, str] | None = None,
+        count_all: bool = False,
+        limit: int | None = None,
     ) -> None:
         self._app = app
         self._throttle = throttle
         self._path_class = path_class
         self._machine = machine
         self._env = env
+        self._count_all = count_all
+        self._limit = limit
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":  # pragma: no cover - these routes are HTTP only
@@ -248,9 +311,17 @@ class Throttled:
             return
 
         source = source_of(Request(scope))
-        wait = self._throttle.retry_after(self._path_class, source)
+        wait = self._throttle.retry_after(self._path_class, source, limit=self._limit)
         if wait:
             await self._refuse(wait)(scope, receive, send)
+            return
+
+        if self._count_all:
+            # Before the work, because the work is what it pays for. Nothing below may
+            # forgive it either: on this class a successful request is exactly the
+            # expensive one.
+            self._throttle.record_attempt(self._path_class, source)
+            await self._app(scope, receive, send)
             return
 
         status = 0
@@ -263,9 +334,9 @@ class Throttled:
 
         await self._app(scope, receive, watch)
         if status >= 400:
-            self._throttle.record_failure(self._path_class, source)
+            self._throttle.record_attempt(self._path_class, source)
         else:
-            self._throttle.forget(self._path_class, source)
+            self._throttle.forgive(self._path_class, source)
 
     def _refuse(self, wait: int) -> Response:
         """The 429, in the shape the caller of this path can read.
@@ -274,12 +345,15 @@ class Throttled:
         different readers: an assistant app backs off on ``Retry-After``, and a person
         reads the sentence on the page. A page that said something else than its own header
         would make one of the two wrong.
+
+        The wording says "too many attempts" and not which of them were refused: on the
+        classes that count every request, most of them worked.
         """
         if self._machine:
             return json_response(
                 {
                     "error": _ERROR,
-                    "error_description": f"too many failed attempts, retry in {wait} seconds",
+                    "error_description": f"too many attempts, retry in {wait} seconds",
                 },
                 status_code=429,
                 headers={"Retry-After": str(wait)},

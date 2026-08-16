@@ -1075,8 +1075,11 @@ def test_the_html_answer_names_the_same_seconds_as_its_header() -> None:
     assert throttled.headers["cache-control"] == "no-store"
 
 
-def test_a_successful_request_clears_what_the_failures_counted() -> None:
-    """Four failures with a success in the middle are two and two, never four."""
+def test_a_successful_request_pays_back_one_failure_and_never_the_window() -> None:
+    """WR-03: clearing the counter was an off switch. The path classes are shared surfaces,
+    so a caller guessing flow ids only had to interleave one harmless successful request
+    every ninth attempt to stay at zero forever. One success pays back exactly one failure:
+    two failures, a success, two failures is three, and three is the limit here."""
     http, _box = probe(machine=True)
 
     for _attempt in range(2):
@@ -1085,6 +1088,20 @@ def test_a_successful_request_clears_what_the_failures_counted() -> None:
     for _attempt in range(2):
         assert http.get("/probe").status_code == 400
 
+    assert http.get("/probe?status=200").status_code == 429
+
+
+def test_a_success_never_pays_back_more_than_it_spent() -> None:
+    """The forgiving half of the same rule: a person who mistypes something twice and then
+    succeeds does not carry the two around for the rest of the window."""
+    http, _box = probe(machine=True)
+
+    assert http.get("/probe").status_code == 400
+    for _attempt in range(3):
+        assert http.get("/probe?status=200").status_code == 200
+
+    for _attempt in range(2):
+        assert http.get("/probe").status_code == 400
     assert http.get("/probe?status=200").status_code == 200
 
 
@@ -1104,7 +1121,7 @@ def test_the_throttle_remembers_a_bounded_number_of_sources() -> None:
     box = throttle_module.Throttle(limit=3, ceiling=1000, window=60)
 
     for index in range(throttle_module.SOURCE_LIMIT + 50):
-        box.record_failure("probe", f"10.0.0.{index}")
+        box.record_attempt("probe", f"10.0.0.{index}")
 
     assert len(box._counters) <= throttle_module.SOURCE_LIMIT
 
@@ -1113,7 +1130,7 @@ def test_the_throttle_stores_neither_a_credential_nor_an_identity() -> None:
     """T-03-65: a counter that keeps what it counted is itself a source of data."""
     box = throttle_module.Throttle(limit=3, ceiling=100, window=60)
 
-    box.record_failure(throttle_module.CLASS_TOKEN, "10.0.0.7")
+    box.record_attempt(throttle_module.CLASS_TOKEN, "10.0.0.7")
 
     kept = repr(sorted(box._counters))
     assert "10.0.0.7" not in kept, "the source is a digest, never the address"

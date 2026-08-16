@@ -60,7 +60,7 @@ from ..exapp.ui.connect import (
 )
 from . import crypto, loginflow
 from .store import STORE_FILENAME, OAuthStore
-from .throttle import CLASS_CONNECT, Throttle, Throttled
+from .throttle import CLASS_CONNECT, CLASS_CONNECT_START, FLOW_LIMIT, Throttle, Throttled
 
 __all__ = [
     "ACTION_CANCEL",
@@ -108,10 +108,15 @@ def connect_routes(
 ) -> list[Route]:
     """Build the three onboarding routes against one environment.
 
-    Throttled as browser paths and with a path class of their own: this is the one surface
-    on which an anonymous caller can make this server open a Nextcloud login flow, which is
-    the anonymous flow creation T-03-35 handed to this plan (SC 5). A refused request here
-    is a page, so a throttled one is E6 with the same seconds in header and text.
+    Throttled as browser paths, and in two classes rather than one: this is the surface on
+    which an anonymous caller can make this server open a Nextcloud login flow, which is
+    the anonymous flow creation T-03-35 handed to this plan (SC 5). The POST that opens one
+    is counted on every request, because it answers 200 when it succeeds and a counter that
+    only saw refusals bounded nothing at all on the one path it was built for (CR-02). The
+    invitation and the waiting screen keep the refusal counter: they cost a poll, not a
+    flow, and the waiting screen loads itself every three seconds by design. A refused
+    request here is a page, so a throttled one is E6 with the same seconds in header and
+    text.
 
     The store is opened once per application and not once per request, and the first open is
     also where :meth:`OAuthStore.purge_expired` runs: this project has no cron and no
@@ -162,14 +167,27 @@ def connect_routes(
         return await _wait(request, store, env)
 
     counters = throttle if throttle is not None else Throttle()
-    routes = [
-        Route(CONNECT_PATH, invitation, methods=["GET"]),
-        Route(CONNECT_PATH, begin, methods=["POST"]),
-        Route(WAIT_PATH, wait, methods=["GET"]),
-    ]
-    for route in routes:
+    invitation_route = Route(CONNECT_PATH, invitation, methods=["GET"])
+    begin_route = Route(CONNECT_PATH, begin, methods=["POST"])
+    wait_route = Route(WAIT_PATH, wait, methods=["GET"])
+
+    for route in (invitation_route, wait_route):
         route.app = Throttled(route.app, counters, CLASS_CONNECT, machine=False, env=env)
-    return routes
+    # The POST is the one request of this route that makes Nextcloud open a login flow, so
+    # every one of them is counted and not only the refused ones (CR-02, SC 5). It has a
+    # path class and a limit of its own for that: the pages behind it are loaded once every
+    # three seconds by a waiting screen that is doing nothing wrong, and they must not run
+    # into the ceiling of the requests that cost a round trip.
+    begin_route.app = Throttled(
+        begin_route.app,
+        counters,
+        CLASS_CONNECT_START,
+        machine=False,
+        env=env,
+        count_all=True,
+        limit=FLOW_LIMIT,
+    )
+    return [invitation_route, begin_route, wait_route]
 
 
 async def _start(store: StoreProvider, env: Mapping[str, str] | None) -> Response:

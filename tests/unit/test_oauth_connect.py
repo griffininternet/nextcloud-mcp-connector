@@ -33,6 +33,7 @@ from mcp_connector import config, entry_http
 from mcp_connector.entry_exapp import build_exapp_app
 from mcp_connector.exapp.ui import strings
 from mcp_connector.oauth import connect, loginflow
+from mcp_connector.oauth import throttle as throttle_module
 from mcp_connector.oauth.store import FLOW_TTL, FlowRow, OAuthStore
 
 BASE_URL = "http://nc.test"
@@ -348,6 +349,65 @@ def test_the_result_page_says_how_to_use_it_and_how_to_revoke_it(client: TestCli
     assert strings.RESULT_CONNECTED_TITLE in text
     assert "Devices and sessions" in text
     assert strings.CONNECT_RESULT_ONCE in text
+
+
+# --- CR-02: the requests that cost a Nextcloud round trip are the ones that are counted ---
+
+
+@respx.mock
+def test_a_flood_of_successful_starts_ends_in_429(store: OAuthStore) -> None:
+    """CR-02, SC 5: this is the path the throttle was built for, and it answers 200.
+
+    Every one of these requests makes Nextcloud open a login flow: one PHP round trip and
+    one record that lives for twenty minutes there. While only refusals were counted, none
+    of them was ever counted at all, so the ceiling this module exists for was unreachable
+    on the one route that named it in its own docstring.
+    """
+    counters = throttle_module.Throttle(ceiling=10_000, window=60)
+
+    async def provide() -> OAuthStore:
+        return store
+
+    client = TestClient(
+        Starlette(routes=connect.connect_routes(ENV, store_provider=provide, throttle=counters))
+    )
+    init = respx.post(INIT_URL).mock(return_value=httpx.Response(200, json=start_body()))
+
+    statuses = [
+        client.post(
+            connect.CONNECT_PATH, data={connect.ACTION_FIELD: connect.ACTION_START}
+        ).status_code
+        for _ in range(throttle_module.FLOW_LIMIT + 3)
+    ]
+
+    assert statuses[: throttle_module.FLOW_LIMIT] == [200] * throttle_module.FLOW_LIMIT
+    assert set(statuses[throttle_module.FLOW_LIMIT :]) == {429}
+    assert init.call_count == throttle_module.FLOW_LIMIT, (
+        "a throttled request must not reach Nextcloud at all"
+    )
+
+
+@respx.mock
+def test_the_throttled_start_does_not_close_the_waiting_screen(store: OAuthStore) -> None:
+    """The waiting screen loads itself every three seconds by design, so it must not share
+    the counter of the requests that open flows (CR-02, T-03-34)."""
+    counters = throttle_module.Throttle(ceiling=10_000, window=60)
+
+    async def provide() -> OAuthStore:
+        return store
+
+    client = TestClient(
+        Starlette(routes=connect.connect_routes(ENV, store_provider=provide, throttle=counters))
+    )
+    respx.post(INIT_URL).mock(return_value=httpx.Response(200, json=start_body()))
+    respx.post(POLL_URL).mock(return_value=httpx.Response(404))
+    flow_id = start_a_flow(client)
+
+    for _ in range(throttle_module.FLOW_LIMIT + 3):
+        client.post(connect.CONNECT_PATH, data={connect.ACTION_FIELD: connect.ACTION_START})
+
+    assert client.get(wait_url(flow_id)).status_code == 200
+    assert client.get(connect.CONNECT_PATH).status_code == 200
 
 
 # --- CR-01: the credential goes to the account that signed in, or back to Nextcloud -------

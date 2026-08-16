@@ -89,7 +89,7 @@ from . import loginflow
 from .provider import NextcloudOAuthProvider
 from .registry import redirect_uri_allowed
 from .store import FlowRow, OAuthStore
-from .throttle import CLASS_AUTHORIZE, Throttle, Throttled
+from .throttle import CLASS_AUTHORIZE, CLASS_AUTHORIZE_START, FLOW_LIMIT, Throttle, Throttled
 
 __all__ = [
     "AUTHORIZATION_PATH",
@@ -114,12 +114,14 @@ def consent_routes(
     provider: NextcloudOAuthProvider,
     throttle: Throttle | None = None,
 ) -> list[Route]:
-    """The authorization endpoint of this app and the consent screen behind it.
+    """The authorization endpoint of this app and the consent surface behind it.
 
-    Both routes are throttled, and both as browser paths: a refused request here ends on a
-    page, so the throttled one has to as well (E6 with the same seconds in its header and
-    in its text). They share one path class, because they are one surface to a caller: the
-    authorization request and the screen behind it are two halves of one attempt (D-37).
+    Every route is throttled, and every one of them as a browser path: a refused request
+    here ends on a page, so the throttled one has to as well (E6 with the same seconds in
+    its header and in its text). The screen and the decision share one path class, because
+    they are one surface to a caller: the two halves of one attempt (D-37). The
+    authorization endpoint has one of its own since CR-02, because what has to be bounded
+    there is not its refusals but its successes: each of them opens a Nextcloud login flow.
     """
     handler = AuthorizationHandler(provider)
 
@@ -153,14 +155,27 @@ def consent_routes(
         return await _decide(request, provider, env)
 
     counters = throttle if throttle is not None else Throttle()
-    routes = [
-        Route(AUTHORIZATION_PATH, authorize, methods=["GET", "POST"]),
+    authorize_route = Route(AUTHORIZATION_PATH, authorize, methods=["GET", "POST"])
+    screen_routes = [
         Route(CONSENT_PATH, consent, methods=["GET"]),
         Route(DECIDE_PATH, decide, methods=["POST"]),
     ]
-    for route in routes:
+    # The authorization endpoint opens a Nextcloud login flow on every request it does not
+    # refuse, and it answers 302 when it does, so its cost was invisible to a counter that
+    # only saw refusals (CR-02, SC 5). Every request of it is counted now, with a class and
+    # a limit of its own, so the consent screen behind it keeps the ten refusals it needs.
+    authorize_route.app = Throttled(
+        authorize_route.app,
+        counters,
+        CLASS_AUTHORIZE_START,
+        machine=False,
+        env=env,
+        count_all=True,
+        limit=FLOW_LIMIT,
+    )
+    for route in screen_routes:
         route.app = Throttled(route.app, counters, CLASS_AUTHORIZE, machine=False, env=env)
-    return routes
+    return [authorize_route, *screen_routes]
 
 
 async def _refuse(

@@ -225,6 +225,7 @@ Three numbers, and they are the ones that multiply with the number of users:
 | Nextcloud requests per accepted MCP request | **1** (six HTTP requests, one session `initialize` plus five `tools/list`, produced six lookups) |
 | Nextcloud requests per refused MCP request | **1** |
 | Refused token requests before the throttle answers 429 | **11**, with `Retry-After: 300` |
+| Login flows one source may open per five minutes | **20** per path class, refused or not (CR-02) |
 
 **Every request that carries an `Authorization` header costs exactly one Nextcloud round
 trip, and this application cannot switch it off.** HaRP resolves a user for any request
@@ -387,10 +388,20 @@ two checks the flow id was the whole authorisation, and whoever started a flow c
 a sign in somebody else performed (CR-01, the Login Flow v2 relay).
 
 **The throttle protects the authorization endpoints and never the MCP route.** Ten refused
-attempts per source and path class in five minutes end in `429` with `Retry-After`. Rate
-limiting the tool calls themselves would be this server's own denial of service, so the
-measured number above is the honest ceiling: an accepted MCP request is not throttled here
-and costs one Nextcloud round trip.
+attempts per source and path class in five minutes end in `429` with `Retry-After`, and a
+success pays back one of them rather than clearing the window. Rate limiting the tool calls
+themselves would be this server's own denial of service, so the measured number above is the
+honest ceiling: an accepted MCP request is not throttled here and costs one Nextcloud round
+trip.
+
+**On the two routes that open a Nextcloud login flow, every request is counted, not only
+the refused ones.** `POST /connect` and `/authorize` answer 200 and 302 when they work, and
+each of those answers costs one Nextcloud round trip plus one login flow record that lives
+for twenty minutes there. Counting refusals bounded nothing at all on exactly the path
+success criterion 5 is about, so those two carry a path class and a limit of their own:
+twenty per source per five minutes, counted before the work. The screens behind them, the
+consent surface and the waiting page, keep the refusal counter, because a waiting screen
+reloads itself every three seconds and is doing nothing wrong (CR-02).
 
 **A revocation takes effect before the request returns.** The store, the process caches and
 the Nextcloud app password are ended in that order, and the third step may fail without
