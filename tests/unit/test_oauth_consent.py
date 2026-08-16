@@ -14,11 +14,13 @@ container, no network, no Nextcloud.
 """
 
 import asyncio
+import logging
 import re
 import sqlite3
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlsplit
 
 import httpx
 import pytest
@@ -33,7 +35,7 @@ from mcp_connector.exapp.ui import consent as ui_consent
 from mcp_connector.exapp.ui import strings
 from mcp_connector.oauth import consent, loginflow, registry
 from mcp_connector.oauth import provider as provider_module
-from mcp_connector.oauth.store import FLOW_TTL, OAuthStore
+from mcp_connector.oauth.store import AUTH_CODE_TTL, FLOW_TTL, OAuthStore, token_hash
 
 BASE_URL = "http://nc.test"
 PUBLIC_URL = "https://cloud.example.com/exapps/mcp_connector"
@@ -65,6 +67,7 @@ ENV = {
 
 INIT_URL = f"{BASE_URL}{loginflow.INIT_PATH}"
 POLL_URL = f"{BASE_URL}{loginflow.POLL_PATH}"
+REVOKE_URL = f"{BASE_URL}{loginflow.APP_PASSWORD_PATH}"
 
 
 def start_body() -> dict[str, object]:
@@ -504,6 +507,298 @@ def test_a_client_blocked_after_the_sign_in_does_not_reach_the_decision(
 
     assert response.status_code in (400, 403)
     assert strings.CONSENT_APPROVE not in response.text
+
+
+# --- the decision -----------------------------------------------------------------------
+
+
+def signed_in(provider: provider_module.NextcloudOAuthProvider) -> tuple[TestClient, str, str]:
+    """One flow that reached the consent screen, plus the screen it rendered."""
+    client, flow_id, _target = opened(provider)
+    with respx.mock:
+        respx.post(POLL_URL).mock(return_value=httpx.Response(200, json=poll_body()))
+        page = client.get(consent_url(flow_id, step=ui_consent.STEP_WAIT))
+    return client, flow_id, page.text
+
+
+def decide(
+    client: TestClient,
+    flow_id: str,
+    decision: str,
+    *,
+    store: OAuthStore | None = None,
+    confirm: str | None = None,
+) -> Any:
+    """One press of one of the two buttons, exactly as the rendered form sends it."""
+    token = confirm if confirm is not None else (store.form_token(flow_id) if store else "")
+    return client.post(
+        ui_consent.CONSENT_PATH,
+        data={
+            ui_consent.FLOW_PARAM: flow_id,
+            ui_consent.DECISION_PARAM: decision,
+            ui_consent.CONFIRM_PARAM: token,
+        },
+        follow_redirects=False,
+    )
+
+
+def rows(store: OAuthStore, table: str) -> list[tuple[Any, ...]]:
+    """Every row of one table, read straight out of the file the store writes."""
+    conn = sqlite3.connect(store.path)
+    try:
+        return conn.execute(f"SELECT * FROM {table} ORDER BY rowid").fetchall()  # noqa: S608
+    finally:
+        conn.close()
+
+
+def snapshot(store: OAuthStore) -> dict[str, list[tuple[Any, ...]]]:
+    """The three tables a decision may touch, so a test can prove none of them moved."""
+    return {name: rows(store, name) for name in ("flows", "authorizations", "auth_codes")}
+
+
+def query_of(response: Any) -> dict[str, list[str]]:
+    return parse_qs(urlsplit(response.headers["location"]).query)
+
+
+def test_an_approval_redirects_with_code_state_and_iss(store: OAuthStore) -> None:
+    """The one moment of this phase that grants something, and the shape RFC 9207 wants."""
+    provider = make(store)
+    register(provider)
+    client, flow_id, _page = signed_in(provider)
+
+    response = decide(client, flow_id, ui_consent.DECISION_APPROVE, store=store)
+
+    assert response.status_code == 302
+    assert response.headers["location"].startswith(REDIRECT)
+    assert response.headers["cache-control"] == "no-store"
+    query = query_of(response)
+    assert query["state"] == [STATE]
+    assert query["iss"] == [PUBLIC_URL], "the issuer is the configured public URL (RFC 9207)"
+    assert len(query["code"]) == 1
+    assert len(rows(store, "authorizations")) == 1, "exactly one authorization, not a second"
+    assert asyncio.run(store.load_flow(flow_id, now=0)) is None, "the flow is spent"
+
+
+def test_the_code_lives_sixty_seconds_and_is_redeemable_exactly_once(
+    store: OAuthStore,
+) -> None:
+    provider = make(store)
+    register(provider)
+    client, flow_id, _page = signed_in(provider)
+
+    response = decide(client, flow_id, ui_consent.DECISION_APPROVE, store=store)
+    code = query_of(response)["code"][0]
+
+    stored = rows(store, "auth_codes")
+    assert len(stored) == 1
+    assert stored[0][0] == token_hash(code), "the code stands in the file as its digest only"
+    assert code not in _store_bytes(store.path.parent).decode("utf-8", "ignore")
+    first = asyncio.run(store.redeem_auth_code(code))
+    second = asyncio.run(store.redeem_auth_code(code))
+    assert first is not None
+    assert second is None
+    assert first.auth_id == flow_id
+    assert first.code_challenge == CHALLENGE
+    assert first.redirect_uri == REDIRECT
+    assert first.resource == RESOURCE
+    assert 0 < stored[0][5] - int(time.time()) <= AUTH_CODE_TTL
+
+
+def test_a_get_never_grants_anything_whatever_it_carries(store: OAuthStore) -> None:
+    """T-03-50: a state change is a POST, so a GET with a decision in it changes nothing."""
+    provider = make(store)
+    register(provider)
+    client, flow_id, _page = signed_in(provider)
+    before = snapshot(store)
+
+    response = client.get(
+        f"{consent_url(flow_id)}&{ui_consent.DECISION_PARAM}={ui_consent.DECISION_APPROVE}"
+        f"&{ui_consent.CONFIRM_PARAM}={store.form_token(flow_id)}",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 200
+    assert "location" not in response.headers
+    assert snapshot(store) == before, "not one row of the store moved"
+
+
+def test_a_denial_answers_access_denied_and_hands_the_credential_back(
+    store: OAuthStore,
+) -> None:
+    """A refused connection must not leave a usable Nextcloud credential behind (D-34)."""
+    provider = make(store)
+    register(provider)
+    client, flow_id, _page = signed_in(provider)
+
+    with respx.mock:
+        revoke = respx.delete(REVOKE_URL).mock(return_value=httpx.Response(200, json={}))
+        response = decide(client, flow_id, ui_consent.DECISION_DENY, store=store)
+
+    assert response.status_code == 302
+    assert revoke.call_count == 1, "one attempt, no retry"
+    query = query_of(response)
+    assert query["error"] == ["access_denied"]
+    assert query["state"] == [STATE]
+    assert query["iss"] == [PUBLIC_URL]
+    assert "code" not in query
+    assert rows(store, "authorizations") == [], "no authorization survives a denial"
+    assert rows(store, "auth_codes") == []
+    assert asyncio.run(store.load_flow(flow_id, now=0)) is None
+
+
+@pytest.mark.parametrize("confirm", ["", "not-the-token", "0" * 64])
+def test_a_decision_without_the_anti_forgery_token_changes_nothing(
+    store: OAuthStore, confirm: str
+) -> None:
+    """T-03-50: the value is bound to this flow and to this deployment, and nothing else."""
+    provider = make(store)
+    register(provider)
+    client, flow_id, _page = signed_in(provider)
+    before = snapshot(store)
+
+    response = decide(client, flow_id, ui_consent.DECISION_APPROVE, confirm=confirm)
+
+    assert response.status_code == 400
+    assert "location" not in response.headers
+    assert snapshot(store) == before
+
+
+def test_a_second_decision_on_the_same_flow_creates_nothing_more(store: OAuthStore) -> None:
+    provider = make(store)
+    register(provider)
+    client, flow_id, _page = signed_in(provider)
+
+    first = decide(client, flow_id, ui_consent.DECISION_APPROVE, store=store)
+    second = decide(client, flow_id, ui_consent.DECISION_APPROVE, store=store)
+
+    assert first.status_code == 302
+    assert second.status_code == 400
+    assert len(rows(store, "auth_codes")) == 1
+    assert len(rows(store, "authorizations")) == 1
+
+
+def test_the_form_is_a_post_with_two_named_buttons_and_deny_first(store: OAuthStore) -> None:
+    """03-UI-SPEC.md S3: no GET grants anything, and the safe action is reachable first."""
+    provider = make(store)
+    register(provider)
+    _client, flow_id, page = signed_in(provider)
+
+    assert 'method="post"' in page
+    assert f'name="{ui_consent.DECISION_PARAM}" value="{ui_consent.DECISION_DENY}"' in page
+    assert f'name="{ui_consent.DECISION_PARAM}" value="{ui_consent.DECISION_APPROVE}"' in page
+    assert page.index(strings.CONSENT_DENY) < page.index(strings.CONSENT_APPROVE)
+    assert f'name="{ui_consent.CONFIRM_PARAM}" value="{store.form_token(flow_id)}"' in page, (
+        "the form carries the value that binds it to this authorization request"
+    )
+    assert "<script" not in page
+
+
+def test_the_page_lands_on_its_heading_and_not_on_the_granting_button(
+    store: OAuthStore,
+) -> None:
+    """A page that opens with the granting action focused turns a stray Enter into a grant."""
+    provider = make(store)
+    register(provider)
+    _client, _flow_id, page = signed_in(provider)
+
+    heading = re.search(r"<h1[^>]*>", page)
+    assert heading is not None
+    assert 'tabindex="-1"' in heading.group(0)
+    assert "autofocus" in heading.group(0)
+    assert "autofocus" not in page[page.index("<button") :]
+
+
+def out_of_band(store: OAuthStore, flow_id: str) -> None:
+    """A finished sign in of a client this server cannot redirect anywhere (S4)."""
+    asyncio.run(
+        store.create_flow(
+            flow_id,
+            client_id=CLIENT_ID,
+            redirect_uri="",
+            redirect_uri_explicit=False,
+            code_challenge=CHALLENGE,
+            state=None,
+            scopes="nextcloud",
+            resource=RESOURCE,
+            poll_token=POLL_TOKEN,
+        )
+    )
+    asyncio.run(
+        store.create_authorization(
+            flow_id,
+            client_id=CLIENT_ID,
+            nc_user=LOGIN_NAME,
+            app_password=APP_PASSWORD,
+            scopes="nextcloud",
+            resource=RESOURCE,
+        )
+    )
+
+
+def test_without_a_return_address_the_result_is_a_page(store: OAuthStore) -> None:
+    provider = make(store)
+    register(provider)
+    client = TestClient(application(provider))
+    out_of_band(store, "flow-approved-out-of-band")
+
+    response = decide(client, "flow-approved-out-of-band", ui_consent.DECISION_APPROVE, store=store)
+
+    assert response.status_code == 200
+    assert "location" not in response.headers
+    assert strings.RESULT_CONNECTED_TITLE in response.text
+    assert (
+        strings.RESULT_CONNECTED_BODY.format(client=CLIENT_NAME, user=LOGIN_NAME) in response.text
+    )
+    assert APP_PASSWORD not in response.text
+
+
+def test_without_a_return_address_a_denial_is_a_page_too(store: OAuthStore) -> None:
+    provider = make(store)
+    register(provider)
+    client = TestClient(application(provider))
+    out_of_band(store, "flow-denied-out-of-band")
+
+    with respx.mock:
+        respx.delete(REVOKE_URL).mock(return_value=httpx.Response(200, json={}))
+        response = decide(client, "flow-denied-out-of-band", ui_consent.DECISION_DENY, store=store)
+
+    assert response.status_code == 200
+    assert strings.RESULT_DENIED_TITLE in response.text
+    assert strings.RESULT_DENIED_BODY.format(client=CLIENT_NAME) in response.text
+    assert APP_PASSWORD not in response.text
+    assert rows(store, "authorizations") == []
+
+
+def test_a_decision_of_a_client_blocked_in_the_meantime_grants_nothing(
+    store: OAuthStore,
+) -> None:
+    """T-03-40, pitfall 9: the enforcement point is asked again at the moment of the grant."""
+    provider = make(store)
+    register(provider)
+    client, flow_id, _page = signed_in(provider)
+    asyncio.run(store.save_client(CLIENT_ID, metadata_json='{"client_id": "x"}', allowed=False))
+
+    response = decide(client, flow_id, ui_consent.DECISION_APPROVE, store=store)
+
+    assert response.status_code in (400, 403)
+    assert "location" not in response.headers
+    assert rows(store, "auth_codes") == []
+
+
+def test_no_decision_writes_a_credential_into_the_log(
+    store: OAuthStore, caplog: pytest.LogCaptureFixture
+) -> None:
+    """T-03-54: not on DEBUG, not truncated, not in the successful case either."""
+    provider = make(store)
+    register(provider)
+    client, flow_id, _page = signed_in(provider)
+
+    with caplog.at_level(logging.DEBUG):
+        response = decide(client, flow_id, ui_consent.DECISION_APPROVE, store=store)
+
+    assert APP_PASSWORD not in caplog.text
+    assert POLL_TOKEN not in caplog.text
+    assert query_of(response)["code"][0] not in caplog.text
 
 
 # --- the properties of every page of this route -------------------------------------------
