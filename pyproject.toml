@@ -9,8 +9,11 @@ keywords = ["mcp", "nextcloud", "webdav", "caldav", "carddav"]
 
 # Dependency policy (see docs/dependency-audit.md):
 # httpx2 is a transitive dependency of mcp only. It is never pinned directly here.
+# cryptography is listed because oauth/crypto.py imports it directly; it was already in
+# the lock through mcp -> pyjwt[crypto], so the entry is a declaration, not an install.
 dependencies = [
     "mcp[cli]>=2.0,<3",
+    "cryptography>=50,<51",
     "httpx>=0.28,<0.29",
     "lxml>=6.1,<7",
     "icalendar>=7.2,<8",

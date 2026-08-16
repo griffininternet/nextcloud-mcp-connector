@@ -6,6 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 # Dependency audit
 
 **Audited:** 2026-08-14 (slopcheck 0.6.1 against PyPI)
+**Last addendum:** 2026-08-16, `cryptography` promoted from transitive to direct (plan 03-02)
 **Scope:** all direct dependencies of `nextcloud-mcp-connector` plus the notable transitive ones.
 **Owner sign-off:** the package legitimacy gate for the first `uv sync` was approved by the
 repository owner on 2026-08-14 after independent verification (see "The httpx2 finding").
@@ -31,6 +32,7 @@ repository owner on 2026-08-14 after independent verification (see "The httpx2 f
 | nodeenv | PyPI | 1.10.0 | very high | github.com/ekalinin/nodeenv | [OK] | Approved (transitive of pyright, never pinned directly) |
 | vulture | PyPI | 2.16 | high | github.com/jendrikseipp/vulture | [OK] | Approved (dev) 2026-08-14, owner sign-off for the quality gate |
 | lxml-stubs | PyPI | 0.5.1, official stubs from the lxml org | high | github.com/lxml/lxml-stubs | [OK] | Approved (dev) 2026-08-14, typing support for pyright |
+| cryptography | PyPI | 158 releases, 50.0.0 since 2026-07-31 | very high (top 20 on PyPI) | github.com/pyca/cryptography | not runnable here, verified by hand | Approved (direct) 2026-08-16, owner sign-off (see "Promoting cryptography") |
 
 Packages removed due to a `[SLOP]` verdict: none.
 Packages flagged as suspicious: `httpx2`.
@@ -58,6 +60,46 @@ Secondary observation, no action needed in phase 1: `httpx2` verifies TLS agains
 system trust store (via `truststore`) instead of `certifi`. That becomes relevant only when an
 integration test talks to a self-signed Nextcloud certificate; the Docker test setup uses plain
 HTTP.
+
+## Promoting cryptography from transitive to direct (2026-08-16, plan 03-02)
+
+Phase 3 stores a Nextcloud app password per authorization, encrypted at rest. The
+encryption lives in `src/mcp_connector/oauth/crypto.py` and imports the package directly:
+
+```python
+from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+```
+
+The policy of this file says a package we import directly is declared directly, so the
+entry in `pyproject.toml` is `cryptography>=50,<51`.
+
+**What the promotion changes and what it does not.** Nothing is installed by it. The
+package was already resolved through `mcp` to `pyjwt[crypto]` and is pinned at 50.0.0 in
+`uv.lock`; the diff of the lock is two lines, both of them declarations. What changes is
+that the project now says out loud what it relies on, so a future upstream change in `mcp`
+cannot remove our encryption without a resolution failure that names it.
+
+**Verification.** `slopcheck` was not runnable in this environment: it shells out to `pip`
+and there is no `pip` on the PATH of this uv setup (`uv tool run --from slopcheck slopcheck
+install cryptography` ends in a `FileNotFoundError`). The check was therefore done by hand
+against the PyPI JSON API and the installed distribution:
+
+- project URLs point at `github.com/pyca/cryptography`, the Python Cryptographic Authority,
+- 158 releases, current version 50.0.0 uploaded 2026-07-31,
+- one of the twenty most downloaded packages on PyPI, and a dependency of `pyjwt[crypto]`,
+  which the official MCP SDK itself pulls in,
+- `uv run --no-sync python -c "import cryptography; print(cryptography.__version__)"`
+  answers `50.0.0`, the version in the lock.
+
+**Owner decision.** Approved by the repository owner on 2026-08-16 after the question was
+put explicitly, together with the constraint that the lock step must not touch the virtual
+environment. `uv lock` was used instead of `uv add`, which writes `uv.lock` only.
+
+**Why an alternative was not taken.** Leaving the package transitive was the other option.
+It would have meant that the encryption of every stored app password depends on a decision
+in someone else's dependency list: the day `mcp` drops `pyjwt[crypto]`, the next clean
+install of this project fails at import time, in production, with no warning in between.
 
 ## Resolved tree (`uv tree --depth 2`, 2026-08-14)
 

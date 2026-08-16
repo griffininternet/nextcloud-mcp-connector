@@ -472,6 +472,7 @@ name = "nextcloud-mcp-connector"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "cryptography" },
     { name = "httpx" },
     { name = "icalendar" },
     { name = "lxml" },
@@ -493,6 +494,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cryptography", specifier = ">=50,<51" },
     { name = "httpx", specifier = ">=0.28,<0.29" },
     { name = "icalendar", specifier = ">=7.2,<8" },
     { name = "lxml", specifier = ">=6.1,<7" },

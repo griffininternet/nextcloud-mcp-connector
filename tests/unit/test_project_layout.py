@@ -34,6 +34,18 @@ def test_httpx_is_pinned_for_our_own_client_code(pyproject: dict) -> None:
     )
 
 
+def test_cryptography_is_declared_because_we_import_it(pyproject: dict) -> None:
+    """Owner sign-off 2026-08-16: what encrypts the app passwords is not somebody else's
+    dependency decision (docs/dependency-audit.md, "Promoting cryptography")."""
+    deps = pyproject["project"]["dependencies"]
+    assert any(dep.startswith("cryptography>=") for dep in deps)
+
+    crypto = Path(__file__).resolve().parents[2] / "src" / "mcp_connector" / "oauth" / "crypto.py"
+    assert "from cryptography" in crypto.read_text(encoding="utf-8"), (
+        "the declaration exists because of this import; remove one and remove both"
+    )
+
+
 def test_default_test_run_excludes_integration(pyproject: dict) -> None:
     addopts = pyproject["tool"]["pytest"]["ini_options"]["addopts"]
     assert "not integration" in addopts, "the default suite must run without Docker"
