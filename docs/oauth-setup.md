@@ -372,6 +372,15 @@ operator has to know: a backup of the volume without the Nextcloud database is u
 replacing that configuration value by hand makes every stored authorization unreadable, so
 every connected assistant has to connect again.
 
+**Start the very first container with one worker.** The data key of this installation is
+created on the first start and stored in Nextcloud's ExApp configuration, and that API has
+no compare and set. Two workers that start at the same moment on an installation without a
+key can both write one; the second write wins, and the worker that lost encrypts with a key
+nobody can read again. Every later start reads the stored key and this cannot happen, so it
+is one moment per installation. A loser is loud rather than silent: it logs "another worker
+stored the data key first", and rows written with the lost key answer as unreadable instead
+of decrypting into something wrong (WR-02).
+
 **The persistent volume is not optional.** `APP_PERSISTENT_STORAGE` is where the store file
 lives. Without a real volume every restart of the container loses every connection, and the
 failure looks like a working installation until the first restart.

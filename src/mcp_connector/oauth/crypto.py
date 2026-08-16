@@ -165,17 +165,48 @@ async def data_key(env: Mapping[str, str] | None = None) -> bytes:
     every authorization that was ever stored, so every failure below is a hard one
     (pitfall 11, T-03-14).
 
-    The write is followed by a read back rather than trusting what we just sent. Two
-    workers can start at the same time, both find nothing and both store a key; the read
-    back means both continue with the one value that actually survived, instead of one of
-    them encrypting everything with a key nobody will ever read again.
+    **What the read back does, and what it does not do (WR-02).** The write is followed by
+    a read rather than by trusting what was sent, and the answer is compared against what
+    was written: a worker that lost the race adopts the key of the one that won, which is
+    the key of this installation from then on, and says so in a warning. This function
+    never returns a value it did not read out of Nextcloud.
+
+    It does not make the first start of two workers atomic, and the docstring used to claim
+    it did. There is no compare and set in the ExApp configuration API, so two writes can
+    still interleave in a way no read of ours can see: A writes, A reads back its own
+    value, B writes over it. The read is therefore repeated once after the first one has
+    returned, which catches the write that arrived while the first read was in flight, and
+    a loser that is still missed encrypts with a key nobody can read again. The window is
+    the very first start of a deployment, before any row exists, and the failure is loud
+    rather than silent: the store answers ``DecryptionRejected`` on the first read of a row
+    it wrote, which every caller of this phase already handles as a refusal. An
+    installation that wants the window closed starts the first container with one worker,
+    which ``docs/oauth-setup.md`` says.
     """
     settings = config.exapp_settings(env)
     stored = await _read_key(settings)
     if stored is not None:
         return stored
 
-    await _write_key(settings, secrets.token_bytes(KEY_BYTES).hex())
+    written = secrets.token_bytes(KEY_BYTES).hex()
+    await _write_key(settings, written)
+    stored = await _confirm_key(settings)
+    if stored.hex() != written:
+        # Somebody else stored a key first, and theirs is the key of this installation.
+        # Nothing of ours is lost here: no row exists yet at this point of a first start.
+        logger.warning("another worker stored the data key first; this one adopts the stored key")
+        return stored
+
+    # A second read, after the first one has already returned: a worker that wrote while
+    # that read was in flight is visible in this one and in no earlier answer.
+    confirmed = await _confirm_key(settings)
+    if confirmed.hex() != written:
+        logger.warning("another worker stored the data key first; this one adopts the stored key")
+    return confirmed
+
+
+async def _confirm_key(settings: config.ExAppSettings) -> bytes:
+    """The stored key after a write, or a named failure. Never ``None``, never invented."""
     stored = await _read_key(settings)
     if stored is None:
         raise ToolError(

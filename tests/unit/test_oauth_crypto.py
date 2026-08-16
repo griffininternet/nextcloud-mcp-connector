@@ -163,6 +163,87 @@ async def test_the_first_start_creates_the_key_and_stores_it_as_sensitive() -> N
 
 @pytest.mark.anyio
 @respx.mock
+async def test_the_key_this_process_wrote_is_confirmed_by_a_second_read() -> None:
+    """WR-02: the first read back can answer our own write while a worker that started at
+    the same moment is still writing over it. The second read, sent after the first one has
+    returned, is the one that can see that write."""
+    written: list[str] = []
+
+    def write(request: httpx.Request) -> httpx.Response:
+        written.append(json.loads(request.content)["configValue"])
+        return httpx.Response(200, json=ocs_body([]))
+
+    reads: list[int] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        reads.append(1)
+        if not written:
+            return httpx.Response(200, json=ocs_body([]))
+        return httpx.Response(200, json=stored(written[0]))
+
+    respx.post(READ_URL).mock(side_effect=answer)
+    respx.post(CONFIG_URL).mock(side_effect=write)
+
+    key = await crypto.data_key(ENV)
+
+    assert key == bytes.fromhex(written[0])
+    assert len(reads) == 3, "empty, the read back, and the one that confirms it"
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_worker_that_lost_the_race_adopts_the_stored_key(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """WR-02: the docstring claimed both workers continue with the value that survived. The
+    loser has to adopt the stored one, and it has to say so: every row it wrote with its
+    own key would be unreadable, and at this point of a first start there are none."""
+    respx.post(READ_URL).mock(
+        side_effect=[
+            httpx.Response(200, json=ocs_body([])),
+            httpx.Response(200, json=stored(STORED_KEY_HEX)),
+        ]
+    )
+    respx.post(CONFIG_URL).mock(return_value=httpx.Response(200, json=ocs_body([])))
+
+    with caplog.at_level(logging.WARNING):
+        key = await crypto.data_key(ENV)
+
+    assert key == bytes.fromhex(STORED_KEY_HEX), "the stored key wins, never the written one"
+    assert "another worker stored the data key first" in caplog.text
+    assert STORED_KEY_HEX not in caplog.text, "T-03-16: no key material in a log line"
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_key_that_disappears_on_the_confirming_read_is_a_named_failure() -> None:
+    """The second read is a read like every other one: an absent value is a hard failure and
+    never a reason to run on a key nobody stored."""
+    written: list[str] = []
+
+    def write(request: httpx.Request) -> httpx.Response:
+        written.append(json.loads(request.content)["configValue"])
+        return httpx.Response(200, json=ocs_body([]))
+
+    reads: list[int] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        reads.append(1)
+        if len(reads) == 2 and written:
+            return httpx.Response(200, json=stored(written[0]))
+        return httpx.Response(200, json=ocs_body([]))
+
+    respx.post(READ_URL).mock(side_effect=answer)
+    respx.post(CONFIG_URL).mock(side_effect=write)
+
+    with pytest.raises(ToolError) as excinfo:
+        await crypto.data_key(ENV)
+
+    assert crypto.CONFIG_KEY in excinfo.value.message
+
+
+@pytest.mark.anyio
+@respx.mock
 async def test_an_existing_key_is_read_and_never_overwritten() -> None:
     """T-03-14: a second key would make every stored app password unreadable."""
     respx.post(READ_URL).mock(return_value=httpx.Response(200, json=stored(STORED_KEY_HEX)))
