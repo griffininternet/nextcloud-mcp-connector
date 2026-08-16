@@ -235,6 +235,57 @@ claude mcp add --transport http nextcloud https://cloud.example.com/exapps/mcp_c
    instead. The fallback, a reverse proxy rule that serves the metadata at the canonical path,
    is written out in [spike-discovery.md](spike-discovery.md).
 
+## Browser onboarding (no app password to copy by hand)
+
+An assistant app that cannot speak OAuth still needs a credential, and the section at the top
+of this page asks you to create one in the Nextcloud settings yourself. The onboarding page
+does that part for you. Open it in a browser:
+
+```
+https://<nextcloud>/exapps/mcp_connector/connect
+```
+
+What happens there, in four steps:
+
+1. The page explains what it does and offers one button, "Continue to Nextcloud sign in".
+2. Pressing it opens the Nextcloud sign in page in a new window. This is Nextcloud's own
+   page on your own instance, with your own login and your own second factor. Approve the
+   connection there, then come back to the connector page.
+3. That page waits for the result. It refreshes itself every few seconds and carries a
+   "Check now" button for browsers where automatic refresh is switched off.
+4. When the sign in is complete, the page shows your user name and one credential for your
+   assistant app.
+
+Enter both into your client exactly like the app password in the sections above: user name
+and credential as Basic credentials against `https://<nextcloud>/exapps/mcp_connector/mcp`.
+
+**The credential is shown once.** Nothing of it is stored on this server, so there is no page
+that can show it again. If you miss it, lose it, or close the window too early, open
+`/connect` again and run the sign in a second time. The old attempt runs out on its own after
+twenty minutes, and an unused credential can be removed in the Nextcloud settings.
+
+### How to tell a real page from a fake one
+
+This server never asks for your Nextcloud password. Not on the onboarding page, not on the
+waiting page, not on the result page. None of them has an input field at all. A page that
+looks like this one and asks you to type your Nextcloud password is not from this server:
+close it, and tell your administrator.
+
+The credential you get is an ordinary Nextcloud app password that belongs to you. It appears
+in **Settings, Security, Devices and sessions** under the name of this connector, together
+with every other connection of your account, and you can end it there at any time without
+touching your password or your second factor.
+
+### Which way is meant for which client
+
+* **OAuth** is the way for Claude.ai and ChatGPT, which register themselves and run the whole
+  authorization in the client. It arrives with plan 03-06 of this phase; nothing has to be
+  copied by hand there.
+* **Browser onboarding** is the way for every other client: it produces the credential the
+  Basic header of the sections above needs, without you creating an app password by hand.
+* **The app password sections above stay valid** for stdio, for the standalone HTTP mode and
+  for the ExApp mode. The onboarding only replaces the manual step of creating one.
+
 ## Three things that will go wrong
 
 ### 1. `421 Misdirected Request`
