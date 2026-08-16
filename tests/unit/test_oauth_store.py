@@ -301,7 +301,7 @@ async def test_a_client_secret_is_stored_as_a_hash_and_masked(tmp_path: Path) ->
     assert row is not None
     assert row.allowed is False
     assert row.client_secret_hash == store.token_hash("the-secret")
-    assert row.client_secret_hash not in repr(row)
+    assert store.token_hash("the-secret") not in repr(row)
     assert "***" in repr(row)
 
 

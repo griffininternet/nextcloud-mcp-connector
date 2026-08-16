@@ -38,6 +38,15 @@ FORBIDDEN: dict[str, str] = {
     ".delete(": "no client helper may expose a delete call",
 }
 
+# The one file where the word DELETE is not an HTTP verb. TOOL-09 is a promise about what
+# this server does to data in Nextcloud, and the OAuth store is our own SQLite file: it
+# has to drop an expired authorization code and a registration nobody ever used, or it
+# grows without a bound (T-03-17). The exemption is deliberately narrow, two exact SQL
+# forms in one file, so an HTTP DELETE written in the same module is still reported, and
+# ``.delete(`` above is never exempt anywhere.
+FILES_WITH_OWN_SQL = frozenset({"oauth/store.py"})
+SQL_DELETE_FORMS = ("DELETE FROM ", "ON DELETE CASCADE")
+
 # Module level mutable state is forbidden as a rule, because a dictionary that outlives a
 # request is one refactor away from being a session store, and a session store is what
 # breaks the restart proof (D-20). These two are the documented exceptions: both are pure
@@ -101,10 +110,18 @@ def test_the_production_code_contains_no_destructive_request() -> None:
         relative = path.relative_to(SRC).as_posix()
         for number, text in _code_lines(path):
             for needle, why in FORBIDDEN.items():
-                if needle in text:
-                    findings.append(f"{relative}:{number}: {needle!r} ({why}): {text.strip()}")
+                if needle not in text:
+                    continue
+                if needle == "DELETE" and _is_own_sql(relative, text):
+                    continue
+                findings.append(f"{relative}:{number}: {needle!r} ({why}): {text.strip()}")
 
     assert findings == [], "destructive call found:\n" + "\n".join(findings)
+
+
+def _is_own_sql(relative: str, text: str) -> bool:
+    """True for a statement against our own store file, false for anything else."""
+    return relative in FILES_WITH_OWN_SQL and any(form in text for form in SQL_DELETE_FORMS)
 
 
 def test_the_gate_would_notice_a_destructive_call_in_real_code() -> None:
@@ -122,6 +139,23 @@ def test_the_gate_would_notice_a_destructive_call_in_real_code() -> None:
 
     with_a_violation = docstring_text + '\n    await client.request("DELETE", url)\n'
     assert "DELETE" in with_a_violation, "a real call is still visible after filtering"
+
+
+def test_the_sql_exemption_covers_sql_and_nothing_else() -> None:
+    """Counter proof for the narrow exemption: an HTTP DELETE in the store still counts.
+
+    The exemption exists so the OAuth store may drop its own expired rows. If it were
+    written as "ignore DELETE in this file" it would also hide the one line that would
+    make this server delete something in Nextcloud from inside the store.
+    """
+    store = "oauth/store.py"
+    assert _is_own_sql(store, 'conn.execute("DELETE FROM flows WHERE expires_at <= ?")')
+    assert _is_own_sql(store, "auth_id TEXT NOT NULL REFERENCES x(y) ON DELETE CASCADE,")
+    assert not _is_own_sql(store, 'await client.request("DELETE", url)')
+    assert not _is_own_sql("tools/files.py", 'conn.execute("DELETE FROM flows")')
+
+    for relative in FILES_WITH_OWN_SQL:
+        assert (SRC / relative).is_file(), f"{relative} is exempt but does not exist"
 
 
 def test_no_module_level_mutable_state_outside_the_two_documented_caches() -> None:

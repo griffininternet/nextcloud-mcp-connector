@@ -62,3 +62,43 @@ _.authorization_response_iss_parameter_supported
 deck_api_versions
 NSMAP
 get_board
+
+# --- The store API of phase 3 ----------------------------------------------------------
+# oauth/store.py is the persistence layer of the OAuth phase and is built in one piece, in
+# plan 03-02, because its schema and its transactions only make sense together. Its callers
+# arrive in the plans that follow: the consent bridge (03-04) writes flows and
+# authorizations, the authorize and token endpoints (03-05, 03-06) write and redeem codes
+# and tokens, the verifier (03-06) reads access tokens, and the rotation with reuse
+# detection (03-07) is the whole reason redeem_refresh_token and revoke_family exist.
+# Every name below is exercised by tests/unit/test_oauth_store.py, which fails if one of
+# them stops behaving; none of them is reachable from the production call graph yet.
+_.save_client
+_.load_client
+_.touch_client
+_.delete_client
+_.create_flow
+_.load_flow
+_.delete_flow
+_.create_authorization
+_.load_authorization
+_.revoke_authorization
+_.create_auth_code
+_.redeem_auth_code
+_.create_access_token
+_.load_access_token
+_.create_refresh_token
+_.load_refresh_token
+_.redeem_refresh_token
+_.revoke_family
+_.purge_expired
+
+# Fields of the row objects above that this phase writes and a later plan reads:
+# client_secret_hash (03-06 authenticates a confidential client with it), created_at and
+# revoked_at (03-07 and the admin view of phase 4), issued_at and used_at (the grace window
+# of D-41 is decided on used_at, and the auth code row keeps its own used_at as the record
+# that it was consumed).
+_.client_secret_hash
+_.created_at
+_.revoked_at
+_.issued_at
+_.used_at
