@@ -18,11 +18,21 @@ The static bearer mode is the only mode that configures the SDK auth layer, and 
 configures ``auth=`` and ``token_verifier=`` together, because the SDK raises
 ``ValueError`` in the constructor when only one of them is set (pitfall 2).
 
-In the ExApp mode the identity comes from ``AUTHORIZATION-APP-API`` and from nowhere
-else. An ``Authorization`` header that arrives with the same request is not read: HaRP
-forwards whatever the client sent, so accepting it as well would be a second usable auth
-channel next to the one the proxy vouches for, which is exactly the silent fallback D-27
-forbids.
+In the ExApp mode the user id of ``AUTHORIZATION-APP-API`` decides which of two channels
+this call belongs to, and it decides alone:
+
+* a user id in the header is the AppAPI impersonation of AUTH-01. An ``Authorization``
+  header that arrives with the same request is not looked at in this branch at all: HaRP
+  forwards whatever the client sent, so reading it as well would be a second usable auth
+  channel next to the one the proxy vouches for.
+* an empty user id is the OAuth branch of AUTH-03. The bearer of the request was verified
+  by the transport boundary before any MCP code ran, and what this module reads is the
+  identity that boundary resolved from it: the Nextcloud user who consented and the app
+  password of that one connection.
+
+There is no fallback in either direction (D-27). A missing OAuth identity does not become
+an app secret impersonation, and a missing AppAPI user does not make a bearer optional;
+each branch either has its own ground or it fails.
 """
 
 import base64
@@ -40,8 +50,9 @@ from . import config
 from .config import load_stdio_credentials
 from .exapp.auth import AppApiRejected, verify_appapi_headers
 from .nextcloud import NcClients
-from .nextcloud.credentials import Credentials
+from .nextcloud.credentials import MODE_BASIC, Credentials
 from .nextcloud.http import shared_client
+from .oauth.verifier import OAUTH_STATE_ATTR, OAuthIdentity
 
 __all__ = [
     "MCPError",
@@ -74,7 +85,7 @@ def resolve_credentials(ctx: Any) -> Credentials:
 
     if mode == "exapp":
         # headers is not None in this mode either, for the same reason.
-        return _credentials_from_appapi(headers or {})
+        return _credentials_from_appapi(ctx, headers or {})
 
     if mode == "http_passthrough":
         # headers is not None in this mode, select_mode guarantees it.
@@ -139,16 +150,17 @@ def build_auth(
     return StaticBearerVerifier(token), settings
 
 
-def _credentials_from_appapi(headers: Mapping[str, str]) -> Credentials:
+def _credentials_from_appapi(ctx: Any, headers: Mapping[str, str]) -> Credentials:
     """Turn the AppAPI headers of this request into the credentials of one Nextcloud user.
 
-    Two refusals and no third path. A request that AppAPI did not sign is not ours to
-    serve, and a valid app context without a user id is not a person: impersonating
-    nobody with ``APP_SECRET`` would read data no logged in user could reach, which is the
-    one promise this whole project is built on (T-02-12).
+    One refusal and two branches. A request that AppAPI did not sign is not ours to serve;
+    a signed one with a user id is that user; a signed one without is the OAuth branch,
+    where the identity comes from the token the transport boundary already verified.
+    Impersonating nobody with ``APP_SECRET`` is not among the outcomes, because it would
+    read data no logged in user could reach (T-02-12).
 
-    Neither message repeats a header value, and neither of them offers a hint about which
-    check failed: the caller behind these headers is a proxy, not a model.
+    No message repeats a header value, and none of them offers a hint about which check
+    failed: the caller behind these headers is a proxy, not a model.
     """
     settings = config.exapp_settings()
     try:
@@ -160,13 +172,7 @@ def _credentials_from_appapi(headers: Mapping[str, str]) -> Credentials:
         ) from None
 
     if not user:
-        raise MCPError(
-            code=INVALID_REQUEST,
-            message=(
-                "This AppAPI request has no user context, and without a user there is "
-                "nothing this server is allowed to read."
-            ),
-        )
+        return _credentials_from_oauth(ctx, settings)
 
     # The base URL is the one AppAPI deployed us against, never a value from the request.
     return Credentials(
@@ -178,6 +184,66 @@ def _credentials_from_appapi(headers: Mapping[str, str]) -> Credentials:
         app_version=settings.app_version,
         aa_version=settings.aa_version,
     )
+
+
+def _credentials_from_oauth(ctx: Any, settings: config.ExAppSettings) -> Credentials:
+    """The fifth credential mode: one OAuth token, one authorization, one app password.
+
+    The identity is read and not resolved here. ``exapp/middleware.py`` verified the bearer
+    against the token store, loaded the authorization behind it and decrypted its app
+    password before any MCP code ran, and left the result in the state of this request.
+    This function is synchronous, as every credential resolution of this project is, so
+    doing that work here would mean blocking inside a tool call (D-26).
+
+    No third ``MODE_`` value is added for this: towards Nextcloud an app password is Basic
+    authentication, exactly like the one a user pastes into a client in the passthrough
+    mode. The difference is where it came from, not what it is, and a mode of its own would
+    suggest a fifth authentication scheme that does not exist.
+    """
+    identity = _oauth_identity(ctx)
+    if identity is None:
+        raise MCPError(
+            code=INVALID_REQUEST,
+            message=(
+                "This request has no user context: it carries neither a signed in Nextcloud "
+                "user nor an authorized connection, and without one there is nothing this "
+                "server is allowed to read."
+            ),
+        )
+    if identity.revoked:
+        raise MCPError(
+            code=INVALID_REQUEST,
+            message=(
+                "This connection was ended in Nextcloud. Connect the app again to create a new one."
+            ),
+        )
+
+    # The base URL is the one this app was deployed against, never a value from the request.
+    return Credentials(
+        base_url=settings.base_url,
+        user=identity.nc_user,
+        secret=identity.app_password,
+        mode=MODE_BASIC,
+    )
+
+
+def _oauth_identity(ctx: Any) -> OAuthIdentity | None:
+    """The identity the transport boundary left for this request, or ``None``.
+
+    Defensive on the way in and never on the way out: a context without a request, a
+    request without state and a state without our value are one answer, and that answer is
+    a refusal in the caller. The alternative, guessing an identity from anything else in
+    the request, is the confused deputy this whole layer exists against (T-01-12).
+    """
+    try:
+        request = getattr(ctx.request_context, "request", None)
+    except (AttributeError, ValueError):
+        return None
+    state = getattr(request, "state", None)
+    if state is None:
+        return None
+    identity = getattr(state, OAUTH_STATE_ATTR, None)
+    return identity if isinstance(identity, OAuthIdentity) else None
 
 
 def _credentials_from_basic(headers: Mapping[str, str]) -> Credentials:
