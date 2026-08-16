@@ -739,16 +739,10 @@ def onboarding(base: str, nc: str, user: str, password: str) -> None:
     if used.status_code != 200:
         raise CheckFailed(f"the handed out credential answered {used.status_code} on /mcp")
 
-    with httpx.Client(base_url=nc, timeout=TIMEOUT) as client:
-        sessions = client.get(
-            "/ocs/v2.php/core/getapppassword",
-            auth=(user, credential),
-            headers={"OCS-APIRequest": "true", "Accept": "application/json"},
-        )
     note(
         "sc 3",
-        f"the credential is a Nextcloud app password "
-        f"(getapppassword answered {sessions.status_code})",
+        "the entry of this credential under Devices and sessions is read with "
+        f"'occ user:auth-tokens:list {user}'; Nextcloud has no API for that list",
     )
 
 
