@@ -145,7 +145,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 03-06-PLAN.md - Zustimmung, Code-Tausch, Token-Verifier und fuenfter Credential-Modus (Wave 5)
+- [x] 03-06-PLAN.md - Zustimmung, Code-Tausch, Token-Verifier und fuenfter Credential-Modus (Wave 5)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
