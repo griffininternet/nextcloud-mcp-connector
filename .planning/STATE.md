@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-02-PLAN.md
-last_updated: "2026-08-16T00:00:00.000Z"
+stopped_at: Completed 03-04-PLAN.md
+last_updated: "2026-08-16T01:25:00.000Z"
 last_activity: 2026-08-16
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 30
-  completed_plans: 24
-  percent: 40
+  completed_plans: 25
+  percent: 42
 ---
 
 # Project State
@@ -26,19 +26,19 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 3
-Plan: 4 of 9
+Plan: 5 of 9
 Status: In progress
 Last activity: 2026-08-16
 
-Progress: [████████░░] 80%
+Progress: [████████░░] 83%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 24
+- Total plans completed: 25
 - Average duration: 35 min
-- Total execution time: 13.5 hours
+- Total execution time: 13.9 hours
 
 **By Phase:**
 
@@ -46,7 +46,7 @@ Progress: [████████░░] 80%
 |-------|-------|-------|----------|
 | 1 | 14 | - | - |
 | 2 | 7 | 254 min | 36 min |
-| 3 | 3 | 180 min | 60 min |
+| 3 | 4 | 205 min | 51 min |
 
 **Recent Trend:**
 
@@ -77,6 +77,7 @@ Progress: [████████░░] 80%
 | Phase 03 P01 | 65 min | 3 tasks | 15 files |
 | Phase 03 P03 | 20 min | 2 tasks | 6 files |
 | Phase 03 P02 | 95 min | 3 tasks | 15 files |
+| Phase 03 P04 | 25 min | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -202,11 +203,19 @@ Recent decisions affecting current work:
 - [Phase 03-oauth-2-1]: Client-Verfall laeuft nur in purge_expired, nie im Schreibpfad: das Loeschen eines Clients nimmt ueber die Kaskade seine Autorisierungen mit
 - [Phase 03-oauth-2-1]: cryptography ist ab 03-02 direkte Dependency (Owner-Freigabe 16.08.); der Lock-Schritt lief mit `uv lock` statt `uv add`, damit die .venv unberuehrt bleibt
 - [Phase 03-oauth-2-1]: Das Destruktiv-Gate bekommt eine eng gefasste, gegengeprobte Ausnahme fuer SQL in oauth/store.py (DELETE FROM, ON DELETE CASCADE): TOOL-09 ist ein Versprechen ueber Daten in Nextcloud, nicht ueber die eigene SQLite-Datei
+- [Phase 03-oauth-2-1]: Der Poll laeuft immer gegen die konfigurierte Basis-URL mit festem Pfad, nie gegen die absolute Adresse aus der Startantwort (Pitfall 7c); ein Test mit einer zweiten respx-Route belegt, dass diese Adresse nie aufgerufen wird
+- [Phase 03-oauth-2-1]: 404 heisst bei Nextcloud gleichzeitig 'noch nicht fertig' und 'unbekannt oder abgelaufen'; die Unterscheidung kommt deshalb aus unserer eigenen Zwanzig-Minuten-Frist im Flow-Datensatz, nie aus der Antwort
+- [Phase 03-oauth-2-1]: Der Client-Name wird vor dem Absenden auf druckbares ASCII reduziert, gekuerzt und mit festem Praefix versehen: er wird bei Nextcloud zum User-Agent und damit zum angezeigten Namen im Bestaetigungsdialog (Pitfall 8)
+- [Phase 03-oauth-2-1]: Der Anmeldelink steht auf der Seite, die der Start erzeugt, und nicht auf der sich alle drei Sekunden neu ladenden Warteseite; ein Link, der drei Sekunden nach dem Erscheinen verschwindet, ist schlechter als einer, den 'Start over' neu holt
+- [Phase 03-oauth-2-1]: Die Onboarding-Strecke bucht ihre Flows unter einer reservierten Client-Zeile mit allowed=false, weil die flows-Tabelle einen Fremdschluessel auf clients hat und dieser Weg gar keinen registrierten Client kennt
+- [Phase 03-oauth-2-1]: Der Flow-Datensatz wird geloescht, bevor die Zugangsberechtigung gerendert wird (das 200 des Polls kommt genau einmal); schlaegt das Loeschen fehl, wird das gerade erzeugte App-Passwort widerrufen statt ungenutzt in Nextcloud zu bleiben
+- [Phase 03-oauth-2-1]: Die prozessweite Store-Instanz und der purge_expired-Aufruf leben in der Closure der Routen-Fabrik, nicht als Modulglobale: ein Zustand, der Requests ueberlebt, ist sonst einen Refactor von einem Session-Store entfernt (D-20)
+- [Phase 03-oauth-2-1]: Ein GET startet nie einen Anmeldevorgang; der zustandsaendernde Schritt der Browser-Strecke ist ein POST mit benannter Aktion (T-03-35)
 
 ### Pending Todos
 
 - **Leseform der ExApp-Config (Plan 03-08):** `oauth/crypto.CONFIG_READ_PARAM` steht auf `configKeys[]` und ist die einzige Stelle dieses Plans, die nicht gegen eine laufende AppAPI bestaetigt ist. Beim Live-Beweis pruefen und, falls noetig, diese eine Konstante samt Test korrigieren.
-- **Verdrahtung des Stores (Plan 03-04):** Es gibt noch keinen Produktionsaufrufer fuer `data_key` und keine `OAuthStore`-Instanz im Prozess. Der Plan, der zuerst einen Store braucht, legt die Instanz an und ruft `purge_expired` beim Start.
+- **Drosselung der PUBLIC-Auth-Pfade (Plan 03-07, SC 5):** `/connect` legt anonym Flows an. Sie laufen nach zwanzig Minuten ab und werden opportunistisch aufgeraeumt, eine Begrenzung der Anlagerate fehlt aber noch (T-03-35).
 
 - **Owner-Schritt 01-13:** PR an nextcloud/context_agent#227 einreichen. Branch und DCO-Commit liegen im Fork street1983nk/context_agent (fix/stateless-http-session-compat, def1425), der PR-Text in docs/contrib/227-pr-body.md. Kommando und Pruefpunkte stehen in .planning/phases/01-server-kern/01-13-SUMMARY.md. Vorher `git push origin main` im Connector-Repo, damit der verlinkte Regressionstest oeffentlich sichtbar ist. Danach PR-URL nachtragen, ROADMAP 01-13 abhaken, CONTRIB-01 auf Complete.
 - **Owner-Schritt 01-14:** Ein Durchgang mit Claude Desktop selbst nach docs/client-setup.md. Die Anleitung ist gegen die Referenz-Clients der Testsuite verprobt (mcp 2.0 und mcp 1.29 gegen denselben laufenden Endpoint, plus scripts/acceptance_all_tools.py ueber alle 15 Tools per stdio); die Konfigurationspfade fuer Claude Desktop stammen aus der offiziellen Dokumentation und sind auf diesem Rechner nicht verifiziert.
@@ -231,6 +240,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-16T00:00:00.000Z
-Stopped at: Completed 03-02-PLAN.md
+Last session: 2026-08-16T01:25:00.000Z
+Stopped at: Completed 03-04-PLAN.md
 Resume file: None

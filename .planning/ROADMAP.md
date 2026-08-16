@@ -137,7 +137,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 03-04-PLAN.md - Login Flow v2 und Onboarding ohne OAuth (AUTH-02) (Wave 3)
+- [x] 03-04-PLAN.md - Login Flow v2 und Onboarding ohne OAuth (AUTH-02) (Wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -201,7 +201,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Server-Kern | 14/14 | Complete    | 2026-08-14 |
 | 2. ExApp-Shell | 7/7 | Complete    | 2026-08-15 |
-| 3. OAuth 2.1 | 3/9 | In Progress|  |
+| 3. OAuth 2.1 | 4/9 | In Progress|  |
 | 4. Per-User-Verwaltung und prepare_context | 0/TBD | Not started | - |
 | 5. Hardening und Store-Einreichung | 0/TBD | Not started | - |
 
