@@ -351,6 +351,26 @@ def test_the_result_page_says_how_to_use_it_and_how_to_revoke_it(client: TestCli
     assert strings.CONNECT_RESULT_ONCE in text
 
 
+# --- WR-06: a ciphertext that cannot be read is a page, never a 500 -----------------------
+
+
+@respx.mock
+def test_a_flow_written_with_another_data_key_is_a_page(store: OAuthStore, tmp_path: Path) -> None:
+    """WR-06: load_flow decrypts the poll token of the row, so a changed data key and a
+    damaged blob both raise out of it. Unguarded that reached Starlette as a bare 500,
+    while the docstring of the module says no rejection escapes as one."""
+    flow_id = start_a_flow(TestClient(app_with(store)))
+    stranger = OAuthStore(tmp_path / "oauth.sqlite3", bytes(range(32, 64)))
+    client = TestClient(app_with(stranger))
+
+    response = client.get(wait_url(flow_id))
+
+    assert response.status_code == 500, "fail closed, and answered by us"
+    assert strings.ERROR_GENERIC_TITLE in response.text
+    assert "Traceback" not in response.text
+    assert POLL_TOKEN not in response.text
+
+
 # --- CR-02: the requests that cost a Nextcloud round trip are the ones that are counted ---
 
 

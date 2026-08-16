@@ -741,6 +741,47 @@ def test_a_second_decision_on_the_same_flow_creates_nothing_more(store: OAuthSto
     assert len(rows(store, "authorizations")) == 1
 
 
+# --- WR-06: a ciphertext that cannot be read is a page, never a 500 -----------------------
+
+
+@pytest.mark.parametrize("step", ["", ui_consent.STEP_WAIT], ids=["screen", "waiting"])
+def test_a_flow_written_with_another_data_key_is_a_page(
+    store: OAuthStore, tmp_path: Path, step: str
+) -> None:
+    """WR-06: load_flow decrypts the poll token of the row, so a changed data key and a
+    damaged blob both raise out of it. Both call sites of this module were unguarded, so
+    such a row reached Starlette as a bare 500 while the docstring said the opposite."""
+    provider = make(store)
+    register(provider)
+    _client, flow_id, _target = opened(provider)
+    stranger = OAuthStore(tmp_path / "oauth.sqlite3", bytes(range(32, 64)))
+    client = TestClient(application(make(stranger)))
+
+    response = client.get(consent_url(flow_id, step=step))
+
+    assert response.status_code == 500, "fail closed, and answered by us"
+    assert strings.ERROR_GENERIC_TITLE in response.text
+    assert "Traceback" not in response.text
+    assert POLL_TOKEN not in response.text
+
+
+def test_a_decision_on_a_flow_that_cannot_be_read_is_a_page(
+    store: OAuthStore, tmp_path: Path
+) -> None:
+    """The same guard on the request that would grant something (WR-06)."""
+    provider = make(store)
+    register(provider)
+    _client, flow_id, _page = signed_in(provider)
+    stranger = OAuthStore(tmp_path / "oauth.sqlite3", bytes(range(32, 64)))
+    deciding = TestClient(application(make(stranger)))
+
+    response = decide(deciding, flow_id, ui_consent.DECISION_APPROVE, store=store)
+
+    assert response.status_code == 500
+    assert strings.ERROR_GENERIC_TITLE in response.text
+    assert rows(store, "auth_codes") == []
+
+
 # --- CR-02: an authorization request costs a Nextcloud login flow, so it is counted -------
 
 

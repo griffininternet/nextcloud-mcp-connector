@@ -261,7 +261,14 @@ async def _wait(request: Request, store: StoreProvider, env: Mapping[str, str] |
 
     # Loaded without the deadline, so that "ran out of time" and "never existed" can be told
     # apart here. Nextcloud cannot tell them apart: it answers 404 for both (pitfall 7).
-    row = await opened.load_flow(flow_id, now=0)
+    try:
+        # ``load_flow`` decrypts the poll token of the row, and a data key that changed or
+        # a damaged blob make that a refusal. Unguarded it reached Starlette as a bare 500,
+        # while the docstring of this module said no rejection escapes as one (WR-06).
+        row = await opened.load_flow(flow_id, now=0)
+    except Exception:
+        logger.exception("a flow record could not be read back")
+        return _generic("the flow record could not be read", env)
     if row is None:
         return _page(errors.error_page("E3", env=env))
     if row.expires_at <= _now():

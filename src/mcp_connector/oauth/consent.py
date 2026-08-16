@@ -246,7 +246,9 @@ async def _screen(
 
     # Loaded without the deadline, so that "ran out of time" and "never existed" can be
     # told apart here. Nextcloud cannot tell them apart: it answers 404 for both.
-    row = await store.load_flow(flow_id, now=0)
+    row = await _flow_or_page(store, flow_id, env)
+    if isinstance(row, Response):
+        return row
     if row is None:
         return _page(errors.error_page("E3", env=env))
     if row.expires_at <= _now():
@@ -362,7 +364,9 @@ async def _decide(
     if isinstance(store, Response):
         return store
 
-    row = await store.load_flow(flow_id, now=0)
+    row = await _flow_or_page(store, flow_id, env)
+    if isinstance(row, Response):
+        return row
     if row is None:
         # Also the second press of the same button: an approved flow is gone, so the page
         # that says "this link has expired" is exactly right for it.
@@ -546,6 +550,25 @@ def _nextcloud_base(env: Mapping[str, str] | None) -> str:
         return config.exapp_settings(env).base_url
     except ToolError:
         return ""
+
+
+async def _flow_or_page(
+    store: OAuthStore, flow_id: str, env: Mapping[str, str] | None
+) -> FlowRow | Response | None:
+    """The flow record, ``None`` when there is none, or the page that ends the request.
+
+    ``load_flow`` decrypts the poll token of the row, and a data key that changed or a
+    damaged blob make that a :class:`~mcp_connector.oauth.crypto.DecryptionRejected`. This
+    call site was unguarded, so such a row reached Starlette as a bare 500 while the module
+    docstring said no refusal escapes as one (WR-06). Every other read of a secret in this
+    phase is guarded the same way, and the answer is the generic page: the reader can do
+    nothing about it, and the reference in the log is what an administrator needs.
+    """
+    try:
+        return await store.load_flow(flow_id, now=0)
+    except Exception:
+        logger.exception("a flow record could not be read back")
+        return _generic("the flow record could not be read", env)
 
 
 async def _store_or_page(
