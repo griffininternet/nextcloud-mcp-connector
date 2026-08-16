@@ -79,9 +79,21 @@ PROXY_OWNED_HEADERS = (
 )
 
 #: What this phase opens: the MCP transport, the three discovery documents, the two pages
-#: of the browser onboarding, the four endpoints of the authorization server and the
-#: consent screen behind /authorize (D-38, AUTH-02, AUTH-03).
-DECLARED_ROUTES = 11
+#: of the browser onboarding, the four endpoints of the authorization server, the consent
+#: screen behind /authorize and the decision behind that screen (D-38, AUTH-02, AUTH-03).
+DECLARED_ROUTES = 12
+
+#: The routes that must not be PUBLIC, and the level they carry instead. One entry, and it
+#: is the enforcement point of CR-01: the decision is the request that turns a finished
+#: Nextcloud sign in into a grant, and only HaRP can say which account is behind the
+#: browser that sends it. A PUBLIC decision route is the Login Flow v2 relay again, so the
+#: gate below refuses the manifest instead of trusting a review to notice.
+ACCESS_LEVELS = {"^/authorize/decide/?$": "USER"}
+
+#: Every access level this app is allowed to declare at all. ADMIN is deliberately absent:
+#: no route of this app is an administrative one, and a level nobody meant to use is a
+#: level nobody checks.
+ALLOWED_ACCESS_LEVELS = frozenset({"PUBLIC", "USER"})
 
 #: The onboarding paths the application registers, compared with the manifest below. Set
 #: equality for the same reason as the well-known documents: a page that is declared but not
@@ -94,11 +106,13 @@ CONNECT_PATHS = ("/connect", "/connect/wait")
 #: and a served one that is not declared is unreachable through HaRP (AUTH-03, D-38).
 AS_PATHS = ("/authorize", "/token", "/register", "/revoke")
 
-#: The consent screen of plan 03-05. Declared with the four above and compared with them,
-#: because it is the page /authorize sends every browser to.
+#: The consent screen of plan 03-05 and the decision behind it. Declared with the four
+#: above and compared with them, because the screen is the page /authorize sends every
+#: browser to and the decision is the request that grant hangs on (CR-01).
 CONSENT_PATH = "/authorize/consent"
+DECIDE_PATH = "/authorize/decide"
 
-AUTHORIZATION_PATHS = (*AS_PATHS, CONSENT_PATH)
+AUTHORIZATION_PATHS = (*AS_PATHS, CONSENT_PATH, DECIDE_PATH)
 
 #: Enough of a deploy environment to build the application the manifest is compared against.
 MANIFEST_ENV = {
@@ -144,7 +158,9 @@ def manifest_problems(root: etree._Element) -> list[str]:
 
     routes = root.findall(".//route")
     if len(routes) != DECLARED_ROUTES:
-        problems.append(f"{len(routes)} routes declared, this phase opens exactly ten")
+        problems.append(
+            f"{len(routes)} routes declared, this phase opens exactly {DECLARED_ROUTES}"
+        )
 
     for route in routes:
         url = (route.findtext("url") or "").strip()
@@ -159,6 +175,15 @@ def manifest_problems(root: etree._Element) -> list[str]:
                 problems.append(f"route {url!r} does not have {header} stripped by the proxy")
         if access_level == "PUBLIC" and not url.startswith("^/"):
             problems.append(f"public route {url!r} is not anchored at a path")
+        if access_level not in ALLOWED_ACCESS_LEVELS:
+            problems.append(f"route {url!r} declares the access level {access_level!r}")
+        expected = ACCESS_LEVELS.get(url, "PUBLIC")
+        if access_level != expected:
+            # The access level table of CR-01. The decision behind the consent screen is
+            # the one request whose caller HaRP has to resolve, and every other route is
+            # PUBLIC for a reason written next to it in the manifest. A route that changes
+            # level silently is a change of who may reach it, so it fails here.
+            problems.append(f"route {url!r} is {access_level!r} and has to be {expected!r}")
         if not url.endswith("$"):
             # HaRP matches with re.match, which anchors at the start only, so a pattern
             # without an end anchor also matches every neighbour that starts the same way:
@@ -584,14 +609,15 @@ def test_the_tunnel_probe_reads_the_process_table(
     assert result.returncode == expected_code, result.stderr
 
 
-def test_the_manifest_declares_exactly_the_eleven_routes_of_this_phase(
+def test_the_manifest_declares_exactly_the_twelve_routes_of_this_phase(
     manifest_root: etree._Element,
 ) -> None:
     """D-38: /mcp is PUBLIC since plan 03-01, the one broad well-known route that carried the
     accepted risk AR-02-06 is three fully anchored ones now, plan 03-04 adds the two pages of
     the browser onboarding, and plan 03-05 adds the four endpoints of the authorization
     server plus the consent screen behind /authorize. Every one of them is anchored at both
-    ends and PUBLIC for a reason of its own."""
+    ends and PUBLIC for a reason of its own, except the decision behind the consent screen:
+    that one is USER, because HaRP has to name the account that decides (CR-01)."""
     routes = [
         ((route.findtext("url") or "").strip(), (route.findtext("access_level") or "").strip())
         for route in manifest_root.findall(".//route")
@@ -605,6 +631,7 @@ def test_the_manifest_declares_exactly_the_eleven_routes_of_this_phase(
         ("^/connect/?$", "PUBLIC"),
         ("^/authorize/?$", "PUBLIC"),
         ("^/authorize/consent/?$", "PUBLIC"),
+        ("^/authorize/decide/?$", "USER"),
         ("^/token/?$", "PUBLIC"),
         ("^/register/?$", "PUBLIC"),
         ("^/revoke/?$", "PUBLIC"),
@@ -666,7 +693,8 @@ def test_the_authorization_routes_declare_exactly_the_verbs_they_answer(
     }
 
     assert verbs["^/authorize/?$"] == "GET,POST"
-    assert verbs["^/authorize/consent/?$"] == "GET,POST"
+    assert verbs["^/authorize/consent/?$"] == "GET"
+    assert verbs["^/authorize/decide/?$"] == "POST"
     assert verbs["^/token/?$"] == "POST"
     assert verbs["^/register/?$"] == "POST"
     assert verbs["^/revoke/?$"] == "POST"
@@ -758,6 +786,43 @@ def test_the_manifest_gate_rejects_a_wide_public_route(manifest_root: etree._Ele
     assert any("/enabled" in problem for problem in problems)
 
 
+def test_the_manifest_gate_rejects_a_public_decision_route(
+    manifest_root: etree._Element,
+) -> None:
+    """CR-01: with the decision PUBLIC, HaRP forwards it without resolving an account, so
+    the app has nothing to compare the deciding browser against and the Login Flow v2 relay
+    is open again. The counter probe for the access level table."""
+    routes = {
+        (route.findtext("url") or "").strip(): route for route in manifest_root.findall(".//route")
+    }
+    element = routes["^/authorize/decide/?$"].find("access_level")
+    assert element is not None
+    element.text = "PUBLIC"
+
+    problems = manifest_problems(manifest_root)
+
+    assert any("has to be 'USER'" in problem for problem in problems)
+
+
+def test_the_manifest_gate_rejects_an_unexpected_user_route(
+    manifest_root: etree._Element,
+) -> None:
+    """The same table read the other way: a route that quietly becomes USER stops answering
+    the anonymous request it exists for, and the discovery documents and /mcp are exactly
+    those routes (pitfall 6). PUBLIC is the declared default and a deviation has to be
+    written into the table, not into the manifest alone."""
+    routes = {
+        (route.findtext("url") or "").strip(): route for route in manifest_root.findall(".//route")
+    }
+    element = routes["^/mcp/?$"].find("access_level")
+    assert element is not None
+    element.text = "USER"
+
+    problems = manifest_problems(manifest_root)
+
+    assert any("has to be 'PUBLIC'" in problem for problem in problems)
+
+
 def test_the_manifest_gate_rejects_a_route_that_keeps_the_client_headers(
     manifest_root: etree._Element,
 ) -> None:
@@ -781,15 +846,20 @@ def test_the_bootstrap_registration_strips_the_same_headers() -> None:
         assert f'"{header}"' in text, f"{header} is not stripped by the registration"
 
 
-def test_the_bootstrap_registration_declares_the_same_eleven_routes(
+def test_the_bootstrap_registration_declares_the_same_twelve_routes(
     manifest_root: etree._Element,
 ) -> None:
     """The json-info payload overrides the manifest, so a route that only lives in
     appinfo/info.xml is not registered on the test instance at all. access_level travels as
-    a number there: 0 is PUBLIC, and this phase declares nothing else."""
+    a number there: 0 is PUBLIC and 1 is USER, and the one route that carries 1 is the one
+    the manifest declares as USER (CR-01)."""
     text = BOOTSTRAP.read_text(encoding="utf-8")
-    assert text.count('"access_level":0') == DECLARED_ROUTES
-    assert '"access_level":1' not in text
+    assert text.count('"access_level":0') == DECLARED_ROUTES - len(ACCESS_LEVELS)
+    assert text.count('"access_level":1') == len(ACCESS_LEVELS)
+    assert '"access_level":2' not in text
+    for url in ACCESS_LEVELS:
+        pattern = url.replace("\\", "\\\\")
+        assert f'"url":"{pattern}","verb":"POST","access_level":1' in text, url
     for path in declared_well_known_paths(manifest_root):
         # The payload carries the pattern with a doubled backslash escape, so the literal
         # path is compared without the dot escape (see the comment above json_info).

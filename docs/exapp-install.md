@@ -28,7 +28,7 @@ installation fails at the very first step, the heartbeat, with "heartbeat check 
 Make sure that Nextcloud instance and ExApp can reach it other." Nextcloud All-in-One ships
 exactly this rule in its bundled Caddy, and `deploy/Caddyfile` rebuilds it.
 
-The app declares eleven routes, and they are its whole external surface. As of phase 3 they
+The app declares twelve routes, and they are its whole external surface. As of phase 3 they
 are these:
 
 | Route | Access | What it is for |
@@ -39,10 +39,13 @@ are these:
 | `/.well-known/openid-configuration` | public | The same document at the one path that survives a stripped prefix. |
 | `/connect`, `/connect/wait` | public | The browser onboarding for clients that cannot speak OAuth (AUTH-02). |
 | `/authorize`, `/authorize/consent` | public | The authorization endpoint and the consent screen. |
+| `/authorize/decide` | user | The decision behind the consent screen. The one route that is not public: HaRP resolves the signed in Nextcloud account for it, and the app grants nothing unless that account is the one that signed in (CR-01). |
 | `/token`, `/register`, `/revoke` | public | The machine endpoints of the authorization server. |
 
 Public here means that HaRP does not decide access; every one of these routes carries its
-own check, and `/mcp` refuses any request without a bearer this app issued. The OAuth half
+own check, and `/mcp` refuses any request without a bearer this app issued. The one `user`
+route is the exception in both directions: HaRP refuses it without a Nextcloud session, and
+the app refuses it unless the session belongs to the account whose sign in it decides. The OAuth half
 is configured in [oauth-setup.md](./oauth-setup.md), which also lists the four deploy
 variables the manifest declares.
 

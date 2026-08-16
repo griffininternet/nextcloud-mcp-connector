@@ -32,6 +32,14 @@ exists for the test topology and nowhere else. No module under ``src/`` contains
 automation, no product code ever sees a user password, and ``tests/unit/test_oauth_abuse``
 keeps a gate over ``src/`` that says so.
 
+The decision needs the same actor for a second reason since CR-01: ``/authorize/decide``
+is declared ``USER``, so HaRP resolves the Nextcloud account of the request and the app
+grants nothing unless that account is the one that signed in. A browser carries it in the
+session cookie of the sign in it just completed; this walker carries it as a credential of
+that one request. The step before it posts the same decision *without* an account and
+refuses to continue if that one is granted, which is the relay attack of CR-01 walked over
+the full chain.
+
 Nothing here changes the instance beyond what it creates itself: one client registration,
 one authorization, one note, and it hands all three back at the end.
 """
@@ -327,9 +335,27 @@ def connect(
             raise CheckFailed(f"the consent screen answered {screen.status_code}")
         confirm = hidden_field(screen.text, "confirm")
 
-        approved = client.post(
-            f"{base}/authorize/consent",
+        # The decision is a USER route since CR-01, so HaRP resolves the Nextcloud account
+        # behind the request before this app sees it, and the app refuses a decision that
+        # does not come from the account that signed in. A browser brings that account in
+        # its session cookie; this walker is not a browser, so it brings the same account
+        # as a credential of the request. Without it HaRP answers 403 and no code exists,
+        # which is exactly the refusal the relay attack now runs into.
+        refused = client.post(
+            f"{base}/authorize/decide",
             data={"flow": flow_id, "confirm": confirm, "decision": "approve"},
+        )
+        if refused.status_code == 302:
+            raise CheckFailed(
+                "the decision was granted without a Nextcloud account behind it (CR-01)"
+            )
+        if verbose:
+            report("step 5", "POST", "/authorize/decide", refused.status_code, identity="none")
+
+        approved = client.post(
+            f"{base}/authorize/decide",
+            data={"flow": flow_id, "confirm": confirm, "decision": "approve"},
+            auth=(user, password),
         )
         if approved.status_code != 302:
             raise CheckFailed(f"the approval answered {approved.status_code}, not a redirect")
@@ -338,7 +364,7 @@ def connect(
             report(
                 "step 5",
                 "POST",
-                "/authorize/consent",
+                "/authorize/decide",
                 approved.status_code,
                 code="present" if returned.get("code") else "missing",
                 state="matches" if returned.get("state") == [state] else "differs",

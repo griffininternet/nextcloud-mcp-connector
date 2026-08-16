@@ -46,6 +46,7 @@ from . import icons, layout, strings
 __all__ = [
     "CONFIRM_PARAM",
     "CONSENT_PATH",
+    "DECIDE_PATH",
     "DECISION_APPROVE",
     "DECISION_DENY",
     "DECISION_PARAM",
@@ -69,6 +70,14 @@ __all__ = [
 #: every other route of this app (D-38, pitfall 14). ``/authorize`` itself is the endpoint
 #: of the specification and is declared separately.
 CONSENT_PATH = "/authorize/consent"
+
+#: Where the decision of that surface is posted, and the reason it is a path of its own
+#: (CR-01). The screen has to be reachable by a browser that is not signed in yet, so it
+#: stays PUBLIC; the request that turns a sign in into a grant must not be, so it is
+#: declared ``USER`` in ``appinfo/info.xml`` and HaRP resolves the signed in Nextcloud
+#: account for it. The route compares that account with the one the sign in produced, so a
+#: flow id alone no longer decides anything.
+DECIDE_PATH = "/authorize/decide"
 
 #: The flow id travels as a query parameter. It is what connects this page to one running
 #: authorization request, which is why every page here carries ``Referrer-Policy:
@@ -195,6 +204,9 @@ def consent_page(
     * the deny button is rendered before the approve button, so the safe action is the one
       the keyboard reaches first,
     * the form carries the anti forgery value of exactly this flow as a hidden field,
+    * it posts to :data:`DECIDE_PATH` and not to this page: that route is declared ``USER``,
+      so the browser that decides has to be signed in to Nextcloud, and the route grants
+      nothing unless that account is the one this sign in produced (CR-01),
     * the initial focus is the heading and never the granting button, because a page that
       opens with that button focused turns a stray Enter key into a grant.
     """
@@ -225,7 +237,7 @@ def consent_page(
                 ]
             ),
             layout.form(
-                CONSENT_PATH,
+                DECIDE_PATH,
                 [
                     layout.button_secondary(
                         strings.CONSENT_DENY, name=DECISION_PARAM, value=DECISION_DENY

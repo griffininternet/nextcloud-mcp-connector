@@ -40,7 +40,7 @@ Every request runs under the identity of the signed in user, so an assistant nev
 			<image-tag>0.1.0</image-tag>
 		</docker-install>
 		<!--
-		  - Exactly eleven routes, and they are the whole external attack surface of this app.
+		  - Exactly twelve routes, and they are the whole external attack surface of this app.
 		  -
 		  - The three AppAPI lifecycle paths (/heartbeat, /init and /enabled) are deliberately
 		  - absent, and this comment is the only place they appear here. A path that matches no
@@ -112,10 +112,20 @@ Every request runs under the identity of the signed in user, so an assistant nev
 		  - /authorize/consent is the consent screen and the bridge into the Nextcloud sign
 		  - in: it shows who is asking, hands the user over to Nextcloud's own pages and
 		  - waits for the result. It is PUBLIC for the reason /authorize is, and it takes
-		  - GET and POST because the decision of plan 03-06 is a POST on the same address;
-		  - the verb is declared now so the manifest changes once instead of twice. The page
-		  - takes one unguessable flow id and the sign in address Nextcloud handed us, and
-		  - it refuses to render an address that does not belong to this instance.
+		  - GET only. The page takes one unguessable flow id and the sign in address
+		  - Nextcloud handed us, and it refuses to render an address that does not belong to
+		  - this instance.
+		  -
+		  - /authorize/decide is the decision behind that screen and the one route of this
+		  - app with access_level USER (CR-01). It is the request that turns a finished sign
+		  - in into an authorization code, and the flow id cannot authorise it: that value
+		  - belongs to whoever started the flow, which in the OAuth path is the client and
+		  - not the user, so a stranger could finish a sign in somebody else performed
+		  - (the Login Flow v2 relay). With USER, HaRP resolves the signed in Nextcloud
+		  - account and writes it into AUTHORIZATION-APP-API, and the app grants nothing
+		  - unless that account is the one the sign in produced. It is reachable exactly
+		  - when it has to be: a user who just signed in through Login Flow v2 is signed in
+		  - to Nextcloud in that browser, so the session is there when the form is posted.
 		-->
 		<routes>
 			<route>
@@ -162,8 +172,14 @@ Every request runs under the identity of the signed in user, so an assistant nev
 			</route>
 			<route>
 				<url>^/authorize/consent/?$</url>
-				<verb>GET,POST</verb>
+				<verb>GET</verb>
 				<access_level>PUBLIC</access_level>
+				<headers_to_exclude>["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERSION","X-ORIGIN-IP"]</headers_to_exclude>
+			</route>
+			<route>
+				<url>^/authorize/decide/?$</url>
+				<verb>POST</verb>
+				<access_level>USER</access_level>
 				<headers_to_exclude>["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERSION","X-ORIGIN-IP"]</headers_to_exclude>
 			</route>
 			<route>

@@ -31,6 +31,16 @@ done with that row yet: no token exists without an authorization code, and plan 
 creates the code only when the user approves. The denial path of that plan revokes the app
 password again, and that is the one piece of housekeeping this state owes.
 
+**Why the decision has a route of its own.** The screen and the decision are two different
+security problems (CR-01). The screen has to be reachable by a browser that is not signed
+in to Nextcloud yet, because that is the state it exists for, so it is PUBLIC. The decision
+turns a sign in into a grant, and the only fact that says the person deciding is the person
+who signed in is the Nextcloud account behind the browser. So the decision lives at
+``/authorize/decide``, that route is declared ``USER`` in ``appinfo/info.xml``, HaRP
+resolves the account for it, and :func:`_decide` compares that account with the one the
+sign in produced. Without it the flow id alone decided, and the flow id belongs to whoever
+started the flow.
+
 The route is a factory like every other one of this project and is attached by
 ``entry_exapp`` alone (D-23). The guards return a response instead of raising, so no
 refusal can escape as a 500 (the shape of ``exapp/lifecycle.py``).
@@ -54,11 +64,13 @@ from starlette.routing import Route
 
 from .. import config
 from ..errors import ToolError
+from ..exapp.auth import appapi_user, is_user
 from ..exapp.responses import NO_STORE
 from ..exapp.ui import errors
 from ..exapp.ui.consent import (
     CONFIRM_PARAM,
     CONSENT_PATH,
+    DECIDE_PATH,
     DECISION_APPROVE,
     DECISION_DENY,
     DECISION_PARAM,
@@ -79,7 +91,13 @@ from .registry import redirect_uri_allowed
 from .store import FlowRow, OAuthStore
 from .throttle import CLASS_AUTHORIZE, Throttle, Throttled
 
-__all__ = ["AUTHORIZATION_PATH", "CODE_BYTES", "CONSENT_PATH", "consent_routes"]
+__all__ = [
+    "AUTHORIZATION_PATH",
+    "CODE_BYTES",
+    "CONSENT_PATH",
+    "DECIDE_PATH",
+    "consent_routes",
+]
 
 #: 32 bytes of entropy behind an authorization code, which ``token_urlsafe`` renders as 43
 #: characters. The same size as every other secret of this phase: the code is a bearer
@@ -114,21 +132,31 @@ def consent_routes(
         return await handler.handle(request)
 
     async def consent(request: Request) -> Response:
-        """The consent surface: hand over, wait, decide.
+        """The consent surface: hand over, wait, show the decision screen.
 
-        One route and two verbs, because they are two halves of one page: the GET renders
-        the state a user is in, the POST is the decision they made. A GET never grants
-        anything whatever it carries, which is why the decision is read out of the form and
-        never out of the query (T-03-50).
+        A GET only, and it grants nothing whatever it carries (T-03-50). It is the one
+        half of this surface a browser may reach without being signed in to Nextcloud,
+        because that is where the sign in is offered in the first place, which is why the
+        route stays PUBLIC in ``appinfo/info.xml``.
         """
-        if request.method == "POST":
-            return await _decide(await request.form(), provider, env)
         return await _screen(request.query_params, provider, env)
+
+    async def decide(request: Request) -> Response:
+        """The other half: the decision, on a path of its own because it grants something.
+
+        Split off the consent screen for CR-01. The screen may be anonymous, the decision
+        may not: this path is declared ``USER``, so HaRP resolves the signed in Nextcloud
+        account before this application sees the request, and :func:`_decide` refuses every
+        decision that does not come from the account whose sign in produced the
+        authorization.
+        """
+        return await _decide(request, provider, env)
 
     counters = throttle if throttle is not None else Throttle()
     routes = [
         Route(AUTHORIZATION_PATH, authorize, methods=["GET", "POST"]),
-        Route(CONSENT_PATH, consent, methods=["GET", "POST"]),
+        Route(CONSENT_PATH, consent, methods=["GET"]),
+        Route(DECIDE_PATH, decide, methods=["POST"]),
     ]
     for route in routes:
         route.app = Throttled(route.app, counters, CLASS_AUTHORIZE, machine=False, env=env)
@@ -289,7 +317,7 @@ def _decision(
 
 
 async def _decide(
-    form: FormData,
+    request: Request,
     provider: NextcloudOAuthProvider,
     env: Mapping[str, str] | None,
 ) -> Response:
@@ -298,8 +326,20 @@ async def _decide(
     The order of the checks is the order of the things that can be wrong, and every one of
     them ends the request without touching a row: no flow, no time left, no anti forgery
     value, a client that was blocked while the user was reading, a sign in that never
-    finished. Only after all five does the decision itself get read.
+    finished, and finally a browser that is not the account that signed in. Only after all
+    six does the decision itself get read.
+
+    **Why the last check is the one that matters (CR-01).** Until it existed, the flow id
+    was the whole authorisation of this request, and the flow id belongs to whoever started
+    the flow, which in the OAuth path is the client and not the user. That made the classic
+    Login Flow v2 relay work: an attacker starts an authorization, sends the victim nothing
+    but Nextcloud's own sign in link, and then finishes the flow themselves, so the consent
+    screen the victim was supposed to read is never shown to anybody. The anti forgery
+    value could not answer that, because it is derived from the same flow id. The account
+    that signed in can: it is the one fact of this request the party that started the flow
+    cannot produce, and HaRP puts it into the AppAPI header of a ``USER`` route.
     """
+    form = await request.form()
     flow_id = str(form.get(FLOW_PARAM) or "")
     if not flow_id:
         return _page(errors.error_page("E3", env=env))
@@ -335,6 +375,14 @@ async def _decide(
         # The form was submitted before the sign in finished. Nothing exists to approve,
         # and the honest next step is to start the connection again.
         return _page(errors.error_page("E4", env=env))
+
+    if not is_user(appapi_user(request, env=env), authorization.nc_user):
+        # The browser that decides is not the account whose sign in this is (CR-01).
+        # Answered with the page an expired link gets, for the reason the anti forgery
+        # refusal above is: a refusal that named the reason would tell whoever tried which
+        # of the two halves they were missing (T-03-47).
+        logger.warning("a decision arrived from a browser that is not the account that signed in")
+        return _page(errors.error_page("E3", env=env))
 
     decision = str(form.get(DECISION_PARAM) or "")
     if decision == DECISION_APPROVE:

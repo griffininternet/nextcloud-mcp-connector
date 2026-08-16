@@ -248,14 +248,30 @@ def sign_in(deployment: Deployment, flow_id: str) -> Any:
         )
 
 
+def as_user(user: str = LOGIN_NAME) -> dict[str, str]:
+    """The headers HaRP attaches to a request on the USER route of the decision (CR-01).
+
+    These tests speak to the application directly, so they stand in for the proxy: the
+    value is base64 of ``<user>:<APP_SECRET>``, built out of the Nextcloud account HaRP
+    resolved and the registration secret of this app.
+    """
+    raw = f"{user}:{ENV[config.ENV_APP_SECRET]}".encode()
+    return {
+        "EX-APP-ID": ENV[config.ENV_APP_ID],
+        "EX-APP-VERSION": ENV[config.ENV_APP_VERSION],
+        "AUTHORIZATION-APP-API": base64.b64encode(raw).decode("ascii"),
+    }
+
+
 def approve(deployment: Deployment, flow_id: str) -> Any:
     return deployment.client.post(
-        ui_consent.CONSENT_PATH,
+        ui_consent.DECIDE_PATH,
         data={
             ui_consent.FLOW_PARAM: flow_id,
             ui_consent.DECISION_PARAM: ui_consent.DECISION_APPROVE,
             ui_consent.CONFIRM_PARAM: deployment.store.form_token(flow_id),
         },
+        headers=as_user(),
         follow_redirects=False,
     )
 

@@ -179,6 +179,13 @@ uv run --no-sync python scripts/oauth_flow_check.py \
 The code exchange took **0.04 seconds**. A connector allows ten, and this path makes no
 Nextcloud call at all, which is the reason.
 
+**One line of this run is older than the code it describes.** The decision was a `POST` on
+`/authorize/consent` when this was measured. It is `POST /authorize/decide` since CR-01, it
+is the one route of the app with `access_level` `USER`, and the walker now sends it twice:
+once without a Nextcloud account, which has to be refused, and once with the account that
+signed in, which is the redirect above. The numbers of every other step are unaffected; the
+run is repeated against the staging instance in plan 03-09.
+
 ### 2. The canonical root paths, with and without the two rules
 
 The rules of the Install section were removed from the running reverse proxy and put back:
@@ -367,6 +374,17 @@ failure looks like a working installation until the first restart.
 `NC_MCP_OAUTH_ALLOWLIST_ONLY` on and an empty list, nobody can authorize. That is the
 intended reading and it is checked in four places, so a client that is blocked after its
 token was issued stops working immediately rather than at the next expiry.
+
+**A connection is granted by the account that signed in, and by nobody else.** The consent
+screen is reachable with a flow id alone, because a browser that has not signed in yet has
+nothing else, but the decision behind it is not. `POST /authorize/decide` is declared
+`USER`, so HaRP resolves the Nextcloud account of that request, and the app compares it
+with the account whose sign in produced the authorization; a mismatch, and an absent
+account, are refused without a code. The same rule guards the one page that shows an app
+password in clear text, `GET /connect/wait`: a credential that cannot be handed to the
+account that signed in is handed back to Nextcloud instead of being shown. Without those
+two checks the flow id was the whole authorisation, and whoever started a flow could finish
+a sign in somebody else performed (CR-01, the Login Flow v2 relay).
 
 **The throttle protects the authorization endpoints and never the MCP route.** Ten refused
 attempts per source and path class in five minutes end in `429` with `Retry-After`. Rate

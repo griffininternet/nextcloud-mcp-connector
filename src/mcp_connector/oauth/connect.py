@@ -16,11 +16,13 @@ that names the next step.
 Three properties are worth stating in one place, because the rest of the file is the
 mechanics of them:
 
-* **The flow id is the whole authorisation.** It is a ``secrets.token_urlsafe`` value, it
-  travels in the URL of the waiting page, and whoever has it can fetch the result of that
-  sign in exactly once. That is why every page here carries ``Referrer-Policy: no-referrer``
-  (the sign in link opens another origin), why the record expires after twenty minutes, and
-  why it is deleted the moment the result is shown (T-03-32).
+* **The flow id names a sign in, it does not authorise reading its result.** It is a
+  ``secrets.token_urlsafe`` value and it travels in the URL of the waiting page, which is
+  why every page here carries ``Referrer-Policy: no-referrer`` (the sign in link opens
+  another origin), why the record expires after twenty minutes and why it is deleted the
+  moment the flow ends (T-03-32). What decides whether the credential is *shown* is the
+  Nextcloud account behind the browser: the flow id belongs to whoever started the flow,
+  and that is not necessarily the person who signed in (CR-01).
 * **The poll token is encrypted at rest**, bound to the flow id as additional authenticated
   data, so reading the store file does not hand anyone a running sign in (T-03-32).
 * **The credential is never stored.** It is rendered into one answer and dropped. The store
@@ -41,6 +43,7 @@ from starlette.routing import Route
 
 from .. import config
 from ..errors import ToolError
+from ..exapp.auth import appapi_user, is_user
 from ..exapp.responses import NO_STORE
 from ..exapp.ui import errors
 from ..exapp.ui.connect import (
@@ -156,7 +159,7 @@ def connect_routes(
 
     async def wait(request: Request) -> Response:
         """One poll per load, and one of the four ends: waiting, result, expired, failed."""
-        return await _wait(request.query_params.get(FLOW_PARAM) or "", store, env)
+        return await _wait(request, store, env)
 
     counters = throttle if throttle is not None else Throttle()
     routes = [
@@ -219,12 +222,22 @@ async def _cancel(flow_id: str, store: StoreProvider, env: Mapping[str, str] | N
     return RedirectResponse(CONNECT_PATH, status_code=303, headers=dict(NO_STORE))
 
 
-async def _wait(flow_id: str, store: StoreProvider, env: Mapping[str, str] | None) -> Response:
-    """The waiting screen: one poll, then one of the four ends of this flow."""
+async def _wait(request: Request, store: StoreProvider, env: Mapping[str, str] | None) -> Response:
+    """The waiting screen: one poll, then one of the four ends of this flow.
+
+    The result end of it is the one page of this project that writes a credential into a
+    document, and since CR-01 it is also the one that asks who is reading. The flow id is
+    not an answer to that question: it belongs to whoever started the flow, and an attacker
+    who starts a flow, sends the victim nothing but Nextcloud's own sign in link and then
+    loads this page would read the victim's app password off their own screen. So the
+    credential is only rendered to the Nextcloud account that just signed in, and every
+    other case hands the credential back to Nextcloud instead of showing it (D-34).
+    """
     opened = await _store_or_page(store, env)
     if isinstance(opened, Response):
         return opened
 
+    flow_id = request.query_params.get(FLOW_PARAM) or ""
     if not flow_id:
         return _page(errors.error_page("E3", env=env))
 
@@ -244,6 +257,17 @@ async def _wait(flow_id: str, store: StoreProvider, env: Mapping[str, str] | Non
         return _generic("the login flow poll failed", env)
 
     credentials = result.credentials
+    if not is_user(appapi_user(request, env=env), credentials.login_name):
+        # Not the browser of the account that signed in, so the credential is not shown to
+        # it. It exists at Nextcloud from the moment of the poll, and nobody will ever use
+        # it now, so it goes back the same way a failed write hands it back (pitfall 13).
+        logger.warning("a finished sign in was not handed to the account that signed in")
+        await loginflow.revoke_app_password(
+            credentials.login_name, credentials.app_password, env=env
+        )
+        await opened.delete_flow(flow_id)
+        return _page(errors.error_page("E3", env=env))
+
     try:
         # Deleted before the credential is rendered, not after: the 200 of a poll arrives
         # exactly once, so a record that survives the answer would leave the next load

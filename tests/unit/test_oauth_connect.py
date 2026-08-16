@@ -14,12 +14,14 @@ Nextcloud is answered by respx, and the store is a SQLite file in ``tmp_path``.
 """
 
 import asyncio
+import base64
 import logging
 import re
 import sqlite3
 import time
 from html.parser import HTMLParser
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
@@ -116,6 +118,27 @@ def start_a_flow(client: TestClient) -> str:
 
 def wait_url(flow_id: str) -> str:
     return f"{connect.WAIT_PATH}?{connect.FLOW_PARAM}={flow_id}"
+
+
+def as_user(user: str = LOGIN_NAME) -> dict[str, str]:
+    """The three headers HaRP attaches once it has resolved a Nextcloud account.
+
+    These tests speak to the application directly, so they stand in for the proxy. The
+    value of ``AUTHORIZATION-APP-API`` is base64 of ``<user>:<APP_SECRET>``, which is what
+    HaRP builds out of the account it resolved and the registration secret of this app, and
+    which is why no caller can write it themselves: the secret is not theirs.
+    """
+    raw = f"{user}:{ENV[config.ENV_APP_SECRET]}".encode()
+    return {
+        "EX-APP-ID": ENV[config.ENV_APP_ID],
+        "EX-APP-VERSION": ENV[config.ENV_APP_VERSION],
+        "AUTHORIZATION-APP-API": base64.b64encode(raw).decode("ascii"),
+    }
+
+
+def result_of(client: TestClient, flow_id: str, user: str = LOGIN_NAME) -> Any:
+    """Load the waiting page as the browser of one signed in Nextcloud account (CR-01)."""
+    return client.get(wait_url(flow_id), headers=as_user(user))
 
 
 def flow_ids(store: OAuthStore) -> list[str]:
@@ -284,8 +307,8 @@ def test_the_credential_is_shown_once_and_never_again(client: TestClient) -> Non
     flow_id = start_a_flow(client)
     respx.post(POLL_URL).mock(return_value=httpx.Response(200, json=poll_body()))
 
-    first = client.get(wait_url(flow_id))
-    second = client.get(wait_url(flow_id))
+    first = result_of(client, flow_id)
+    second = result_of(client, flow_id)
 
     assert first.status_code == 200
     assert APP_PASSWORD in first.text
@@ -300,7 +323,7 @@ def test_the_flow_record_is_gone_after_the_result(client: TestClient, store: OAu
     flow_id = start_a_flow(client)
     respx.post(POLL_URL).mock(return_value=httpx.Response(200, json=poll_body()))
 
-    client.get(wait_url(flow_id))
+    result_of(client, flow_id)
 
     assert flow_ids(store) == []
 
@@ -311,7 +334,7 @@ def test_the_credential_reaches_no_file_of_this_server(client: TestClient, tmp_p
     flow_id = start_a_flow(client)
     respx.post(POLL_URL).mock(return_value=httpx.Response(200, json=poll_body()))
 
-    assert APP_PASSWORD in client.get(wait_url(flow_id)).text
+    assert APP_PASSWORD in result_of(client, flow_id).text
     assert APP_PASSWORD.encode() not in store_bytes(tmp_path)
 
 
@@ -320,11 +343,85 @@ def test_the_result_page_says_how_to_use_it_and_how_to_revoke_it(client: TestCli
     flow_id = start_a_flow(client)
     respx.post(POLL_URL).mock(return_value=httpx.Response(200, json=poll_body()))
 
-    text = client.get(wait_url(flow_id)).text
+    text = result_of(client, flow_id).text
 
     assert strings.RESULT_CONNECTED_TITLE in text
     assert "Devices and sessions" in text
     assert strings.CONNECT_RESULT_ONCE in text
+
+
+# --- CR-01: the credential goes to the account that signed in, or back to Nextcloud -------
+
+
+@pytest.mark.parametrize(
+    ("user", "case"),
+    [(None, "no Nextcloud session at all"), ("mallory", "a different Nextcloud account")],
+)
+@respx.mock
+def test_the_relay_attack_reads_no_app_password(
+    client: TestClient, user: str | None, case: str
+) -> None:
+    """CR-01, the whole attack in one test.
+
+    The attacker starts the sign in here, so they hold the flow id, which until this fix
+    was the entire authorisation of this page. They send the victim nothing but Nextcloud's
+    own sign in link; the victim signs in and grants access, and the attacker loads the
+    waiting page. Every check before this one passes: the flow exists, it has not expired
+    and the poll answers 200 with a credential. Only the browser is somebody else's, and
+    the credential must not appear on it.
+    """
+    flow_id = start_a_flow(client)
+    respx.post(POLL_URL).mock(return_value=httpx.Response(200, json=poll_body()))
+    revoke = respx.delete(f"{BASE_URL}{loginflow.APP_PASSWORD_PATH}").mock(
+        return_value=httpx.Response(200, json={})
+    )
+
+    response = client.get(wait_url(flow_id)) if user is None else result_of(client, flow_id, user)
+
+    assert response.status_code == 400, case
+    assert APP_PASSWORD not in response.text
+    assert LOGIN_NAME not in response.text, "not even who signed in"
+    assert revoke.call_count == 1, "the credential nobody may read is handed back (D-34)"
+
+
+@respx.mock
+def test_a_forged_identity_header_reads_no_app_password(client: TestClient) -> None:
+    """The header is signed with APP_SECRET, which the caller does not have (T-02-02)."""
+    flow_id = start_a_flow(client)
+    respx.post(POLL_URL).mock(return_value=httpx.Response(200, json=poll_body()))
+    respx.delete(f"{BASE_URL}{loginflow.APP_PASSWORD_PATH}").mock(
+        return_value=httpx.Response(200, json={})
+    )
+    forged = base64.b64encode(f"{LOGIN_NAME}:not-the-app-secret".encode()).decode("ascii")
+
+    response = client.get(
+        wait_url(flow_id),
+        headers={
+            "EX-APP-ID": ENV[config.ENV_APP_ID],
+            "EX-APP-VERSION": ENV[config.ENV_APP_VERSION],
+            "AUTHORIZATION-APP-API": forged,
+        },
+    )
+
+    assert response.status_code == 400
+    assert APP_PASSWORD not in response.text
+
+
+@respx.mock
+def test_a_refused_result_ends_the_flow_so_the_poll_is_not_repeated(
+    client: TestClient, store: OAuthStore
+) -> None:
+    """The 200 of a poll arrives exactly once, so a record that survived the refusal would
+    leave a flow behind that can never finish, and one more page to try it on."""
+    flow_id = start_a_flow(client)
+    respx.post(POLL_URL).mock(return_value=httpx.Response(200, json=poll_body()))
+    respx.delete(f"{BASE_URL}{loginflow.APP_PASSWORD_PATH}").mock(
+        return_value=httpx.Response(200, json={})
+    )
+
+    result_of(client, flow_id, "mallory")
+
+    assert flow_ids(store) == []
 
 
 @respx.mock
@@ -336,7 +433,7 @@ def test_no_secret_of_the_result_reaches_the_log(
     respx.post(POLL_URL).mock(return_value=httpx.Response(200, json=poll_body()))
 
     with caplog.at_level(logging.DEBUG, logger="mcp_connector"):
-        client.get(wait_url(flow_id))
+        result_of(client, flow_id)
 
     assert APP_PASSWORD not in caplog.text
     assert POLL_TOKEN not in caplog.text

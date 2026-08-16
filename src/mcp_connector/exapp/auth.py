@@ -24,8 +24,15 @@ from typing import cast
 from starlette.requests import Request
 
 from .. import config
+from ..errors import ToolError
 
-__all__ = ["AppApiRejected", "require_appapi", "verify_appapi_headers"]
+__all__ = [
+    "AppApiRejected",
+    "appapi_user",
+    "is_user",
+    "require_appapi",
+    "verify_appapi_headers",
+]
 
 HEADER_APP_ID = "ex-app-id"
 HEADER_APP_VERSION = "ex-app-version"
@@ -80,6 +87,41 @@ def require_appapi(request: Request, *, env: Mapping[str, str] | None = None) ->
     """
     settings = config.exapp_settings(env)
     return verify_appapi_headers(request.headers, settings.app_id, settings.app_secret)
+
+
+def appapi_user(request: Request, *, env: Mapping[str, str] | None = None) -> str:
+    """The Nextcloud account this request runs as, or an empty string when there is none.
+
+    The browser surfaces of phase 3 need the same fact the MCP route needs, and they need
+    it without an exception: who is sitting in front of this browser (CR-01). HaRP answers
+    that question for every request it forwards, on a PUBLIC route as well, by resolving
+    the Nextcloud credential of the request and writing the user id into
+    ``AUTHORIZATION-APP-API``; the id is empty when the caller sent no credential
+    (03-RESEARCH.md, pattern 4). The value is trustworthy because it is signed with
+    ``APP_SECRET``, which no caller has, and because the manifest has the proxy strip a
+    client set copy of the header before it ever reaches this process.
+
+    Every rejection collapses into the empty string on purpose: a caller that is not signed
+    in, one whose headers were tampered with and a process that is not registered as an
+    ExApp are one answer here, "this request has no Nextcloud identity", and the caller
+    that asks turns that into a refusal. Nothing about which of the three it was reaches a
+    response (T-02-03).
+    """
+    try:
+        return require_appapi(request, env=env)
+    except (AppApiRejected, ToolError):
+        return ""
+
+
+def is_user(received: str, expected: str) -> bool:
+    """Whether these two Nextcloud user ids are the same account. Empty is never a match.
+
+    ``compare_digest`` and not ``==`` for the reason the whole module uses it: one of the
+    two values is decided by a request. An empty id fails before the comparison, so a
+    request without an identity can never pass as the account of a row that has none
+    either (fail closed, D-37).
+    """
+    return bool(received) and bool(expected) and _same(received, expected)
 
 
 def _single(headers: Mapping[str, str], name: str) -> str:

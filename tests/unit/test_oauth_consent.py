@@ -14,6 +14,7 @@ container, no network, no Nextcloud.
 """
 
 import asyncio
+import base64
 import logging
 import re
 import sqlite3
@@ -521,6 +522,22 @@ def signed_in(provider: provider_module.NextcloudOAuthProvider) -> tuple[TestCli
     return client, flow_id, page.text
 
 
+def appapi_headers(user: str) -> dict[str, str]:
+    """The three headers HaRP attaches to a request on a ``USER`` route.
+
+    These tests speak to the application directly, so they stand in for the proxy. The
+    value of ``AUTHORIZATION-APP-API`` is base64 of ``<user>:<APP_SECRET>``, which is what
+    HaRP builds out of the Nextcloud account it resolved and the registration secret of
+    this app, and which is why no caller can write it: the secret is not theirs.
+    """
+    raw = f"{user}:{ENV[config.ENV_APP_SECRET]}".encode()
+    return {
+        "EX-APP-ID": ENV[config.ENV_APP_ID],
+        "EX-APP-VERSION": ENV[config.ENV_APP_VERSION],
+        "AUTHORIZATION-APP-API": base64.b64encode(raw).decode("ascii"),
+    }
+
+
 def decide(
     client: TestClient,
     flow_id: str,
@@ -528,16 +545,23 @@ def decide(
     *,
     store: OAuthStore | None = None,
     confirm: str | None = None,
+    user: str | None = LOGIN_NAME,
 ) -> Any:
-    """One press of one of the two buttons, exactly as the rendered form sends it."""
+    """One press of one of the two buttons, exactly as the rendered form sends it.
+
+    ``user`` is the Nextcloud account HaRP resolved for the browser that presses it, and
+    ``None`` is the anonymous request: no headers at all, which is what an attacker without
+    a Nextcloud session can send (CR-01).
+    """
     token = confirm if confirm is not None else (store.form_token(flow_id) if store else "")
     return client.post(
-        ui_consent.CONSENT_PATH,
+        ui_consent.DECIDE_PATH,
         data={
             ui_consent.FLOW_PARAM: flow_id,
             ui_consent.DECISION_PARAM: decision,
             ui_consent.CONFIRM_PARAM: token,
         },
+        headers=appapi_headers(user) if user is not None else {},
         follow_redirects=False,
     )
 
@@ -685,6 +709,107 @@ def test_a_second_decision_on_the_same_flow_creates_nothing_more(store: OAuthSto
     assert second.status_code == 400
     assert len(rows(store, "auth_codes")) == 1
     assert len(rows(store, "authorizations")) == 1
+
+
+# --- CR-01: the decision belongs to the account that signed in ----------------------------
+
+
+@pytest.mark.parametrize(
+    ("user", "case"),
+    [(None, "no Nextcloud session at all"), ("mallory", "a different Nextcloud account")],
+)
+def test_the_relay_attack_never_reaches_a_code(
+    store: OAuthStore, user: str | None, case: str
+) -> None:
+    """CR-01, the whole attack in one test.
+
+    The attacker registers a client, starts the authorization and gets the flow id, which
+    until this fix was the entire authorisation of the decision. They send the victim
+    nothing but Nextcloud's own sign in link, the victim grants it, and the attacker
+    presses "Allow access" with the flow id and the anti forgery value of that flow, both
+    of which they hold. Every check before this one passes: the flow exists, it has not
+    expired, the value fits the form, the client is allowed and the sign in is finished.
+    Only the account behind the browser is somebody else's, and that is what has to end it.
+    """
+    provider = make(store)
+    register(provider)
+    client, flow_id, page = signed_in(provider)
+    assert strings.CONSENT_APPROVE in page, "the sign in of the victim finished"
+    before = snapshot(store)
+
+    response = decide(client, flow_id, ui_consent.DECISION_APPROVE, store=store, user=user)
+
+    assert response.status_code == 400, case
+    assert "location" not in response.headers, "no code and no redirect to the client"
+    assert rows(store, "auth_codes") == []
+    assert snapshot(store) == before, "not one row of the store moved"
+    assert strings.CONSENT_APPROVE not in response.text
+
+
+def test_a_forged_identity_header_is_not_an_identity(store: OAuthStore) -> None:
+    """The header is signed with APP_SECRET, which the caller does not have (T-02-02)."""
+    provider = make(store)
+    register(provider)
+    client, flow_id, _page = signed_in(provider)
+    forged = base64.b64encode(f"{LOGIN_NAME}:not-the-app-secret".encode()).decode("ascii")
+
+    response = client.post(
+        ui_consent.DECIDE_PATH,
+        data={
+            ui_consent.FLOW_PARAM: flow_id,
+            ui_consent.DECISION_PARAM: ui_consent.DECISION_APPROVE,
+            ui_consent.CONFIRM_PARAM: store.form_token(flow_id),
+        },
+        headers={
+            "EX-APP-ID": ENV[config.ENV_APP_ID],
+            "EX-APP-VERSION": ENV[config.ENV_APP_VERSION],
+            "AUTHORIZATION-APP-API": forged,
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 400
+    assert rows(store, "auth_codes") == []
+
+
+def test_a_denial_by_a_stranger_leaves_the_connection_alone(store: OAuthStore) -> None:
+    """The refusal is the whole decision, not only the granting half of it: a stranger who
+    could deny would end a connection somebody else is making and hand back their
+    credential, which is the same authority in the other direction."""
+    provider = make(store)
+    register(provider)
+    client, flow_id, _page = signed_in(provider)
+
+    with respx.mock:
+        revoke = respx.delete(REVOKE_URL).mock(return_value=httpx.Response(200, json={}))
+        response = decide(client, flow_id, ui_consent.DECISION_DENY, store=store, user="mallory")
+
+    assert response.status_code == 400
+    assert revoke.call_count == 0, "no app password of another account is handed back"
+    assert len(rows(store, "authorizations")) == 1, "the connection of the victim is untouched"
+
+
+def test_the_decision_is_a_route_of_its_own_and_the_screen_stays_public() -> None:
+    """CR-01: the split is what makes one access level possible per half of the surface."""
+    paths = [getattr(route, "path", "") for route in build_exapp_app(ENV).router.routes]
+
+    assert paths.count(ui_consent.CONSENT_PATH) == 1
+    assert paths.count(ui_consent.DECIDE_PATH) == 1
+
+    served = {
+        getattr(route, "path", ""): sorted(getattr(route, "methods", set()) or set())
+        for route in build_exapp_app(ENV).router.routes
+    }
+    assert served[ui_consent.CONSENT_PATH] == ["GET", "HEAD"]
+    assert served[ui_consent.DECIDE_PATH] == ["POST"]
+
+
+def test_the_form_of_the_consent_screen_posts_to_the_decision_route(store: OAuthStore) -> None:
+    provider = make(store)
+    register(provider)
+    _client, _flow_id, page = signed_in(provider)
+
+    assert f'action="{PREFIX}{ui_consent.DECIDE_PATH}"' in page
 
 
 def test_the_form_is_a_post_with_two_named_buttons_and_deny_first(store: OAuthStore) -> None:
@@ -871,3 +996,4 @@ def test_the_routes_are_declared_in_the_manifest_and_served_by_the_application()
 
     assert paths.count("/authorize") == 1
     assert paths.count(ui_consent.CONSENT_PATH) == 1
+    assert paths.count(ui_consent.DECIDE_PATH) == 1
