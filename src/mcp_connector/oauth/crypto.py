@@ -25,6 +25,8 @@ user decrypted for them. The additional authenticated data of this module is the
 so a moved ciphertext is refused instead of decrypted (T-03-12).
 """
 
+import hashlib
+import hmac
 import logging
 import secrets
 from collections.abc import Mapping
@@ -50,6 +52,7 @@ __all__ = [
     "data_key",
     "decrypt",
     "encrypt",
+    "form_token",
 ]
 
 #: AES-256. The size is fixed here instead of being inferred from the stored value, so a
@@ -62,6 +65,11 @@ NONCE_BYTES = 12
 
 #: The name of the value in Nextcloud's ExApp configuration.
 CONFIG_KEY = "oauth_data_key"
+
+#: What :func:`form_token` derives, spelled out so the same key can never produce two
+#: values that mean different things. Versioned, so a later change is a new value and not a
+#: silent reinterpretation of an old one.
+_FORM_TOKEN_LABEL = b"consent-form-v1:"
 
 #: The AppAPI route that stores ExApp configuration. ``sensitive`` marks the value as one
 #: Nextcloud must not show in any administrative interface.
@@ -119,6 +127,24 @@ def decrypt(key: bytes, blob: bytes, *, aad: str) -> bytes:
         return AESGCM(key).decrypt(blob[:NONCE_BYTES], blob[NONCE_BYTES:], aad.encode("utf-8"))
     except InvalidTag:
         raise DecryptionRejected from None
+
+
+def form_token(key: bytes, flow_id: str) -> str:
+    """The anti forgery value of one consent form, derived instead of stored (T-03-50).
+
+    A hidden field that binds a form to one authorization request has to be two things: it
+    must be impossible to produce without being this deployment, and it must be impossible
+    to reuse for another flow. An HMAC over the flow id with the data key is both, and it
+    is the one shape that needs no column: the ``flows`` table is written by plan 03-02 and
+    a schema change for a value that can be recomputed at every render is a migration for
+    nothing. It also survives a restart and a second worker process, which a token kept in
+    a dictionary would not.
+
+    The label keeps this value apart from anything else the same key might ever
+    authenticate, so one derived secret can never be mistaken for another.
+    """
+    _check_key(key)
+    return hmac.new(key, _FORM_TOKEN_LABEL + flow_id.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 async def data_key(env: Mapping[str, str] | None = None) -> bytes:

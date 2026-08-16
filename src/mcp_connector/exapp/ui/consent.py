@@ -1,4 +1,4 @@
-"""The screens of the OAuth authorization: hand over, wait, decide (03-UI-SPEC.md S1 to S3).
+"""The screens of the OAuth authorization: hand over, wait, decide (03-UI-SPEC.md S1 to S4).
 
 The routes that drive them live in :mod:`mcp_connector.oauth.consent`; this module only
 renders, and it renders through :func:`mcp_connector.exapp.ui.layout.page` like every other
@@ -24,12 +24,11 @@ The four screens, in the order a user meets them:
    link that disappears three seconds after it appeared is worse than one a user can reach
    again (the lesson of plan 03-04).
 3. :func:`waiting_page` while the sign in runs: the refreshing screen, one poll per load.
-4. :func:`consent_page` once Nextcloud knows who the user is: the decision screen.
-
-The decision buttons themselves arrive in plan 03-06 together with the route that acts on
-them. What this plan renders is the screen a user reads before they press anything, which
-is the half that has to be right first: a person who cannot tell who is asking cannot make
-the decision the buttons record.
+4. :func:`consent_page` once Nextcloud knows who the user is: the decision screen, with
+   the two buttons and the hidden value that binds them to this one request.
+5. :func:`connected_page` and :func:`denied_page` for the rare client that cannot be
+   redirected back at all. The normal end of a decision is a 302 to the registered address
+   and no page at all (03-UI-SPEC.md, S4).
 
 The paths and parameter names of the route are declared here, next to the links and forms
 that write them into the document, and :mod:`mcp_connector.oauth.consent` imports them for
@@ -42,17 +41,23 @@ from urllib.parse import urlencode, urlsplit
 from starlette.responses import Response
 
 from ... import config
-from . import layout, strings
+from . import icons, layout, strings
 
 __all__ = [
+    "CONFIRM_PARAM",
     "CONSENT_PATH",
+    "DECISION_APPROVE",
+    "DECISION_DENY",
+    "DECISION_PARAM",
     "FLOW_PARAM",
     "LOGIN_PARAM",
     "REFRESH_SECONDS",
     "STEP_PARAM",
     "STEP_WAIT",
+    "connected_page",
     "consent_page",
     "consent_url",
+    "denied_page",
     "empty_page",
     "handoff_page",
     "meta_refresh",
@@ -87,6 +92,17 @@ STEP_WAIT = "wait"
 #: also the load a running sign in puts on Nextcloud: one request every three seconds, for
 #: at most the twenty minutes a flow lives.
 REFRESH_SECONDS = 3
+
+#: Which of the two buttons was pressed. Both are submit buttons of one form, so the name
+#: of the field is the same and only the value differs (03-UI-SPEC.md, S3).
+DECISION_PARAM = "decision"
+DECISION_APPROVE = "approve"
+DECISION_DENY = "deny"
+
+#: The hidden field that binds the form to one authorization request. The value is derived
+#: from the flow id and the data key of this installation, so a page of another site cannot
+#: produce it and a value of another flow does not fit this one (T-03-50).
+CONFIRM_PARAM = "confirm"
 
 
 def consent_url(public_base: str, flow_id: str, login_url: str) -> str:
@@ -159,19 +175,28 @@ def consent_page(
     client_id: str,
     redirect_uri: str,
     user: str,
+    flow_id: str,
+    confirm: str,
     *,
     unverified: bool,
     env: Mapping[str, str] | None = None,
 ) -> Response:
-    """S3: everything a person needs to decide, and the warning when nobody vouched.
+    """S3: everything a person needs to decide, and the two buttons that decide it.
 
     The three details are a definition list and the return address is never shortened: a
     redirect target cut off in the middle hides exactly the part an attacker would have
     changed (03-UI-SPEC.md, S3).
 
-    The two buttons of the decision are built in plan 03-06, together with the route that
-    records what they mean. This page is the reading half, and it is complete: the
-    identity, the warning, the details and what the access would cover.
+    Four properties of the decision itself are built here and are the reason this page has
+    no JavaScript at all:
+
+    * both buttons are submit buttons of one ``POST`` form, so no link and no reload can
+      grant anything (a GET must never change state, T-03-50),
+    * the deny button is rendered before the approve button, so the safe action is the one
+      the keyboard reaches first,
+    * the form carries the anti forgery value of exactly this flow as a hidden field,
+    * the initial focus is the heading and never the granting button, because a page that
+      opens with that button focused turns a stray Enter key into a grant.
     """
     name = layout.client_name(client_name)
     blocks = [
@@ -199,6 +224,19 @@ def consent_page(
                     strings.CONSENT_GRANT_REVOKE,
                 ]
             ),
+            layout.form(
+                CONSENT_PATH,
+                [
+                    layout.button_secondary(
+                        strings.CONSENT_DENY, name=DECISION_PARAM, value=DECISION_DENY
+                    ),
+                    layout.button_primary(
+                        strings.CONSENT_APPROVE, name=DECISION_PARAM, value=DECISION_APPROVE
+                    ),
+                ],
+                hidden={FLOW_PARAM: flow_id, CONFIRM_PARAM: confirm},
+                env=env,
+            ),
         ]
     )
     return layout.page(
@@ -206,6 +244,48 @@ def consent_page(
         blocks,
         env=env,
         footer=strings.CONSENT_FOOTER.format(host=_host(env)),
+        focus_heading=True,
+    )
+
+
+def connected_page(
+    client_name: str, user: str, *, env: Mapping[str, str] | None = None
+) -> Response:
+    """S4, approved: the page that exists only when there is nowhere to redirect to.
+
+    The normal end of an approval is a 302 back to the registered address and no page at
+    all. This one is for a client that registered no usable return address, and for the
+    reader it has to say two things: it worked, and there is nothing left to do here.
+    """
+    return layout.page(
+        strings.RESULT_CONNECTED_TITLE,
+        [
+            layout.paragraph(
+                strings.RESULT_CONNECTED_BODY.format(
+                    client=layout.client_name(client_name), user=user
+                )
+            )
+        ],
+        env=env,
+        heading_icon=icons.CHECK,
+        heading_tone="success",
+    )
+
+
+def denied_page(client_name: str, *, env: Mapping[str, str] | None = None) -> Response:
+    """S4, denied: nothing was shared, and the sentence says exactly that.
+
+    Answered with 200 and not with an error status: the user did what they meant to do,
+    and a refusal that reads like a failure teaches people to try again until it works.
+    """
+    return layout.page(
+        strings.RESULT_DENIED_TITLE,
+        [
+            layout.paragraph(
+                strings.RESULT_DENIED_BODY.format(client=layout.client_name(client_name))
+            )
+        ],
+        env=env,
     )
 
 

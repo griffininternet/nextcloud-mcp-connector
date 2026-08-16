@@ -37,29 +37,38 @@ refusal can escape as a 500 (the shape of ``exapp/lifecycle.py``).
 """
 
 import logging
+import secrets
 import time
 from collections.abc import Mapping
 from urllib.parse import urlsplit
 
 from mcp.server.auth.handlers.authorize import AuthorizationHandler
+from mcp.server.auth.provider import construct_redirect_uri
 from mcp.server.auth.routes import AUTHORIZATION_PATH
 from mcp.shared.auth import InvalidRedirectUriError, OAuthClientInformationFull
 from pydantic import AnyUrl, ValidationError
 from starlette.datastructures import FormData, QueryParams
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import RedirectResponse, Response
 from starlette.routing import Route
 
 from .. import config
 from ..errors import ToolError
+from ..exapp.responses import NO_STORE
 from ..exapp.ui import errors
 from ..exapp.ui.consent import (
+    CONFIRM_PARAM,
     CONSENT_PATH,
+    DECISION_APPROVE,
+    DECISION_DENY,
+    DECISION_PARAM,
     FLOW_PARAM,
     LOGIN_PARAM,
     STEP_PARAM,
     STEP_WAIT,
+    connected_page,
     consent_page,
+    denied_page,
     empty_page,
     handoff_page,
     waiting_page,
@@ -67,9 +76,15 @@ from ..exapp.ui.consent import (
 from . import loginflow
 from .provider import NextcloudOAuthProvider
 from .registry import redirect_uri_allowed
-from .store import OAuthStore
+from .store import FlowRow, OAuthStore
 
-__all__ = ["AUTHORIZATION_PATH", "CONSENT_PATH", "consent_routes"]
+__all__ = ["AUTHORIZATION_PATH", "CODE_BYTES", "CONSENT_PATH", "consent_routes"]
+
+#: 32 bytes of entropy behind an authorization code, which ``token_urlsafe`` renders as 43
+#: characters. The same size as every other secret of this phase: the code is a bearer
+#: value for sixty seconds, and sixty seconds of a guessable code is still a granted
+#: connection.
+CODE_BYTES = 32
 
 logger = logging.getLogger("mcp_connector.oauth.consent")
 
@@ -91,14 +106,14 @@ def consent_routes(
     async def consent(request: Request) -> Response:
         """The consent surface: hand over, wait, decide.
 
-        A POST is answered with the page a GET would answer and the status of a request
-        this route does not understand yet. The decision itself is plan 03-06, and
-        declaring the verb now keeps the manifest from changing twice.
+        One route and two verbs, because they are two halves of one page: the GET renders
+        the state a user is in, the POST is the decision they made. A GET never grants
+        anything whatever it carries, which is why the decision is read out of the form and
+        never out of the query (T-03-50).
         """
-        rendered = await _screen(request.query_params, provider, env)
         if request.method == "POST":
-            rendered.status_code = 400
-        return rendered
+            return await _decide(await request.form(), provider, env)
+        return await _screen(request.query_params, provider, env)
 
     return [
         Route(AUTHORIZATION_PATH, authorize, methods=["GET", "POST"]),
@@ -191,7 +206,7 @@ async def _screen(
 
     signed_in = await store.load_authorization(flow_id)
     if signed_in is not None:
-        return _decision(client, signed_in.nc_user, row.redirect_uri, provider, env)
+        return _decision(client, signed_in.nc_user, row, store, provider, env)
 
     if params.get(STEP_PARAM) != STEP_WAIT:
         link = _sign_in_link(params.get(LOGIN_PARAM) or "", env)
@@ -228,13 +243,14 @@ async def _screen(
         )
         return _generic("the finished sign in could not be written to the store", env)
 
-    return _decision(client, credentials.login_name, row.redirect_uri, provider, env)
+    return _decision(client, credentials.login_name, row, store, provider, env)
 
 
 def _decision(
     client: OAuthClientInformationFull,
     user: str,
-    redirect_uri: str,
+    row: FlowRow,
+    store: OAuthStore,
     provider: NextcloudOAuthProvider,
     env: Mapping[str, str] | None,
 ) -> Response:
@@ -249,10 +265,168 @@ def _decision(
     return consent_page(
         _name(client),
         client.client_id,
-        redirect_uri,
+        row.redirect_uri,
         user,
+        row.flow_id,
+        store.form_token(row.flow_id),
         unverified=not provider.policy.listed(client.client_id, addresses),
         env=env,
+    )
+
+
+async def _decide(
+    form: FormData,
+    provider: NextcloudOAuthProvider,
+    env: Mapping[str, str] | None,
+) -> Response:
+    """The one request of this whole surface that grants or refuses something.
+
+    The order of the checks is the order of the things that can be wrong, and every one of
+    them ends the request without touching a row: no flow, no time left, no anti forgery
+    value, a client that was blocked while the user was reading, a sign in that never
+    finished. Only after all five does the decision itself get read.
+    """
+    flow_id = str(form.get(FLOW_PARAM) or "")
+    if not flow_id:
+        return _page(errors.error_page("E3", env=env))
+
+    store = await _store_or_page(provider, env)
+    if isinstance(store, Response):
+        return store
+
+    row = await store.load_flow(flow_id, now=0)
+    if row is None:
+        # Also the second press of the same button: an approved flow is gone, so the page
+        # that says "this link has expired" is exactly right for it.
+        return _page(errors.error_page("E3", env=env))
+    if row.expires_at <= _now():
+        await store.delete_flow(flow_id)
+        return _page(errors.error_page("E4", env=env))
+
+    if not _confirmed(store, flow_id, str(form.get(CONFIRM_PARAM) or "")):
+        # A decision that did not come from the form this server rendered (T-03-50). The
+        # answer is the page an expired link gets, because a refusal that names the reason
+        # would tell whoever tried which of the two values they got wrong.
+        logger.warning("a decision arrived without the anti forgery value of its flow")
+        return _page(errors.error_page("E3", env=env))
+
+    client = await provider.get_client(row.client_id)
+    if client is None:
+        # The enforcement point one last time, at the moment the grant would happen
+        # (T-03-40, pitfall 9).
+        return _no_client_page(row.client_id, provider, env)
+
+    authorization = await store.load_authorization(flow_id)
+    if authorization is None:
+        # The form was submitted before the sign in finished. Nothing exists to approve,
+        # and the honest next step is to start the connection again.
+        return _page(errors.error_page("E4", env=env))
+
+    decision = str(form.get(DECISION_PARAM) or "")
+    if decision == DECISION_APPROVE:
+        return await _approve(store, row, client, authorization.nc_user, env)
+    if decision == DECISION_DENY:
+        return await _deny(store, row, client, authorization.nc_user, env)
+    # Neither button. Nothing is granted and nothing is refused, so nothing changes.
+    return _page(errors.error_page("E3", env=env))
+
+
+async def _approve(
+    store: OAuthStore,
+    row: FlowRow,
+    client: OAuthClientInformationFull,
+    user: str,
+    env: Mapping[str, str] | None,
+) -> Response:
+    """Turn the consent of a person into one short lived, single use authorization code.
+
+    The code is the only thing this step creates: the authorization itself was written when
+    the sign in finished, under the id of its own flow, which is why the code points at the
+    flow id (plan 03-05). The flow is deleted in the same breath, so a second press of the
+    same button finds nothing to approve twice.
+    """
+    code = secrets.token_urlsafe(CODE_BYTES)
+    try:
+        await store.create_auth_code(
+            code,
+            auth_id=row.flow_id,
+            redirect_uri=row.redirect_uri,
+            redirect_uri_explicit=row.redirect_uri_explicit,
+            code_challenge=row.code_challenge,
+            resource=row.resource,
+        )
+        await store.delete_flow(row.flow_id)
+    except Exception:
+        logger.exception("the approved authorization could not be written to the store")
+        return _generic("the authorization code could not be written", env)
+
+    if not row.redirect_uri:
+        return connected_page(_name(client), user, env=env)
+
+    # ``iss`` is the mix-up protection of RFC 9207: a client that talks to more than one
+    # authorization server can tell from it which one answered, and refuse a response that
+    # came back from a server it did not send this request to. The same fact is announced
+    # in the metadata document as ``authorization_response_iss_parameter_supported``
+    # (oauth/metadata.py), and the value is the configured public URL, never a request.
+    target = construct_redirect_uri(
+        row.redirect_uri, code=code, state=row.state, iss=config.public_url(env)
+    )
+    return RedirectResponse(target, status_code=302, headers=dict(NO_STORE))
+
+
+async def _deny(
+    store: OAuthStore,
+    row: FlowRow,
+    client: OAuthClientInformationFull,
+    user: str,
+    env: Mapping[str, str] | None,
+) -> Response:
+    """Refuse the connection, and take back what the sign in already handed out.
+
+    The app password behind this flow exists at Nextcloud from the moment the sign in
+    finished, which is before anybody consented (plan 03-05). A refused connection must not
+    leave a working credential behind, so it is handed back here: one attempt, no retry,
+    and the row goes even when that attempt fails, because a connection the user refused
+    must not survive a cleanup step that did not work (D-34, D-37).
+    """
+    password = await _app_password(store, row.flow_id)
+    if password:
+        await loginflow.revoke_app_password(user, password, env=env)
+    await store.delete_authorization(row.flow_id)
+    await store.delete_flow(row.flow_id)
+
+    if not row.redirect_uri:
+        return denied_page(_name(client), env=env)
+
+    target = construct_redirect_uri(
+        row.redirect_uri, error="access_denied", state=row.state, iss=config.public_url(env)
+    )
+    return RedirectResponse(target, status_code=302, headers=dict(NO_STORE))
+
+
+async def _app_password(store: OAuthStore, auth_id: str) -> str:
+    """The credential of this connection, or an empty string. Never an exception.
+
+    A ciphertext that cannot be read is a store written with another key, and it must not
+    stop a denial: the user refused, and the refusal has to complete either way.
+    """
+    try:
+        return await store.app_password(auth_id) or ""
+    except Exception:
+        logger.error("the app password of a denied connection could not be read back")
+        return ""
+
+
+def _confirmed(store: OAuthStore, flow_id: str, presented: str) -> bool:
+    """Whether this decision came from the form this server rendered for this flow.
+
+    ``compare_digest`` on bytes and not ``==``: the value arrives from a request, and a
+    comparison that stops at the first different character leaks its prefix over enough
+    attempts (the rule of ``exapp/auth.py``).
+    """
+    expected = store.form_token(flow_id)
+    return bool(presented) and secrets.compare_digest(
+        expected.encode("utf-8"), presented.encode("utf-8")
     )
 
 

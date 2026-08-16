@@ -551,6 +551,15 @@ def rows(store: OAuthStore, table: str) -> list[tuple[Any, ...]]:
         conn.close()
 
 
+def _columns(store: OAuthStore, table: str) -> list[str]:
+    """The column names of one table, so a test reads a row by name and not by position."""
+    conn = sqlite3.connect(store.path)
+    try:
+        return [str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})")]
+    finally:
+        conn.close()
+
+
 def snapshot(store: OAuthStore) -> dict[str, list[tuple[Any, ...]]]:
     """The three tables a decision may touch, so a test can prove none of them moved."""
     return {name: rows(store, name) for name in ("flows", "authorizations", "auth_codes")}
@@ -601,7 +610,8 @@ def test_the_code_lives_sixty_seconds_and_is_redeemable_exactly_once(
     assert first.code_challenge == CHALLENGE
     assert first.redirect_uri == REDIRECT
     assert first.resource == RESOURCE
-    assert 0 < stored[0][5] - int(time.time()) <= AUTH_CODE_TTL
+    expires_at = dict(zip(_columns(store, "auth_codes"), stored[0], strict=True))["expires_at"]
+    assert 0 < expires_at - int(time.time()) <= AUTH_CODE_TTL
 
 
 def test_a_get_never_grants_anything_whatever_it_carries(store: OAuthStore) -> None:

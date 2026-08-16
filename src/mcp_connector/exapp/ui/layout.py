@@ -205,6 +205,7 @@ def page(
     heading_icon: str = "",
     heading_tone: str = "",
     head_extra: str = "",
+    focus_heading: bool = False,
 ) -> Response:
     """Render one page of this phase, with the headers every page of this phase carries.
 
@@ -221,6 +222,12 @@ def page(
     onboarding, and accepts exactly one shape of value (:data:`HEAD_EXTRA_PATTERN`). It is
     not a general escape hatch: everything else raises, because a head a caller can fill
     freely would end the property that this function is the only way a page can exist.
+
+    ``focus_heading`` exists for the one page of this project that carries a granting
+    button (03-UI-SPEC.md, S3). Without it a browser puts the initial focus on the first
+    interactive element, and on that page a stray Enter key would then be a grant. The
+    heading takes ``tabindex="-1"`` so it can hold focus at all while staying out of the
+    tab order, which keeps the order of the specification: heading, details, deny, approve.
     """
     nonce = secrets.token_urlsafe(NONCE_BYTES)
     tone = _TONES.get(heading_tone)
@@ -229,6 +236,7 @@ def page(
     if head_extra and not HEAD_EXTRA_PATTERN.fullmatch(head_extra):
         raise ValueError(f"{head_extra!r} is not the one head fragment a page may carry")
     closing = _escape(footer or strings.FOOTER_PASSWORD_PROMPT)
+    focus = ' tabindex="-1" autofocus' if focus_heading else ""
 
     document = (
         "<!doctype html>\n"
@@ -244,7 +252,7 @@ def page(
         f"{_bar(env)}\n"
         "<main>\n"
         '<div class="card">\n'
-        f'<h1 class="heading{tone}">{heading_icon}<span>{_escape(title)}</span></h1>\n'
+        f'<h1 class="heading{tone}"{focus}>{heading_icon}<span>{_escape(title)}</span></h1>\n'
         f"{''.join(blocks)}\n"
         "</div>\n"
         "</main>\n"

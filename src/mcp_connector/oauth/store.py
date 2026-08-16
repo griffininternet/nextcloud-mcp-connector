@@ -37,6 +37,7 @@ import time
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from .. import config
 from . import crypto
@@ -169,6 +170,7 @@ CREATE TABLE IF NOT EXISTS auth_codes (
   code_hash TEXT PRIMARY KEY,
   auth_id TEXT NOT NULL REFERENCES authorizations(auth_id) ON DELETE CASCADE,
   redirect_uri TEXT NOT NULL,
+  redirect_uri_explicit INTEGER NOT NULL DEFAULT 1,
   code_challenge TEXT NOT NULL,
   resource TEXT NOT NULL,
   expires_at INTEGER NOT NULL,
@@ -271,12 +273,21 @@ class AuthorizationRow:
 
 @dataclass(frozen=True, slots=True)
 class AuthCodeRow:
-    """What a redeemed authorization code was bound to, for the checks of plan 03-06."""
+    """What an authorization code is bound to: everything the token endpoint compares.
+
+    ``redirect_uri_explicit`` is the one field that is neither a secret nor a deadline: the
+    SDK compares the return address of the token request against the one of the
+    authorization request, and a request that named none has to name none again. Carrying
+    the flag is the only way that comparison can still be made after the flow record that
+    knew it is gone.
+    """
 
     auth_id: str
     redirect_uri: str
+    redirect_uri_explicit: bool
     code_challenge: str
     resource: str
+    expires_at: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -339,6 +350,15 @@ class OAuthStore:
     @property
     def path(self) -> Path:
         return self._path
+
+    def form_token(self, flow_id: str) -> str:
+        """The anti forgery value of the consent form of one flow (T-03-50).
+
+        It lives on this object because the data key does, and nowhere else in the process
+        holds that key. Nothing is read or written: the value is derived, which is why it
+        is the same for every render of the same form and different for every deployment.
+        """
+        return crypto.form_token(self._key, flow_id)
 
     # --- clients --------------------------------------------------------------------
 
@@ -551,6 +571,21 @@ class OAuthStore:
             return None
         return decrypt(self._key, blob, aad=auth_id).decode("utf-8")
 
+    async def delete_authorization(self, auth_id: str) -> None:
+        """Remove a connection and, through the cascade, every code and token under it.
+
+        The deliberate difference to :meth:`revoke_authorization`: a revoked authorization
+        is a connection that existed and ended, and it is kept so a later revocation is
+        idempotent and visible. A denied one never existed as far as the user is concerned,
+        so the row goes and takes the ciphertext of an app password with it that nobody may
+        ever use again.
+        """
+
+        def work(conn: sqlite3.Connection) -> None:
+            conn.execute("DELETE FROM authorizations WHERE auth_id = ?", (auth_id,))
+
+        await self._write(work)
+
     async def revoke_authorization(self, auth_id: str, *, now: int | None = None) -> None:
         """Mark the connection as gone. Idempotent: the first revocation time stands."""
         moment = _moment(now)
@@ -573,6 +608,7 @@ class OAuthStore:
         redirect_uri: str,
         code_challenge: str,
         resource: str,
+        redirect_uri_explicit: bool = True,
         now: int | None = None,
     ) -> None:
         moment = _moment(now)
@@ -580,12 +616,14 @@ class OAuthStore:
         def work(conn: sqlite3.Connection) -> None:
             _purge_expired_rows(conn, moment)
             conn.execute(
-                "INSERT INTO auth_codes (code_hash, auth_id, redirect_uri, code_challenge, "
-                "resource, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO auth_codes (code_hash, auth_id, redirect_uri, "
+                "redirect_uri_explicit, code_challenge, resource, expires_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     token_hash(code),
                     auth_id,
                     redirect_uri,
+                    int(redirect_uri_explicit),
                     code_challenge,
                     resource,
                     moment + AUTH_CODE_TTL,
@@ -614,14 +652,12 @@ class OAuthStore:
                 conn.execute("COMMIT")
                 return None
             row = conn.execute(
-                "SELECT auth_id, redirect_uri, code_challenge, resource FROM auth_codes "
-                "WHERE code_hash = ?",
+                "SELECT auth_id, redirect_uri, redirect_uri_explicit, code_challenge, resource, "
+                "expires_at FROM auth_codes WHERE code_hash = ?",
                 (digest,),
             ).fetchone()
             conn.execute("COMMIT")
-            return AuthCodeRow(
-                auth_id=row[0], redirect_uri=row[1], code_challenge=row[2], resource=row[3]
-            )
+            return _auth_code_row(row)
 
         return await self._transaction(work)
 
@@ -904,7 +940,38 @@ def _connect(path: Path) -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute(f"PRAGMA busy_timeout = {_BUSY_TIMEOUT_MS}")
     conn.executescript(SCHEMA)
+    _add_missing_columns(conn)
     return conn
+
+
+def _add_missing_columns(conn: sqlite3.Connection) -> None:
+    """Bring a file written by an earlier build up to the schema above.
+
+    ``CREATE TABLE IF NOT EXISTS`` does nothing to a table that already exists, so a store
+    file from a development build before plan 03-06 would keep an ``auth_codes`` table
+    without ``redirect_uri_explicit`` and fail on the first insert. One ``ALTER TABLE`` with
+    the same default as the schema is the whole migration, and it is idempotent because it
+    asks first. Nothing here rewrites a row: a column that is added with a default is what
+    every existing code carried anyway, an authorization request that named its return
+    address.
+    """
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(auth_codes)")}
+    if "redirect_uri_explicit" not in columns:
+        conn.execute(
+            "ALTER TABLE auth_codes ADD COLUMN redirect_uri_explicit INTEGER NOT NULL DEFAULT 1"
+        )
+
+
+def _auth_code_row(row: tuple[Any, ...]) -> AuthCodeRow:
+    """One shape for the two places that read a code, so they cannot drift apart."""
+    return AuthCodeRow(
+        auth_id=row[0],
+        redirect_uri=row[1],
+        redirect_uri_explicit=bool(row[2]),
+        code_challenge=row[3],
+        resource=row[4],
+        expires_at=row[5],
+    )
 
 
 #: How long the loser of a lock waits for the winner. Long enough for a transaction that
