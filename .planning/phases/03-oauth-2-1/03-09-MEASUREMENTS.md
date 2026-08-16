@@ -58,10 +58,10 @@ authorization server metadata it uses the canonical path at the domain root,
 `/.well-known/oauth-authorization-server/exapps/mcp_connector`, which exists only
 because of the rewrite rule in deploy/Caddyfile.staging.
 
-**Consequence for the documentation:** the two rewrite rules are not optional for
-Claude.ai, they are required. The wording "optional" in deploy/Caddyfile and in
-docs/spike-discovery.md has to change. The counter measurement (comment the
-blocks out, reload Caddy, reconnect) has not been run yet.
+**Reading at the time:** the two rewrite rules looked required rather than
+optional. The counter measurement below shows that this reading was wrong: with
+the rules gone Claude.ai falls back to a third path and still connects. What run
+1 measured is only which path Claude.ai *prefers* when both exist.
 
 ### Redirect URI
 
@@ -193,12 +193,93 @@ the token store is emptied and existing client connections have to be made again
 
 ---
 
+## Run 3: the counter measurement for A2, 2026-08-16, RESULT: CONNECTS WITHOUT THE REWRITES
+
+Both rewrite blocks in `deploy/Caddyfile.staging` were commented out, Caddy was
+restarted, and Claude.ai was made to run the whole flow again from nothing.
+
+### How to switch the rules off, and the trap in doing it
+
+`deploy/Caddyfile.staging` is bind mounted as a **single file** into the Caddy
+container. `sed -i` writes a new inode, so the container keeps reading the old
+one: the file on the host changes, the running proxy does not, and `caddy reload`
+happily reloads the unchanged file. The first attempt measured 200 on both
+canonical paths for exactly that reason and looked like a sensational finding.
+Two ways out: write in place without replacing the inode (`… > /tmp/x && cat
+/tmp/x > deploy/Caddyfile.staging`) and restart the container so the mount is
+resolved again, or edit through the container. The check that the edit arrived is
+`docker exec nc-mcp-staging-caddy grep -c COUNTERMEASURE /etc/caddy/Caddyfile`.
+
+With the rules really gone:
+
+```
+404  /.well-known/oauth-authorization-server/exapps/mcp_connector
+404  /.well-known/oauth-protected-resource/exapps/mcp_connector/mcp
+200  /exapps/mcp_connector/.well-known/oauth-authorization-server
+200  /exapps/mcp_connector/.well-known/oauth-protected-resource/mcp
+```
+
+`scripts/oauth_flow_check.py` walked the full flow in this state and passed; only
+its step 3 flipped to `rewrite=absent`. The rest of the chain does not touch the
+canonical paths at all.
+
+### Making Claude.ai start over, and a finding that came out of it
+
+Removing the connector in the Claude.ai UI does **not** end the authorization. The
+connector was removed, then added again under a new name with the same server URL,
+and Claude.ai reused its stored connection: the very first request was a tool call
+that answered 200, no 401, no discovery, no registration. The entry even kept its
+old id (`0b092552-…`). So the UI "Remove" is a local bookkeeping action; what ends
+access is a revoke on the Nextcloud side. This belongs in docs/client-setup.md and
+is worth one line in the consent copy review: a user who removes a connector in
+the client has not revoked anything.
+
+To force a real start over, the OAuth store of the ExApp was emptied
+(`clients`, `authorizations`, `auth_codes`, `flows`, `access_tokens`,
+`refresh_tokens` in `/nc_app_mcp_connector_data/oauth.sqlite3`), after which
+`POST /mcp` answered 401 again.
+
+### The request chain without the rewrites
+
+```
+POST 401  /exapps/mcp_connector/mcp
+GET  200  /exapps/mcp_connector/.well-known/oauth-protected-resource/mcp
+GET  404  /.well-known/oauth-authorization-server/exapps/mcp_connector
+GET  404  /.well-known/openid-configuration/exapps/mcp_connector
+GET  200  /exapps/mcp_connector/.well-known/openid-configuration   <- the fallback
+POST 201  /exapps/mcp_connector/register
+POST 200  /index.php/login/v2        (client name "MCP Connector: Claude")
+POST 200  /login/v2/poll
+POST 200  /exapps/mcp_connector/token
+POST 200  /exapps/mcp_connector/mcp  (repeatedly)
+```
+
+Claude.ai returned to `claude.ai/customize/connectors?…&step=success` and the
+connector is connected. The client id issued this time was
+`4572d09d-df53-41dc-9c51-0671d71dfa79`, the redirect target was again the static
+`https://claude.ai/api/mcp/auth_callback`.
+
+### What A2 actually says now
+
+Claude.ai tries three locations for the authorization server metadata, in order:
+the RFC 8414 canonical path at the domain root, the same path with
+`openid-configuration`, and finally the OIDC style suffix below the issuer,
+`<issuer>/.well-known/openid-configuration`. The third one is ours and needs no
+proxy rule at all.
+
+**Consequence for the documentation:** the two rewrite rules stay **optional**,
+which is what deploy/Caddyfile and docs/spike-discovery.md already say. They are
+worth keeping as a courtesy for clients that stop after the canonical path, and
+the sentence that names them optional should now cite this measurement instead of
+leaving the question open. The finding of the spike, that the canonical path is
+404 without a proxy rule, is confirmed: it is the client that has a fallback, not
+the server that serves the path.
+
+After the measurement both rules were put back and the container restarted; the
+canonical paths answer 200 again.
+
 ## Still open
 
-- Counter measurement for A2: comment out both rewrite blocks in
-  deploy/Caddyfile.staging, reload Caddy, remove and re add the Claude.ai
-  connector, and record whether the connection still succeeds. That turns the
-  observation above into a proof.
 - Cursor: not required by phase 3, but it is the only client class with a loopback
   redirect (`http://127.0.0.1:<port>`), the class that BACKLOG BL-04 defers. The
   staging instance is the cheap moment to learn whether exact redirect matching
