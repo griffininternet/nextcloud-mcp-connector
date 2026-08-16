@@ -153,7 +153,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 03-08-PLAN.md - Integrationsbeweis gegen die laufende Topologie und docs/oauth-setup.md (Wave 7)
+- [x] 03-08-PLAN.md - Integrationsbeweis gegen die laufende Topologie und docs/oauth-setup.md (Wave 7)
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
@@ -201,7 +201,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Server-Kern | 14/14 | Complete    | 2026-08-14 |
 | 2. ExApp-Shell | 7/7 | Complete    | 2026-08-15 |
-| 3. OAuth 2.1 | 7/9 | In Progress|  |
+| 3. OAuth 2.1 | 8/9 | In Progress|  |
 | 4. Per-User-Verwaltung und prepare_context | 0/TBD | Not started | - |
 | 5. Hardening und Store-Einreichung | 0/TBD | Not started | - |
 

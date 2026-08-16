@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-07-PLAN.md
-last_updated: "2026-08-16T03:22:00.000Z"
+stopped_at: Completed 03-08-PLAN.md
+last_updated: "2026-08-16T04:45:00.000Z"
 last_activity: 2026-08-16
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 30
-  completed_plans: 28
-  percent: 47
+  completed_plans: 29
+  percent: 48
 ---
 
 # Project State
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 3
-Plan: 8 of 9
+Plan: 9 of 9
 Status: In progress
 Last activity: 2026-08-16
 
-Progress: [█████████░] 93%
+Progress: [█████████░] 97%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 28
+- Total plans completed: 29
 - Average duration: 35 min
 - Total execution time: 15.2 hours
 
@@ -46,7 +46,7 @@ Progress: [█████████░] 93%
 |-------|-------|-------|----------|
 | 1 | 14 | - | - |
 | 2 | 7 | 254 min | 36 min |
-| 3 | 7 | 320 min | 46 min |
+| 3 | 8 | 400 min | 50 min |
 
 **Recent Trend:**
 
@@ -81,6 +81,7 @@ Progress: [█████████░] 93%
 | Phase 03 P05 | 35 min | 3 tasks | 14 files |
 | Phase 03 P06 | 40 min | 3 tasks | 16 files |
 | Phase 03 P07 | 40 min | 3 tasks | 11 files |
+| Phase 03 P08 | 80 min | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -237,17 +238,20 @@ Recent decisions affecting current work:
 - [Phase 03-oauth-2-1]: Die Drosselung hat zwei Grenzen: eine je Quelle, die ein gefaelschter X-Forwarded-For aufteilen kann, und eine je Pfadklasse, die er nicht aufteilen kann; gezaehlt wird nach Antwortstatus, gespeichert wird nur ein SHA-256-Digest
 - [Phase 03-oauth-2-1]: Der Sweep fuer nie entschiedene Anmeldungen haengt an der Autorisierungsanfrage, hart begrenzt auf drei je Aufruf: dieses Projekt hat keinen Cron, und wer neu verbindet, zahlt fuer die, die niemand zu Ende gebracht hat
 
+- [Phase 03-oauth-2-1]: NC_MCP_PUBLIC_URL ist die eine Variable, ohne die OAuth nicht funktioniert, und der Deploy-Daemon reicht eine Variable nur durch, wenn das Manifest sie deklariert: appinfo/info.xml deklariert sie und die drei AUTH-07-Schalter, sonst wird `--env` akzeptiert und verworfen (gemessen gegen AppAPI 34.0.0)
+- [Phase 03-oauth-2-1]: Die ExApp-Config wird mit POST auf .../ex-app/config/get-values und dem Rumpf {"configKeys": [...]} gelesen, nicht mit GET und configKeys[]; die Antwort nennt ihre Felder klein (configkey/configvalue), und beides zusammen war der Grund, warum kein Datenschluessel je gelesen werden konnte
+- [Phase 03-oauth-2-1]: Der geteilte httpx-Client fuehrt keinen Cookie-Jar mehr: Nextcloud setzt auf jede Antwort ein Session-Cookie, und auf einem prozessweiten Client wurde daraus eine Sitzung fuer alle Nutzer (gemessen: SEARCH mit dem Scope des einen und der Identitaet des anderen Nutzers)
+- [Phase 03-oauth-2-1]: SC 5 ist gemessen statt geschaetzt: genau ein Nextcloud-Roundtrip je MCP-Request mit Authorization-Header, angenommen wie abgelehnt; die eigene Drosselung antwortet beim elften abgelehnten Token-Request mit 429 und Retry-After 300, und der Testnutzer meldet sich danach normal an
+
 ### Pending Todos
 
-- **Leseform der ExApp-Config (Plan 03-08):** `oauth/crypto.CONFIG_READ_PARAM` steht auf `configKeys[]` und ist die einzige Stelle dieses Plans, die nicht gegen eine laufende AppAPI bestaetigt ist. Beim Live-Beweis pruefen und, falls noetig, diese eine Konstante samt Test korrigieren.
-- **Nextcloud-Roundtrips zaehlen (Plan 03-08, SC 5):** Die Drosselung ist gebaut und getestet, die eigentliche Messgroesse von SC 5 ist aber die Zahl der Nextcloud-PHP-Roundtrips unter einer Fehlversuchsflut (Access-Log oder `docker logs`, nicht Antwortzeiten). Das gehoert zum Livebeweis gegen die laufende Topologie.
-- **App-Passwort-Loeschung live bestaetigen (Plan 03-08):** Dass der Widerruf den Eintrag unter "Geraete und Sitzungen" wirklich entfernt, ist in Prozess-Tests nur ueber respx belegt; dasselbe gilt fuer den Sweep der nie entschiedenen Anmeldungen.
+- **AUTH-04 (Plan 03-09, Owner):** Claude.ai und ChatGPT gegen eine oeffentlich erreichbare Staging-Instanz. Alles, was ohne oeffentliche Domain messbar war, ist mit 03-08 gemessen; offen bleibt genau der Teil, der eine erreichbare Instanz und die beiden gehosteten Oberflaechen braucht.
 
 - **Owner-Schritt 01-13:** PR an nextcloud/context_agent#227 einreichen. Branch und DCO-Commit liegen im Fork street1983nk/context_agent (fix/stateless-http-session-compat, def1425), der PR-Text in docs/contrib/227-pr-body.md. Kommando und Pruefpunkte stehen in .planning/phases/01-server-kern/01-13-SUMMARY.md. Vorher `git push origin main` im Connector-Repo, damit der verlinkte Regressionstest oeffentlich sichtbar ist. Danach PR-URL nachtragen, ROADMAP 01-13 abhaken, CONTRIB-01 auf Complete.
 - **Owner-Schritt 01-14:** Ein Durchgang mit Claude Desktop selbst nach docs/client-setup.md. Die Anleitung ist gegen die Referenz-Clients der Testsuite verprobt (mcp 2.0 und mcp 1.29 gegen denselben laufenden Endpoint, plus scripts/acceptance_all_tools.py ueber alle 15 Tools per stdio); die Konfigurationspfade fuer Claude Desktop stammen aus der offiziellen Dokumentation und sind auf diesem Rechner nicht verifiziert.
 - **Nextcloud-AIO-Smoke (Phase 5, D-31):** Der zweite Smoke-Schritt aus Success Criterion 1 ist an Phase 5 uebergeben. Er scheitert auf diesem Rechner an AIOs Domain-Validierung (oeffentliche Domain plus gueltiges TLS). Die fehlenden Schritte stehen in docs/exapp-install.md, Abschnitt Nextcloud AIO: Host mit oeffentlicher Domain und Zertifikat, AIO-Mastercontainer starten, optionalen HaRP-Container aktivieren (Annahme A6 unverifiziert), App als ExApp installieren, den Permission-Fidelity-Smoke wiederholen und occ app_api:app:list festhalten.
 - **WR-12 Linux-socat-Loop (Phase 5):** Die Linux-Variante des --manual-Entwicklungsloops (socat auf das Compose-Gateway) ist dokumentiert, aber auf diesem Windows-Host nicht durchgespielt; Entwicklungs-Komfort, nicht der ausgelieferte Pfad.
-- **ExApp-Topologie:** Nach 02-07 heruntergefahren (`docker compose -p nc-mcp-exapp -f compose.exapp.yml down`, Volumes bleiben) und `docker stop nc_app_mcp_connector`. Wieder anfahren fuer weitere Laeufe: `export HP_SHARED_KEY=$(openssl rand -hex 32)`, `up -d --wait`, dann `bash scripts/bootstrap_exapp.sh` (die Daemon-Registrierung verschwindet mit jedem down -v).
+- **ExApp-Topologie:** Nach 03-08 wieder heruntergefahren (`down` mit erhaltenen Volumes, danach `docker stop`/`docker rm nc_app_mcp_connector` und `docker network rm nc-mcp-exapp-net`). Wieder anfahren: `export HP_SHARED_KEY=$(openssl rand -hex 32)` und in DERSELBEN Zeile weiterarbeiten (die Shell-Env ueberlebt einen Aufruf nicht, und jedes `docker compose` gegen diese Datei braucht die Variable), `up -d --wait`, `occ app_api:app:unregister mcp_connector --silent --force`, `occ app_api:daemon:unregister harp_proxy_docker`, dann `bash scripts/bootstrap_exapp.sh` (baut das Image neu und setzt NC_MCP_PUBLIC_URL). Ohne das Neubauen laeuft ein veraltetes Image.
 - **Aufraeumen (optional):** Die Docker-Testinstanz traegt jetzt zusaetzlich die Calendar-App 6.5.3 und die Abnahme-Artefakte. Fuer einen sauberen Stand: `docker compose -f compose.test.yml down -v` und danach `bash scripts/bootstrap_test_nc.sh`.
 
 ### Blockers/Concerns
@@ -266,6 +270,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-16T03:22:00.000Z
-Stopped at: Completed 03-07-PLAN.md
+Last session: 2026-08-16T04:45:00.000Z
+Stopped at: Completed 03-08-PLAN.md
 Resume file: None

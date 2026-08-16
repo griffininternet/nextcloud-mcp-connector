@@ -296,6 +296,23 @@ docker exec -u www-data nc-mcp-exapp-nc php occ user:auth-tokens:list alice
 An OAuth connection appears in the same list under the name the client registered itself
 with, prefixed the same way, for example `MCP Connector: OAuth flow check`.
 
+### 8. The sign ins nobody finished are cleaned up
+
+A sign in that Nextcloud completed but that nobody ever approved leaves a working app
+password behind. This app has no cron, so the cleanup hangs on the authorization request:
+each one hands back at most three of those credentials. Measured by waiting out the twenty
+minute deadline and then driving ten authorization requests:
+
+```
+MCP Connector entries before the sweep: 25
+MCP Connector entries after ten authorization requests: 24
+handed back by the sweep: [104]
+```
+
+Entry 104 was the credential of a sign in that never became a connection. Nothing else in
+that list was touched: a running sign in and a live connection are both left alone by
+definition, which is why only one entry moved.
+
 ## Known pitfalls
 
 The six things that made this phase expensive, in the words of somebody who runs the
