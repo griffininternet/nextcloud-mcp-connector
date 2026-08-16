@@ -1,0 +1,545 @@
+"""The browser onboarding for clients that cannot speak OAuth (AUTH-02, D-36).
+
+The promise of this route is small and hard: a user opens a page, signs in at Nextcloud
+itself, and reads one credential exactly once. This server never sees the password, never
+asks for one, and keeps nothing of what it hands over.
+
+Threats covered here: T-03-30 (a password prompt of our own, or a page that imitates
+Nextcloud), T-03-32 (taking over a running sign in through its flow id), T-03-33 (the
+credential surviving in a file or a cache), T-03-34 (a poll storm out of the waiting page)
+and T-03-35 (flows without an end).
+
+Nothing here starts a container, opens a socket or needs a Nextcloud: every call to
+Nextcloud is answered by respx, and the store is a SQLite file in ``tmp_path``.
+"""
+
+import asyncio
+import logging
+import re
+import sqlite3
+import time
+from html.parser import HTMLParser
+from pathlib import Path
+
+import httpx
+import pytest
+import respx
+from starlette.applications import Starlette
+from starlette.testclient import TestClient
+
+from mcp_connector import config, entry_http
+from mcp_connector.entry_exapp import build_exapp_app
+from mcp_connector.exapp.ui import strings
+from mcp_connector.oauth import connect, loginflow
+from mcp_connector.oauth.store import FLOW_TTL, FlowRow, OAuthStore
+
+BASE_URL = "http://nc.test"
+PUBLIC_URL = "https://cloud.example.com/exapps/mcp_connector"
+HOST = "cloud.example.com"
+
+ENV = {
+    config.ENV_PUBLIC_URL: PUBLIC_URL,
+    config.ENV_APP_ID: "mcp_connector",
+    config.ENV_APP_SECRET: "app-secret-test",
+    config.ENV_APP_VERSION: "0.1.0",
+    config.ENV_AA_VERSION: "34.0.3",
+    config.ENV_NEXTCLOUD_URL: BASE_URL,
+}
+
+INIT_URL = f"{BASE_URL}{loginflow.INIT_PATH}"
+POLL_URL = f"{BASE_URL}{loginflow.POLL_PATH}"
+
+LOGIN_URL = "https://cloud.example.com/index.php/login/v2/flow/abc123"
+POLL_TOKEN = "poll-token-of-this-flow"
+LOGIN_NAME = "alice"
+APP_PASSWORD = "aaaaa-bbbbb-ccccc-ddddd-eeeee"
+
+#: A key that is not secret, because it never leaves this file.
+KEY = bytes(range(32))
+
+UI_DIR = Path(connect.__file__).resolve().parents[1] / "exapp" / "ui"
+
+
+def start_body() -> dict[str, object]:
+    endpoint = "https://public.example.org/login/v2/poll"
+    return {"poll": {"token": POLL_TOKEN, "endpoint": endpoint}, "login": LOGIN_URL}
+
+
+def poll_body() -> dict[str, str]:
+    return {"server": BASE_URL, "loginName": LOGIN_NAME, "appPassword": APP_PASSWORD}
+
+
+class Inputs(HTMLParser):
+    """Collect every form control of a page, which is what a phishing page would need."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.controls: list[dict[str, str]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in {"input", "textarea", "select"}:
+            self.controls.append({key: value or "" for key, value in attrs} | {"tag": tag})
+
+
+def controls(markup: str) -> list[dict[str, str]]:
+    parser = Inputs()
+    parser.feed(markup)
+    return parser.controls
+
+
+@pytest.fixture
+def store(tmp_path: Path) -> OAuthStore:
+    return OAuthStore(tmp_path / "oauth.sqlite3", KEY)
+
+
+@pytest.fixture
+def client(store: OAuthStore) -> TestClient:
+    return TestClient(app_with(store))
+
+
+def app_with(store: OAuthStore) -> Starlette:
+    async def provider() -> OAuthStore:
+        return store
+
+    return Starlette(routes=connect.connect_routes(ENV, store_provider=provider))
+
+
+def start_a_flow(client: TestClient) -> str:
+    """Run the POST that opens a sign in and return the flow id it created."""
+    respx.post(INIT_URL).mock(return_value=httpx.Response(200, json=start_body()))
+    response = client.post(connect.CONNECT_PATH, data={connect.ACTION_FIELD: connect.ACTION_START})
+    assert response.status_code == 200, response.text
+    match = re.search(rf"{connect.FLOW_PARAM}=([A-Za-z0-9_-]+)", response.text)
+    assert match is not None, response.text
+    return match.group(1)
+
+
+def wait_url(flow_id: str) -> str:
+    return f"{connect.WAIT_PATH}?{connect.FLOW_PARAM}={flow_id}"
+
+
+def flow_ids(store: OAuthStore) -> list[str]:
+    """Every flow id in the file, read beside the store on purpose."""
+    conn = sqlite3.connect(store.path)
+    try:
+        return [row[0] for row in conn.execute("SELECT flow_id FROM flows").fetchall()]
+    finally:
+        conn.close()
+
+
+def load_flow(store: OAuthStore, flow_id: str) -> FlowRow | None:
+    return asyncio.run(store.load_flow(flow_id))
+
+
+def store_bytes(directory: Path) -> bytes:
+    """Everything the store wrote, including the write ahead log."""
+    return b"".join(path.read_bytes() for path in sorted(directory.iterdir()) if path.is_file())
+
+
+# --- the handoff page --------------------------------------------------------------------
+
+
+def test_the_handoff_page_names_who_is_asking_and_offers_the_sign_in(client: TestClient) -> None:
+    response = client.get(connect.CONNECT_PATH)
+
+    assert response.status_code == 200
+    assert strings.WORDMARK in response.text
+    assert HOST in response.text
+    assert strings.SIGNIN_CTA in response.text
+    assert '<form method="post"' in response.text
+
+
+def test_the_handoff_page_starts_nothing(client: TestClient) -> None:
+    """T-03-35: a GET may not open a login flow, or a crawler opens thousands."""
+    with respx.mock:
+        init = respx.post(INIT_URL).mock(return_value=httpx.Response(200, json=start_body()))
+        client.get(connect.CONNECT_PATH)
+
+        assert init.call_count == 0
+
+
+# --- starting a sign in ------------------------------------------------------------------
+
+
+@respx.mock
+def test_the_start_opens_one_flow_and_links_to_nextcloud_in_a_new_window(
+    client: TestClient,
+) -> None:
+    init = respx.post(INIT_URL).mock(return_value=httpx.Response(200, json=start_body()))
+
+    response = client.post(connect.CONNECT_PATH, data={connect.ACTION_FIELD: connect.ACTION_START})
+
+    assert init.call_count == 1
+    assert response.status_code == 200
+    assert LOGIN_URL in response.text
+    assert 'target="_blank"' in response.text
+    assert 'rel="noopener noreferrer"' in response.text
+    assert strings.SIGNIN_CTA in response.text
+
+
+@respx.mock
+def test_the_start_sends_the_prefixed_onboarding_name_as_the_user_agent(
+    client: TestClient,
+) -> None:
+    """T-03-37: the entry in "Devices and sessions" has to say where it came from."""
+    init = respx.post(INIT_URL).mock(return_value=httpx.Response(200, json=start_body()))
+
+    client.post(connect.CONNECT_PATH, data={connect.ACTION_FIELD: connect.ACTION_START})
+
+    assert init.calls[0].request.headers["user-agent"].startswith(loginflow.AGENT_PREFIX)
+
+
+@respx.mock
+def test_the_flow_record_is_unguessable_and_runs_out_after_twenty_minutes(
+    client: TestClient, store: OAuthStore
+) -> None:
+    flow_id = start_a_flow(client)
+
+    assert flow_ids(store) == [flow_id]
+    assert len(flow_id) >= 32, "the flow id is the only authorisation to fetch the result"
+    row = load_flow(store, flow_id)
+    assert row is not None
+    assert row.poll_token == POLL_TOKEN
+    assert abs(row.expires_at - (int(time.time()) + FLOW_TTL)) <= 5
+
+
+@respx.mock
+def test_the_poll_token_never_lies_in_the_file_in_clear_text(
+    client: TestClient, tmp_path: Path
+) -> None:
+    start_a_flow(client)
+
+    assert POLL_TOKEN.encode() not in store_bytes(tmp_path)
+
+
+@respx.mock
+def test_a_start_nextcloud_refuses_leaves_no_flow_behind(
+    client: TestClient, store: OAuthStore
+) -> None:
+    respx.post(INIT_URL).mock(return_value=httpx.Response(500, json={}))
+
+    response = client.post(connect.CONNECT_PATH, data={connect.ACTION_FIELD: connect.ACTION_START})
+
+    assert response.status_code == 500
+    assert strings.ERROR_GENERIC_TITLE in response.text
+    assert flow_ids(store) == []
+
+
+def test_an_unknown_action_changes_nothing(client: TestClient, store: OAuthStore) -> None:
+    response = client.post(connect.CONNECT_PATH, data={connect.ACTION_FIELD: "something else"})
+
+    assert response.status_code == 400
+    assert flow_ids(store) == []
+
+
+# --- waiting (T-03-34) --------------------------------------------------------------------
+
+
+@respx.mock
+def test_the_waiting_page_refreshes_itself_and_polls_exactly_once(client: TestClient) -> None:
+    flow_id = start_a_flow(client)
+    poll = respx.post(POLL_URL).mock(return_value=httpx.Response(404))
+
+    response = client.get(wait_url(flow_id))
+
+    assert response.status_code == 200
+    assert poll.call_count == 1
+    assert 'http-equiv="refresh"' in response.text
+    assert 'role="status"' in response.text
+    assert 'aria-live="polite"' in response.text
+    assert strings.ACTION_CHECK_NOW in response.text
+    assert "<script" not in response.text
+
+
+@respx.mock
+def test_three_loads_of_the_waiting_page_are_three_polls_and_nothing_more(
+    client: TestClient,
+) -> None:
+    flow_id = start_a_flow(client)
+    poll = respx.post(POLL_URL).mock(return_value=httpx.Response(404))
+
+    for _ in range(3):
+        client.get(wait_url(flow_id))
+
+    assert poll.call_count == 3
+
+
+@respx.mock
+def test_the_poll_carries_the_token_of_that_flow(client: TestClient) -> None:
+    flow_id = start_a_flow(client)
+    poll = respx.post(POLL_URL).mock(return_value=httpx.Response(404))
+
+    client.get(wait_url(flow_id))
+
+    assert poll.calls[0].request.content == f"token={POLL_TOKEN}".encode()
+
+
+# --- the one time result ------------------------------------------------------------------
+
+
+@respx.mock
+def test_the_credential_is_shown_once_and_never_again(client: TestClient) -> None:
+    flow_id = start_a_flow(client)
+    respx.post(POLL_URL).mock(return_value=httpx.Response(200, json=poll_body()))
+
+    first = client.get(wait_url(flow_id))
+    second = client.get(wait_url(flow_id))
+
+    assert first.status_code == 200
+    assert APP_PASSWORD in first.text
+    assert LOGIN_NAME in first.text
+    assert second.status_code == 400
+    assert strings.ERROR_EXPIRED_TITLE in second.text
+    assert APP_PASSWORD not in second.text
+
+
+@respx.mock
+def test_the_flow_record_is_gone_after_the_result(client: TestClient, store: OAuthStore) -> None:
+    flow_id = start_a_flow(client)
+    respx.post(POLL_URL).mock(return_value=httpx.Response(200, json=poll_body()))
+
+    client.get(wait_url(flow_id))
+
+    assert flow_ids(store) == []
+
+
+@respx.mock
+def test_the_credential_reaches_no_file_of_this_server(client: TestClient, tmp_path: Path) -> None:
+    """T-03-33: the app password belongs to the user, not to this server."""
+    flow_id = start_a_flow(client)
+    respx.post(POLL_URL).mock(return_value=httpx.Response(200, json=poll_body()))
+
+    assert APP_PASSWORD in client.get(wait_url(flow_id)).text
+    assert APP_PASSWORD.encode() not in store_bytes(tmp_path)
+
+
+@respx.mock
+def test_the_result_page_says_how_to_use_it_and_how_to_revoke_it(client: TestClient) -> None:
+    flow_id = start_a_flow(client)
+    respx.post(POLL_URL).mock(return_value=httpx.Response(200, json=poll_body()))
+
+    text = client.get(wait_url(flow_id)).text
+
+    assert strings.RESULT_CONNECTED_TITLE in text
+    assert "Devices and sessions" in text
+    assert strings.CONNECT_RESULT_ONCE in text
+
+
+@respx.mock
+def test_no_secret_of_the_result_reaches_the_log(
+    client: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    """T-03-36: the one page that carries a credential must not repeat it in a record."""
+    flow_id = start_a_flow(client)
+    respx.post(POLL_URL).mock(return_value=httpx.Response(200, json=poll_body()))
+
+    with caplog.at_level(logging.DEBUG, logger="mcp_connector"):
+        client.get(wait_url(flow_id))
+
+    assert APP_PASSWORD not in caplog.text
+    assert POLL_TOKEN not in caplog.text
+    assert flow_id not in caplog.text
+
+
+# --- the failure paths --------------------------------------------------------------------
+
+
+def test_an_unknown_flow_is_the_expired_page(client: TestClient) -> None:
+    response = client.get(wait_url("not-a-flow-that-exists"))
+
+    assert response.status_code == 400
+    assert strings.ERROR_EXPIRED_TITLE in response.text
+
+
+def test_a_request_without_a_flow_is_the_expired_page(client: TestClient) -> None:
+    response = client.get(connect.WAIT_PATH)
+
+    assert response.status_code == 400
+    assert strings.ERROR_EXPIRED_TITLE in response.text
+
+
+def test_a_sign_in_that_ran_out_of_time_is_the_timeout_page(
+    client: TestClient, store: OAuthStore
+) -> None:
+    """Never an endless refresh: the deadline is ours, because Nextcloud answers 404 for
+    "not yet" and for "expired" alike (pitfall 7)."""
+    long_ago = int(time.time()) - FLOW_TTL - 10
+    asyncio.run(
+        store.create_flow(
+            "an-old-flow",
+            client_id=connect.CONNECT_CLIENT_ID,
+            redirect_uri="",
+            redirect_uri_explicit=False,
+            code_challenge="",
+            state=None,
+            scopes="",
+            resource="",
+            poll_token=POLL_TOKEN,
+            now=long_ago,
+        )
+    )
+
+    with respx.mock:
+        poll = respx.post(POLL_URL).mock(return_value=httpx.Response(404))
+        response = client.get(wait_url("an-old-flow"))
+
+        assert poll.call_count == 0, "an expired flow must not produce another poll"
+
+    assert response.status_code == 408
+    assert strings.ERROR_TIMEOUT_TITLE in response.text
+
+
+@respx.mock
+def test_a_nextcloud_that_cannot_be_reached_is_the_generic_page(
+    client: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    flow_id = start_a_flow(client)
+    respx.post(POLL_URL).mock(side_effect=httpx.ConnectError("no route"))
+
+    with caplog.at_level(logging.ERROR, logger="mcp_connector"):
+        response = client.get(wait_url(flow_id))
+
+    assert response.status_code == 500
+    assert strings.ERROR_GENERIC_TITLE in response.text
+    reference = re.search(r"reference ([A-Z2-9]{8})", response.text)
+    assert reference is not None, response.text
+    assert reference.group(1) in caplog.text
+
+
+@respx.mock
+def test_the_cancellation_removes_the_running_flow(client: TestClient, store: OAuthStore) -> None:
+    flow_id = start_a_flow(client)
+
+    response = client.post(
+        connect.CONNECT_PATH,
+        data={connect.ACTION_FIELD: connect.ACTION_CANCEL, connect.FLOW_PARAM: flow_id},
+    )
+
+    assert response.status_code == 200
+    assert flow_ids(store) == []
+    assert client.get(wait_url(flow_id)).status_code == 400
+
+
+# --- what none of these pages does (T-03-30) -----------------------------------------------
+
+
+@respx.mock
+def test_no_page_of_this_route_asks_for_anything(client: TestClient) -> None:
+    """Not one visible input on the whole path, so a page that asks is not ours."""
+    flow_id = start_a_flow(client)
+    respx.post(POLL_URL).mock(return_value=httpx.Response(404))
+    pages = [
+        client.get(connect.CONNECT_PATH).text,
+        client.get(wait_url(flow_id)).text,
+        client.get(wait_url("unknown")).text,
+    ]
+
+    for markup in pages:
+        for control in controls(markup):
+            assert control["tag"] == "input", control
+            assert control.get("type") == "hidden", control
+
+
+def test_the_ui_package_carries_no_credential_input_at_all() -> None:
+    """A source gate, so a later page cannot grow one without this test going red."""
+    for path in sorted(UI_DIR.glob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        for forbidden in ('type="password"', 'type="email"', 'type="text"'):
+            assert forbidden not in text, f"{path.name} carries {forbidden}"
+
+
+@respx.mock
+def test_every_answer_of_this_route_carries_the_security_headers(client: TestClient) -> None:
+    flow_id = start_a_flow(client)
+    respx.post(POLL_URL).mock(return_value=httpx.Response(404))
+    answers = [
+        client.get(connect.CONNECT_PATH),
+        client.get(wait_url(flow_id)),
+        client.get(wait_url("unknown")),
+    ]
+
+    for response in answers:
+        assert response.headers["cache-control"] == "no-store"
+        assert response.headers["referrer-policy"] == "no-referrer"
+        assert response.headers["x-frame-options"] == "DENY"
+        assert "default-src 'none'" in response.headers["content-security-policy"]
+
+
+def test_the_pages_do_not_imitate_nextcloud(client: TestClient) -> None:
+    """A page that looks like Nextcloud teaches the wrong lesson (03-UI-SPEC, Color)."""
+    text = client.get(connect.CONNECT_PATH).text
+
+    assert "0082C9" not in text.upper()
+    assert strings.FOOTER_PASSWORD_PROMPT in text
+
+
+# --- wiring ---------------------------------------------------------------------------------
+
+
+def test_the_exapp_application_serves_the_onboarding_and_the_http_mode_does_not() -> None:
+    """D-23: the standalone HTTP server of phase 1 stays exactly as it was."""
+    exapp = {getattr(route, "path", "") for route in build_exapp_app(ENV).router.routes}
+    standalone = {getattr(route, "path", "") for route in entry_http.build_app({}).router.routes}
+
+    assert {connect.CONNECT_PATH, connect.WAIT_PATH} <= exapp
+    assert not {connect.CONNECT_PATH, connect.WAIT_PATH} & standalone
+
+
+def test_the_default_store_is_opened_once_and_purged_at_the_first_use(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The process wide store and the purge at the first use are wired here (T-03-17)."""
+    opened: list[str] = []
+
+    async def fake_key(env: object = None) -> bytes:
+        opened.append("key")
+        return KEY
+
+    monkeypatch.setattr(connect.crypto, "data_key", fake_key)
+    env = ENV | {config.ENV_APP_PERSISTENT_STORAGE: str(tmp_path)}
+    client = TestClient(Starlette(routes=connect.connect_routes(env)))
+
+    first = client.get(wait_url("unknown"))
+    second = client.get(wait_url("unknown"))
+
+    assert first.status_code == 400
+    assert second.status_code == 400
+    assert opened == ["key"], "the store is opened once per application, not per request"
+    assert (tmp_path / "oauth.sqlite3").is_file()
+
+
+def test_a_store_that_cannot_be_opened_is_the_generic_page() -> None:
+    """Fail closed (D-37): no deploy environment, no store, and a named page, not a 500."""
+    client = TestClient(
+        Starlette(routes=connect.connect_routes({config.ENV_PUBLIC_URL: PUBLIC_URL}))
+    )
+
+    response = client.get(wait_url("anything"))
+
+    assert response.status_code == 500
+    assert strings.ERROR_GENERIC_TITLE in response.text
+
+
+def test_the_flow_id_is_drawn_from_the_secure_generator() -> None:
+    source = Path(connect.__file__).read_text(encoding="utf-8")
+
+    assert "secrets.token_urlsafe" in source
+    assert "import random" not in source
+
+
+def test_the_onboarding_stores_no_credential_anywhere_in_its_source() -> None:
+    """The result is rendered and dropped: no authorization row on this path."""
+    source = Path(connect.__file__).read_text(encoding="utf-8")
+    code = "\n".join(line for line in source.splitlines() if "#" not in line)
+
+    assert "create_authorization" not in code
+
+
+def test_the_factory_returns_the_three_declared_routes() -> None:
+    routes = connect.connect_routes(ENV)
+
+    assert [getattr(route, "path", "") for route in routes] == [
+        connect.CONNECT_PATH,
+        connect.CONNECT_PATH,
+        connect.WAIT_PATH,
+    ]
