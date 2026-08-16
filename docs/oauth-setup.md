@@ -530,6 +530,8 @@ shows a credential is the onboarding result page, once, with `no-store`.
 
 - Installing the ExApp itself: [exapp-install.md](./exapp-install.md)
 - What a user enters into a client: [client-setup.md](./client-setup.md)
+- The throwaway instance the hosted connectors are measured against:
+  [staging-setup.md](./staging-setup.md)
 - Where the discovery paths were measured first: [spike-discovery.md](./spike-discovery.md)
 - Requirements `AUTH-02` (browser onboarding), `AUTH-03` (OAuth 2.1 to the MCP
   authorization specification) and `AUTH-07` (the three administrator switches)
