@@ -31,6 +31,7 @@ file are a supported case, not an accident (SRV-05).
 """
 
 import asyncio
+import contextlib
 import hashlib
 import sqlite3
 import time
@@ -981,7 +982,7 @@ class OAuthStore:
         return await asyncio.to_thread(self._call, work, False)
 
     async def _write[T](self, work: Work[T]) -> T:
-        """Statements that are committed together when ``work`` returns."""
+        """Statements that are committed together when ``work`` returns, or not at all."""
         return await asyncio.to_thread(self._call, work, True)
 
     async def _transaction[T](self, work: Work[T]) -> T:
@@ -989,12 +990,37 @@ class OAuthStore:
         return await asyncio.to_thread(self._call, work, False)
 
     def _call[T](self, work: Work[T], commit: bool) -> T:
+        """Run ``work`` on one connection, inside a transaction when it is a write.
+
+        The transaction is explicit, and it has to be (WR-05). The connection is opened
+        with ``isolation_level=None``, which is autocommit: every ``execute`` of ``work``
+        used to commit on its own and the ``conn.commit()`` here was a statement about
+        nothing. :meth:`_write` promised the opposite in one line of documentation, so the
+        next caller that groups two statements there would have got none of it, and a body
+        that failed halfway would have left the half it had already written.
+
+        ``BEGIN IMMEDIATE`` and not ``BEGIN``: the write lock is taken at the start, so two
+        writers meet at the beginning of their work rather than at its end, which is the
+        same rule the bodies that open their own transaction follow (pitfall 10). The
+        rollback is best effort, because there is one case in which no transaction is open
+        any more, and it is the interesting one: a body that hit the busy timeout on its
+        own ``BEGIN``. Failing there would replace the real error with a second one.
+        """
         conn = _connect(self._path)
         try:
+            if commit:
+                conn.execute("BEGIN IMMEDIATE")
             result = work(conn)
             if commit:
-                conn.commit()
+                conn.execute("COMMIT")
             return result
+        except BaseException:
+            if commit:
+                # Suppressed and not handled: the error of ``work`` is the one that
+                # matters, and it is on its way up.
+                with contextlib.suppress(sqlite3.Error):
+                    conn.execute("ROLLBACK")
+            raise
         finally:
             conn.close()
 

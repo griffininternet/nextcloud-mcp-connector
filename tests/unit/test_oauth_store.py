@@ -682,6 +682,53 @@ async def test_a_used_client_that_is_merely_older_than_a_day_stays(tmp_path: Pat
     assert await subject.load_client(CLIENT_ID) is not None
 
 
+# --- the transaction _write promises (WR-05) -------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_a_write_that_fails_halfway_leaves_nothing_behind(tmp_path: Path) -> None:
+    """WR-05: the connection is opened with isolation_level=None, which is autocommit, so
+    every statement of a body used to commit on its own and the commit at the end was a
+    statement about nothing. A body that groups two writes has to get both or neither."""
+    subject = open_store(tmp_path)
+    await with_client(subject)
+
+    def half(conn: sqlite3.Connection) -> None:
+        conn.execute(
+            "UPDATE clients SET allowed = 0 WHERE client_id = ?",
+            (CLIENT_ID,),
+        )
+        raise RuntimeError("the second half of this body never ran")
+
+    with pytest.raises(RuntimeError):
+        await subject._write(half)
+
+    row = await subject.load_client(CLIENT_ID)
+    assert row is not None
+    assert row.allowed is True, "the first statement of a failed body was rolled back"
+
+
+@pytest.mark.anyio
+async def test_a_write_that_returns_commits_every_statement_of_its_body(
+    tmp_path: Path,
+) -> None:
+    """The other half of the same contract: a body that returns has written all of it, and
+    the rows are there for the next connection and not only for this one."""
+    subject = open_store(tmp_path)
+    await with_client(subject)
+
+    def both(conn: sqlite3.Connection) -> None:
+        conn.execute("UPDATE clients SET allowed = 0 WHERE client_id = ?", (CLIENT_ID,))
+        conn.execute("UPDATE clients SET last_used_at = ? WHERE client_id = ?", (4711, CLIENT_ID))
+
+    await subject._write(both)
+
+    row = await subject.load_client(CLIENT_ID)
+    assert row is not None
+    assert row.allowed is False
+    assert row.last_used_at == 4711
+
+
 # --- source gates --------------------------------------------------------------------
 
 
