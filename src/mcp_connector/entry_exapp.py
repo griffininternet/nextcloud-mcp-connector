@@ -135,6 +135,12 @@ def main() -> None:
 
     try:
         config.exapp_settings()
+        # The place the OAuth store writes to, checked before the first request and not on
+        # the first authorization: a missing or read only volume answers every question
+        # correctly until the container restarts and then has lost every connection
+        # (pitfall 12, T-03-15). The data key is not fetched here; that needs a running
+        # event loop and a reachable Nextcloud, and the store asks for it when it opens.
+        config.persistent_storage()
     except ToolError as exc:
         logger.error("%s %s", exc.message, exc.hint)
         raise SystemExit(2) from None

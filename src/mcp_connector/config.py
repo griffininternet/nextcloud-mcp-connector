@@ -23,14 +23,18 @@ branch is testable without a server. The remaining helpers here feed the transpo
 hardening of ``entry_http`` (allowed hosts, DNS rebinding protection).
 """
 
+import logging
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
 from .errors import ToolError
 from .nextcloud.credentials import Credentials
+
+logger = logging.getLogger("mcp_connector.config")
 
 ENV_URL = "NC_MCP_URL"
 ENV_USER = "NC_MCP_USER"
@@ -65,6 +69,11 @@ LOCALHOST_NAMES = ("127.0.0.1", "localhost", "[::1]")
 
 _TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 
+#: Where the OAuth store goes when this process was not started by the AppAPI deploy
+#: daemon, which is the ``--manual`` development mode and nothing else. Relative to the
+#: working directory and git ignored, because the file holds encrypted app passwords.
+DEV_STORAGE_DIR = ".nc-mcp-dev-storage"
+
 REDIRECT_HINT = "Your Nextcloud URL redirects; use the final URL, including https and any subpath."
 
 _URL_HINT = (
@@ -77,6 +86,13 @@ _EXAPP_HINT = (
     "AppAPI deploy daemon when it starts the container. A missing one means the process was "
     "started by hand: register the ExApp with 'occ app_api:app:register' and take the values "
     "from that registration."
+)
+
+_STORAGE_HINT = (
+    f"{ENV_APP_PERSISTENT_STORAGE} is the mount point of the volume AppAPI creates for this "
+    "app (nc_app_<appid>_data). The deploy daemon sets it and mounts the volume writable for "
+    "uid 10001. Check the volume of the container and the value in the deploy environment; "
+    "without it every authorization would be lost on the next restart."
 )
 
 
@@ -211,6 +227,68 @@ def public_url(env: Mapping[str, str] | None = None) -> str:
     """Public base URL of this MCP server, used for the bearer discovery document."""
     source = os.environ if env is None else env
     return (source.get(ENV_PUBLIC_URL) or "").strip().rstrip("/") or DEFAULT_PUBLIC_URL
+
+
+def persistent_storage(env: Mapping[str, str] | None = None) -> Path:
+    """Return the directory the OAuth store writes into, or say what is missing.
+
+    Fail closed in the ExApp mode (pitfall 12, T-03-15): AppAPI creates the volume and
+    passes its mount point, so a missing variable, a missing directory or a read only
+    mount is a deployment error that must stop the start. It is never a directory this
+    process may invent, because a store on the container filesystem answers every
+    question correctly until the first restart and then loses every authorization.
+
+    Outside the ExApp mode there is no volume and no daemon: the ``--manual`` development
+    mode falls back into a git ignored directory of the working tree. That branch is named
+    in the log instead of being a silent default, because a production process that ever
+    reaches it is misconfigured.
+    """
+    source = os.environ if env is None else env
+    raw = (source.get(ENV_APP_PERSISTENT_STORAGE) or "").strip()
+
+    if not exapp_configured(source):
+        fallback = Path.cwd() / DEV_STORAGE_DIR
+        fallback.mkdir(parents=True, exist_ok=True)
+        logger.warning(
+            "%s is not set and this process is not an ExApp: the OAuth store falls back to "
+            "the development directory %s. Encrypted app passwords live there; it is git "
+            "ignored and must never be used in a deployment.",
+            ENV_APP_PERSISTENT_STORAGE,
+            DEV_STORAGE_DIR,
+        )
+        return fallback
+
+    if not raw:
+        raise ToolError(message=f"{ENV_APP_PERSISTENT_STORAGE} is not set.", hint=_STORAGE_HINT)
+
+    path = Path(raw)
+    if not path.is_dir():
+        raise ToolError(
+            message=f"{ENV_APP_PERSISTENT_STORAGE} does not point at a directory.",
+            hint=_STORAGE_HINT,
+        )
+    if not _probe_writable(path):
+        raise ToolError(
+            message=f"The directory in {ENV_APP_PERSISTENT_STORAGE} is not writable.",
+            hint=_STORAGE_HINT,
+        )
+    return path
+
+
+def _probe_writable(path: Path) -> bool:
+    """Write a file and remove it again, because asking is not the same as knowing.
+
+    ``os.access`` reports the permission bits, which say nothing about a read only bind
+    mount, a full filesystem or a Windows ACL. The store has to write, so the check
+    writes.
+    """
+    probe = path / f".write-probe-{os.getpid()}"
+    try:
+        probe.write_bytes(b"")
+        probe.unlink()
+    except OSError:
+        return False
+    return True
 
 
 def allowed_hosts(env: Mapping[str, str] | None = None) -> list[str]:

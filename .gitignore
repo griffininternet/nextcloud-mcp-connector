@@ -12,3 +12,6 @@ dist/
 build/
 .coverage
 .claude-active
+# The OAuth store of the --manual development mode: encrypted app passwords and token
+# hashes of whoever authorized against a local Nextcloud (config.DEV_STORAGE_DIR).
+.nc-mcp-dev-storage/
