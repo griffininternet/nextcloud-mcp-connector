@@ -39,7 +39,24 @@ findings:
   warning: 12
   info: 6
   total: 21
-status: issues_found
+resolved:
+  at: 2026-08-16
+  critical: 3
+  warning: 8
+  info: 0
+  open: 10
+  commits:
+    - 563e330 CR-01
+    - fdaea5d CR-02, WR-03
+    - f6d5ed1 CR-03
+    - d3a5450 WR-01
+    - b254e21 WR-02
+    - 783854c WR-04
+    - 91db412 WR-05
+    - bac94d4 WR-06
+    - ed829e3 WR-07
+    - 1abbc90 WR-11
+status: partially_resolved
 ---
 
 # Phase 3: Code Review Report
@@ -47,7 +64,23 @@ status: issues_found
 **Reviewed:** 2026-08-16T05:02:00Z
 **Depth:** standard (security focus, whole OAuth implementation 03-01 to 03-08)
 **Files Reviewed:** 27 source files plus manifest, deploy, docs, tests, CI
-**Status:** issues_found
+**Status:** partially_resolved (three blockers and eight warnings fixed on 2026-08-16, ten findings open)
+
+## What was fixed, and what is still open
+
+Fixed on 2026-08-16, one commit per finding, each with a guard test that is red without it:
+the three blockers (CR-01, CR-02, CR-03) and eight warnings (WR-01 to WR-07 and WR-11).
+Every one of them carries a **Resolved** line with its commit below.
+
+Still open, and deliberately: WR-08 (the refused client pages echo an attacker supplied
+client id as page copy), WR-09 (a missing NC_MCP_PUBLIC_URL degrades to the loopback default
+in the ExApp mode), WR-10 (_client_information takes a client_id it never compares), WR-12
+(POST /connect carries no anti forgery value) and the six Info findings.
+
+One open point belongs to CR-03 rather than to the list above: the return page needs a cross
+check in a real Chromium and a real WebKit. It is the shape that is correct without one,
+because a navigation is not a form submission, and the measurement belongs to the staging
+run of plan 03-09.
 
 ## Summary
 
@@ -78,6 +111,13 @@ cascade that drops Nextcloud credentials it promised to hand back).
 ## Critical Issues
 
 ### CR-01: A login flow can be finished by a different person than the one who signs in; the consent screen is bypassable
+
+**Resolved:** 563e330, 2026-08-16. The decision is a route of its own, /authorize/decide,
+declared USER; HaRP resolves the signed in Nextcloud account and the route grants nothing
+unless it is the account whose sign in produced the authorization. The result page of the
+browser onboarding applies the same rule and hands the credential back when it cannot be shown
+to that account. Manifest gate pulled along (twelve routes, an access level table with counter
+probes in both directions). Guard tests reproduce the relay on both surfaces.
 
 **File:** `src/mcp_connector/oauth/consent.py:191-345`, `src/mcp_connector/oauth/connect.py:222-261`, `src/mcp_connector/oauth/crypto.py:139-154`
 
@@ -147,6 +187,12 @@ owner directive of this phase.
 
 ### CR-02: The throttle bounds nothing on the path it was built for; anonymous callers can create Nextcloud login flows without limit
 
+**Resolved:** fdaea5d, 2026-08-16. The two routes that make this server open a Nextcloud login
+flow, POST /connect and /authorize, count every request before the work, in path classes and
+with a per source limit of their own; the screens behind them keep the refusal counter.
+forget() is gone with it, which also resolves WR-03: a success pays back exactly one counted
+failure now. SC 5 statements in docs/oauth-setup.md corrected.
+
 **File:** `src/mcp_connector/oauth/throttle.py:216-268`, `src/mcp_connector/oauth/connect.py:100-169`
 
 **Issue:**
@@ -199,6 +245,11 @@ saw at most N round trips.
 
 ### CR-03: `form-action 'self'` very likely blocks the approval redirect in Chromium and WebKit
 
+**Resolved:** f6d5ed1, 2026-08-16. The decision answers 200 with a page that carries the return
+address as a meta refresh and as a readable button, instead of a 302 a browser refuses under
+form-action 'self'. The policy is untouched and names no foreign origin. The browser cross
+check in a real Chromium is still open and belongs to the staging run of plan 03-09.
+
 **File:** `src/mcp_connector/exapp/ui/layout.py:66-69`, `src/mcp_connector/oauth/consent.py:385-388`
 
 **Issue:**
@@ -239,6 +290,10 @@ needs a browser check, not another `httpx` run.
 
 ### WR-01: `HashedClientAuthenticator` drops two fail-closed guards of the SDK authenticator
 
+**Resolved:** d3a5450, 2026-08-16. A registration that asked for a secret and has none stored
+is refused instead of read as a public client, and client_secret_expires_at is compared against
+the clock of this provider.
+
 **File:** `src/mcp_connector/oauth/provider.py:1071-1101`
 
 **Issue:** The override reimplements `ClientAuthenticator.authenticate_request` and loses two
@@ -276,6 +331,12 @@ and not a blocker. Both become live the moment a row is written another way or
 
 ### WR-02: The first start race of the data key is not closed by the read back
 
+**Resolved:** b254e21, 2026-08-16. The read back is compared against what was written, a worker
+that lost adopts the stored key and logs it, and the read is repeated once. The residual is
+named instead of denied: the configuration API has no compare and set, the window is the first
+start of a deployment, and docs/oauth-setup.md tells an administrator to start the first
+container with one worker.
+
 **File:** `src/mcp_connector/oauth/crypto.py:157-185`
 
 **Issue:** The docstring claims the read back means two workers "both continue with the one
@@ -307,6 +368,10 @@ row that was just written, so a lost race is repaired instead of persisted.
 
 ### WR-03: One success clears the failure counter of a whole path class, which a guessing loop can drive
 
+**Resolved:** fdaea5d, 2026-08-16. Resolved with CR-02: forget() no longer clears the window of
+a source. A success pays back exactly one counted failure, so one harmless request every ninth
+attempt no longer keeps a guessing loop at zero.
+
 **File:** `src/mcp_connector/oauth/throttle.py:180-187`, `:265-268`
 
 **Issue:** `forget()` deletes the per source counter of the path class on any answer below
@@ -330,6 +395,11 @@ instead of deleting it:
 
 ### WR-04: Expiring a client cascade deletes its authorizations, so live Nextcloud app passwords are orphaned without being handed back
 
+**Resolved:** 783854c, 2026-08-16. purge_expired leaves a client with connections alone and
+lists it through expired_clients; the provider revokes the app passwords, deletes the
+authorizations and only then the client, in a sweep next to sweep_abandoned and in the expiry
+branch of get_client.
+
 **File:** `src/mcp_connector/oauth/store.py:954-975`, `src/mcp_connector/oauth/provider.py:320-323`
 
 **Issue:** `purge_expired` and `get_client` delete client rows, and `authorizations` has
@@ -348,6 +418,9 @@ removes clients, first collect the authorizations of those clients, revoke their
 and let `sweep_abandoned` pick the rows up, which it already can once the client is gone.
 
 ### WR-05: `OAuthStore._write` promises a transaction it never opens
+
+**Resolved:** 91db412, 2026-08-16. _call opens BEGIN IMMEDIATE for a write, commits when the
+body returns and rolls back when it does not.
 
 **File:** `src/mcp_connector/oauth/store.py:983-999`
 
@@ -381,6 +454,10 @@ behaviour.
 
 ### WR-06: A ciphertext that cannot be read escapes as a 500 on the two browser surfaces
 
+**Resolved:** bac94d4, 2026-08-16. Both call sites of load_flow, and the decision route with
+them, answer the generic page with its log reference instead of letting DecryptionRejected
+reach Starlette.
+
 **File:** `src/mcp_connector/oauth/consent.py:207`, `src/mcp_connector/oauth/connect.py:233`
 
 **Issue:** `store.load_flow` decrypts `poll_token_enc` inside the worker
@@ -402,6 +479,10 @@ guarded; these two were missed.
 ```
 
 ### WR-07: The sign in link on the trust page is checked by host only, not by path
+
+**Resolved:** ed829e3, 2026-08-16. The path of the address is checked against the one shape a
+Login Flow v2 grant page has, so no other page of the configured host can stand behind the
+button.
 
 **File:** `src/mcp_connector/oauth/consent.py:447-469`
 
@@ -490,6 +571,9 @@ key and JSON from the same object, but the guard the signature suggests does not
 ```
 
 ### WR-11: The OAuth flow integration test never runs in CI
+
+**Resolved:** 1abbc90, 2026-08-16. The suite runs in the exapp job, and a guard test keeps
+every tests/integration/*_exapp.py suite named in the workflow.
 
 **File:** `.github/workflows/ci.yml:63-106`, `tests/integration/test_oauth_flow_exapp.py:99-125`
 
