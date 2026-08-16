@@ -29,6 +29,18 @@ fails if a name or a permission level in the table disagrees with it.
 Step by step setup for Claude Desktop, Claude Code and remote HTTP clients, including the three
 errors that actually happen: **[docs/client-setup.md](docs/client-setup.md)**.
 
+### OAuth 2.1
+
+Installed as a Nextcloud ExApp, this server is also its own OAuth 2.1 authorization server, to
+the MCP authorization specification: dynamic client registration, PKCE S256, audience bound
+tokens, refresh rotation with reuse detection and immediate revocation. A client such as
+Claude.ai or ChatGPT is given one URL, signs the user in on Nextcloud's own pages and never
+sees a password or an app password. The connection appears under Settings, Security, Devices
+and sessions and can be ended there.
+
+What an administrator has to set, what a user enters, and the measurements behind both:
+**[docs/oauth-setup.md](docs/oauth-setup.md)**.
+
 ## Quickstart (stdio)
 
 You need a Nextcloud app password, not your login password. Create one in Nextcloud under
@@ -100,7 +112,10 @@ the bind address: `--host 0.0.0.0` allows nobody in.
 | `NC_MCP_ALLOWED_HOSTS` | HTTP | yes in practice | Comma separated `Host` header allow list of this server; a port wildcard is added per name |
 | `NC_MCP_STATIC_BEARER` | HTTP | no | Static bearer token for single user deployments; without it, clients authenticate per request |
 | `NC_MCP_DISABLE_DNS_REBINDING_PROTECTION` | HTTP | no | Set to `true` only behind a proxy that controls the `Host` header |
-| `NC_MCP_PUBLIC_URL` | static bearer | no | Public URL of this server for the bearer discovery document |
+| `NC_MCP_PUBLIC_URL` | static bearer, ExApp | yes for OAuth | Public URL of this server. In the ExApp mode it is the issuer of the authorization server and the resource of the protected resource document, so OAuth does not work without it |
+| `NC_MCP_OAUTH_DCR` | ExApp | no | Dynamic client registration, on unless switched off |
+| `NC_MCP_OAUTH_ALLOWLIST_ONLY` | ExApp | no | Only listed clients may authorize; an empty list then closes the door for everyone |
+| `NC_MCP_OAUTH_ALLOWED_CLIENTS` | ExApp | no | Comma separated client ids or redirect URIs, read only when the allowlist is on |
 
 No credential is ever logged, in any mode.
 

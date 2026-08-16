@@ -28,6 +28,24 @@ installation fails at the very first step, the heartbeat, with "heartbeat check 
 Make sure that Nextcloud instance and ExApp can reach it other." Nextcloud All-in-One ships
 exactly this rule in its bundled Caddy, and `deploy/Caddyfile` rebuilds it.
 
+The app declares eleven routes, and they are its whole external surface. As of phase 3 they
+are these:
+
+| Route | Access | What it is for |
+|-------|--------|----------------|
+| `/mcp` | public | The MCP transport. Public since plan 03-01, because the OAuth discovery flow begins with a 401 that this app has to answer itself; the protection it replaced is a bearer check inside the container. |
+| `/.well-known/oauth-protected-resource/mcp` | public | RFC 9728, the document the 401 points at. |
+| `/.well-known/oauth-authorization-server` | public | RFC 8414, and the rewrite target of the optional reverse proxy rule. |
+| `/.well-known/openid-configuration` | public | The same document at the one path that survives a stripped prefix. |
+| `/connect`, `/connect/wait` | public | The browser onboarding for clients that cannot speak OAuth (AUTH-02). |
+| `/authorize`, `/authorize/consent` | public | The authorization endpoint and the consent screen. |
+| `/token`, `/register`, `/revoke` | public | The machine endpoints of the authorization server. |
+
+Public here means that HaRP does not decide access; every one of these routes carries its
+own check, and `/mcp` refuses any request without a bearer this app issued. The OAuth half
+is configured in [oauth-setup.md](./oauth-setup.md), which also lists the four deploy
+variables the manifest declares.
+
 Two more properties of the file are deliberate:
 
 * Every published port binds to `127.0.0.1`. The instance carries throwaway credentials and
@@ -334,6 +352,7 @@ rather than remembered only here.
 
 ## Related
 
+- Turning on OAuth 2.1 on this topology: [oauth-setup.md](./oauth-setup.md)
 - Manifest and routes: [../appinfo/info.xml](../appinfo/info.xml)
 - Topology: [../compose.exapp.yml](../compose.exapp.yml), [../deploy/Caddyfile](../deploy/Caddyfile)
 - Installation script: [../scripts/bootstrap_exapp.sh](../scripts/bootstrap_exapp.sh)

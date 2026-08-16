@@ -279,12 +279,55 @@ touching your password or your second factor.
 ### Which way is meant for which client
 
 * **OAuth** is the way for Claude.ai and ChatGPT, which register themselves and run the whole
-  authorization in the client. It arrives with plan 03-06 of this phase; nothing has to be
-  copied by hand there.
+  authorization in the client. Nothing is copied by hand there; see the next section.
 * **Browser onboarding** is the way for every other client: it produces the credential the
   Basic header of the sections above needs, without you creating an app password by hand.
 * **The app password sections above stay valid** for stdio, for the standalone HTTP mode and
   for the ExApp mode. The onboarding only replaces the manual step of creating one.
+
+## OAuth clients (Claude.ai, ChatGPT)
+
+A client that speaks the MCP authorization specification needs one thing from you: the URL
+of the connector. Enter it exactly like this, with `/mcp` and **without a trailing slash**:
+
+```
+https://<nextcloud>/exapps/mcp_connector/mcp
+```
+
+The trailing slash is not cosmetic. That string has to match the `resource` value of the
+protected resource document character for character, and a URL that ends in a slash is a
+different resource. A client that is given the wrong form fails before the first tool call.
+
+What happens after you enter it:
+
+1. The client calls the URL, gets a `401` and reads the address of the metadata out of it.
+2. It registers itself, with no client id and no secret you have to create.
+3. It opens a browser window. What you see there is **Nextcloud's own sign in page** on your
+   own instance, with your own login and your own second factor. This connector never asks
+   for your password and has no input field for one.
+4. After the sign in you get one page from the connector that names the client, your account
+   and what the connection may do, with an "Approve access" and a "Deny access" button.
+5. Approving sends the browser back to the client, which is connected from then on.
+
+The connection appears under **Settings, Security, Devices and sessions** with the name of
+the client, prefixed by `MCP Connector:`. Ending it there ends it immediately, and so does
+the client's own disconnect button.
+
+### If the client cannot find the authorization server
+
+Symptom: the client reports "could not discover authorization server", "authorization
+server metadata not found" or simply refuses to connect, although opening
+`https://<nextcloud>/exapps/mcp_connector/.well-known/oauth-protected-resource/mcp` in a
+browser shows a JSON document.
+
+Cause: the client only tries the canonical path on the domain root, and that path belongs
+to Nextcloud, which answers 404 there. Two reverse proxy rules map it back onto this app;
+they are in the Install section of [oauth-setup.md](./oauth-setup.md), for Caddy and for
+nginx, and they are the administrator's part.
+
+**Claude Code is not in this group.** It identifies itself with a client id metadata
+document instead of registering, and its callback port changes per run, which exact
+redirect URI matching cannot accept. Use the app password way above for it.
 
 ## Three things that will go wrong
 
