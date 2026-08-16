@@ -1,0 +1,73 @@
+# Reverse proxy for the public staging topology (compose.staging.yml, plan 03-09).
+#
+# Same routing as deploy/Caddyfile, with three differences, and all three come from the one
+# fact that this instance is reachable from the internet:
+#
+#   * the site address is the public host name instead of :80, so Caddy manages a
+#     certificate for it and redirects http to https on its own,
+#   * the name comes from the environment ({$NC_STAGING_DOMAIN}, set in compose.staging.yml)
+#     and is never written into this file, because this file is public and the instance is
+#     a throwaway with a different name every time,
+#   * every request is logged, because the access log is the measuring instrument of plan
+#     03-09: which discovery path a hosted connector really tries, in which order, with
+#     which status code, and how long /token took.
+#
+# The certificate is issued over HTTP-01 or TLS-ALPN, which needs no DNS provider token and
+# no configuration here. It does need the A record to be DNS-only: behind a CDN proxy the
+# challenge never arrives, and the streaming response of the MCP transport would be handled
+# by a third party as well.
+{$NC_STAGING_DOMAIN} {
+	# The access log of the measurement. It records method, path, query, status and
+	# duration. It does not record request bodies, so no token, no code, no PKCE verifier
+	# and no password passes through it. It does record query strings, and an authorization
+	# request carries state and code_challenge in the query, so a raw log line is never
+	# pasted into a document (T-03-81).
+	log {
+		output stdout
+		format json
+	}
+
+	# The two canonical discovery paths of RFC 9728 and RFC 8414, mapped back onto the
+	# ExApp. Both sit on the domain root and belong to Nextcloud: RFC 9728 pushes the
+	# well-known segment between host and resource path, RFC 8414 does the same for the
+	# issuer, and Nextcloud's WellKnownController matches a single path segment only, so
+	# both answer 404 (measured, spike-discovery.md). HaRP routes /exapps/* alone, so the
+	# ExApp never sees these paths without a rule like this one.
+	#
+	# The rules are optional. A spec compliant client reads the resource_metadata pointer
+	# out of our 401 first and finds the protected resource document without them, and the
+	# authorization server document is served at the path appended OpenID variant below our
+	# own prefix as well. They exist for clients that try the canonical path only.
+	#
+	# Whether the hosted connectors need them is exactly the open question of plan 03-09
+	# (assumption A2). The counter measurement is run by commenting out these two blocks
+	# and reloading Caddy; docs/staging-setup.md carries the two commands.
+	#
+	# Both matchers are exact paths, not prefixes (T-03-07): they rewrite these two strings
+	# and nothing else, and no Nextcloud path outside them changes behaviour. Order matters,
+	# the first matching route wins, so they stand before the /exapps/* block.
+	route /.well-known/oauth-protected-resource/exapps/mcp_connector/mcp {
+		rewrite * /exapps/mcp_connector/.well-known/oauth-protected-resource/mcp
+		reverse_proxy appapi-harp:8780
+	}
+
+	route /.well-known/oauth-authorization-server/exapps/mcp_connector {
+		rewrite * /exapps/mcp_connector/.well-known/oauth-authorization-server
+		reverse_proxy appapi-harp:8780
+	}
+
+	route /exapps/* {
+		reverse_proxy appapi-harp:8780 {
+			# Streamable HTTP holds a response open for the lifetime of an MCP session.
+			# The default read timeout would cut such a stream, and the client would see
+			# a truncated body instead of an error.
+			transport http {
+				read_timeout 1800s
+			}
+		}
+	}
+
+	route {
+		reverse_proxy nextcloud:80
+	}
+}

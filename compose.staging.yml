@@ -1,0 +1,186 @@
+# Public staging topology for the end to end proof of plan 03-09 (AUTH-04).
+#
+#   export NC_STAGING_DOMAIN=nc-staging.example.com
+#   bash scripts/setup_staging.sh            # one command, see docs/staging-setup.md
+#
+# or, if the bootstrap has already run once:
+#
+#   docker compose --env-file .env.staging -f compose.staging.yml up -d --wait
+#   docker compose --env-file .env.staging -f compose.staging.yml down -v   # throw it away
+#
+# This is the third and last topology of this repository, next to compose.test.yml (the
+# instance in daily use) and compose.exapp.yml (the local throwaway HaRP instance). It
+# carries its own project name, its own volumes, its own network and its own subnet, so a
+# command aimed at this file can never touch either of the other two.
+#
+# It exists for one reason: Claude.ai and ChatGPT reach an MCP server from the internet,
+# over TLS, so the only way to measure what they really do is an instance they can reach.
+# It is a throwaway (docs/staging-setup.md, "What this instance is not"), and it is deleted
+# after the measurement.
+#
+# What is different from compose.exapp.yml, and why:
+#
+#   * Caddy listens on 80 and 443 of every interface instead of 127.0.0.1:8081. That is the
+#     whole point of this file, and it is also why nothing here has a weak default: the
+#     local topology may carry throwaway credentials because nobody can reach it, this one
+#     may not.
+#   * TLS is issued automatically by Let's Encrypt over HTTP-01 or TLS-ALPN. No DNS
+#     provider token is needed, which is why the A record has to be DNS-only (grey cloud):
+#     behind a proxy the challenge never reaches this Caddy.
+#   * The certificates live in a named volume. Without it every restart asks for a new
+#     certificate, and Let's Encrypt answers the sixth one in a week with a rate limit that
+#     lasts a week (five duplicate certificates per name per 168 hours).
+#   * Nextcloud is told its public name over OVERWRITEHOST and OVERWRITEPROTOCOL, so every
+#     generated link is https on the public domain rather than an internal container name.
+#   * The registry stays on loopback. It has neither authentication nor TLS; published on a
+#     public interface it is an open write target for the image the deploy daemon pulls.
+name: nc-mcp-staging
+
+services:
+  caddy:
+    # Same role as in the local topology, one address higher in reach: it terminates TLS,
+    # routes /exapps/* to HaRP and everything else to Nextcloud. AppAPI reaches an ExApp
+    # through the public Nextcloud URL, so without the /exapps/ rule the registration
+    # already fails at the heartbeat (02-RESEARCH.md, pitfall 7).
+    image: caddy:2
+    container_name: nc-mcp-staging-caddy
+    ports:
+      # Public on purpose, and the one deliberate difference to compose.exapp.yml. Port 80
+      # is not decoration: the ACME HTTP-01 challenge arrives there, and Caddy redirects
+      # everything else on it to https itself.
+      - "80:80"
+      - "443:443"
+    environment:
+      # No default (see the file header). The Caddyfile reads it as {$NC_STAGING_DOMAIN},
+      # and an empty value would produce a site block that matches nothing at all.
+      NC_STAGING_DOMAIN: "${NC_STAGING_DOMAIN:?set NC_STAGING_DOMAIN to the public host name first, see docs/staging-setup.md}"
+    volumes:
+      - ./deploy/Caddyfile.staging:/etc/caddy/Caddyfile:ro
+      # The certificate store. A restart without it asks Let's Encrypt for a new
+      # certificate every time, and the rate limit for that is five per name per week.
+      - caddy-staging-data:/data
+      - caddy-staging-config:/config
+    networks:
+      default:
+        # A fixed address, because Nextcloud and HaRP have to trust exactly this one
+        # container and nothing else in the subnet (WR-08). The ExApp container is hung
+        # into the same network by the deploy daemon, and it is the component that
+        # processes untrusted input: it must never be able to rewrite a client address.
+        ipv4_address: 172.30.42.10
+        aliases:
+          # The public host name, resolvable inside the compose network. AppAPI and HaRP
+          # call Nextcloud under its public URL, and this alias keeps that call inside the
+          # network instead of sending it out to the public address and back in. It needs
+          # no hairpin NAT from the provider, it stays on the same certificate (Caddy holds
+          # it for exactly this name), and the internal traffic never leaves the host.
+          - "${NC_STAGING_DOMAIN:?set NC_STAGING_DOMAIN to the public host name first, see docs/staging-setup.md}"
+    depends_on:
+      nextcloud:
+        condition: service_healthy
+    restart: unless-stopped
+
+  nextcloud:
+    image: nextcloud:34-apache
+    container_name: nc-mcp-staging-nc
+    # No published port: this instance is reachable through Caddy only, because every
+    # request from AppAPI to the ExApp has to take the same way a browser takes, and
+    # because a second way in would be a way in without TLS.
+    environment:
+      SQLITE_DATABASE: nextcloud
+      NEXTCLOUD_ADMIN_USER: "${NC_STAGING_ADMIN_USER:-admin}"
+      # No default, unlike the local topology. This instance is on the public internet
+      # from its first minute, and a documented administrator password would be a
+      # documented takeover. scripts/setup_staging.sh generates one into .env.staging.
+      NEXTCLOUD_ADMIN_PASSWORD: "${NC_STAGING_ADMIN_PASSWORD:?scripts/setup_staging.sh generates this into .env.staging, do not start this topology by hand without it}"
+      NEXTCLOUD_TRUSTED_DOMAINS: "${NC_STAGING_DOMAIN} localhost 127.0.0.1"
+      # The public identity of this instance. AppAPI builds the ExApp URL from it, occ
+      # prints it, and every link Nextcloud generates carries it (02-RESEARCH.md,
+      # pitfall 7). Without the overwrite Nextcloud would answer http:// links behind an
+      # https proxy, which breaks the browser part of the OAuth flow.
+      OVERWRITEHOST: "${NC_STAGING_DOMAIN}"
+      OVERWRITEPROTOCOL: https
+      OVERWRITECLIURL: "https://${NC_STAGING_DOMAIN}"
+      # Only the proxy in front of it may rewrite the client address, and that is one
+      # container, not the subnet (WR-08). On a public instance this matters more than on
+      # the local one: the bruteforce counter, the audit entries and every IP based rule
+      # read the value the proxy sets.
+      TRUSTED_PROXIES: "172.30.42.10"
+    healthcheck:
+      # status.php answers as soon as the web server is up. That is not the same as
+      # "installed", so the bootstrap script polls `occ status` before it does any work.
+      test: ["CMD", "php", "-r", "exit(file_get_contents('http://localhost/status.php') ? 0 : 1);"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+    volumes:
+      - nextcloud-staging-data:/var/www/html
+    restart: unless-stopped
+
+  appapi-harp:
+    # The deploy daemon. It starts the ExApp container over the Docker socket and routes
+    # every /exapps/ request to it, past the PHP process.
+    image: ghcr.io/nextcloud/nextcloud-appapi-harp:release
+    container_name: nc-mcp-staging-harp
+    # No ports section: Caddy reaches 8780 inside this network, and publishing the port on
+    # a public interface would expose the ExApp proxy directly, without TLS.
+    environment:
+      # No default (WR-11). Whoever reaches the FRP port with this key can register as
+      # this ExApp. scripts/setup_staging.sh generates one into .env.staging.
+      HP_SHARED_KEY: "${HP_SHARED_KEY:?export HP_SHARED_KEY with 64 hex characters first, see docs/staging-setup.md}"
+      # The public URL, resolved to the caddy container by the network alias above. AppAPI
+      # and HaRP have to reach Nextcloud under the same name a browser uses, otherwise the
+      # heartbeat fails and the generated links point at a name no client can resolve.
+      NC_INSTANCE_URL: "https://${NC_STAGING_DOMAIN}"
+      # One proxy, not the subnet: see the TRUSTED_PROXIES comment above (WR-08).
+      HP_TRUSTED_PROXY_IPS: "172.30.42.10"
+      HP_LOG_LEVEL: "${HP_LOG_LEVEL:-warning}"
+    volumes:
+      # T-02-31, accepted for a throwaway instance: the Docker socket is effectively root
+      # on the host. The deploy daemon cannot create the ExApp container without it. This
+      # is one of the reasons the instance is deleted after the measurement instead of
+      # being kept around (docs/staging-setup.md).
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./.harp-certs:/certs
+    depends_on:
+      nextcloud:
+        condition: service_healthy
+    restart: unless-stopped
+
+  registry:
+    # The ExApp image is not published before phase 5 (D-25), so the deploy daemon pulls
+    # from a registry that lives on this host. The Docker daemon treats 127.0.0.1:5000 as
+    # an allowed insecure registry without any extra configuration.
+    image: registry:2
+    container_name: nc-mcp-staging-registry
+    ports:
+      # Loopback only, and here it is not a convenience but the rule that keeps the public
+      # instance from serving an unauthenticated, unencrypted write target for exactly the
+      # image the deploy daemon pulls and runs with APP_SECRET in its environment (WR-09).
+      - "127.0.0.1:5000:5000"
+    volumes:
+      - registry-staging-data:/var/lib/registry
+    restart: unless-stopped
+
+networks:
+  default:
+    # Named explicitly because `occ app_api:daemon:register --net` needs the name. The
+    # subnet is a different one from compose.exapp.yml on purpose: the two topologies are
+    # never meant to run on the same host, and an overlapping subnet would be the kind of
+    # failure that looks like a network bug.
+    name: nc-mcp-staging-net
+    ipam:
+      config:
+        - subnet: 172.30.42.0/24
+          # Dynamic assignment never enters the static half (IN-03): without the range,
+          # Docker could hand the fixed proxy address 172.30.42.10 to any other container
+          # once caddy is down, including the ExApp container the daemon creates, which
+          # would make the component that processes untrusted input a trusted proxy.
+          ip_range: 172.30.42.128/25
+
+volumes:
+  nextcloud-staging-data:
+  registry-staging-data:
+  # The certificate store of Caddy. Named, not anonymous: an anonymous volume is a new
+  # volume after `down -v`, and a new volume means a new certificate order.
+  caddy-staging-data:
+  caddy-staging-config:
