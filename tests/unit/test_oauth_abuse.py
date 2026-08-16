@@ -41,6 +41,7 @@ import ast
 import asyncio
 import base64
 import hashlib
+import html
 import inspect
 import logging
 import re
@@ -235,8 +236,26 @@ def flow_of(response: Any) -> str:
     return match.group(1)
 
 
+def returned_to(response: Any) -> str:
+    """Where this answer sends the browser, out of a redirect or out of a return page.
+
+    Since CR-03 the decision answers 200 with a page that navigates instead of a 302 to the
+    client: Chromium and WebKit check ``form-action`` against the target of a redirect that
+    follows a form submission, and every page of this phase carries ``form-action 'self'``.
+    The authorization endpoint still answers a redirect, so both shapes are read here.
+    """
+    location = response.headers.get("location")
+    if location:
+        return str(location)
+    match = re.search(r'content="0; url=([^"]+)"', response.text)
+    assert match is not None, response.text
+    target = html.unescape(match.group(1))
+    assert f'href="{match.group(1)}"' in response.text, "the address is not readable as a link"
+    return target
+
+
 def query_of(response: Any) -> dict[str, list[str]]:
-    return parse_qs(urlsplit(response.headers["location"]).query)
+    return parse_qs(urlsplit(returned_to(response)).query)
 
 
 def sign_in(deployment: Deployment, flow_id: str) -> Any:
@@ -294,7 +313,9 @@ def connect(deployment: Deployment) -> dict[str, Any]:
     flow_id = flow_of(opened)
     sign_in(deployment, flow_id)
     granted = approve(deployment, flow_id)
-    assert granted.status_code == 302, granted.text
+    # 200 and not 302 since CR-03: the decision answers a page that navigates, because a
+    # redirect out of a form submission is refused under ``form-action 'self'``.
+    assert granted.status_code == 200, granted.text
     code = query_of(granted)["code"][0]
     answer = deployment.client.post("/token", data=token_request(code=code))
     assert answer.status_code == 200, answer.text

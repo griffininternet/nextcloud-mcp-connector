@@ -81,6 +81,8 @@ __all__ = [
     "RESULT_CONNECTED_TITLE",
     "RESULT_DENIED_BODY",
     "RESULT_DENIED_TITLE",
+    "RESULT_RETURN_ACTION",
+    "RESULT_RETURN_BODY",
     "SIGNIN_BODY",
     "SIGNIN_CTA",
     "SIGNIN_TITLE",
@@ -248,6 +250,16 @@ RESULT_CONNECTED_BODY = "{client} may now use your Nextcloud as {user}. You can 
 RESULT_DENIED_TITLE = "Access denied"
 
 RESULT_DENIED_BODY = "{client} did not get access. Nothing was shared. You can close this window."
+
+#: The return page of a decision that has somewhere to go back to (CR-03). The decision is
+#: a form submission, and Chromium and WebKit check ``form-action`` against the target of a
+#: redirect that follows one, so an answer of "302 to the client" is refused by the browser
+#: under the policy of this phase. The answer is this page instead: it continues on its own
+#: and names the button that does the same thing, so the return never depends on a redirect
+#: the browser may refuse or on a policy that names a foreign origin.
+RESULT_RETURN_BODY = "Taking you back to {client}. If nothing happens, use the button below."
+
+RESULT_RETURN_ACTION = "Continue to {client}"
 
 # --- Empty state -------------------------------------------------------------------------
 

@@ -59,13 +59,12 @@ from mcp.shared.auth import InvalidRedirectUriError, OAuthClientInformationFull
 from pydantic import AnyUrl, ValidationError
 from starlette.datastructures import FormData, QueryParams
 from starlette.requests import Request
-from starlette.responses import RedirectResponse, Response
+from starlette.responses import Response
 from starlette.routing import Route
 
 from .. import config
 from ..errors import ToolError
 from ..exapp.auth import appapi_user, is_user
-from ..exapp.responses import NO_STORE
 from ..exapp.ui import errors
 from ..exapp.ui.consent import (
     CONFIRM_PARAM,
@@ -448,7 +447,13 @@ async def _approve(
     target = construct_redirect_uri(
         row.redirect_uri, code=code, state=row.state, iss=config.public_url(env)
     )
-    return RedirectResponse(target, status_code=302, headers=dict(NO_STORE))
+    # A page and not a 302 (CR-03). This answer is the answer of a form submission, and
+    # Chromium and WebKit check ``form-action`` against the target of a redirect that
+    # follows one; the policy of every page of this phase is ``form-action 'self'``, so
+    # those browsers refuse to follow a redirect to the client and the user is left on a
+    # blank page. The page navigates instead, which no browser checks against that
+    # directive, and it does so without naming a foreign origin in the policy.
+    return connected_page(_name(client), user, target=target, env=env)
 
 
 async def _deny(
@@ -475,10 +480,13 @@ async def _deny(
     if not row.redirect_uri:
         return denied_page(_name(client), env=env)
 
+    # The same page shape as the approval, for the same reason (CR-03): the refusal has to
+    # reach the client that asked, and a 302 out of a form submission is refused by
+    # Chromium and WebKit under ``form-action 'self'``.
     target = construct_redirect_uri(
         row.redirect_uri, error="access_denied", state=row.state, iss=config.public_url(env)
     )
-    return RedirectResponse(target, status_code=302, headers=dict(NO_STORE))
+    return denied_page(_name(client), target=target, env=env)
 
 
 async def _app_password(store: OAuthStore, auth_id: str) -> str:

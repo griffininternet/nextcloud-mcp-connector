@@ -15,6 +15,7 @@ container, no network, no Nextcloud.
 
 import asyncio
 import base64
+import html
 import logging
 import re
 import sqlite3
@@ -590,20 +591,47 @@ def snapshot(store: OAuthStore) -> dict[str, list[tuple[Any, ...]]]:
     return {name: rows(store, name) for name in ("flows", "authorizations", "auth_codes")}
 
 
+def returned_to(response: Any) -> str:
+    """Where this answer sends the browser, out of a redirect or out of a return page.
+
+    Since CR-03 the decision answers 200 with a page that navigates instead of a 302 to the
+    client: Chromium and WebKit check ``form-action`` against the target of a redirect that
+    follows a form submission, and every page of this phase carries ``form-action 'self'``.
+    The authorization endpoint still answers a redirect, so both shapes are read here.
+    """
+    location = response.headers.get("location")
+    if location:
+        return str(location)
+    match = re.search(r'content="0; url=([^"]+)"', response.text)
+    assert match is not None, response.text
+    target = html.unescape(match.group(1))
+    assert f'href="{match.group(1)}"' in response.text, "the address is not readable as a link"
+    return target
+
+
 def query_of(response: Any) -> dict[str, list[str]]:
-    return parse_qs(urlsplit(response.headers["location"]).query)
+    return parse_qs(urlsplit(returned_to(response)).query)
 
 
-def test_an_approval_redirects_with_code_state_and_iss(store: OAuthStore) -> None:
-    """The one moment of this phase that grants something, and the shape RFC 9207 wants."""
+def test_an_approval_returns_to_the_client_with_code_state_and_iss(store: OAuthStore) -> None:
+    """The one moment of this phase that grants something, and the shape RFC 9207 wants.
+
+    Answered with a page that navigates and not with a 302 since CR-03: the decision is a
+    form submission, and Chromium and WebKit check ``form-action`` against the target of a
+    redirect that follows one, so the redirect this used to answer never arrived in those
+    browsers. The address is the same, and it is in the page as a link as well as in the
+    refresh, so a reader sees where they are being sent.
+    """
     provider = make(store)
     register(provider)
     client, flow_id, _page = signed_in(provider)
 
     response = decide(client, flow_id, ui_consent.DECISION_APPROVE, store=store)
 
-    assert response.status_code == 302
-    assert response.headers["location"].startswith(REDIRECT)
+    assert response.status_code == 200
+    assert "location" not in response.headers, "a 302 out of a form post is refused by CSP"
+    assert returned_to(response).startswith(REDIRECT)
+    assert "form-action 'self'" in response.headers["content-security-policy"]
     assert response.headers["cache-control"] == "no-store"
     query = query_of(response)
     assert query["state"] == [STATE]
@@ -669,7 +697,8 @@ def test_a_denial_answers_access_denied_and_hands_the_credential_back(
         revoke = respx.delete(REVOKE_URL).mock(return_value=httpx.Response(200, json={}))
         response = decide(client, flow_id, ui_consent.DECISION_DENY, store=store)
 
-    assert response.status_code == 302
+    assert response.status_code == 200
+    assert returned_to(response).startswith(REDIRECT)
     assert revoke.call_count == 1, "one attempt, no retry"
     query = query_of(response)
     assert query["error"] == ["access_denied"]
@@ -706,7 +735,7 @@ def test_a_second_decision_on_the_same_flow_creates_nothing_more(store: OAuthSto
     first = decide(client, flow_id, ui_consent.DECISION_APPROVE, store=store)
     second = decide(client, flow_id, ui_consent.DECISION_APPROVE, store=store)
 
-    assert first.status_code == 302
+    assert first.status_code == 200
     assert second.status_code == 400
     assert len(rows(store, "auth_codes")) == 1
     assert len(rows(store, "authorizations")) == 1
@@ -769,6 +798,53 @@ def test_the_flood_does_not_close_the_consent_screen_behind_it(store: OAuthStore
     assert screen.status_code == 200
 
 
+# --- CR-03: the decision answers a navigation, never a redirect a browser refuses ---------
+
+
+@pytest.mark.parametrize(
+    "decision", [ui_consent.DECISION_APPROVE, ui_consent.DECISION_DENY], ids=["approve", "deny"]
+)
+def test_no_decision_answers_a_redirect_to_a_foreign_origin(
+    store: OAuthStore, decision: str
+) -> None:
+    """CR-03: Chromium and WebKit check ``form-action`` against the target of a redirect
+    that follows a form submission, and every page of this phase carries ``form-action
+    'self'``. A 302 to the client out of this POST is therefore a blank page in those
+    browsers, which is the primary flow of success criteria 1 and 2. The answer is a page
+    that navigates, and the policy is unchanged: no foreign origin is named in it."""
+    provider = make(store)
+    register(provider)
+    client, flow_id, _page = signed_in(provider)
+
+    with respx.mock:
+        respx.delete(REVOKE_URL).mock(return_value=httpx.Response(200, json={}))
+        response = decide(client, flow_id, decision, store=store)
+
+    assert response.status_code == 200
+    assert "location" not in response.headers
+    assert returned_to(response).startswith(REDIRECT)
+    policy = response.headers["content-security-policy"]
+    assert "form-action 'self'" in policy
+    assert "claude.ai" not in policy, "the policy never names the origin of a registration"
+    assert "<script" not in response.text
+
+
+def test_the_return_page_shows_the_address_it_continues_to(store: OAuthStore) -> None:
+    """A page that navigates on its own has to say where, or it is the open redirect this
+    surface exists against wearing a friendlier hat (T-03-41)."""
+    provider = make(store)
+    register(provider)
+    client, flow_id, _page = signed_in(provider)
+
+    response = decide(client, flow_id, ui_consent.DECISION_APPROVE, store=store)
+
+    target = returned_to(response)
+    assert f'href="{html.escape(target, quote=True)}"' in response.text
+    assert strings.RESULT_RETURN_ACTION.format(client=CLIENT_NAME) in response.text
+    assert response.headers["referrer-policy"] == "no-referrer"
+    assert response.headers["cache-control"] == "no-store"
+
+
 # --- CR-01: the decision belongs to the account that signed in ----------------------------
 
 
@@ -798,7 +874,8 @@ def test_the_relay_attack_never_reaches_a_code(
     response = decide(client, flow_id, ui_consent.DECISION_APPROVE, store=store, user=user)
 
     assert response.status_code == 400, case
-    assert "location" not in response.headers, "no code and no redirect to the client"
+    assert "location" not in response.headers
+    assert "url=" not in response.text, "no code and no way back to the client"
     assert rows(store, "auth_codes") == []
     assert snapshot(store) == before, "not one row of the store moved"
     assert strings.CONSENT_APPROVE not in response.text

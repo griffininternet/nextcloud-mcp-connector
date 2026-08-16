@@ -48,6 +48,7 @@ import argparse
 import asyncio
 import base64
 import hashlib
+import html as html_module
 import json
 import os
 import re
@@ -181,6 +182,23 @@ def hidden_field(html: str, name: str) -> str:
     if match is None:
         raise CheckFailed(f"the rendered form carried no {name} field")
     return match.group(1)
+
+
+def return_target(page: str) -> str:
+    """The address a decision page continues to (CR-03).
+
+    The decision answers 200 with a page that navigates instead of a 302 to the client:
+    Chromium and WebKit check ``form-action`` against the target of a redirect that follows
+    a form submission, and every page of this phase carries ``form-action 'self'``. The
+    address stands twice in that page, once in the refresh and once as a link a reader can
+    see, and both have to be the same one.
+    """
+    match = re.search(r'<meta http-equiv="refresh" content="0; url=([^"]+)">', page)
+    if match is None:
+        raise CheckFailed("the decision page carried no address to continue to")
+    if f'href="{match.group(1)}"' not in page:
+        raise CheckFailed("the decision page continues somewhere it does not show as a link")
+    return html_module.unescape(match.group(1))
 
 
 def detail_value(html: str, term: str) -> str:
@@ -345,7 +363,7 @@ def connect(
             f"{base}/authorize/decide",
             data={"flow": flow_id, "confirm": confirm, "decision": "approve"},
         )
-        if refused.status_code == 302:
+        if refused.status_code == 200:
             raise CheckFailed(
                 "the decision was granted without a Nextcloud account behind it (CR-01)"
             )
@@ -357,9 +375,10 @@ def connect(
             data={"flow": flow_id, "confirm": confirm, "decision": "approve"},
             auth=(user, password),
         )
-        if approved.status_code != 302:
-            raise CheckFailed(f"the approval answered {approved.status_code}, not a redirect")
-        returned = urllib.parse.parse_qs(urllib.parse.urlsplit(approved.headers["location"]).query)
+        if approved.status_code != 200:
+            raise CheckFailed(f"the approval answered {approved.status_code}, not the return page")
+        target = return_target(approved.text)
+        returned = urllib.parse.parse_qs(urllib.parse.urlsplit(target).query)
         if verbose:
             report(
                 "step 5",
@@ -371,11 +390,11 @@ def connect(
                 iss=returned.get("iss", [""])[0],
             )
         if not returned.get("code"):
-            raise CheckFailed("the redirect carried no authorization code")
+            raise CheckFailed("the return page carried no authorization code")
         if returned.get("state") != [state]:
-            raise CheckFailed("the redirect carried another state")
+            raise CheckFailed("the return page carried another state")
         if returned.get("iss") != [base]:
-            raise CheckFailed("the redirect carried no issuer or the wrong one")
+            raise CheckFailed("the return page carried no issuer or the wrong one")
 
         started = time.monotonic()
         exchanged = client.post(

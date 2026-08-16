@@ -261,43 +261,62 @@ def consent_page(
 
 
 def connected_page(
-    client_name: str, user: str, *, env: Mapping[str, str] | None = None
+    client_name: str,
+    user: str,
+    *,
+    target: str = "",
+    env: Mapping[str, str] | None = None,
 ) -> Response:
-    """S4, approved: the page that exists only when there is nowhere to redirect to.
+    """S4, approved: the end of the flow, with or without somewhere to go back to.
 
-    The normal end of an approval is a 302 back to the registered address and no page at
-    all. This one is for a client that registered no usable return address, and for the
-    reader it has to say two things: it worked, and there is nothing left to do here.
+    With a ``target`` this is the return page of CR-03: the decision is a form submission,
+    and Chromium and WebKit check ``form-action`` against the target of a redirect that
+    follows one, so the ``302`` this used to answer is refused by those browsers under the
+    policy every page of this phase carries. A navigation is not a form submission, so the
+    page navigates instead: it carries the address as a meta refresh and as a button the
+    reader can see and press.
+
+    Without one it is the page for a client that registered no usable return address, and
+    it has to say two things: it worked, and there is nothing left to do here.
     """
+    name = layout.client_name(client_name)
+    blocks = [layout.paragraph(strings.RESULT_CONNECTED_BODY.format(client=name, user=user))]
+    if target:
+        blocks = [
+            layout.paragraph(strings.RESULT_RETURN_BODY.format(client=name)),
+            layout.return_action(strings.RESULT_RETURN_ACTION.format(client=name), target),
+        ]
     return layout.page(
         strings.RESULT_CONNECTED_TITLE,
-        [
-            layout.paragraph(
-                strings.RESULT_CONNECTED_BODY.format(
-                    client=layout.client_name(client_name), user=user
-                )
-            )
-        ],
+        blocks,
         env=env,
         heading_icon=icons.CHECK,
         heading_tone="success",
+        refresh_to=target,
     )
 
 
-def denied_page(client_name: str, *, env: Mapping[str, str] | None = None) -> Response:
+def denied_page(
+    client_name: str, *, target: str = "", env: Mapping[str, str] | None = None
+) -> Response:
     """S4, denied: nothing was shared, and the sentence says exactly that.
 
     Answered with 200 and not with an error status: the user did what they meant to do,
     and a refusal that reads like a failure teaches people to try again until it works.
+    The refusal has to reach the client that asked, so this page returns to it the same way
+    the approved one does (CR-03), carrying ``error=access_denied`` in the address.
     """
+    name = layout.client_name(client_name)
+    blocks = [layout.paragraph(strings.RESULT_DENIED_BODY.format(client=name))]
+    if target:
+        blocks.append(
+            layout.return_action(strings.RESULT_RETURN_ACTION.format(client=name), target)
+        )
     return layout.page(
         strings.RESULT_DENIED_TITLE,
-        [
-            layout.paragraph(
-                strings.RESULT_DENIED_BODY.format(client=layout.client_name(client_name))
-            )
-        ],
+        blocks,
         env=env,
+        refresh_to=target,
     )
 
 

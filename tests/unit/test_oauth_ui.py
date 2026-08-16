@@ -301,6 +301,45 @@ def test_a_link_to_another_origin_is_refused() -> None:
         layout.form("https://evil.example.com/", [])
 
 
+def test_a_return_target_becomes_a_refresh_the_caller_did_not_write() -> None:
+    """CR-03: the head takes a value and never a fragment, so a caller cannot write markup
+    into it, and the address is the one the page also shows as a link."""
+    response = layout.page(
+        "Connected",
+        [layout.return_action("Continue", "https://claude.ai/callback?code=abc&state=xyz")],
+        refresh_to="https://claude.ai/callback?code=abc&state=xyz",
+    )
+    rendered = body(response)
+
+    assert '<meta http-equiv="refresh" content="0; url=https://claude.ai/callback?' in rendered
+    assert "&amp;state=xyz" in rendered, "the address is escaped where it is written"
+    assert rendered.count("claude.ai") == 2, "once in the refresh, once as a readable link"
+    assert 'target="_blank"' not in rendered, "the return stays in the window of the flow"
+
+
+@pytest.mark.parametrize(
+    "target",
+    ["javascript:alert(1)", "data:text/html,x", "//evil.example.com/", "/local/path"],
+)
+def test_a_return_target_that_is_not_an_http_address_is_refused(target: str) -> None:
+    with pytest.raises(ValueError, match="continue to"):
+        layout.page("Connected", [], refresh_to=target)
+    with pytest.raises(ValueError, match="return to"):
+        layout.return_action("Continue", target)
+
+
+def test_a_page_carries_either_its_own_refresh_or_a_target_and_never_both() -> None:
+    """One head, one refresh: two of them and the browser picks, which is not a decision
+    this project leaves to a browser."""
+    with pytest.raises(ValueError, match="never both"):
+        layout.page(
+            "Waiting",
+            [],
+            head_extra='<meta http-equiv="refresh" content="3">',
+            refresh_to="https://claude.ai/callback",
+        )
+
+
 def test_the_stylesheet_carries_the_focus_ring_and_never_removes_one() -> None:
     assert ":focus-visible" in layout.STYLESHEET
     assert "outline: 3px solid #1F3A5F" in layout.STYLESHEET

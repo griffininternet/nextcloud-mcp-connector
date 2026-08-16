@@ -180,11 +180,16 @@ The code exchange took **0.04 seconds**. A connector allows ten, and this path m
 Nextcloud call at all, which is the reason.
 
 **One line of this run is older than the code it describes.** The decision was a `POST` on
-`/authorize/consent` when this was measured. It is `POST /authorize/decide` since CR-01, it
-is the one route of the app with `access_level` `USER`, and the walker now sends it twice:
-once without a Nextcloud account, which has to be refused, and once with the account that
-signed in, which is the redirect above. The numbers of every other step are unaffected; the
-run is repeated against the staging instance in plan 03-09.
+`/authorize/consent` answering `302` when this was measured. Two things changed since. It
+is `POST /authorize/decide` now, the one route of the app with `access_level` `USER`, and
+the walker sends it twice: once without a Nextcloud account, which has to be refused, and
+once with the account that signed in (CR-01). And its answer is `200` with a page that
+carries the return address as a link and as a `meta refresh`, not a `302`: Chromium and
+WebKit check `form-action` against the target of a redirect that follows a form
+submission, and every page here carries `form-action 'self'`, so the redirect never
+arrived in those browsers (CR-03). The address, the code, the state and the `iss` are the
+same as the line above shows. The numbers of every other step are unaffected; the run is
+repeated against the staging instance in plan 03-09.
 
 ### 2. The canonical root paths, with and without the two rules
 
@@ -407,6 +412,15 @@ reloads itself every three seconds and is doing nothing wrong (CR-02).
 the Nextcloud app password are ended in that order, and the third step may fail without
 holding up the first two. A user ends their own connection under Settings, Security,
 Devices and sessions; a client ends it with `POST /revoke`. Both are immediate.
+
+**The end of a decision is a page that navigates, not a redirect.** The consent decision is
+a form submission, and Chromium and WebKit check `form-action` against the target of a
+redirect that follows one. Under the policy every page of this flow carries,
+`form-action 'self'`, a `302` to the client would be refused by those browsers and the user
+would be left on a blank page. So the decision answers `200` with a page that carries the
+return address twice, as a `meta refresh` that fires immediately and as a button the reader
+can see and press. Nothing about the OAuth response changes: the same address, the same
+code, the same `state` and the same `iss` (CR-03).
 
 **Nothing of a token is written anywhere.** No log record, no error page and no answer of
 this server carries a bearer, a code, a PKCE value or an app password. The one page that

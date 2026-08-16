@@ -55,6 +55,7 @@ __all__ = [
     "link",
     "page",
     "paragraph",
+    "return_action",
     "section_heading",
     "status_line",
     "unordered_list",
@@ -205,6 +206,7 @@ def page(
     heading_icon: str = "",
     heading_tone: str = "",
     head_extra: str = "",
+    refresh_to: str = "",
     focus_heading: bool = False,
 ) -> Response:
     """Render one page of this phase, with the headers every page of this phase carries.
@@ -223,6 +225,15 @@ def page(
     not a general escape hatch: everything else raises, because a head a caller can fill
     freely would end the property that this function is the only way a page can exist.
 
+    ``refresh_to`` is the second and last thing that may reach the head, and it is a value
+    and not a fragment: this function builds and escapes the tag itself, so the caller
+    cannot write markup into the head with it. It exists for the return page of a decision
+    (CR-03): the answer of a form submission may not be a redirect to a foreign origin
+    under ``form-action 'self'``, so the answer is a page that navigates instead. A page
+    that carries it has to show the same address as a link its reader can see first, which
+    is why every caller pairs it with :func:`return_action`, and the address is checked here
+    the same way an outbound link is.
+
     ``focus_heading`` exists for the one page of this project that carries a granting
     button (03-UI-SPEC.md, S3). Without it a browser puts the initial focus on the first
     interactive element, and on that page a stray Enter key would then be a grant. The
@@ -235,6 +246,10 @@ def page(
         raise ValueError(f"unknown heading tone {heading_tone!r}")
     if head_extra and not HEAD_EXTRA_PATTERN.fullmatch(head_extra):
         raise ValueError(f"{head_extra!r} is not the one head fragment a page may carry")
+    if refresh_to:
+        if head_extra:
+            raise ValueError("a page carries either its own refresh or a target, never both")
+        head_extra = _refresh_tag(refresh_to)
     closing = _escape(footer or strings.FOOTER_PASSWORD_PROMPT)
     focus = ' tabindex="-1" autofocus' if focus_heading else ""
 
@@ -402,6 +417,22 @@ def external_action(label: str, href: str) -> str:
     )
 
 
+def return_action(label: str, href: str) -> str:
+    """The link back to the client that asked, on the return page of a decision (CR-03).
+
+    Not :func:`external_action`: this one stays in the window the flow runs in, because it
+    is the end of that flow and not a side trip. It carries ``rel="noreferrer"`` for the
+    same reason every page here carries ``Referrer-Policy: no-referrer``, and the scheme is
+    checked here as well as where the address was registered.
+    """
+    if urlsplit(href).scheme not in _EXTERNAL_SCHEMES:
+        raise ValueError(f"{href!r} is not an http address to return to")
+    return (
+        f'<p class="action"><a class="btn-link" href="{_escape(href)}" '
+        f'rel="noreferrer">{_escape(label)}</a></p>'
+    )
+
+
 def link(label: str, href: str, *, env: Mapping[str, str] | None = None) -> str:
     """An inline link to a path of this application. Link text names the destination."""
     return f'<a href="{_escape(app_path(href, env))}">{_escape(label)}</a>'
@@ -429,6 +460,19 @@ def client_name(raw: str) -> str:
     if len(collapsed) > CLIENT_NAME_LIMIT:
         return collapsed[: CLIENT_NAME_LIMIT - len(_TRUNCATION_MARK)] + _TRUNCATION_MARK
     return collapsed
+
+
+def _refresh_tag(target: str) -> str:
+    """The meta refresh of a return page, built here so no caller writes head markup.
+
+    ``0`` seconds, because this page is not a state a user reads: it is the return itself,
+    and everything it says is for the case where the refresh does not happen. The address
+    is checked for its scheme like every outbound address of this module and escaped with
+    quotes, so it cannot leave the attribute it stands in (T-03-20).
+    """
+    if urlsplit(target).scheme not in _EXTERNAL_SCHEMES:
+        raise ValueError(f"{target!r} is not an http address to continue to")
+    return f'<meta http-equiv="refresh" content="0; url={_escape(target)}">\n'
 
 
 def _button(label: str, *, name: str, value: str, css: str) -> str:
