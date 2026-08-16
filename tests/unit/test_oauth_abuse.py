@@ -719,6 +719,24 @@ def test_a_registration_that_names_an_unknown_scope_is_refused(tmp_path: Path) -
     assert refused.json()["error"] == "invalid_client_metadata"
 
 
+def test_a_registration_from_before_the_fix_may_ask_for_the_refresh_scope(
+    tmp_path: Path,
+) -> None:
+    """The rows that already exist on a running instance, and the reason for the read side.
+
+    An administrator whose server carries the fix must not have to delete a connector in
+    ChatGPT to get past a bug that is fixed. The row is written the way the old code wrote
+    it, with the tool scope alone.
+    """
+    deployment = Deployment(tmp_path)
+    asyncio.run(_seed_connection(deployment))
+
+    response = ask(deployment, scope=f"{REFRESH_SCOPE} {TOOL_SCOPE}")
+
+    assert response.status_code == 302, response.text
+    assert "error" not in query_of(response), returned_to(response)
+
+
 def test_offline_access_changes_nothing_about_the_tokens_that_are_issued(
     tmp_path: Path,
 ) -> None:

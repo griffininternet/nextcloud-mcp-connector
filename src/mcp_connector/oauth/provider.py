@@ -1289,12 +1289,22 @@ def _client_information(metadata_json: str, client_id: str) -> OAuthClientInform
     A row this code cannot parse is a row from a future or a broken write. Both are
     reasons to refuse the client, never to answer a 500 that tells the caller a client id
     exists (fail closed, D-37, T-03-47).
+
+    The scope of the row is replaced by the scope this server grants today, for the rows
+    that were written before it granted both: without that line the fix of the
+    ``invalid_scope`` refusal would only reach clients that register again, and an
+    administrator would have to delete a connector in ChatGPT to get past a bug that is
+    already fixed on their server. It is a normalisation and not a widening: the value is
+    the set every registration is recorded with, an unknown scope is still refused, and
+    the scope is the only field of a registration this server assigns rather than accepts.
     """
     try:
-        return OAuthClientInformationFull.model_validate_json(metadata_json)
+        client = OAuthClientInformationFull.model_validate_json(metadata_json)
     except (ValidationError, ValueError, json.JSONDecodeError):
         logger.error("the stored registration of a client cannot be read and is refused")
         return None
+    client.scope = REGISTERED_SCOPE
+    return client
 
 
 def _inside_grace(used_at: int | None, now: int) -> bool:
