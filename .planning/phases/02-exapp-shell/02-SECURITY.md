@@ -98,8 +98,9 @@ die vollstaendige Beweiskette steht im Audit-Bericht vom 2026-08-15 (siehe Audit
 | AR-02-02 | T-02-31 | Docker-Socket fuer HaRP-Deploy noetig; Wegwerf-Loopback-Topologie, Produktionshinweis in Doku | Owner (Plan 02-04) | 2026-08-15 |
 | AR-02-03 | T-02-32 | Lokale Registry ohne TLS nur auf Loopback; Produktionshinweis in Doku | Owner (Plan 02-04) | 2026-08-15 |
 | AR-02-04 | T-02-45 | Kein Rate-Limit auf den PUBLIC-Discovery-Routen; Antworten sind statisch und klein, /mcp bleibt USER | Owner (Plan 02-05) | 2026-08-15 |
+| AR-02-04 (Nachtrag Phase 3) | T-02-45 | Die Begruendung oben stimmt fuer Phase 2 nicht mehr: seit Plan 03-01 ist auch `/mcp` PUBLIC, weil die OAuth-Spec ein anonymes 401 mit `resource_metadata` verlangt und `access_level USER` auf einer Route mit regulaeren Abweisungen die HaRP-Blacklist ausloest (Selbst-DoS, live gemessen). Die Identitaetspruefung liegt dafuer in der App. Bewertet und angenommen in Phase 3 | Phase 3 (Plan 03-01, CR-01-Gegenprobe) | 2026-08-16 |
 | AR-02-05 | T-02-64 | Abnahme deaktiviert/aktiviert die App als Paar auf der Wegwerf-Instanz | Owner (Plan 02-07) | 2026-08-15 |
-| AR-02-06 | (ohne Plan-ID, Audit) | Manifest-Route `^/\.well-known/` ist ein unverankertes PUBLIC-Praefix; haengt an Pfadnormalisierung von Caddy/Starlette. FUER PHASE 3 ENG FASSEN | Audit 2026-08-15 | 2026-08-15 |
+| AR-02-06 | (ohne Plan-ID, Audit) | ERLEDIGT IN PHASE 3: das Manifest fuehrt statt `^/\.well-known/` drei vollstaendig verankerte Routen. Live gegengeprueft am 16.08.2026: die drei deklarierten Dokumente antworten 200, `/.well-known/`, `.well-known/oauth-authorization-server.evil` und der Phase-2-Probe-Pfad antworten 404, der in Phase 2 noch 401 gab | Audit 2026-08-15, geschlossen 03-VERIFICATION.md | 2026-08-16 |
 | AR-02-07 | (ohne Plan-ID, Audit) | ALLOW_PLAINTEXT_FRP=1 als dokumentierter Opt-in sendet HP_SHARED_KEY im Klartext; Default ist Abbruch | Audit 2026-08-15 | 2026-08-15 |
 | AR-02-08 | (ohne Plan-ID, Audit) | bootstrap_exapp.sh legt je Lauf ein neues App-Passwort an und widerruft keins; nur Wegwerf-Instanz | Audit 2026-08-15 | 2026-08-15 |
 | AR-02-09 | (ohne Plan-ID, Audit) | Laengenunterschied der Secrets ueber compare_digest beobachtbar; 64-Zeichen-Hex, Inhalt leckt nicht | Audit 2026-08-15 | 2026-08-15 |
@@ -116,7 +117,8 @@ die vollstaendige Beweiskette steht im Audit-Bericht vom 2026-08-15 (siehe Audit
 
 Hinweis aus dem Audit: Die SUMMARYs nutzen "## Threat Model Coverage" statt "## Threat
 Flags"; neue Angriffsflaeche wurde deshalb aus Reviews und Code abgeleitet (AR-02-06 bis
-AR-02-09). AR-02-06 ist als Arbeitsauftrag fuer Phase 3 markiert.
+AR-02-09). AR-02-06 war als Arbeitsauftrag fuer Phase 3 markiert und ist dort erledigt
+worden; der Beleg steht in `.planning/phases/03-oauth-2-1/03-VERIFICATION.md`.
 
 ---
 

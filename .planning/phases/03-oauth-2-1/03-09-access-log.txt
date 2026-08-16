@@ -1,0 +1,103 @@
+Access log excerpts of the hosted connector runs, plan 03-09.
+
+Source: the Caddy access log of the staging instance https://nc-staging.infranode.dev
+on 2026-08-16 (UTC). The instance was deleted right after this file was written, so
+these lines are the archived evidence behind AUTH-04 and behind the tables in
+docs/oauth-setup.md.
+
+Format: time, method, status, path, duration, User-Agent (truncated).
+Query strings are cut off on purpose and the Login Flow v2 tokens are shortened;
+nothing here is a credential and nothing here is reusable. Lines of our own tooling
+(curl, the flow check script) are left out, as are the HaRP lookups
+(/index.php/apps/app_api/harp/user-info, exactly one per MCP request), whose count
+is the Success Criterion 5 measurement in docs/oauth-setup.md.
+
+================================================================================
+Run 2, ChatGPT, connected (after the invalid_scope fix of 5793fc3/eb5b6b9/8724d57)
+================================================================================
+08:08:56 POST   200 /index.php/login/v2                                             0.128s MCP Connector: ChatGPT
+08:08:56 GET    302 /exapps/mcp_connector/authorize                                 0.191s Mozilla/5.0 (Windows NT 10.0; Win6
+08:08:56 GET    200 /exapps/mcp_connector/authorize/consent                         0.006s Mozilla/5.0 (Windows NT 10.0; Win6
+08:09:08 GET    303 /login/v2/flow/<token>  0.033s Mozilla/5.0 (Windows NT 10.0; Win6
+08:09:08 GET    200 /login/v2/flow                                                  0.044s Mozilla/5.0 (Windows NT 10.0; Win6
+08:09:42 GET    303 /login/v2/grant                                                 0.027s Mozilla/5.0 (Windows NT 10.0; Win6
+08:09:42 GET    200 /login                                                          0.039s Mozilla/5.0 (Windows NT 10.0; Win6
+08:10:19 GET    200 /login/v2/grant                                                 0.044s Mozilla/5.0 (Windows NT 10.0; Win6
+08:10:24 POST   200 /login/v2/grant                                                 0.476s Mozilla/5.0 (Windows NT 10.0; Win6
+08:10:33 POST   200 /login/v2/poll                                                  0.031s nextcloud-mcp-connector/0.1
+08:10:33 GET    200 /exapps/mcp_connector/authorize/consent                         0.091s Mozilla/5.0 (Windows NT 10.0; Win6
+08:10:38 POST   200 /exapps/mcp_connector/authorize/decide                          0.045s Mozilla/5.0 (Windows NT 10.0; Win6
+08:10:40 POST   200 /exapps/mcp_connector/token                                     0.037s Python/3.12 aiohttp/3.13.5
+08:10:40 POST   401 /exapps/mcp_connector/mcp                                       0.003s Python/3.12 aiohttp/3.13.5
+08:10:40 GET    200 /exapps/mcp_connector/.well-known/oauth-protected-resource/mcp  0.003s Python/3.12 aiohttp/3.13.5
+08:10:41 GET    200 /.well-known/oauth-authorization-server/exapps/mcp_connector    0.005s Python/3.12 aiohttp/3.13.5
+08:10:41 GET    200 /exapps/mcp_connector/.well-known/openid-configuration          0.003s Python/3.12 aiohttp/3.13.5
+08:10:41 POST   200 /exapps/mcp_connector/mcp                                       0.035s openai-mcp/1.0.0
+08:10:41 POST   200 /exapps/mcp_connector/mcp                                       0.031s openai-mcp/1.0.0
+08:10:44 GET    200 /exapps/mcp_connector/.well-known/openid-configuration          0.004s Python/3.12 aiohttp/3.13.5
+
+The client is openai-mcp/1.0.0. Its backend (Python/3.12 aiohttp) does the token
+exchange and re-reads the three discovery documents afterwards, including
+/.well-known/openid-configuration, which Claude.ai never fetches. The registration
+of this run happened before the window shown here, in the attempt that was refused
+with invalid_scope; the connector was told to connect again rather than recreated.
+
+================================================================================
+Run 3, Claude.ai, connected WITHOUT the two reverse proxy rules
+================================================================================
+08:23:28 POST   401 /exapps/mcp_connector/mcp                                       0.004s python-httpx/0.28.1
+08:23:29 GET    200 /exapps/mcp_connector/.well-known/oauth-protected-resource/mcp  0.003s python-httpx/0.28.1
+08:23:29 GET    404 /.well-known/oauth-authorization-server/exapps/mcp_connector    0.052s python-httpx/0.28.1
+08:23:29 GET    404 /.well-known/openid-configuration/exapps/mcp_connector          0.032s python-httpx/0.28.1
+08:23:30 GET    200 /exapps/mcp_connector/.well-known/openid-configuration          0.003s python-httpx/0.28.1
+08:23:30 POST   201 /exapps/mcp_connector/register                                  0.008s python-httpx/0.28.1
+08:23:31 POST   200 /index.php/login/v2                                             0.091s MCP Connector: Claude
+08:23:31 GET    302 /exapps/mcp_connector/authorize                                 0.143s Mozilla/5.0 (Windows NT 10.0; Win6
+08:23:31 GET    200 /exapps/mcp_connector/authorize/consent                         0.005s Mozilla/5.0 (Windows NT 10.0; Win6
+08:24:06 GET    303 /login/v2/flow/<token>  0.035s Mozilla/5.0 (Windows NT 10.0; Win6
+08:24:06 GET    200 /login/v2/flow                                                  0.053s Mozilla/5.0 (Windows NT 10.0; Win6
+08:24:18 GET    303 /login/v2/grant                                                 0.040s Mozilla/5.0 (Windows NT 10.0; Win6
+08:24:18 GET    200 /login                                                          0.042s Mozilla/5.0 (Windows NT 10.0; Win6
+08:24:54 GET    200 /login/v2/grant                                                 0.042s Mozilla/5.0 (Windows NT 10.0; Win6
+08:25:03 POST   200 /login/v2/grant                                                 0.490s Mozilla/5.0 (Windows NT 10.0; Win6
+08:25:10 POST   200 /login/v2/poll                                                  0.033s nextcloud-mcp-connector/0.1
+08:25:10 GET    200 /exapps/mcp_connector/authorize/consent                         0.083s Mozilla/5.0 (Windows NT 10.0; Win6
+08:25:15 POST   200 /exapps/mcp_connector/authorize/decide                          0.042s Mozilla/5.0 (Windows NT 10.0; Win6
+08:25:15 POST   200 /exapps/mcp_connector/token                                     0.023s python-httpx/0.28.1
+08:25:16 POST   200 /exapps/mcp_connector/mcp                                       0.043s Claude-User
+08:25:17 POST   200 /exapps/mcp_connector/mcp                                       0.038s Claude-User
+08:25:18 POST   200 /exapps/mcp_connector/mcp                                       0.043s Claude-User
+08:25:19 POST   200 /exapps/mcp_connector/mcp                                       0.039s Claude-User
+08:25:19 POST   200 /exapps/mcp_connector/mcp                                       0.044s Claude-User
+08:25:19 POST   200 /exapps/mcp_connector/mcp                                       0.038s Claude-User
+
+The two 404 lines are the canonical root paths with the rewrite rules switched off.
+The 200 on /exapps/mcp_connector/.well-known/openid-configuration right after them
+is the fallback that makes the rules optional. From /register onwards this is the
+ordinary flow, and the six Claude-User calls at the end are the connected client
+listing and using tools.
+
+The browser lines (Mozilla) are the human half: Nextcloud's own sign in page, the
+grant screen, and this app's consent page. The connector never sees the password.
+
+================================================================================
+Run 4, Cursor, refused at registration
+================================================================================
+08:26:05 POST   401 /exapps/mcp_connector/mcp                                       0.004s Cursor/3.2.16 (win32 x64)
+08:26:05 POST   401 /exapps/mcp_connector/mcp                                       0.004s Cursor/3.2.16 (win32 x64)
+08:26:05 GET    200 /exapps/mcp_connector/.well-known/oauth-protected-resource/mcp  0.002s Cursor/3.2.16 (win32 x64)
+08:26:05 GET    200 /.well-known/oauth-authorization-server/exapps/mcp_connector    0.002s Cursor/3.2.16 (win32 x64)
+08:26:05 GET    200 /exapps/mcp_connector/.well-known/oauth-protected-resource/mcp  0.003s Cursor/3.2.16 (win32 x64)
+08:26:05 GET    200 /.well-known/oauth-authorization-server/exapps/mcp_connector    0.004s Cursor/3.2.16 (win32 x64)
+08:26:06 POST   400 /exapps/mcp_connector/register                                  0.003s Cursor/3.2.16 (win32 x64)
+08:26:25 POST   401 /exapps/mcp_connector/mcp                                       0.003s Cursor/3.2.16 (win32 x64)
+08:26:25 GET    200 /exapps/mcp_connector/.well-known/oauth-protected-resource/mcp  0.003s Cursor/3.2.16 (win32 x64)
+08:26:25 GET    200 /.well-known/oauth-authorization-server/exapps/mcp_connector    0.003s Cursor/3.2.16 (win32 x64)
+08:26:26 POST   400 /exapps/mcp_connector/register                                  0.004s Cursor/3.2.16 (win32 x64)
+08:26:26 POST   400 /exapps/mcp_connector/register                                  0.005s Cursor/3.2.16 (win32 x64)
+
+400 invalid_redirect_uri, because Cursor registers
+cursor://anysphere.cursor-mcp/oauth/callback alongside two admissible addresses and
+this server reads the whole field. The payload is in 03-09-MEASUREMENTS.md; it had
+to be measured with a recording server, because this server never echoes a refused
+address back to the client.

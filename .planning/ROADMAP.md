@@ -157,7 +157,7 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 03-09-PLAN.md - Staging-E2E mit Claude.ai und ChatGPT (AUTH-04, Owner-Action) (Wave 8)
+- [x] 03-09-PLAN.md - Staging-E2E mit Claude.ai und ChatGPT (AUTH-04, Owner-Action) (Wave 8)
 
 **UI hint**: yes
 
