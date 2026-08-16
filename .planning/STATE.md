@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-06-PLAN.md
-last_updated: "2026-08-16T02:40:00.000Z"
+stopped_at: Completed 03-07-PLAN.md
+last_updated: "2026-08-16T03:22:00.000Z"
 last_activity: 2026-08-16
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 30
-  completed_plans: 27
-  percent: 45
+  completed_plans: 28
+  percent: 47
 ---
 
 # Project State
@@ -26,19 +26,19 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 3
-Plan: 7 of 9
+Plan: 8 of 9
 Status: In progress
 Last activity: 2026-08-16
 
-Progress: [█████████░] 90%
+Progress: [█████████░] 93%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 27
+- Total plans completed: 28
 - Average duration: 35 min
-- Total execution time: 14.5 hours
+- Total execution time: 15.2 hours
 
 **By Phase:**
 
@@ -46,7 +46,7 @@ Progress: [█████████░] 90%
 |-------|-------|-------|----------|
 | 1 | 14 | - | - |
 | 2 | 7 | 254 min | 36 min |
-| 3 | 6 | 280 min | 47 min |
+| 3 | 7 | 320 min | 46 min |
 
 **Recent Trend:**
 
@@ -80,6 +80,7 @@ Progress: [█████████░] 90%
 | Phase 03 P04 | 25 min | 3 tasks | 14 files |
 | Phase 03 P05 | 35 min | 3 tasks | 14 files |
 | Phase 03 P06 | 40 min | 3 tasks | 16 files |
+| Phase 03 P07 | 40 min | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -229,12 +230,18 @@ Recent decisions affecting current work:
 - [Phase 03-oauth-2-1]: Kein dritter MODE_-Wert: gegenueber Nextcloud ist ein App-Passwort Basic-Auth, der OAuth-Zweig baut MODE_BASIC-Credentials
 - [Phase 03-oauth-2-1]: provider.load_access_token bleibt eine Absage, weil der ProviderTokenVerifier des SDK Prozess-Cache, Audience-Pruefung und Client-Policy umgehen wuerde; geprueft wird ausschliesslich ueber oauth/verifier.py
 - [Phase 03-oauth-2-1]: /token und /revoke werden mit einem eigenen ClientAuthenticator neu gebaut, der gegen den gespeicherten Hash vergleicht; das SDK vergleicht ein Klartext-Secret, das dieser Store nicht haelt
+- [Phase 03-oauth-2-1]: Das Gnadenfenster aus D-41 wiederholt genau die vorgehaltene Antwort und erzeugt nie einen zweiten Familienzweig; eine verlorene vorgehaltene Antwort ist invalid_grant und nie ein Familienwiderruf
+- [Phase 03-oauth-2-1]: Eine Wiederverwendung ausserhalb des Fensters widerruft Familie UND Autorisierung, ausschliesslich im Store, und vermerkt das App-Passwort als Aufraeumaufgabe: der Token-Pfad ruft Nextcloud nie an (Pitfall 13)
+- [Phase 03-oauth-2-1]: Der Widerruf laeuft in der Reihenfolge Store, Prozess-Caches, Nextcloud; der dritte Schritt darf fehlschlagen und haelt die ersten beiden nie auf (cleanup_at vermerkt den Fehlschlag)
+- [Phase 03-oauth-2-1]: /revoke wird als FamilyRevocation neu gebaut, weil load_access_token bewusst absagt und der SDK-Handler sonst 200 antwortet, ohne irgendetwas zu widerrufen; das eigene Request-Modell macht client_secret optional, sonst bekaeme jeder oeffentliche Client 400
+- [Phase 03-oauth-2-1]: Die Drosselung hat zwei Grenzen: eine je Quelle, die ein gefaelschter X-Forwarded-For aufteilen kann, und eine je Pfadklasse, die er nicht aufteilen kann; gezaehlt wird nach Antwortstatus, gespeichert wird nur ein SHA-256-Digest
+- [Phase 03-oauth-2-1]: Der Sweep fuer nie entschiedene Anmeldungen haengt an der Autorisierungsanfrage, hart begrenzt auf drei je Aufruf: dieses Projekt hat keinen Cron, und wer neu verbindet, zahlt fuer die, die niemand zu Ende gebracht hat
 
 ### Pending Todos
 
 - **Leseform der ExApp-Config (Plan 03-08):** `oauth/crypto.CONFIG_READ_PARAM` steht auf `configKeys[]` und ist die einzige Stelle dieses Plans, die nicht gegen eine laufende AppAPI bestaetigt ist. Beim Live-Beweis pruefen und, falls noetig, diese eine Konstante samt Test korrigieren.
-- **Liegengebliebene Autorisierungen (Plan 03-07):** Der Ablehnungspfad ist in 03-06 gebaut (App-Passwort zurueckgeben, Zeile loeschen). Offen bleibt der Sweep fuer Autorisierungen einer Anmeldung, die niemand zu Ende entschieden hat: sie tragen ein App-Passwort bei Nextcloud und laufen von allein nicht ab.
-- **Drosselung der PUBLIC-Auth-Pfade (Plan 03-07, SC 5):** `/connect` legt anonym Flows an. Sie laufen nach zwanzig Minuten ab und werden opportunistisch aufgeraeumt, eine Begrenzung der Anlagerate fehlt aber noch (T-03-35).
+- **Nextcloud-Roundtrips zaehlen (Plan 03-08, SC 5):** Die Drosselung ist gebaut und getestet, die eigentliche Messgroesse von SC 5 ist aber die Zahl der Nextcloud-PHP-Roundtrips unter einer Fehlversuchsflut (Access-Log oder `docker logs`, nicht Antwortzeiten). Das gehoert zum Livebeweis gegen die laufende Topologie.
+- **App-Passwort-Loeschung live bestaetigen (Plan 03-08):** Dass der Widerruf den Eintrag unter "Geraete und Sitzungen" wirklich entfernt, ist in Prozess-Tests nur ueber respx belegt; dasselbe gilt fuer den Sweep der nie entschiedenen Anmeldungen.
 
 - **Owner-Schritt 01-13:** PR an nextcloud/context_agent#227 einreichen. Branch und DCO-Commit liegen im Fork street1983nk/context_agent (fix/stateless-http-session-compat, def1425), der PR-Text in docs/contrib/227-pr-body.md. Kommando und Pruefpunkte stehen in .planning/phases/01-server-kern/01-13-SUMMARY.md. Vorher `git push origin main` im Connector-Repo, damit der verlinkte Regressionstest oeffentlich sichtbar ist. Danach PR-URL nachtragen, ROADMAP 01-13 abhaken, CONTRIB-01 auf Complete.
 - **Owner-Schritt 01-14:** Ein Durchgang mit Claude Desktop selbst nach docs/client-setup.md. Die Anleitung ist gegen die Referenz-Clients der Testsuite verprobt (mcp 2.0 und mcp 1.29 gegen denselben laufenden Endpoint, plus scripts/acceptance_all_tools.py ueber alle 15 Tools per stdio); die Konfigurationspfade fuer Claude Desktop stammen aus der offiziellen Dokumentation und sind auf diesem Rechner nicht verifiziert.
@@ -259,6 +266,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-16T02:40:00.000Z
-Stopped at: Completed 03-06-PLAN.md
+Last session: 2026-08-16T03:22:00.000Z
+Stopped at: Completed 03-07-PLAN.md
 Resume file: None
