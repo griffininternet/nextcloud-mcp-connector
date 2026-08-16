@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-04-PLAN.md
-last_updated: "2026-08-16T01:25:00.000Z"
+stopped_at: Completed 03-05-PLAN.md
+last_updated: "2026-08-16T02:00:00.000Z"
 last_activity: 2026-08-16
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 30
-  completed_plans: 25
-  percent: 42
+  completed_plans: 26
+  percent: 43
 ---
 
 # Project State
@@ -26,19 +26,19 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 3
-Plan: 5 of 9
+Plan: 6 of 9
 Status: In progress
 Last activity: 2026-08-16
 
-Progress: [████████░░] 83%
+Progress: [████████░░] 87%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 25
+- Total plans completed: 26
 - Average duration: 35 min
-- Total execution time: 13.9 hours
+- Total execution time: 14.5 hours
 
 **By Phase:**
 
@@ -46,7 +46,7 @@ Progress: [████████░░] 83%
 |-------|-------|-------|----------|
 | 1 | 14 | - | - |
 | 2 | 7 | 254 min | 36 min |
-| 3 | 4 | 205 min | 51 min |
+| 3 | 5 | 240 min | 48 min |
 
 **Recent Trend:**
 
@@ -78,6 +78,7 @@ Progress: [████████░░] 83%
 | Phase 03 P03 | 20 min | 2 tasks | 6 files |
 | Phase 03 P02 | 95 min | 3 tasks | 15 files |
 | Phase 03 P04 | 25 min | 3 tasks | 14 files |
+| Phase 03 P05 | 35 min | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -211,10 +212,20 @@ Recent decisions affecting current work:
 - [Phase 03-oauth-2-1]: Der Flow-Datensatz wird geloescht, bevor die Zugangsberechtigung gerendert wird (das 200 des Polls kommt genau einmal); schlaegt das Loeschen fehl, wird das gerade erzeugte App-Passwort widerrufen statt ungenutzt in Nextcloud zu bleiben
 - [Phase 03-oauth-2-1]: Die prozessweite Store-Instanz und der purge_expired-Aufruf leben in der Closure der Routen-Fabrik, nicht als Modulglobale: ein Zustand, der Requests ueberlebt, ist sonst einen Refactor von einem Session-Store entfernt (D-20)
 - [Phase 03-oauth-2-1]: Ein GET startet nie einen Anmeldevorgang; der zustandsaendernde Schritt der Browser-Strecke ist ein POST mit benannter Aktion (T-03-35)
+- [Phase 03-oauth-2-1]: Die drei Schalter von AUTH-07 liegen in einem unveraenderlichen Policy-Objekt, das an vier Stellen befragt wird statt an einer: wer nur bei der Registrierung prueft, laesst einen spaeter gesperrten Client bis zum Token-Ablauf weiterlaufen (Pitfall 9)
+- [Phase 03-oauth-2-1]: Der Allowlist-Modus mit leerer Liste sperrt alles: ein Admin, der den Modus einschaltet und die Liste vergisst, wollte schliessen und nicht oeffnen; ein unbekannter Wert eines Schalters behaelt dagegen den Default und wird geloggt, weil ein Tippfehler kein Sicherheitsschalter ist
+- [Phase 03-oauth-2-1]: get_client liefert fuer unbekannt, gesperrt, nicht gelistet und verfallen dieselbe Antwort None und loescht dabei verfallene Registrierungen; die Fehlerseite waehlt danach allein die Admin-Konfiguration aus (E1/E2/E3), nie der Zustand eines Clients (T-03-47)
+- [Phase 03-oauth-2-1]: Das Client-Secret wird nur als SHA-256-Hash gespeichert; der SDK-ClientAuthenticator vergleicht Klartext, deshalb bleibt der Token-Endpunkt fuer vertrauliche Clients bis zum eigenen Authenticator in 03-06 fail-closed
+- [Phase 03-oauth-2-1]: Von den Routen aus create_auth_routes werden zwei verworfen: das AS-Metadatendokument (03-01 liefert das vollstaendige) und /authorize (oauth/consent.py steht davor, damit eine Ablehnung eine Seite ist und kein JSON im Browser)
+- [Phase 03-oauth-2-1]: Der Anmeldelink des Login Flow v2 reist als Query-Parameter der Weiterleitung zur Consent-Seite, weil der flows-Tabelle die Spalte fehlt und eine Migration teurer waere; gerendert wird er nur, wenn sein Host die konfigurierte Nextcloud oder die eigene public_url ist (T-03-42)
+- [Phase 03-oauth-2-1]: Die Autorisierung wird unter der Id ihres eigenen Flows angelegt; damit verbindet sie sich mit dem Flow-Datensatz ohne zusaetzliche Spalte, und das App-Passwort aus dem einmaligen 200 des Polls ist sofort verschluesselt abgelegt
+- [Phase 03-oauth-2-1]: Jeder Link und jede Formular-Aktion traegt jetzt den Praefix aus config.public_url: HaRP strippt /exapps/<app> vor dem Request, ein absoluter Pfad ohne Praefix zeigte auf die Nextcloud-Wurzel (Fund und Fix in 03-05, betraf auch die /connect-Seiten aus 03-04)
 
 ### Pending Todos
 
 - **Leseform der ExApp-Config (Plan 03-08):** `oauth/crypto.CONFIG_READ_PARAM` steht auf `configKeys[]` und ist die einzige Stelle dieses Plans, die nicht gegen eine laufende AppAPI bestaetigt ist. Beim Live-Beweis pruefen und, falls noetig, diese eine Konstante samt Test korrigieren.
+- **Nicht bestaetigte Autorisierungen (Plan 03-06/03-07):** Eine fertige Anmeldung legt die Autorisierung samt App-Passwort an, bevor der Nutzer zustimmt (das 200 des Polls kommt genau einmal). Der Ablehnungspfad in 03-06 muss App-Passwort und Zeile widerrufen, und 03-07 sollte liegengebliebene, nie bestaetigte Autorisierungen aufraeumen.
+- **Consent-Buttons (Plan 03-06):** Die Entscheidungsseite S3 rendert noch ohne "Approve access" und "Deny access" und ohne den Anti-Forgery-Token; die POST-Route ist deklariert und antwortet bis dahin mit 400.
 - **Drosselung der PUBLIC-Auth-Pfade (Plan 03-07, SC 5):** `/connect` legt anonym Flows an. Sie laufen nach zwanzig Minuten ab und werden opportunistisch aufgeraeumt, eine Begrenzung der Anlagerate fehlt aber noch (T-03-35).
 
 - **Owner-Schritt 01-13:** PR an nextcloud/context_agent#227 einreichen. Branch und DCO-Commit liegen im Fork street1983nk/context_agent (fix/stateless-http-session-compat, def1425), der PR-Text in docs/contrib/227-pr-body.md. Kommando und Pruefpunkte stehen in .planning/phases/01-server-kern/01-13-SUMMARY.md. Vorher `git push origin main` im Connector-Repo, damit der verlinkte Regressionstest oeffentlich sichtbar ist. Danach PR-URL nachtragen, ROADMAP 01-13 abhaken, CONTRIB-01 auf Complete.
@@ -240,6 +251,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-16T01:25:00.000Z
-Stopped at: Completed 03-04-PLAN.md
+Last session: 2026-08-16T02:00:00.000Z
+Stopped at: Completed 03-05-PLAN.md
 Resume file: None
