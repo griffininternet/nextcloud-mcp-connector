@@ -75,9 +75,14 @@ the three blockers (CR-01, CR-02, CR-03) and eight warnings (WR-01 to WR-07 and 
 Every one of them carries a **Resolved** line with its commit below.
 
 Still open, and deliberately: WR-08 (the refused client pages echo an attacker supplied
-client id as page copy), WR-09 (a missing NC_MCP_PUBLIC_URL degrades to the loopback default
-in the ExApp mode), WR-10 (_client_information takes a client_id it never compares), WR-12
-(POST /connect carries no anti forgery value) and the six Info findings.
+client id as page copy), WR-10 (_client_information takes a client_id it never compares),
+WR-12 (POST /connect carries no anti forgery value) and five of the six Info findings.
+
+Closed later the same day, after the phase gates named them again: **WR-09** (`main` now
+refuses to start in the ExApp mode without `NC_MCP_PUBLIC_URL`, blank counts as missing) and
+**IN-03** (`revocation_endpoint_auth_methods_supported` advertises `none`, so a public client
+is no longer told it cannot end its own connection). Both with guard tests that are red
+without the change.
 
 One open point belongs to CR-03 rather than to the list above: the return page needs a cross
 check in a real Chromium and a real WebKit. It is the shape that is correct without one,

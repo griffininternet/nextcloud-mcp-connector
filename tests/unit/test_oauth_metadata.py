@@ -217,6 +217,20 @@ def test_the_authorization_server_document_carries_the_three_own_additions() -> 
     assert body["code_challenge_methods_supported"] == ["S256"]
 
 
+def test_a_public_client_is_told_it_may_revoke() -> None:
+    """IN-03: both endpoints a public client uses have to admit that it has no secret.
+
+    The SDK describes the revocation endpoint with the same two secret based methods as the
+    token endpoint. This server revokes for public clients on purpose, which is why the
+    revocation request treats ``client_secret`` as optional, so a document that lists only
+    the two tells a strict client that it cannot end its own connection: it would keep a
+    token it wanted to hand back.
+    """
+    with client() as http:
+        body = http.get(OPENID_PATH).json()
+    assert "none" in body["revocation_endpoint_auth_methods_supported"]
+
+
 def test_the_authorization_server_document_carries_no_other_field() -> None:
     """T-03-04: set equality, so an SDK upgrade cannot publish a new field unreviewed."""
     with client() as http:

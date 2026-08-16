@@ -189,6 +189,23 @@ def main() -> None:
         # (pitfall 12, T-03-15). The data key is not fetched here; that needs a running
         # event loop and a reachable Nextcloud, and the store asks for it when it opens.
         config.persistent_storage()
+        # The one value an installation has to set, and the one whose absence was invisible
+        # (WR-09). It becomes the issuer, the audience of every token, the resource_metadata
+        # pointer, the prefix of every form action and the target of the consent redirect.
+        # Missing, the container came up green, answered every document, and sent every
+        # browser to the loopback default, which is a working installation for nobody. It is
+        # checked here rather than earlier so the two neighbours keep their order in the log:
+        # an operator fixes the deploy environment top down.
+        if config.exapp_configured() and not (os.environ.get(config.ENV_PUBLIC_URL) or "").strip():
+            logger.error(
+                "%s is not set. The authorization server calls itself by it: without it "
+                "every discovery document, the audience of every token and the consent "
+                "redirect name %s, and no client can connect. Declare it in the deploy "
+                "environment (appinfo/info.xml, docs/oauth-setup.md).",
+                config.ENV_PUBLIC_URL,
+                config.DEFAULT_PUBLIC_URL,
+            )
+            raise SystemExit(2)
         # The public URL is what the authorization server calls itself, and the SDK refuses
         # an issuer that is not https unless it is loopback. Building the application here
         # turns that refusal into the same named exit as a missing volume, instead of into

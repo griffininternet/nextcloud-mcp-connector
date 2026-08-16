@@ -504,3 +504,58 @@ def test_a_missing_or_broken_port_stops_the_start(
     with pytest.raises(SystemExit) as excinfo:
         entry_exapp.main()
     assert excinfo.value.code == 2
+
+
+def test_a_missing_public_url_stops_the_start(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """WR-09: the one value an installation has to set, and the one whose absence is silent.
+
+    A missing volume loses connections on the next restart and an unusable issuer refuses to
+    build; both already stop the start. A missing public URL did neither: the container came
+    up, answered every discovery document, and named `http://127.0.0.1:8765` as the issuer,
+    the audience of every token and the target of the consent redirect. Every browser was
+    then sent to its own machine, and nothing in the log said why.
+    """
+    for name, value in EXAPP_ENV.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv(config.ENV_APP_PERSISTENT_STORAGE, str(tmp_path))
+    for name in (config.ENV_STATIC_BEARER, config.ENV_APP_PASSWORD, config.ENV_PUBLIC_URL):
+        monkeypatch.delenv(name, raising=False)
+
+    with (
+        caplog.at_level("ERROR", logger="mcp_connector.entry_exapp"),
+        pytest.raises(SystemExit) as excinfo,
+    ):
+        entry_exapp.main()
+
+    assert excinfo.value.code == 2
+    messages = [record.getMessage() for record in caplog.records]
+    assert any(config.ENV_PUBLIC_URL in message for message in messages), messages
+    assert any(config.DEFAULT_PUBLIC_URL in message for message in messages), messages
+
+
+def test_a_blank_public_url_counts_as_missing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A quoted empty value in a compose file is a typo, not a decision to use the default.
+
+    The exit code alone would not prove anything here, because a later check refuses the
+    start as well; what is asserted is that this value is the one named in the log.
+    """
+    for name, value in EXAPP_ENV.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv(config.ENV_APP_PERSISTENT_STORAGE, str(tmp_path))
+    monkeypatch.setenv(config.ENV_PUBLIC_URL, "   ")
+    for name in (config.ENV_STATIC_BEARER, config.ENV_APP_PASSWORD):
+        monkeypatch.delenv(name, raising=False)
+
+    with (
+        caplog.at_level("ERROR", logger="mcp_connector.entry_exapp"),
+        pytest.raises(SystemExit) as excinfo,
+    ):
+        entry_exapp.main()
+
+    assert excinfo.value.code == 2
+    messages = [record.getMessage() for record in caplog.records]
+    assert any(config.ENV_PUBLIC_URL in message for message in messages), messages

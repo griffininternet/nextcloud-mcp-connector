@@ -185,6 +185,14 @@ def _authorization_server_document(
         *(metadata.token_endpoint_auth_methods_supported or []),
         PUBLIC_CLIENT_AUTH_METHOD,
     ]
+    # The same correction for the revocation endpoint, which the SDK describes with the same
+    # two secret based methods (IN-03). This server revokes for public clients on purpose,
+    # which is why the revocation request makes client_secret optional; a document that
+    # withholds that tells a strict client it cannot end its own connection.
+    metadata.revocation_endpoint_auth_methods_supported = [
+        *(metadata.revocation_endpoint_auth_methods_supported or []),
+        PUBLIC_CLIENT_AUTH_METHOD,
+    ]
     # Spelled out rather than inherited from the registration options, because the two lists
     # answer different questions: what a client may register for, and what this server
     # offers (D-42 plus the refresh grant).
