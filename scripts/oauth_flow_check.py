@@ -32,13 +32,15 @@ exists for the test topology and nowhere else. No module under ``src/`` contains
 automation, no product code ever sees a user password, and ``tests/unit/test_oauth_abuse``
 keeps a gate over ``src/`` that says so.
 
-The decision needs the same actor for a second reason since CR-01: ``/authorize/decide``
-is declared ``USER``, so HaRP resolves the Nextcloud account of the request and the app
-grants nothing unless that account is the one that signed in. A browser carries it in the
-session cookie of the sign in it just completed; this walker carries it as a credential of
-that one request. The step before it posts the same decision *without* an account and
-refuses to continue if that one is granted, which is the relay attack of CR-01 walked over
-the full chain.
+The decision needs the same actor for a second reason since CR-01: HaRP resolves the
+Nextcloud account of every request it forwards, and the app grants nothing unless that
+account is the one that signed in. So :func:`sign_in` hands out the client that holds the
+session cookies of the sign in it just completed, and the decision is posted with it. That
+is the production path exactly: a session cookie, on a route that is PUBLIC, resolved by
+HaRP into the AppAPI header. The step before it posts the same decision from the caller
+that started the flow, which holds the flow id and no account, and refuses to continue if
+that one is granted; that is the relay attack of CR-01 walked over the full chain. The
+result page of the browser onboarding is asked by both actors for the same reason.
 
 Nothing here changes the instance beyond what it creates itself: one client registration,
 one authorization, one note, and it hands all three back at the end.
@@ -58,8 +60,8 @@ import sys
 import time
 import urllib.parse
 import uuid
-from collections.abc import AsyncIterator, Callable, Mapping, Sequence
-from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator, Callable, Iterator, Mapping, Sequence
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from typing import Any
 
@@ -209,7 +211,8 @@ def detail_value(html: str, term: str) -> str:
     return match.group(1)
 
 
-def sign_in(nc: str, user: str, password: str, login_url: str) -> None:
+@contextmanager
+def sign_in(nc: str, user: str, password: str, login_url: str) -> Iterator[httpx.Client]:
     """Complete a Nextcloud Login Flow v2 sign in without a browser (test topology only).
 
     Three requests, and each of them is what a browser sends: the auth picker page of the
@@ -218,8 +221,17 @@ def sign_in(nc: str, user: str, password: str, login_url: str) -> None:
     Nextcloud authenticates the user on its own pages, which is the whole point of the flow
     (T-03-30). It exists so that a plan can prove the chain end to end without a human, and
     it lives in ``scripts/`` because it must never be reachable from the product.
+
+    **What it yields, and why that matters.** The client it hands out still holds the
+    session cookies of that sign in, which is exactly what the browser of the person who
+    just signed in holds. Both steps that follow a sign in in this flow are decided by the
+    Nextcloud account behind the request (CR-01), and this is the actor that carries one the
+    way production carries it. An earlier version threw the session away and re-authenticated
+    the decision with Basic auth, which proved that *a* credential works and left the browser
+    path, the only path a real user walks, unmeasured.
     """
-    with httpx.Client(base_url=nc, follow_redirects=True, timeout=TIMEOUT) as browser:
+    browser = httpx.Client(base_url=nc, follow_redirects=True, timeout=TIMEOUT)
+    try:
         picker = browser.get(login_url)
         if picker.status_code != 200:
             raise CheckFailed(f"the sign in page answered {picker.status_code}")
@@ -261,6 +273,9 @@ def sign_in(nc: str, user: str, password: str, login_url: str) -> None:
         )
         if granted.status_code != 200:
             raise CheckFailed(f"the grant answered {granted.status_code}")
+        yield browser
+    finally:
+        browser.close()
 
 
 def register_client(base: str, *, name: str = CLIENT_NAME, step: str = "step 4") -> dict[str, Any]:
@@ -337,44 +352,44 @@ def connect(
         flow_id = parameters["flow"][0]
         login_url = parameters["login"][0]
 
-        sign_in(nc, user, password, login_url)
-
-        screen = client.get(f"{base}/authorize/consent", params={"flow": flow_id, "step": "wait"})
-        if verbose:
-            report(
-                "step 5",
-                "GET",
-                "/authorize/consent",
-                screen.status_code,
-                cache_control=screen.headers.get("cache-control"),
-                signed_in=user in screen.text,
+        with sign_in(nc, user, password, login_url) as browser:
+            screen = client.get(
+                f"{base}/authorize/consent", params={"flow": flow_id, "step": "wait"}
             )
-        if screen.status_code != 200:
-            raise CheckFailed(f"the consent screen answered {screen.status_code}")
-        confirm = hidden_field(screen.text, "confirm")
+            if verbose:
+                report(
+                    "step 5",
+                    "GET",
+                    "/authorize/consent",
+                    screen.status_code,
+                    cache_control=screen.headers.get("cache-control"),
+                    signed_in=user in screen.text,
+                )
+            if screen.status_code != 200:
+                raise CheckFailed(f"the consent screen answered {screen.status_code}")
+            confirm = hidden_field(screen.text, "confirm")
 
-        # The decision is a USER route since CR-01, so HaRP resolves the Nextcloud account
-        # behind the request before this app sees it, and the app refuses a decision that
-        # does not come from the account that signed in. A browser brings that account in
-        # its session cookie; this walker is not a browser, so it brings the same account
-        # as a credential of the request. Without it HaRP answers 403 and no code exists,
-        # which is exactly the refusal the relay attack now runs into.
-        refused = client.post(
-            f"{base}/authorize/decide",
-            data={"flow": flow_id, "confirm": confirm, "decision": "approve"},
-        )
-        if refused.status_code == 200:
-            raise CheckFailed(
-                "the decision was granted without a Nextcloud account behind it (CR-01)"
-            )
-        if verbose:
-            report("step 5", "POST", "/authorize/decide", refused.status_code, identity="none")
+            decision = {"flow": flow_id, "confirm": confirm, "decision": "approve"}
 
-        approved = client.post(
-            f"{base}/authorize/decide",
-            data={"flow": flow_id, "confirm": confirm, "decision": "approve"},
-            auth=(user, password),
-        )
+            # The relay of CR-01, over the whole chain: this caller holds the flow id and
+            # the anti forgery value derived from it, which used to be the entire
+            # authorisation of the decision, and it has no Nextcloud account. HaRP writes an
+            # empty user id into the AppAPI header for it and the app refuses, because the
+            # account that signed in is the one fact the party that started the flow cannot
+            # produce.
+            refused = client.post(f"{base}/authorize/decide", data=decision)
+            if refused.status_code == 200:
+                raise CheckFailed(
+                    "the decision was granted without a Nextcloud account behind it (CR-01)"
+                )
+            if verbose:
+                report("step 5", "POST", "/authorize/decide", refused.status_code, identity="none")
+
+            # And the same request from the browser that just signed in, carrying nothing
+            # but its Nextcloud session cookies. This is the production path of the consent
+            # decision, and the one the whole CR-01 fix rests on: HaRP has to resolve a
+            # cookie session into the AppAPI header, on a route that is PUBLIC.
+            approved = browser.post(f"{base}/authorize/decide", data=decision)
         if approved.status_code != 200:
             raise CheckFailed(f"the approval answered {approved.status_code}, not the return page")
         target = return_target(approved.text)
@@ -385,6 +400,7 @@ def connect(
                 "POST",
                 "/authorize/decide",
                 approved.status_code,
+                identity="the session cookie of the sign in",
                 code="present" if returned.get("code") else "missing",
                 state="matches" if returned.get("state") == [state] else "differs",
                 iss=returned.get("iss", [""])[0],
@@ -733,26 +749,58 @@ def onboarding(base: str, nc: str, user: str, password: str) -> None:
             raise CheckFailed("the handoff page carried no sign in link")
         flow_id = hidden_field(started.text, "flow")
 
-        sign_in(nc, user, password, link.group(1))
-
-        result = client.get(f"{base}/connect/wait", params={"flow": flow_id})
-        credential = detail_value(result.text, "Credential for your assistant app")
+        # The page that shows an app password in clear text is the second surface of CR-01,
+        # and it is asked here by both actors. First by the caller that started the flow and
+        # holds its id but has no Nextcloud account: that is the relay, and the credential
+        # must not reach it. The route is PUBLIC, so the refusal is this app's own, made on
+        # the AppAPI header HaRP wrote rather than by the proxy.
+        with sign_in(nc, user, password, link.group(1)):
+            relayed = client.get(f"{base}/connect/wait", params={"flow": flow_id})
+        leaked = "Credential for your assistant app" in relayed.text
         report(
             "sc 3",
             "GET",
             "/connect/wait",
-            result.status_code,
-            signed_in_as=detail_value(result.text, "Signed in as"),
-            credential=f"{len(credential)} characters, shown once",
+            relayed.status_code,
+            identity="none",
+            credential_handed_over=leaked,
         )
+        if leaked:
+            raise CheckFailed("the app password was handed to a caller without an account")
 
-        again = client.get(f"{base}/connect/wait", params={"flow": flow_id})
-        shown_twice = "Credential for your assistant app" in again.text
-        report(
-            "sc 3", "GET", "/connect/wait", again.status_code, credential_shown_again=shown_twice
-        )
-        if shown_twice:
-            raise CheckFailed("the credential is shown a second time")
+        # A refusal ends the flow and hands the credential back to Nextcloud (D-34), so the
+        # half that has to work needs a flow of its own rather than a second try on that
+        # one. Same start, same sign in, and this time the browser that signed in asks.
+        second = client.post(f"{base}/connect", data={"action": "start"})
+        second_link = re.search(r'href="([^"]*login/v2/flow[^"]*)"', second.text)
+        if second_link is None:
+            raise CheckFailed("the second handoff page carried no sign in link")
+        second_flow = hidden_field(second.text, "flow")
+
+        with sign_in(nc, user, password, second_link.group(1)) as browser:
+            result = browser.get(f"{base}/connect/wait", params={"flow": second_flow})
+            credential = detail_value(result.text, "Credential for your assistant app")
+            report(
+                "sc 3",
+                "GET",
+                "/connect/wait",
+                result.status_code,
+                identity="the session cookie of the sign in",
+                signed_in_as=detail_value(result.text, "Signed in as"),
+                credential=f"{len(credential)} characters, shown once",
+            )
+
+            again = browser.get(f"{base}/connect/wait", params={"flow": second_flow})
+            shown_twice = "Credential for your assistant app" in again.text
+            report(
+                "sc 3",
+                "GET",
+                "/connect/wait",
+                again.status_code,
+                credential_shown_again=shown_twice,
+            )
+            if shown_twice:
+                raise CheckFailed("the credential is shown a second time")
 
     with httpx.Client(timeout=TIMEOUT) as client:
         used = client.post(

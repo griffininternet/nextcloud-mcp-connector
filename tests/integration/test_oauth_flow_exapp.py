@@ -410,3 +410,71 @@ async def test_a_flood_of_unknown_bearers_throttles_the_token_endpoint_and_nothi
     # The window lives in the process, and the next check must not inherit it.
     restart_exapp()
     wait_until_answering(flow_env["base"])
+
+
+def refuse_decisions(base: str, count: int) -> list[int]:
+    """Post ``count`` consent decisions with no Nextcloud account, and collect the statuses.
+
+    The body is deliberately junk: the flow does not exist, so the refusal happens for the
+    reason this check is about (no account behind the request) and no state is touched.
+    """
+    with httpx.Client(timeout=30.0) as client:
+        return [
+            client.post(
+                f"{base}/authorize/decide",
+                data={"flow": uuid.uuid4().hex, "confirm": uuid.uuid4().hex, "decision": "approve"},
+            ).status_code
+            for _ in range(count)
+        ]
+
+
+def still_reachable(base: str) -> tuple[int, int]:
+    """The status of one discovery document and of one anonymous MCP request, in that order.
+
+    Sync like every other request helper of this file, because a blocking call belongs
+    outside the async body of a check (the async lint of this project).
+    """
+    with httpx.Client(timeout=30.0) as client:
+        document = client.get(f"{base}/.well-known/oauth-authorization-server")
+        challenge = client.post(
+            f"{base}/mcp",
+            headers={"Accept": "application/json, text/event-stream"},
+            json=INITIALIZE,
+        )
+    return document.status_code, challenge.status_code
+
+
+async def test_refused_decisions_do_not_take_the_whole_app_off_the_network(
+    flow_env: dict[str, str],
+) -> None:
+    """The regression guard of the access level of ``/authorize/decide``.
+
+    While that route was declared ``USER``, HaRP refused an anonymous decision itself with
+    403 *and* counted it in a blacklist of its own. Ten of those from one address inside
+    ``HP_BLACKLIST_WINDOW`` (300 seconds by default) answered that address with 502 on every
+    route of this app for the rest of the window: the discovery documents, ``/mcp``, all of
+    it. Refusals are the normal traffic of this route, not an anomaly, so that was a remote
+    off switch anybody could pull, and two runs of this very file pulled it by accident.
+
+    The route is PUBLIC now and the refusal is the app's own, which is why this check asks
+    for more refusals than HaRP's threshold and then asks whether the app is still there.
+    The refusals themselves are allowed to end in this app's own 429: that throttle sits on
+    one path class, answers with ``Retry-After`` and is the designed bound. What may not
+    happen is a 502, and what may not happen is a discovery document that stops answering.
+    """
+    base = flow_env["base"]
+    statuses = refuse_decisions(base, FLOOD)
+
+    assert 502 not in statuses, "a refused decision reached HaRP's blacklist and banned us"
+    assert set(statuses) <= {400, 429}, f"unexpected answers to a refused decision: {statuses}"
+    assert statuses[0] == 400, "the first refusal is the app's own page, not a proxy answer"
+
+    document, challenge = still_reachable(base)
+
+    assert document == 200, "the discovery document stopped answering this source"
+    assert challenge == 401, "the MCP route stopped answering this source"
+
+    # The refusals above live in this app's own window, and the next check must not inherit
+    # them: it walks the same path class to build a connection.
+    restart_exapp()
+    wait_until_answering(base)
