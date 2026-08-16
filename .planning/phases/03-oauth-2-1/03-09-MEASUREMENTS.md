@@ -98,7 +98,7 @@ groups are set to ask for approval.
 
 ---
 
-## Run 2: ChatGPT, 2026-08-16, RESULT: FAILED, then fixed
+## Run 2: ChatGPT, 2026-08-16, RESULT: FAILED, fixed, then CONNECTED
 
 Plan and account: personal ChatGPT account on the free plan.
 
@@ -155,10 +155,41 @@ Also confirmed: ChatGPT sends the `resource` parameter of RFC 8707 correctly, us
 PKCE with S256, and additionally fetches `/.well-known/openid-configuration`,
 which Claude.ai does not.
 
-### Status
+### Status: fixed and re-run, CONNECTED
 
-Fix in progress. After the fix the image has to be rebuilt on the staging machine
-and the ChatGPT run repeated.
+Fix commits 5793fc3, eb5b6b9, 8724d57. After rebuilding the image on the staging
+machine the same connector was told to connect again, without deleting it, and
+the run completed:
+
+```
+GET  302  /exapps/mcp_connector/authorize?...      (no error this time)
+GET  200  /exapps/mcp_connector/authorize/consent?...
+POST 200  /exapps/mcp_connector/authorize/decide
+POST 200  /exapps/mcp_connector/token
+POST 200  /exapps/mcp_connector/mcp                (repeatedly)
+```
+
+Redirect back to `https://chatgpt.com/connector/oauth/GxdvJstdJeOS?code=...&state=...&iss=...`,
+the `iss` parameter carried our issuer. ChatGPT now shows "connected on 16 Aug 2026",
+authorization method OAuth. Nextcloud names the client "MCP Connector: ChatGPT" on
+its own sign in page, the same passthrough as for Claude.
+
+Verified against the live instance after the rebuild:
+```
+registered scope: nextcloud offline_access
+authorize with scope=offline_access nextcloud -> 302 to the consent page, no error
+```
+
+### Deployment note learned here
+
+Rebuilding the image alone does not reach the running container: the image tag is
+the app version and does not change, so AppAPI keeps the old container. Disabling
+and enabling the app is not enough either, and removing the container by hand left
+the registration in a state where `app_api:app:enable` failed. What worked:
+`occ app_api:app:unregister mcp_connector --silent --force` followed by
+`scripts/bootstrap_exapp.sh --staging`. Note that the bootstrap needs the generated
+secrets, so source `.env.staging` first. Unregistering drops the ExApp volume, so
+the token store is emptied and existing client connections have to be made again.
 
 ---
 
