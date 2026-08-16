@@ -21,9 +21,22 @@
 # iteration. The fixed secret is the point: a re-registration hands out a new one, and a
 # process that still holds the old one answers 401 to everything (research pitfall 11).
 #
-# This script only ever talks to the topology named above. It never stops a container of
-# the other test topology in this repository and never destroys a volume, which is why
-# neither that file name nor a "down" command appears anywhere below.
+# The public staging instance of plan 03-09:
+#
+#   bash scripts/bootstrap_exapp.sh --staging
+#
+# does the same work against compose.staging.yml instead of compose.exapp.yml: the public
+# host name from NC_STAGING_DOMAIN becomes the base of NC_MCP_PUBLIC_URL, the connection
+# file is .env.staging.app, and the bruteforce guard stays on, because that instance is
+# reachable from the internet. It is a flag and not an environment variable on purpose,
+# for the same reason COMPOSE_FILE is not overridable (WR-07): a forgotten export in a
+# shell must never be able to redirect this script at a topology the caller did not mean.
+# scripts/setup_staging.sh is the only intended caller; docs/staging-setup.md is the
+# runbook around it.
+#
+# This script only ever talks to one of the two throwaway topologies named above. It never
+# stops a container of the test topology in this repository and never destroys a volume,
+# which is why neither that file name nor a "down" command appears anywhere below.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -33,12 +46,32 @@ cd "$(dirname "$0")/.."
 # Linux, where the variable is simply unknown.
 export MSYS_NO_PATHCONV=1
 
+MANUAL_MODE=0
+STAGING_MODE=0
+for argument in "$@"; do
+  case "${argument}" in
+    --manual) MANUAL_MODE=1 ;;
+    --staging) STAGING_MODE=1 ;;
+    *)
+      echo "ERROR: unknown argument '${argument}'. Known flags: --manual, --staging." >&2
+      exit 1
+      ;;
+  esac
+done
+if [ "${MANUAL_MODE}" -eq 1 ] && [ "${STAGING_MODE}" -eq 1 ]; then
+  echo "ERROR: --manual is the local development loop and --staging is the public" >&2
+  echo "instance. Combining them would register a local process as the public ExApp." >&2
+  exit 1
+fi
+
 # Not overridable, and checked below (WR-07). This script creates users, hands out app
-# passwords and switches `auth.bruteforce.protection.enabled` off. All three are fine on
-# the throwaway topology of this one file and unacceptable on any other instance, so a
-# forgotten `export COMPOSE_FILE=...` in the calling shell must not be able to aim it at
-# the other topology of this repository, which is in daily use.
+# passwords and, on the local topology, switches `auth.bruteforce.protection.enabled` off.
+# All three are fine on a throwaway topology of this repository and unacceptable on any
+# other instance, so a forgotten `export COMPOSE_FILE=...` in the calling shell must not be
+# able to aim it at the test topology of this repository, which is in daily use. The
+# staging topology is selected by the --staging flag above, never by the environment.
 COMPOSE_FILE="compose.exapp.yml"
+PROJECT_NAME="nc-mcp-exapp"
 SERVICE="nextcloud"
 HARP_CONTAINER="${HARP_CONTAINER:-nc-mcp-exapp-harp}"
 HOST_PORT="${NC_EXAPP_PORT:-8081}"
@@ -65,37 +98,104 @@ ALICE_PASSWORD="${NC_EXAPP_ALICE_PASSWORD:-alice-test-pw-01}"
 BOB_PASSWORD="${NC_EXAPP_BOB_PASSWORD:-bob-test-pw-01}"
 TOKEN_NAME="mcp-exapp"
 ENV_FILE="${ENV_FILE:-.env.exapp}"
+# The base URL a browser and a client use. Everything the app publishes about itself is
+# derived from it, so it is one value and not three.
+BASE_URL="http://127.0.0.1:${HOST_PORT}"
+# The URL AppAPI and the deploy daemon call Nextcloud under. It has to be the same way a
+# browser takes, otherwise the heartbeat fails (research pitfall 7).
+NC_DAEMON_URL="http://caddy"
+# Extra arguments every `docker compose` call of this script carries. Empty for the local
+# topology, which needs no environment file; the staging topology interpolates mandatory
+# variables and would refuse every command without one.
+COMPOSE_ENV_ARGS=()
+# Disabling the bruteforce guard is a property of an unreachable instance, never of a
+# public one. The staging branch below turns this off.
+DISABLE_BRUTEFORCE=1
+
+if [ "${STAGING_MODE}" -eq 1 ]; then
+  # The public instance of plan 03-09. Same script, same steps, four differences: another
+  # compose file, another project, the public host name in every URL, and a bruteforce
+  # guard that stays where it is.
+  COMPOSE_FILE="compose.staging.yml"
+  PROJECT_NAME="nc-mcp-staging"
+  HARP_CONTAINER="nc-mcp-staging-harp"
+  NETWORK_NAME="nc-mcp-staging-net"
+  ENV_FILE="${ENV_FILE_STAGING:-.env.staging.app}"
+  COMPOSE_ENV_ARGS=(--env-file "${NC_STAGING_ENV_FILE:-.env.staging}")
+  DISABLE_BRUTEFORCE=0
+  # The one value the whole staging run hangs on. It is interpolated into the URLs the app
+  # publishes about itself, so its shape is checked before it is used (see
+  # require_host_name, called from the run block at the end).
+  STAGING_DOMAIN="${NC_STAGING_DOMAIN:?set NC_STAGING_DOMAIN to the public host name, see docs/staging-setup.md}"
+  BASE_URL="https://${STAGING_DOMAIN}"
+  NC_DAEMON_URL="https://${STAGING_DOMAIN}"
+  # The two throwaway accounts of a public instance get generated passwords, not the
+  # documented ones. scripts/setup_staging.sh generates them into .env.staging and exports
+  # them; the fallbacks below are refused by require_generated_password.
+  ALICE_PASSWORD="${NC_EXAPP_ALICE_PASSWORD:-}"
+  BOB_PASSWORD="${NC_EXAPP_BOB_PASSWORD:-}"
+fi
+
 # The address this app is reachable under from the outside, which is also the issuer of
 # its authorization server and the resource of its protected resource document. It is
 # handed to the container at registration time (see register_exapp) and it is the one
-# value an administrator has to get right for OAuth (docs/oauth-setup.md).
-PUBLIC_URL="${NC_EXAPP_PUBLIC_URL:-http://127.0.0.1:${HOST_PORT}/exapps/${APP_ID}}"
+# value an administrator has to get right for OAuth (docs/oauth-setup.md). On the staging
+# instance it must be the public URL: plan 03-08 measured what happens without it, namely
+# a discovery document that names 127.0.0.1 and a client that cannot connect at all.
+PUBLIC_URL="${NC_EXAPP_PUBLIC_URL:-${BASE_URL}/exapps/${APP_ID}}"
 # Filled by ensure_image and read by verify_image_digest right before the registration.
 IMAGE_DIGEST=""
-
-MANUAL_MODE=0
-if [ "${1:-}" = "--manual" ]; then
-  MANUAL_MODE=1
-fi
 
 ensure_own_topology() {
   if [ ! -f "${COMPOSE_FILE}" ]; then
     echo "ERROR: ${COMPOSE_FILE} is not here. Run this script from the repository root." >&2
     return 1
   fi
-  if ! grep -q '^name: nc-mcp-exapp$' "${COMPOSE_FILE}"; then
-    echo "ERROR: ${COMPOSE_FILE} does not declare the nc-mcp-exapp project." >&2
-    echo "This script only ever runs against that throwaway topology (WR-07)." >&2
+  if ! grep -q "^name: ${PROJECT_NAME}\$" "${COMPOSE_FILE}"; then
+    echo "ERROR: ${COMPOSE_FILE} does not declare the ${PROJECT_NAME} project." >&2
+    echo "This script only ever runs against a throwaway topology (WR-07)." >&2
     return 1
   fi
 }
 
-OCC="docker compose -f ${COMPOSE_FILE} exec -T --user www-data ${SERVICE} php occ"
+# A host name lands unquoted in URLs, in a registration payload and in the compose
+# interpolation, so its shape is pinned before any of that happens (IN-07). Letters,
+# digits, dots and hyphens, at least one dot: anything else is a typo or an injection.
+require_host_name() {
+  local value="$1"
+  if ! printf '%s' "$value" | grep -Eq '^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,}$'; then
+    echo "ERROR: NC_STAGING_DOMAIN is '${value}', which is not a host name." >&2
+    echo "It is interpolated into every URL this app publishes about itself. Refusing." >&2
+    return 1
+  fi
+}
+
+# On a public instance the account passwords are the only thing between the internet and
+# two accounts that hold test data, and the documented defaults of the local topology are
+# published in this repository. Twenty characters is what `openssl rand -hex 16` produces.
+require_generated_password() {
+  local name="$1" value="$2"
+  if [ "${#value}" -lt 20 ]; then
+    echo "ERROR: ${name} is empty or shorter than 20 characters." >&2
+    echo "The staging instance is reachable from the internet, so its accounts do not use" >&2
+    echo "the documented test passwords. scripts/setup_staging.sh generates them." >&2
+    return 1
+  fi
+}
+
+# One place that knows how this script talks to its topology. Every compose call goes
+# through it, so the staging environment file can never be forgotten on one of them.
+dc() {
+  docker compose "${COMPOSE_ENV_ARGS[@]}" -f "${COMPOSE_FILE}" "$@"
+}
+
+# The command a reader has to type to look at the same thing this script looked at.
+compose_hint() {
+  printf 'docker compose %s-f %s' "${COMPOSE_ENV_ARGS[*]:+${COMPOSE_ENV_ARGS[*]} }" "${COMPOSE_FILE}"
+}
 
 occ() {
-  # Intentionally unquoted: OCC is a command line, not a single word.
-  # shellcheck disable=SC2086
-  $OCC "$@"
+  dc exec -T --user www-data "${SERVICE}" php occ "$@"
 }
 
 # Every secret this script hands to the container travels through stdin, never through a
@@ -108,7 +208,7 @@ occ() {
 occ_stdin() {
   local snippet="$1"
   shift
-  docker compose -f "${COMPOSE_FILE}" exec -T --user www-data "${SERVICE}" \
+  dc exec -T --user www-data "${SERVICE}" \
     sh -c "${snippet}" sh "$@"
 }
 
@@ -137,7 +237,7 @@ wait_for_install() {
     sleep 5
   done
   echo "ERROR: Nextcloud is still not installed after five minutes." >&2
-  echo "Check: docker compose -f ${COMPOSE_FILE} logs --tail=100 ${SERVICE}" >&2
+  echo "Check: $(compose_hint) logs --tail=100 ${SERVICE}" >&2
   return 1
 }
 
@@ -222,7 +322,7 @@ ensure_addressbook() {
 # volumes.
 ensure_files_home() {
   local uid="$1"
-  docker compose -f "${COMPOSE_FILE}" exec -T --user www-data "${SERVICE}" sh -c \
+  dc exec -T --user www-data "${SERVICE}" sh -c \
     "mkdir -p 'data/${uid}/files' && printf 'Initialised by scripts/bootstrap_exapp.sh.\n' \
       > 'data/${uid}/files/Readme.md'"
   if occ files:scan "$uid" >/dev/null 2>&1; then
@@ -296,7 +396,7 @@ harp_shared_key() {
     tr -d '\r' | sed -n 's/^HP_SHARED_KEY=//p' | head -n1)"
   if [ -z "$key" ]; then
     echo "ERROR: container ${HARP_CONTAINER} is not running or carries no HP_SHARED_KEY." >&2
-    echo "Start the topology first: docker compose -f ${COMPOSE_FILE} up -d --wait" >&2
+    echo "Start the topology first: $(compose_hint) up -d --wait" >&2
     return 1
   fi
   require_hex64 HP_SHARED_KEY "$key" "container ${HARP_CONTAINER}" || return 1
@@ -335,7 +435,10 @@ ensure_daemon_harp() {
   fi
   # nextcloud_url is passed explicitly: without it AppAPI replaces https by http, and the
   # deploy daemon has to reach Nextcloud through the same reverse proxy that serves
-  # /exapps/, otherwise the heartbeat fails (research pitfall 7).
+  # /exapps/, otherwise the heartbeat fails (research pitfall 7). On the staging topology
+  # that URL is the public https one; compose.staging.yml gives the reverse proxy the
+  # public host name as a network alias, so the call stays inside the compose network and
+  # still lands on the certificate that name belongs to.
   #
   # HP_SHARED_KEY is bearer equivalent (CR-02, WR-11), so it travels through stdin like
   # every other secret of this script (WR-06) and never through the argv of the docker
@@ -344,7 +447,7 @@ ensure_daemon_harp() {
   if ! output="$(printf '%s' "${HP_SHARED_KEY}" | occ_stdin \
     'KEY="$(cat)"; exec php occ app_api:daemon:register "$@" --harp_shared_key "$KEY"' \
     "${DAEMON_NAME}" "Harp Proxy (Docker)" docker-install http \
-    "appapi-harp:8780" "http://caddy" \
+    "appapi-harp:8780" "${NC_DAEMON_URL}" \
     --net "${NETWORK_NAME}" --harp \
     --harp_frp_address "appapi-harp:8782" \
     --set-default 2>&1)"; then
@@ -365,7 +468,7 @@ ensure_image() {
   if ! output="$(docker push "${ref}" 2>&1)"; then
     echo "ERROR: could not push ${ref} into the local registry:" >&2
     echo "${output}" >&2
-    echo "Is the registry service up? docker compose -f ${COMPOSE_FILE} ps registry" >&2
+    echo "Is the registry service up? $(compose_hint) ps registry" >&2
     return 1
   fi
   IMAGE_DIGEST="$(docker inspect --format '{{index .RepoDigests 0}}' "${ref}" 2>/dev/null |
@@ -469,7 +572,7 @@ ensure_exapp() {
   if ! output="$(register_exapp "${DAEMON_NAME}" "${APP_PORT}" 2>&1)"; then
     echo "ERROR: could not register the ExApp ${APP_ID}:" >&2
     echo "${output}" >&2
-    echo "Logs: docker compose -f ${COMPOSE_FILE} logs --tail=100 appapi-harp" >&2
+    echo "Logs: $(compose_hint) logs --tail=100 appapi-harp" >&2
     echo "See the FALLBACK block at the end of this script." >&2
     return 1
   fi
@@ -500,7 +603,7 @@ register_manual_install() {
   if ! occ app_api:daemon:list 2>/dev/null | grep "${MANUAL_DAEMON_NAME}" >/dev/null; then
     if ! output="$(occ app_api:daemon:register \
       "${MANUAL_DAEMON_NAME}" "Manual Install" manual-install http \
-      "host.docker.internal:${MANUAL_APP_PORT}" "http://caddy" 2>&1)"; then
+      "host.docker.internal:${MANUAL_APP_PORT}" "${NC_DAEMON_URL}" 2>&1)"; then
       echo "ERROR: could not register the manual-install daemon:" >&2
       echo "${output}" >&2
       return 1
@@ -520,10 +623,18 @@ register_manual_install() {
 }
 
 echo "== ExApp topology bootstrap =="
+if [ "${STAGING_MODE}" -eq 1 ]; then
+  echo "mode: staging, public base ${BASE_URL}"
+fi
 ensure_own_topology
 require_port_number NC_EXAPP_APP_PORT "${APP_PORT}"
 require_port_number NC_EXAPP_MANUAL_PORT "${MANUAL_APP_PORT}"
 require_registry_shape "${REGISTRY}"
+if [ "${STAGING_MODE}" -eq 1 ]; then
+  require_host_name "${STAGING_DOMAIN}"
+  require_generated_password NC_EXAPP_ALICE_PASSWORD "${ALICE_PASSWORD}"
+  require_generated_password NC_EXAPP_BOB_PASSWORD "${BOB_PASSWORD}"
+fi
 wait_for_install
 
 # Notes and Deck are optional apps; the tool plans of the later phases need both.
@@ -546,9 +657,15 @@ ensure_files_home bob
 # Nextcloud counts failed logins per source IP, and a remote MCP server is one IP for many
 # users. The negative tests produce 401s on purpose, so the guard would throttle the whole
 # run and hand us random 429s (research pitfall 8). Test instance only, never a
-# recommendation for a real server.
-occ config:system:set auth.bruteforce.protection.enabled --value=false --type=boolean >/dev/null
-echo "bruteforce protection: disabled (test instance)"
+# recommendation for a real server, and never on the staging instance: that one is on the
+# public internet, nothing automated hammers it, and a public Nextcloud with the guard
+# switched off is an invitation to guess the two accounts it carries.
+if [ "${DISABLE_BRUTEFORCE}" -eq 1 ]; then
+  occ config:system:set auth.bruteforce.protection.enabled --value=false --type=boolean >/dev/null
+  echo "bruteforce protection: disabled (test instance)"
+else
+  echo "bruteforce protection: left enabled (public instance)"
+fi
 
 # AppAPI is an app store app, not part of the server tarball (research pitfall 9). Recent
 # server images ship it, in which case app:install reports it as already installed.
@@ -575,7 +692,7 @@ echo "app passwords: created for alice and bob"
 umask 077
 cat >"${ENV_FILE}" <<EOF
 # Written by scripts/bootstrap_exapp.sh. Never commit this file.
-NC_MCP_URL=http://127.0.0.1:${HOST_PORT}
+NC_MCP_URL=${BASE_URL}
 NC_MCP_EXAPP_BASE=${PUBLIC_URL}
 NC_MCP_PUBLIC_URL=${PUBLIC_URL}
 NC_MCP_TEST_USER=alice
@@ -609,7 +726,7 @@ fi
 
 echo
 echo "Ready. The app answers under:"
-echo "  http://127.0.0.1:${HOST_PORT}/exapps/${APP_ID}/mcp"
+echo "  ${PUBLIC_URL}/mcp"
 
 # ---------------------------------------------------------------------------
 # FALLBACK 1: no app store access for app_api (research pitfall 9)

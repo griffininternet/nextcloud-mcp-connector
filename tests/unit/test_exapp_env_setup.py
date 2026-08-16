@@ -998,31 +998,54 @@ def test_the_bootstrap_never_reaches_into_the_other_topology() -> None:
     assert "compose.test.yml" not in text
     assert "down -v" not in text
     assert 'COMPOSE_FILE="compose.exapp.yml"' in text
+    assert 'COMPOSE_FILE="compose.staging.yml"' in text, (
+        "the staging topology is not selected by a literal file name any more"
+    )
     assert "COMPOSE_FILE:-" not in text, "the compose file is overridable from the shell"
     assert "ensure_own_topology" in text
 
 
 @needs_bash
 @pytest.mark.parametrize(
-    ("content", "expected_code"),
+    ("project", "content", "expected_code"),
     [
-        ("name: nc-mcp-exapp\nservices:\n", 0),
-        ("name: some-other-project\nservices:\n", 1),
-        ("services:\n", 1),
-        (None, 1),
+        ("nc-mcp-exapp", "name: nc-mcp-exapp\nservices:\n", 0),
+        ("nc-mcp-exapp", "name: some-other-project\nservices:\n", 1),
+        ("nc-mcp-exapp", "services:\n", 1),
+        ("nc-mcp-exapp", None, 1),
+        ("nc-mcp-staging", "name: nc-mcp-staging\nservices:\n", 0),
+        ("nc-mcp-staging", "name: nc-mcp-exapp\nservices:\n", 1),
+        ("nc-mcp-exapp", "name: nc-mcp-staging\nservices:\n", 1),
     ],
-    ids=["the right project", "a foreign project", "no project name", "no file at all"],
+    ids=[
+        "the right project",
+        "a foreign project",
+        "no project name",
+        "no file at all",
+        "the staging project under the staging name",
+        "the local topology behind the staging name",
+        "the staging topology behind the local name",
+    ],
 )
 def test_the_topology_guard_refuses_a_foreign_compose_file(
-    tmp_path: Path, content: str | None, expected_code: int
+    tmp_path: Path, project: str, content: str | None, expected_code: int
 ) -> None:
-    """WR-07: the guard is what makes the fixed file name more than a comment."""
-    compose = tmp_path / "compose.exapp.yml"
+    """WR-07: the guard is what makes the fixed file name more than a comment.
+
+    Since plan 03-09 the script knows two throwaway topologies, so the guard compares the
+    project name it expects with the one the file declares. The last two cases are the ones
+    that matter for that: a run aimed at the public instance must not accept the local file
+    and the other way round, because the two differ in exactly the properties that are
+    dangerous on the wrong instance (a public port, and a bruteforce guard that is switched
+    off on the local one).
+    """
+    compose = tmp_path / "compose.yml"
     if content is not None:
         compose.write_text(content, encoding="utf-8", newline="\n")
     script = (
         "set -euo pipefail\n"
         f'COMPOSE_FILE="{compose.as_posix()}"\n'
+        f'PROJECT_NAME="{project}"\n'
         f"{shell_function('ensure_own_topology')}\n"
         "ensure_own_topology\n"
     )
