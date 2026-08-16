@@ -83,12 +83,15 @@ PROXY_OWNED_HEADERS = (
 #: screen behind /authorize and the decision behind that screen (D-38, AUTH-02, AUTH-03).
 DECLARED_ROUTES = 12
 
-#: The routes that must not be PUBLIC, and the level they carry instead. One entry, and it
-#: is the enforcement point of CR-01: the decision is the request that turns a finished
-#: Nextcloud sign in into a grant, and only HaRP can say which account is behind the
-#: browser that sends it. A PUBLIC decision route is the Login Flow v2 relay again, so the
-#: gate below refuses the manifest instead of trusting a review to notice.
-ACCESS_LEVELS = {"^/authorize/decide/?$": "USER"}
+#: The routes that must not be PUBLIC, and the level they carry instead. Empty, and that is
+#: the finding of the live counter check: HaRP records every refusal of a USER route in a
+#: blacklist of its own, and ten from one address inside HP_BLACKLIST_WINDOW answer that
+#: address with 502 on every route of this app. ``/authorize/decide`` produces refusals as
+#: its normal traffic (CR-01), so a USER declaration there is a remote switch that turns the
+#: whole connector off for a caller. The account behind the request is resolved on a PUBLIC
+#: route just as well, and comparing it is the app's job either way, because the relay
+#: attacker of CR-01 holds a valid account too.
+ACCESS_LEVELS: dict[str, str] = {}
 
 #: Every access level this app is allowed to declare at all. ADMIN is deliberately absent:
 #: no route of this app is an administrative one, and a level nobody meant to use is a
@@ -179,10 +182,12 @@ def manifest_problems(root: etree._Element) -> list[str]:
             problems.append(f"route {url!r} declares the access level {access_level!r}")
         expected = ACCESS_LEVELS.get(url, "PUBLIC")
         if access_level != expected:
-            # The access level table of CR-01. The decision behind the consent screen is
-            # the one request whose caller HaRP has to resolve, and every other route is
-            # PUBLIC for a reason written next to it in the manifest. A route that changes
-            # level silently is a change of who may reach it, so it fails here.
+            # The access level table. Every route of this app is PUBLIC for a reason
+            # written next to it in the manifest, and a route that changes level silently
+            # is a change of who may reach it and of what a refusal costs, so it fails
+            # here. The cost is the half that is easy to miss: a refused request to a USER
+            # route is a strike in HaRP's own blacklist, and ten of them ban the caller
+            # from every route of this app for five minutes.
             problems.append(f"route {url!r} is {access_level!r} and has to be {expected!r}")
         if not url.endswith("$"):
             # HaRP matches with re.match, which anchors at the start only, so a pattern
@@ -616,8 +621,9 @@ def test_the_manifest_declares_exactly_the_twelve_routes_of_this_phase(
     accepted risk AR-02-06 is three fully anchored ones now, plan 03-04 adds the two pages of
     the browser onboarding, and plan 03-05 adds the four endpoints of the authorization
     server plus the consent screen behind /authorize. Every one of them is anchored at both
-    ends and PUBLIC for a reason of its own, except the decision behind the consent screen:
-    that one is USER, because HaRP has to name the account that decides (CR-01)."""
+    ends and PUBLIC for a reason of its own, the decision behind the consent screen
+    included: HaRP names the account that decides on a PUBLIC route too, and a USER
+    declaration would answer ten refusals with a five minute 502 on all twelve (CR-01)."""
     routes = [
         ((route.findtext("url") or "").strip(), (route.findtext("access_level") or "").strip())
         for route in manifest_root.findall(".//route")
@@ -631,7 +637,7 @@ def test_the_manifest_declares_exactly_the_twelve_routes_of_this_phase(
         ("^/connect/?$", "PUBLIC"),
         ("^/authorize/?$", "PUBLIC"),
         ("^/authorize/consent/?$", "PUBLIC"),
-        ("^/authorize/decide/?$", "USER"),
+        ("^/authorize/decide/?$", "PUBLIC"),
         ("^/token/?$", "PUBLIC"),
         ("^/register/?$", "PUBLIC"),
         ("^/revoke/?$", "PUBLIC"),
@@ -786,22 +792,34 @@ def test_the_manifest_gate_rejects_a_wide_public_route(manifest_root: etree._Ele
     assert any("/enabled" in problem for problem in problems)
 
 
-def test_the_manifest_gate_rejects_a_public_decision_route(
+def test_the_manifest_gate_rejects_a_user_decision_route(
     manifest_root: etree._Element,
 ) -> None:
-    """CR-01: with the decision PUBLIC, HaRP forwards it without resolving an account, so
-    the app has nothing to compare the deciding browser against and the Login Flow v2 relay
-    is open again. The counter probe for the access level table."""
+    """The decision route may not go back to ``USER``, measured against a real HaRP.
+
+    It was ``USER`` between the first shape of the CR-01 fix and the live counter check,
+    and that is a remote off switch for the whole app: HaRP answers an anonymous request to
+    a ``USER`` route with 403 *and* records it in its blacklist, and after ten of those from
+    one address inside ``HP_BLACKLIST_WINDOW`` every route of this app answers that address
+    with 502, discovery documents and ``/mcp`` included. Ten is nothing on this route, whose
+    refusals are its normal traffic: the relay attempt of CR-01, an expired session behind
+    an open consent screen, a resubmitted form.
+
+    Nothing is lost by taking the level away, which is the other half of the measurement:
+    HaRP resolves the Nextcloud account on a PUBLIC route as well, and the comparison in
+    ``oauth/consent._decide`` is the only check that separates the relay attacker from the
+    victim anyway, because both of them are signed in.
+    """
     routes = {
         (route.findtext("url") or "").strip(): route for route in manifest_root.findall(".//route")
     }
     element = routes["^/authorize/decide/?$"].find("access_level")
     assert element is not None
-    element.text = "PUBLIC"
+    element.text = "USER"
 
     problems = manifest_problems(manifest_root)
 
-    assert any("has to be 'USER'" in problem for problem in problems)
+    assert any("has to be 'PUBLIC'" in problem for problem in problems)
 
 
 def test_the_manifest_gate_rejects_an_unexpected_user_route(
@@ -850,9 +868,10 @@ def test_the_bootstrap_registration_declares_the_same_twelve_routes(
     manifest_root: etree._Element,
 ) -> None:
     """The json-info payload overrides the manifest, so a route that only lives in
-    appinfo/info.xml is not registered on the test instance at all. access_level travels as
-    a number there: 0 is PUBLIC and 1 is USER, and the one route that carries 1 is the one
-    the manifest declares as USER (CR-01)."""
+    appinfo/info.xml is not registered on the test instance at all, and a level that differs
+    between the two would make the local proof measure something the release does not do.
+    access_level travels as a number there: 0 is PUBLIC and 1 is USER, and every route of
+    this app carries 0 (CR-01, and the HaRP blacklist the counter probe above names)."""
     text = BOOTSTRAP.read_text(encoding="utf-8")
     assert text.count('"access_level":0') == DECLARED_ROUTES - len(ACCESS_LEVELS)
     assert text.count('"access_level":1') == len(ACCESS_LEVELS)

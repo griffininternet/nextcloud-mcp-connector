@@ -116,16 +116,36 @@ Every request runs under the identity of the signed in user, so an assistant nev
 		  - Nextcloud handed us, and it refuses to render an address that does not belong to
 		  - this instance.
 		  -
-		  - /authorize/decide is the decision behind that screen and the one route of this
-		  - app with access_level USER (CR-01). It is the request that turns a finished sign
-		  - in into an authorization code, and the flow id cannot authorise it: that value
-		  - belongs to whoever started the flow, which in the OAuth path is the client and
-		  - not the user, so a stranger could finish a sign in somebody else performed
-		  - (the Login Flow v2 relay). With USER, HaRP resolves the signed in Nextcloud
-		  - account and writes it into AUTHORIZATION-APP-API, and the app grants nothing
-		  - unless that account is the one the sign in produced. It is reachable exactly
-		  - when it has to be: a user who just signed in through Login Flow v2 is signed in
-		  - to Nextcloud in that browser, so the session is there when the form is posted.
+		  - /authorize/decide is the decision behind that screen (CR-01). It is the request
+		  - that turns a finished sign in into an authorization code, and the flow id cannot
+		  - authorise it: that value belongs to whoever started the flow, which in the OAuth
+		  - path is the client and not the user, so a stranger could finish a sign in
+		  - somebody else performed (the Login Flow v2 relay). What answers that is the
+		  - Nextcloud account behind the browser, and the app compares it with the account
+		  - whose sign in produced the authorization.
+		  -
+		  - It is PUBLIC anyway, because HaRP resolves that account on a PUBLIC route too:
+		  - it signs every forwarded request with AUTHORIZATION-APP-API and writes the
+		  - resolved account into it, empty when the caller sent no Nextcloud credential.
+		  - Measured on this exact route against a real HaRP: a browser session cookie, an
+		  - app password and an account password each arrive as the account they belong to,
+		  - and an anonymous caller arrives as the empty string, which is_user() never
+		  - accepts (docs/oauth-setup.md, "The CR-01 counter check").
+		  -
+		  - access_level USER was the first shape of this fix and it was withdrawn, because
+		  - HaRP does not only answer an anonymous request to a USER route with 403, it also
+		  - records that answer in a blacklist of its own: ten refusals from one address
+		  - inside HP_BLACKLIST_WINDOW (300 seconds by default, HP_BLACKLIST_COUNT of 10)
+		  - ban that address from the WHOLE ExApp, every route and every access level alike,
+		  - with 502. Refusals are not an anomaly on this route, they are its normal
+		  - traffic: the relay attempt itself, a browser whose session expired while the
+		  - consent screen was open, a resubmitted form, and the negative probe
+		  - scripts/oauth_flow_check.py sends on every run. So the access level meant to
+		  - harden one route took the whole connector down for the caller instead, while the
+		  - check that actually separates the two accounts stayed where it always was: in
+		  - the app, because HaRP cannot make it. The relay attacker holds a valid Nextcloud
+		  - account too, so "signed in" is not the question, "signed in as whom" is. Same
+		  - trade the /mcp route above documents, for the same reason.
 		-->
 		<routes>
 			<route>
@@ -179,7 +199,7 @@ Every request runs under the identity of the signed in user, so an assistant nev
 			<route>
 				<url>^/authorize/decide/?$</url>
 				<verb>POST</verb>
-				<access_level>USER</access_level>
+				<access_level>PUBLIC</access_level>
 				<headers_to_exclude>["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERSION","X-ORIGIN-IP"]</headers_to_exclude>
 			</route>
 			<route>

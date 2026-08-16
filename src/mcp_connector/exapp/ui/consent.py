@@ -72,11 +72,12 @@ __all__ = [
 CONSENT_PATH = "/authorize/consent"
 
 #: Where the decision of that surface is posted, and the reason it is a path of its own
-#: (CR-01). The screen has to be reachable by a browser that is not signed in yet, so it
-#: stays PUBLIC; the request that turns a sign in into a grant must not be, so it is
-#: declared ``USER`` in ``appinfo/info.xml`` and HaRP resolves the signed in Nextcloud
-#: account for it. The route compares that account with the one the sign in produced, so a
-#: flow id alone no longer decides anything.
+#: (CR-01). The screen shows what is being asked and grants nothing, so a browser that is
+#: not signed in yet may see it; the request that turns a sign in into a grant compares the
+#: Nextcloud account HaRP resolved with the one the sign in produced, so a flow id alone no
+#: longer decides anything. Both are PUBLIC in ``appinfo/info.xml``: HaRP resolves that
+#: account on a PUBLIC route too, and a ``USER`` declaration would feed its blacklist with
+#: every refusal this route exists to produce (see ``oauth/consent.py``).
 DECIDE_PATH = "/authorize/decide"
 
 #: The flow id travels as a query parameter. It is what connects this page to one running
@@ -204,9 +205,9 @@ def consent_page(
     * the deny button is rendered before the approve button, so the safe action is the one
       the keyboard reaches first,
     * the form carries the anti forgery value of exactly this flow as a hidden field,
-    * it posts to :data:`DECIDE_PATH` and not to this page: that route is declared ``USER``,
-      so the browser that decides has to be signed in to Nextcloud, and the route grants
-      nothing unless that account is the one this sign in produced (CR-01),
+    * it posts to :data:`DECIDE_PATH` and not to this page: that route grants nothing
+      unless the Nextcloud account behind the browser is the one this sign in produced,
+      which a browser that is not signed in cannot be (CR-01),
     * the initial focus is the heading and never the granting button, because a page that
       opens with that button focused turns a stray Enter key into a grant.
     """

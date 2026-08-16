@@ -32,14 +32,25 @@ creates the code only when the user approves. The denial path of that plan revok
 password again, and that is the one piece of housekeeping this state owes.
 
 **Why the decision has a route of its own.** The screen and the decision are two different
-security problems (CR-01). The screen has to be reachable by a browser that is not signed
-in to Nextcloud yet, because that is the state it exists for, so it is PUBLIC. The decision
-turns a sign in into a grant, and the only fact that says the person deciding is the person
-who signed in is the Nextcloud account behind the browser. So the decision lives at
-``/authorize/decide``, that route is declared ``USER`` in ``appinfo/info.xml``, HaRP
-resolves the account for it, and :func:`_decide` compares that account with the one the
-sign in produced. Without it the flow id alone decided, and the flow id belongs to whoever
+security problems (CR-01). The screen shows what a client is asking for and grants nothing,
+so a browser that has not signed in yet may see it. The decision turns a sign in into a
+grant, and the only fact that says the person deciding is the person who signed in is the
+Nextcloud account behind the browser. So the decision lives at ``/authorize/decide`` and
+:func:`_decide` compares the account HaRP resolved with the one the sign in produced.
+Without that comparison the flow id alone decided, and the flow id belongs to whoever
 started the flow.
+
+**Why that route is PUBLIC and not ``USER``.** HaRP resolves the Nextcloud account of a
+request on a PUBLIC route as well and writes it into ``AUTHORIZATION-APP-API``, empty when
+the caller sent no credential (``exapp/auth.appapi_user``), so the access level buys nothing
+the comparison below does not already do. It costs something, though: HaRP records every
+refusal of a ``USER`` route in a blacklist of its own, and ten of them from one address in
+five minutes answer that address with 502 on *every* route of this app, discovery documents
+and ``/mcp`` included. Refusals are this route's normal traffic, not an anomaly, so the
+level meant to harden it took the connector down for the caller instead. Measured, both
+halves, in ``docs/oauth-setup.md``. The comparison is also the only check that can tell the
+two apart: the relay attacker of CR-01 holds a valid Nextcloud account too, so the question
+is never "signed in" but "signed in as whom", and HaRP cannot answer that one.
 
 The route is a factory like every other one of this project and is attached by
 ``entry_exapp`` alone (D-23). The guards return a response instead of raising, so no
@@ -153,10 +164,10 @@ def consent_routes(
         """The other half: the decision, on a path of its own because it grants something.
 
         Split off the consent screen for CR-01. The screen may be anonymous, the decision
-        may not: this path is declared ``USER``, so HaRP resolves the signed in Nextcloud
-        account before this application sees the request, and :func:`_decide` refuses every
-        decision that does not come from the account whose sign in produced the
-        authorization.
+        may not: HaRP resolves the Nextcloud account behind the request and writes it into
+        the AppAPI header, and :func:`_decide` refuses every decision that does not come
+        from the account whose sign in produced the authorization. The route is PUBLIC and
+        the refusal is this application's own, for the reason the module docstring gives.
         """
         return await _decide(request, provider, env)
 
@@ -360,7 +371,9 @@ async def _decide(
     screen the victim was supposed to read is never shown to anybody. The anti forgery
     value could not answer that, because it is derived from the same flow id. The account
     that signed in can: it is the one fact of this request the party that started the flow
-    cannot produce, and HaRP puts it into the AppAPI header of a ``USER`` route.
+    cannot produce, and HaRP puts it into the AppAPI header of every request it forwards.
+    A caller without a Nextcloud credential arrives with an empty id, which :func:`is_user`
+    never accepts, so the anonymous case is refused here and needs no help from the proxy.
     """
     form = await request.form()
     flow_id = str(form.get(FLOW_PARAM) or "")
