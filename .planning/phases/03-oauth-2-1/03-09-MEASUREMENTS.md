@@ -278,9 +278,83 @@ the server that serves the path.
 After the measurement both rules were put back and the container restarted; the
 canonical paths answer 200 again.
 
+## Run 4: Cursor, 2026-08-16, RESULT: REFUSED at registration
+
+Cursor 3.2.16 on Windows, signed in. The server was added the plain way, by writing
+`~/.cursor/mcp.json`:
+
+```json
+{ "mcpServers": { "nextcloud-staging": { "url": "https://nc-staging.infranode.dev/exapps/mcp_connector/mcp" } } }
+```
+
+No click was needed: Cursor picks the file up on its own and starts connecting.
+
+### What happened
+
+```
+POST 401  /exapps/mcp_connector/mcp
+GET  200  /exapps/mcp_connector/.well-known/oauth-protected-resource/mcp
+GET  200  /.well-known/oauth-authorization-server/exapps/mcp_connector
+POST 400  /exapps/mcp_connector/register     (twice, two Cursor windows)
+```
+
+Cursor's own log carries our sentence verbatim:
+
+```
+Transient error connecting to streamableHttp server:
+redirect_uris must use https, except loopback addresses of native clients
+Connection failed: …
+```
+
+(`%APPDATA%\Cursor\logs\<session>\window1_wb0\exthost\anysphere.cursor-mcp\MCP user-<server>.log`)
+
+Note that Cursor reads the canonical root path, so with the two rewrite rules gone
+it would fail one step earlier; the run above was made with the rules restored, so
+the refusal measured here is ours and not a discovery accident.
+
+### What Cursor actually registers
+
+Our code never echoes a refused address, on purpose, so the payload was measured
+with a throwaway server on `http://127.0.0.1:8899` that answers the discovery chain
+and writes every body it receives (`scratchpad/dcr_probe.py`, not part of the repo).
+Cursor sent:
+
+```json
+{"redirect_uris":["cursor://anysphere.cursor-mcp/oauth/callback",
+                  "https://www.cursor.com/agents/mcp/oauth/callback",
+                  "http://localhost:8787/callback"],
+ "token_endpoint_auth_method":"none",
+ "grant_types":["authorization_code","refresh_token"],
+ "response_types":["code"],
+ "client_name":"Cursor"}
+```
+
+Client info in `initialize`: `cursor-vscode 1.0.0`, protocol version 2025-11-25.
+
+### Which of the three causes the refusal
+
+Three registrations against the live staging instance:
+
+| payload | result |
+| --- | --- |
+| exactly what Cursor sends | 400 `invalid_redirect_uri` |
+| the same, minus `cursor://…` | 201 |
+| `http://127.0.0.1:49731/callback` alone | 201 |
+
+So the loopback address is not the obstacle, D-35 admits it, random high port and
+all. The private-use URI scheme is, and because the check reads the whole field,
+one inadmissible entry sinks a registration that also carries two admissible ones.
+
+This answers BL-04 differently than it was written: the deferred question was
+whether exact redirect matching locks out local clients, and the measured answer is
+that our scheme rule locks out this one before matching ever happens. The port
+question behind BL-04 stays open, because Cursor uses a fixed port. Both points are
+now recorded in .planning/BACKLOG.md.
+
+The two probe registrations were deleted from the staging store afterwards, and
+`~/.cursor/mcp.json` was removed again.
+
 ## Still open
 
-- Cursor: not required by phase 3, but it is the only client class with a loopback
-  redirect (`http://127.0.0.1:<port>`), the class that BACKLOG BL-04 defers. The
-  staging instance is the cheap moment to learn whether exact redirect matching
-  locks out local clients as a whole.
+- Nothing from this plan. The counter measurement and the Cursor question are both
+  answered above.
