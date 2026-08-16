@@ -98,3 +98,9 @@ _.created_at
 _.revoked_at
 _.issued_at
 _.used_at
+
+# --- The policy of AUTH-07, between two commits of plan 03-05 --------------------------
+# allows: the question the enforcement point asks. Its production caller is get_client in
+# oauth/provider.py, which is the next task of the same plan; until then only
+# tests/unit/test_oauth_registry.py drives it. This entry leaves the list with that task.
+_.allows
