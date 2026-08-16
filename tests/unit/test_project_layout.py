@@ -75,3 +75,26 @@ def test_package_exposes_version_without_side_effects() -> None:
 def pyproject_version() -> str:
     with PYPROJECT.open("rb") as handle:
         return tomllib.load(handle)["project"]["version"]
+
+
+def test_every_exapp_integration_suite_runs_in_the_exapp_job() -> None:
+    """WR-11: a check that runs in no job is a check nobody runs.
+
+    The suites that need the HaRP topology skip everywhere else for lack of the ExApp
+    variables, so the ``exapp`` job of the workflow is the only place they can run at all.
+    The OAuth flow suite, the five checks that prove phase 3 end to end, was not named
+    there, so it was green only when somebody ran it by hand.
+    """
+    workflow = (Path(__file__).resolve().parents[2] / ".github" / "workflows" / "ci.yml").read_text(
+        encoding="utf-8"
+    )
+    suites = sorted(
+        path.name
+        for path in (Path(__file__).resolve().parents[2] / "tests" / "integration").glob(
+            "*_exapp.py"
+        )
+    )
+
+    assert suites, "no ExApp integration suite found, the guard would silently pass"
+    for name in suites:
+        assert name in workflow, f"{name} runs in no CI job"

@@ -104,6 +104,16 @@ jobs:
         run: |
           set -a && . ./.env.exapp && set +a
           uv run pytest tests/integration/test_permission_fidelity_exapp.py -m integration
+      - name: The OAuth connection over the full chain (AUTH-02, AUTH-03, SC 4, SC 5)
+        # The five checks that prove phase 3: a token from the flow serves a tool call over
+        # the chain, it survives a restart of the container, two accounts stay two, a
+        # revocation takes effect immediately, and the throttle answers 429. They are the
+        # only checks that walk the whole authorization flow, and they ran in no job at all
+        # until WR-11: the integration job has no ExApp variables, so their fixture skipped
+        # there, and every regression in the flow shipped unnoticed.
+        run: |
+          set -a && . ./.env.exapp && set +a
+          uv run pytest tests/integration/test_oauth_flow_exapp.py -m integration
       - name: Topology and ExApp logs on failure
         if: failure()
         run: |
