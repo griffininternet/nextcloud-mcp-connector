@@ -545,6 +545,56 @@ async def test_a_confidential_client_without_its_secret_is_refused(tmp_path: Pat
 
 
 @pytest.mark.anyio
+async def test_a_row_that_asks_for_a_secret_and_has_none_is_refused(tmp_path: Path) -> None:
+    """WR-01: the SDK authenticator refuses "registered for a secret and has none stored",
+    and this override read the same state as "a public client, let it in". Any row written
+    another way than through the shipped registration path would then have authenticated
+    with no credential at all."""
+    subject, store = await approved(tmp_path, secret=SECRET)
+    row = await store.load_client(CLIENT_ID)
+    assert row is not None
+    await store.save_client(
+        CLIENT_ID,
+        metadata_json=row.metadata_json,
+        allowed=True,
+        secret_hash=None,
+    )
+
+    with serving(subject) as http:
+        without = http.post("/token", data=token_request())
+        with_one = http.post("/token", data=token_request(client_secret=SECRET))
+
+    assert without.status_code == 401
+    assert with_one.status_code == 401
+    assert without.json()["error"] == "invalid_client"
+    assert await store.load_auth_code(CODE) is not None, "the code was not spent"
+
+
+@pytest.mark.anyio
+async def test_a_client_secret_that_ran_out_stops_working(tmp_path: Path) -> None:
+    """WR-01: nothing compared client_secret_expires_at against a clock, so an expired
+    secret kept working. Not reachable with the shipped default (never), which is why it is
+    a warning, and live the moment an administrator sets an expiry."""
+    subject, store = await approved(tmp_path, secret=SECRET)
+    registered = registration(secret=SECRET)
+    registered.client_secret_expires_at = int(time.time()) - 1
+    row = await store.load_client(CLIENT_ID)
+    assert row is not None
+    await store.save_client(
+        CLIENT_ID,
+        metadata_json=registered.model_dump_json(),
+        allowed=True,
+        secret_hash=row.client_secret_hash,
+    )
+
+    with serving(subject) as http:
+        response = http.post("/token", data=token_request(client_secret=SECRET))
+
+    assert response.status_code == 401
+    assert response.json()["error"] == "invalid_client"
+
+
+@pytest.mark.anyio
 async def test_a_wrong_pkce_verifier_is_refused_by_the_sdk(tmp_path: Path) -> None:
     """The checks the SDK owns stay the SDK's, and this proves they are still in the path."""
     subject, _store = await approved(tmp_path)

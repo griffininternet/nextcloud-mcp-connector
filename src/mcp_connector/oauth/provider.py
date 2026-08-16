@@ -91,7 +91,13 @@ from ..errors import ToolError
 from ..exapp.responses import NO_STORE, json_response
 from ..exapp.ui.consent import consent_url
 from . import loginflow
-from .metadata import AS_METADATA_SUFFIX, REFRESH_SCOPE, RESOURCE_SUFFIX, TOOL_SCOPE
+from .metadata import (
+    AS_METADATA_SUFFIX,
+    PUBLIC_CLIENT_AUTH_METHOD,
+    REFRESH_SCOPE,
+    RESOURCE_SUFFIX,
+    TOOL_SCOPE,
+)
 from .registry import (
     IDLE_REGISTRATION_TTL,
     UNUSED_REGISTRATION_TTL,
@@ -1086,6 +1092,14 @@ class HashedClientAuthenticator(ClientAuthenticator):
             logger.error("a client could not be authenticated: %s", type(exc).__name__)
             raise AuthenticationError("The client could not be authenticated") from None
         if stored is None:
+            if client.token_endpoint_auth_method != PUBLIC_CLIENT_AUTH_METHOD:
+                # A registration that asked for a secret and has none stored is not a
+                # public client, it is a row nothing can be verified against, and the SDK
+                # authenticator refuses exactly this case. Reading it as "no secret, so no
+                # check" would authenticate such a client with no credential at all
+                # (WR-01, fail closed D-37).
+                logger.error("a client registered for a secret has none stored and is refused")
+                raise AuthenticationError("The client could not be authenticated")
             # A public client. The SDK treats a registration without a secret the same way,
             # and PKCE is what authenticates the exchange (OAuth 2.1, S256 enforced).
             return client
@@ -1098,6 +1112,13 @@ class HashedClientAuthenticator(ClientAuthenticator):
         # comparison that stops early leaks its prefix over enough attempts (T-01-24).
         if not secrets.compare_digest(token_hash(presented), stored):
             raise AuthenticationError("Invalid client_secret")
+        expires_at = client.client_secret_expires_at
+        if expires_at and expires_at < self._provider._now():
+            # The second guard of the SDK authenticator this override used to drop: a
+            # secret that ran out keeps working while nobody compares it against a clock.
+            # The default of this deployment is "never", so this is the guard for the
+            # installation that sets client_secret_expiry_seconds (WR-01).
+            raise AuthenticationError("The client could not be authenticated")
         return client
 
 
