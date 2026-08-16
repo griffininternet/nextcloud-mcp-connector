@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Server-Kern** - Alle Kern-Tools, stdio und Streamable HTTP mit App-Passwort; App-ID-Freeze und context_agent-Fix (completed 2026-08-14)
 - [x] **Phase 2: ExApp-Shell** - Installation über AppAPI, Berechtigungs-Durchgriff, Discovery- und DAV-Spikes
  (completed 2026-08-15)
-- [ ] **Phase 3: OAuth 2.1** - Spec-konformes OAuth mit E2E-Beweis gegen Claude.ai und ChatGPT, Login Flow v2 als Fallback
+- [x] **Phase 3: OAuth 2.1** - Spec-konformes OAuth mit E2E-Beweis gegen Claude.ai und ChatGPT, Login Flow v2 als Fallback (completed 2026-08-16)
 - [ ] **Phase 4: Per-User-Verwaltung und prepare_context** - Settings-UI mit Token-Kontrolle plus Bündel-Tool
 - [ ] **Phase 5: Hardening und Store-Einreichung** - Sicherheits-Tests, Signatur, Listing, Client-Doku vor der Conference
 
