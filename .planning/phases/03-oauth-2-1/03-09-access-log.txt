@@ -1,8 +1,9 @@
 Access log excerpts of the hosted connector runs, plan 03-09.
 
 Source: the Caddy access log of the staging instance https://nc-staging.infranode.dev
-on 2026-08-16 (UTC). The instance was deleted right after this file was written, so
-these lines are the archived evidence behind AUTH-04 and behind the tables in
+on 2026-08-16 (UTC). The instance was torn down the same day, between 09:25 and 09:29
+UTC, with the four steps and their timestamps recorded in 03-SECURITY.md, so these
+lines are the archived evidence behind AUTH-04 and behind the tables in
 docs/oauth-setup.md.
 
 Format: time, method, status, path, duration, User-Agent (truncated).

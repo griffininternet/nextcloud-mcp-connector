@@ -943,3 +943,46 @@ async def _seed_connection(deployment: Deployment) -> None:
         auth_id="the-connection-of-that-consent",
         family_id="the-family-of-that-consent",
     )
+
+
+def test_no_module_under_src_automates_a_nextcloud_sign_in() -> None:
+    """AR-03-03: the gate that scripts/oauth_flow_check.py says exists.
+
+    The measurement script drives a Nextcloud sign in with a test account's password,
+    because a browser is the only actor that can perform one, and its docstring promises
+    that no product code does the same. The promise was written down and never enforced;
+    this is the enforcement.
+
+    Two properties, both read as code with docstrings and comments stripped:
+
+    1. No file under ``src/`` mentions ``requesttoken``. That is the anti forgery field of
+       Nextcloud's sign in form, and nothing but a form filler needs it.
+    2. The only Login Flow v2 paths the product knows are the two this app calls itself,
+       plus the marker ``consent.py`` compares a returned link against (WR-07). The page
+       where a password is typed, ``/login/v2/grant``, is not among them, and neither is
+       the sign in form at ``/login``.
+
+    What this does not prove: that no future code posts a password to some other address.
+    A gate over strings cannot; it can only keep the shortcut of the measurement script
+    from quietly becoming a pattern.
+    """
+    allowed = {
+        ("oauth/loginflow.py", "/index.php/login/v2"),
+        ("oauth/loginflow.py", "/login/v2/poll"),
+        ("oauth/consent.py", "/login/v2/flow"),
+    }
+    root = Path(__file__).resolve().parents[2] / "src" / "mcp_connector"
+    found: set[tuple[str, str]] = set()
+
+    for path in sorted(root.rglob("*.py")):
+        where = path.relative_to(root).as_posix()
+        code = _executable(path.read_text(encoding="utf-8"))
+
+        assert "requesttoken" not in code, f"{where} carries the sign in form's anti forgery field"
+        assert "/login/v2/grant" not in code, f"{where} names the page that grants a sign in"
+
+        for literal in re.findall(r"[\"']([^\"']*login/v2[^\"']*)[\"']", code):
+            found.add((where, literal))
+
+    unexpected = found - allowed
+    assert not unexpected, f"a module under src/ knows a sign in path it should not: {unexpected}"

@@ -29,8 +29,11 @@ screen. :func:`sign_in` drives the first one over plain HTTP with the account pa
 a throwaway test user, exactly as a browser would: it asks for the sign in page, posts the
 form with the anti forgery value Nextcloud rendered, and presses "Grant access". This
 exists for the test topology and nowhere else. No module under ``src/`` contains a login
-automation, no product code ever sees a user password, and ``tests/unit/test_oauth_abuse``
-keeps a gate over ``src/`` that says so.
+automation, no product code ever sees a user password, and
+``test_no_module_under_src_automates_a_nextcloud_sign_in`` in ``tests/unit/test_oauth_abuse``
+keeps a gate over ``src/`` that says so: no file there carries the anti forgery field of
+the sign in form, and the only Login Flow v2 paths the product knows are the two it calls
+itself plus the marker a returned link is compared against.
 
 The decision needs the same actor for a second reason since CR-01: HaRP resolves the
 Nextcloud account of every request it forwards, and the app grants nothing unless that

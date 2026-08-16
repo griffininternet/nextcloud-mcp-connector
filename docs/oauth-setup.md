@@ -649,6 +649,17 @@ failure looks like a working installation until the first restart.
 intended reading and it is checked in four places, so a client that is blocked after its
 token was issued stops working immediately rather than at the next expiry.
 
+**On an instance that is reachable from the internet, run one of the two switches.** Either
+`NC_MCP_OAUTH_ALLOWLIST_ONLY=1` with the clients you actually want, or
+`NC_MCP_OAUTH_DCR=0` if you register your clients by hand. With both off, anybody who can
+reach the URL can create a client registration. That alone hands out no data, because an
+authorization additionally requires an account on this instance and the decision is bound
+to the account that signed in, and the throttle caps the attempts. But an open registration
+endpoint on a public host is an invitation nobody needs to accept, and the deliberate
+exception is a short measurement window, not an operating mode. This project ran such a
+window itself, for the connector proof of 2026-08-16, and closed it by deleting the
+instance the same day.
+
 **A connection is granted by the account that signed in, and by nobody else.** The consent
 screen is reachable with a flow id alone, because a browser that has not signed in yet has
 nothing else, but the decision behind it is not. HaRP resolves the Nextcloud account of

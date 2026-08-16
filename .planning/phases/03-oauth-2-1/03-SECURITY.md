@@ -1,8 +1,8 @@
 ---
 phase: 3
 slug: oauth-2-1
-status: open
-threats_open: 3
+status: verified
+threats_open: 0
 asvs_level: 1
 created: 2026-08-16
 ---
@@ -40,10 +40,14 @@ created: 2026-08-16
 
 ## Threat Register
 
-70 Positionen: 68 `mitigate`, 2 `accept`. 67 closed, 3 open (T-03-80, T-03-82, T-03-84;
-alle drei betreffen nicht den Code, sondern den nicht belegten Rückbau der öffentlichen
-Staging-Instanz). Belege verkürzt; jede Zeile wurde einzeln gegen den Quelltext geprüft,
-nicht gegen die SUMMARYs.
+70 Positionen: 68 `mitigate`, 2 `accept`. **70 closed, 0 open.** Belege verkürzt; jede
+Zeile wurde einzeln gegen den Quelltext geprüft, nicht gegen die SUMMARYs.
+
+Das Audit vom 16.08.2026 hatte drei Positionen offen gelassen (T-03-80, T-03-82, T-03-84).
+Alle drei betrafen nicht den Code, sondern den zu diesem Zeitpunkt noch nicht ausgeführten
+Rückbau der öffentlichen Staging-Instanz. Der Rückbau ist am selben Tag zwischen 09:25 und
+09:29 UTC vollzogen worden; der Beleg steht im Abschnitt "Teardown der Staging-Instanz"
+weiter unten und schließt die drei Positionen.
 
 ### Plan 03-01: Discovery und Bearer-Grenze
 
@@ -146,18 +150,18 @@ nicht gegen die SUMMARYs.
 | T-03-71 | Repudiation | docs/oauth-setup.md | mitigate | Evidence-Abschnitt nennt Kommando und Datum (`:4,174,209`); der `invalid_scope`-Fehlschlag von ChatGPT ist als Fehlschlag dokumentiert (03-09-SUMMARY, MEASUREMENTS) | closed |
 | T-03-72 | DoS | scripts/bootstrap_exapp.sh | mitigate | Eigener Port 8081, eigener Projektname mit Prüfung (`bootstrap_exapp.sh:77,155`); `compose.test.yml` wird nicht angefasst; Verifier bestätigt: `nc-mcp-test` und `findling-nextcloud` unberührt | closed |
 | T-03-73 | Tampering | scripts/oauth_flow_check.py | mitigate | Der Lauf widerruft die erzeugte Verbindung und löscht die eine geschriebene Notiz (`oauth_flow_check.py:624-638,879-880`); Endzustand im SUMMARY | closed |
-| T-03-74 | Info Disclosure | scripts/, src/ | mitigate | Der Abkürzungsweg (`sign_in`, `requesttoken`) liegt nur in `scripts/oauth_flow_check.py` mit Kommentar; im Audit per Grep über `src/` bestätigt: keine Login-Automatisierung mit Nutzerpasswort. **Das deklarierte automatische Grep-Gate existiert nicht** (`test_oauth_abuse.py` prüft nur `provider.py`/`verifier.py` auf Schleifen). Restrisiko AR-03-03 | closed |
+| T-03-74 | Info Disclosure | scripts/, src/ | mitigate | Der Abkürzungsweg (`sign_in`, `requesttoken`) liegt nur in `scripts/oauth_flow_check.py` mit Kommentar; im Audit per Grep über `src/` bestätigt: keine Login-Automatisierung mit Nutzerpasswort. Das im Audit fehlende automatische Gate wurde direkt danach gebaut (`test_no_module_under_src_automates_a_nextcloud_sign_in`), siehe AR-03-03 | closed |
 | T-03-75 | DoS | tests, docs | mitigate | Serie läuft mit ungültigen Bearern statt falschen Passwörtern; Gegenprobe "Anmeldung danach normal" im Verifier reproduziert (`03-VERIFICATION.md`, SC 5) | closed |
 
 ### Plan 03-09: Hosted Connectors gegen die öffentliche Instanz
 
 | Threat ID | Category | Component | Disposition | Mitigation (Beleg) | Status |
 |-----------|----------|-----------|-------------|--------------------|--------|
-| T-03-80 | Info Disclosure | Staging-Instanz | mitigate | Zwei Teile belegt: Wegwerf-Topologie mit eigenen Testkonten (`compose.staging.yml`, `docs/staging-setup.md`), getrennt von produktiven Daten. **Dritter Teil unbelegt:** kein Nachweis, dass die Verbindungen nach dem Lauf widerrufen wurden; die Instanz antwortet am 2026-08-16 um 09:17 UTC weiterhin | **open** |
+| T-03-80 | Info Disclosure | Staging-Instanz | mitigate | Alle drei Teile belegt: Wegwerf-Topologie mit eigenen Testkonten (`compose.staging.yml`, `docs/staging-setup.md`), getrennt von produktiven Daten, und der Widerruf am 2026-08-16 um 09:26 UTC, gefolgt von der Zerstörung der Instanz um 09:28 UTC. Beleg unten | closed |
 | T-03-81 | Info Disclosure | 03-09-Artefakte | mitigate | Gate im Audit nachgezogen über `03-09-MEASUREMENTS.md` und `03-09-access-log.txt`: keine 64-stellige Hex-Kette, kein Tokenwert; Query-Strings abgeschnitten, Flow-Token gekürzt | closed |
-| T-03-82 | Elevation | Staging-Instanz, docs | mitigate | **Beide Teile fehlen.** Live gemessen 09:17/09:20 UTC: die AS-Metadaten führen weiterhin `registration_endpoint` (DCR an; bei `dcr_enabled=False` fällt das Feld weg), und `GET /authorize?client_id=<unbekannt>` antwortet mit E3 statt E1, also Allowlist aus. Die Security notes von `docs/oauth-setup.md` erklären den Allowlist-Modus, empfehlen ihn aber für öffentlich erreichbare Instanzen nicht | **open** |
+| T-03-82 | Elevation | Staging-Instanz, docs | mitigate | Die offene Registrierung endete mit der Instanz selbst (09:28 UTC, Beleg unten); der Weg über Allowlist oder DCR-Schalter wurde damit gegenstandslos. Der Dokumentationsteil ist nachgetragen: die Security notes von `docs/oauth-setup.md` verlangen jetzt für jede aus dem Internet erreichbare Instanz ausdrücklich einen der beiden Schalter | closed |
 | T-03-83 | Repudiation | REQUIREMENTS.md, 03-09 | mitigate | AUTH-04 nur mit Beleg abgehakt: Request-Ketten, Client-Ids, Redirect-URIs, Zeiten (`03-09-MEASUREMENTS.md`) plus archivierter Access-Log (`03-09-access-log.txt`, Commit `e32a084`); der Teilfehlschlag von ChatGPT ist benannt, Cursor bleibt ausdrücklich offen (BL-04) | closed |
-| T-03-84 | DoS | Registry, Staging | mitigate | Ein Teil belegt: unbenutzte Registrierungen verfallen nach 24 Stunden (`store.py:109`, `provider.py:326-333`). **Zweiter Teil unbelegt:** kein Nachweis, dass die erzeugten Verbindungen widerrufen wurden; `docs/oauth-setup.md` hält im Gegenteil fest, dass das Entfernen des Connectors im Client nichts widerruft | **open** |
+| T-03-84 | DoS | Registry, Staging | mitigate | Beide Teile belegt: unbenutzte Registrierungen verfallen nach 24 Stunden (`store.py:109`, `provider.py:326-333`), und die drei benutzten Verbindungen wurden am 2026-08-16 um 09:26 UTC in Nextcloud widerrufen, nicht nur im Client entfernt. Der Store selbst wurde mit seinem Volume zerstört | closed |
 | T-03-85 | Spoofing | docs/oauth-setup.md | mitigate | Die Redirect-URI stammt aus dem echten Registrierungsrequest, nicht aus einer Community-Quelle; Annahme A1 wurde dadurch ersetzt (`docs/oauth-setup.md:158`, 03-09-SUMMARY) | closed |
 
 *Status: open, closed*
@@ -166,6 +170,12 @@ nicht gegen die SUMMARYs.
 ---
 
 ## Open Threats (BLOCKER für den Phasenabschluss)
+
+> **Nachtrag vom 2026-08-16, 09:29 UTC: alle drei sind geschlossen.** Der Befund des
+> Audits stimmte, der Rückbau war zum Zeitpunkt der Messung wirklich nicht ausgeführt.
+> Er wurde unmittelbar danach vollzogen; der Beleg steht im Abschnitt "Teardown der
+> Staging-Instanz". Der Befund bleibt hier unverändert stehen, weil ein Audit-Bericht,
+> der nachträglich umgeschrieben wird, seinen Zweck verliert.
 
 Alle drei betreffen denselben Sachverhalt: der Rückbau beziehungsweise die Härtung der
 öffentlichen Staging-Instanz ist deklariert, aber nicht belegt, und die Instanz läuft zum
@@ -206,7 +216,7 @@ gedrosselt auf 20 je Quelle und fünf Minuten.
 |---------|------------|-----------|-------------|------|
 | AR-03-01 | T-03-08 | Kein Rate-Limit auf den drei PUBLIC-Discovery-Routen; die Antworten sind statisch, klein und ohne Datenbankzugriff, die Auth-Pfade sind gedrosselt | Owner (Plan 03-01) | 2026-08-16 |
 | AR-03-02 | T-03-48 | Ein Nextcloud-Roundtrip je Autorisierungsantrag; er liegt ausschließlich im Browserpfad mit großzügigem Zeitbudget, nie im Token-Pfad, und wird über `CLASS_AUTHORIZE_START` begrenzt | Owner (Plan 03-05) | 2026-08-16 |
-| AR-03-03 | T-03-74 | Das deklarierte Grep-Gate über `src/` gegen Login-Automatisierung mit Nutzerpasswort existiert nicht; die Eigenschaft selbst wurde in diesem Audit per Grep bestätigt. Zusätzlich behauptet der Modul-Docstring von `scripts/oauth_flow_check.py` ein Gate in `tests/unit/test_oauth_abuse`, das dort nicht steht. Restrisiko ist eine Regression ohne Wächter, kein aktueller Defekt | Audit 2026-08-16 | 2026-08-16 |
+| AR-03-03 | T-03-74 | ~~Das deklarierte Grep-Gate über `src/` existiert nicht~~ **ERLEDIGT am 2026-08-16, direkt nach dem Audit.** Der Befund stimmte. Das Gate ist jetzt gebaut: `test_no_module_under_src_automates_a_nextcloud_sign_in` prüft jede Datei unter `src/` gegen `requesttoken` und `/login/v2/grant` und lässt nur die drei Login-Flow-Pfade zu, die das Produkt wirklich kennt. Ohne die Eigenschaft ist der Test rot, gegengeprüft mit einer Probedatei. Der Docstring von `scripts/oauth_flow_check.py` nennt den Test jetzt beim Namen und beschreibt, was er leistet und was nicht | Audit 2026-08-16, geschlossen am selben Tag | 2026-08-16 |
 | AR-03-04 | AR-02-04 (Phase 2) | `/mcp` ist seit Plan 03-01 PUBLIC und trägt bewusst keine Drosselung: das anonyme 401 mit `resource_metadata` muss aus der App kommen, und Tool-Aufrufe zu drosseln wäre die eigene Dienstverweigerung. Die Identitätsprüfung liegt dafür in `exapp/middleware.py`. Kosten je anonymem Request: ein HaRP-Lookup. Dokumentiert in `docs/oauth-setup.md`, Security notes | Phase 3 (Plan 03-01), Nachtrag in 02-SECURITY.md | 2026-08-16 |
 | AR-03-05 | WR-09 (Review, ohne Threat-Id) | Ein fehlendes `NC_MCP_PUBLIC_URL` degradiert im ExApp-Modus still auf `http://127.0.0.1:8765`; `entry_exapp.main` schlägt für Volume und Issuer fehl, für diesen Wert nicht. Jeder Installationsweg dieses Repos setzt ihn. Vor Phase 5 SC 2 schließen | Owner, Verifier-Concern C-02 | 2026-08-16 |
 | AR-03-06 | WR-08 (Review), berührt T-03-24 | Die Ablehnungsseiten E1 und E2 geben bis zu 80 Zeichen eines vom Angreifer gewählten `client_id` als Fließtext wieder (escaped und gesäubert, keine Markup-Injektion). Erreichbar nur mit `allowlist_only=on` oder `dcr=off`. Für die Store-Einreichung vor Phase 5 prüfen | Owner (Review offen gelassen) | 2026-08-16 |
@@ -264,13 +274,45 @@ Anmerkungen aus dem Audit:
 
 ---
 
+## Teardown der Staging-Instanz (Beleg für T-03-80, T-03-82, T-03-84)
+
+Ausgeführt am **2026-08-16** nach `docs/staging-setup.md` Abschnitt 6, alle vier Schritte,
+unmittelbar nach dem Audit. Zeiten in UTC, gemessen auf der Instanz beziehungsweise am
+Client.
+
+| Zeit | Schritt | Beleg |
+|------|---------|-------|
+| 09:25:12 | Ausgangszustand aufgenommen | drei Einträge unter Devices and sessions von alice (`MCP Connector: Claude` zweimal, `MCP Connector: ChatGPT`), im OAuth-Store 1 Client, 1 Autorisierung, 1 Access- und 1 Refresh-Token |
+| 09:25:49 | Connector in Claude.ai entfernt | Liste danach ohne Eintrag |
+| 09:26:33 | Plugin in ChatGPT gelöscht | Liste danach ohne Eintrag |
+| 09:26:50 | **Widerruf in Nextcloud**, der Schritt, den das Entfernen im Client nicht leistet | `occ user:auth-tokens:delete alice {4,12,18}`, danach null Einträge mit `MCP Connector` |
+| 09:27:05 | Topologie mit Daten zerstört | `docker compose --env-file .env.staging -f compose.staging.yml down -v`, alle vier Volumes entfernt, darunter der Zertifikatsspeicher |
+| 09:27:17 | ExApp-Container und Token-Store entfernt | `docker rm -f nc_app_mcp_connector`, `docker volume rm nc_app_mcp_connector_data`; danach 0 Container, 0 Volumes; `/mcp` von außen ohne Antwort |
+| 09:28:25 | Virtuelle Maschine gelöscht | Hetzner, Server 162335572 `nc-staging`, beide primären IP-Adressen mitgelöscht statt reserviert |
+| 09:28:47 | DNS-Eintrag gelöscht | Cloudflare-API, A-Record `nc-staging.infranode.dev`, danach null Records für den Namen |
+| 09:29 | Gegenprobe | Namensauflösung leer, HTTPS ohne Route, SSH auf 178.104.71.131 im Timeout. Die beiden InfraNode-Boxen laufen unverändert weiter, `https://infranode.dev/` antwortet 200 |
+
+Die zwei Geheimnisdateien der Instanz (`.env.staging`, `.env.staging.app`) haben die
+Maschine nie verlassen und sind mit ihr verschwunden. Der archivierte Access-Log-Auszug
+`03-09-access-log.txt` ist das, was von der Instanz bleibt, und er enthält keine
+Zugangsdaten.
+
+Damit ist auch die Frage beantwortet, die `docs/staging-setup.md` an den Teardown geknüpft
+hat: der Widerruf muss in Nextcloud geschehen. Das Entfernen des Connectors in Claude.ai
+allein lässt die Autorisierung am Leben, gemessen in Lauf 3 des Plans 03-09.
+
+---
+
 ## Sign-Off
 
 - [x] Alle 70 Positionen tragen eine Disposition (68 mitigate, 2 accept, 0 transfer)
 - [x] Jede Position wurde nach ihrer Disposition geprüft, keine übersprungen
 - [x] Akzeptierte Restrisiken mit Id, Begründung, Owner und Datum eingetragen (AR-03-01 bis AR-03-10)
-- [ ] `threats_open: 0` erreicht: **nein, 3 offen** (T-03-80, T-03-82, T-03-84)
-- [ ] `status: verified` gesetzt: **nein**, `status: open`
+- [x] `threats_open: 0` erreicht, nach dem belegten Teardown vom 2026-08-16
+- [x] `status: verified` gesetzt
 
-**Freigabe:** verweigert bis zum belegten Teardown beziehungsweise zur Härtung der
-Staging-Instanz. Keine Implementierungsdatei wurde in diesem Audit geändert.
+**Freigabe:** erteilt. Die drei zunächst offenen Positionen betrafen ausschließlich den
+Rückbau der öffentlichen Staging-Instanz und sind durch den Teardown geschlossen, nicht
+durch eine Umdeutung. Im Audit selbst wurde keine Implementierungsdatei geändert; die
+danach nachgetragene Empfehlung in `docs/oauth-setup.md` und das Gate zu AR-03-03 sind
+gesondert committet.
