@@ -104,6 +104,13 @@ __all__ = [
 #: connection.
 CODE_BYTES = 32
 
+#: The one path shape a Login Flow v2 grant page has: Nextcloud builds it as
+#: ``<base>/index.php/login/v2/flow/<token>`` and answers it as ``/login/v2/flow/<token>``
+#: behind a prefix rewrite, so the marker is the part both spellings share. Checked as a
+#: substring and not as a prefix on purpose: the base of an instance may carry a path of
+#: its own, and what has to be excluded is every *other* page of that host (WR-07).
+_LOGIN_PATH_MARKER = "/login/v2/flow"
+
 logger = logging.getLogger("mcp_connector.oauth.consent")
 
 
@@ -522,12 +529,19 @@ def _confirmed(store: OAuthStore, flow_id: str, presented: str) -> bool:
 def _sign_in_link(candidate: str, env: Mapping[str, str] | None) -> str:
     """The Nextcloud sign in address, or an empty string when it is not one.
 
-    Two checks, and both are about the same question: does this address belong to the
-    Nextcloud this app is deployed against. The scheme is checked because a link is
-    clicked, and the host because the value travelled through the browser and anybody can
-    write a URL. The two accepted hosts are the configured Nextcloud and the configured
-    public address of this app, which in every supported topology are the same domain: the
-    ExApp lives under it, and Nextcloud builds its sign in address from ``overwrite.cli.url``.
+    Three checks, and all of them are about the same question: is this the address of the
+    Login Flow v2 page of the Nextcloud this app is deployed against. The scheme is checked
+    because a link is clicked, the host because the value travelled through the browser and
+    anybody can write a URL, and the path because the host alone is not an answer (WR-07):
+    every page of that host passed, and a sign in page with an attacker chosen
+    ``redirect_url``, a public share or anything else that renders on that origin would
+    have stood behind the primary button of a page whose whole purpose is to be
+    trustworthy.
+
+    The two accepted hosts are the configured Nextcloud and the configured public address
+    of this app, which in every supported topology are the same domain: the ExApp lives
+    under it, and Nextcloud builds its sign in address from ``overwrite.cli.url``. The path
+    of a Login Flow v2 grant page has one shape, and :data:`_LOGIN_PATH_MARKER` is it.
     """
     if not candidate:
         return ""
@@ -540,6 +554,9 @@ def _sign_in_link(candidate: str, env: Mapping[str, str] | None) -> str:
     }
     if parts.netloc not in known - {""}:
         logger.warning("a sign in link of a foreign host was not rendered")
+        return ""
+    if _LOGIN_PATH_MARKER not in parts.path:
+        logger.warning("a sign in link with a foreign path was not rendered")
         return ""
     return candidate
 

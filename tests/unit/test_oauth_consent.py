@@ -1152,19 +1152,53 @@ def test_every_link_of_a_page_carries_the_public_prefix(store: OAuthStore) -> No
         assert target.startswith(PREFIX), target
 
 
-def test_a_sign_in_link_of_a_foreign_host_is_not_rendered(store: OAuthStore) -> None:
-    """The link is the one place this surface sends a user away from here (T-03-42)."""
+@pytest.mark.parametrize(
+    ("link", "why"),
+    [
+        ("https://evil.example/login", "a foreign host"),
+        (
+            f"https://{HOST}/index.php/login?redirect_url=https://evil.example/",
+            "the sign in page of the right host with a return address of the wrong one",
+        ),
+        (f"https://{HOST}/s/public-share-token", "a public share on the right host"),
+        (f"https://{HOST}/", "the front page of the right host"),
+        (f"https://{HOST}/index.php/login/v2", "the endpoint that starts a flow, not the page"),
+    ],
+    ids=["foreign host", "open redirect", "public share", "front page", "the start endpoint"],
+)
+def test_a_sign_in_link_that_is_not_the_login_flow_page_is_not_rendered(
+    store: OAuthStore, link: str, why: str
+) -> None:
+    """The link is the one place this surface sends a user away from here (T-03-42).
+
+    The host was the whole check until WR-07, so every page of the configured Nextcloud
+    passed: the primary button of a page whose purpose is to be trustworthy could be
+    pointed at a sign in with an attacker chosen redirect_url, at a public share, or at
+    anything else that renders on that origin. The path of a Login Flow v2 grant page has
+    one shape, and everything else is refused."""
     provider = make(store)
     register(provider)
     client, flow_id, _target = opened(provider)
 
     with respx.mock:
         respx.post(POLL_URL).mock(return_value=httpx.Response(404))
-        response = client.get(
-            f"{consent_url(flow_id)}&{ui_consent.LOGIN_PARAM}=https://evil.example/login"
-        )
+        response = client.get(f"{consent_url(flow_id)}&{ui_consent.LOGIN_PARAM}={link}")
 
-    assert "evil.example" not in response.text
+    assert link not in response.text, why
+    assert strings.SIGNIN_CTA not in response.text, "no button stands in front of it either"
+
+
+def test_the_login_flow_page_of_this_instance_is_rendered(store: OAuthStore) -> None:
+    """The counter probe: the check must not refuse the one address it exists to allow."""
+    provider = make(store)
+    register(provider)
+    client, flow_id, _target = opened(provider)
+
+    with respx.mock:
+        respx.post(POLL_URL).mock(return_value=httpx.Response(404))
+        response = client.get(f"{consent_url(flow_id)}&{ui_consent.LOGIN_PARAM}={LOGIN_URL}")
+
+    assert f'href="{LOGIN_URL}"' in response.text
 
 
 def test_the_routes_are_declared_in_the_manifest_and_served_by_the_application() -> None:
