@@ -65,12 +65,14 @@ What phase 4 adds:
 
 | Constraint | Decision | Why |
 |-----------|----------|-----|
-| Route count | Exactly **one** new route, `GET,POST ^/connections/?$`, fully anchored. Thirteen instead of twelve | Every declared route is external attack surface (D-38, pitfall 14). The list, the confirm step and the disconnect are one resource, so they are one route with a named action field, exactly as `/connect` handles start and cancel |
+| Route count | **One** new route for the user-facing part, `GET,POST ^/connections/?$`, fully anchored. Thirteen instead of twelve. A fourteenth may become necessary for the settings switch, see Open Question 1; it is not free either and needs the same justification | Every declared route is external attack surface (D-38, pitfall 14). The list, the confirm step and the disconnect are one resource, so they are one route with a named action field, exactly as `/connect` handles start and cancel |
 | Access level | **PUBLIC**, with the identity check inside the app | `access_level USER` is refused here for the measured CR-01 reason: HaRP answers an anonymous request itself and records it in a per route blacklist, and the tenth refusal in 300 seconds bans the caller from the WHOLE ExApp with 502. A settings page reached from a stale tab or an expired session produces exactly those refusals as normal operation. HaRP resolves the account on a PUBLIC route too and writes it into `AUTHORIZATION-APP-API`, empty when there is none, which is what the page reads |
 | Ownership check | A row may be shown and disconnected only when `authorizations.nc_user` equals the account HaRP resolved. Never the flow id, never a value from the request | The connection handle is guessable enough to be worth forging, and the account behind the browser is the only thing that answers "whose connection is this" |
 | State change | Only through `POST`. Two steps: confirm, then disconnect. No `GET` disconnects anything | The phase 3 rule (T-03-35) and the reason a link cannot be a destructive action |
 | Anti forgery | Hidden field, an HMAC of the connection handle under the installation data key, the same primitive as `CONFIRM_PARAM` of the consent form (T-03-50) | Needs no migration, survives a restart and a second worker, and no foreign origin can produce it |
 | Settings switch storage | Declarative Settings with **`storage_type: external`**, so the new value is pushed to this app when the user flips it | D-47 forbids a second Nextcloud roundtrip per MCP request and D-48 forbids a cache that delays the effect. `internal` storage would leave the value in Nextcloud preferences and force exactly the poll D-47 calls the worst answer. The concrete AppAPI endpoints for the external get and set are a plan question, not a design question, but a design that assumes `internal` is already wrong |
+| Fallback if `external` is unavailable | If AppAPI turns out not to support `storage_type: external` for an ExApp registered form, the switch does **not** silently fall back to a poll. The design falls back to the page: the on/off control moves onto `/connections` next to the list, and Nextcloud's settings section keeps only the link. D-44 asked for the switch to be findable where Nextcloud shows its app switches; that is a preference, while D-47 and D-48 are measured constraints, and the constraint wins | A poll would break the one measured number this phase is not allowed to worsen (SC 5 of phase 3, one Nextcloud roundtrip per MCP call), and a delayed effect would break SC 1. Losing the second entry point costs discoverability and nothing else |
+| Relationship to the old architecture draft | This table supersedes `.planning/research/ARCHITECTURE.md` lines 63 and 174, which still describe the earlier idea: the flag in `preferences_ex`, read from Nextcloud on every request. That is precisely the roundtrip D-47 forbids | The draft predates the SC 5 measurement of phase 3. Naming it here keeps the planner from implementing the older, cheaper looking sketch |
 | Settings rendering | Nextcloud renders the switch in its own design system. We supply `title`, `description`, `label`, `default` and `doc_url` and nothing else | This is the one surface of this app that must look like Nextcloud, because it is Nextcloud. Our own pages must never look like it (phase 3, T-03-23) |
 | New dependency | None. No template engine, no CSS framework, no icon package, no JavaScript | Unchanged from phase 3 |
 
@@ -193,8 +195,20 @@ Continues the phase 3 numbering. S1 to S4 and E1 to E7 exist and are untouched.
 | Section heading (`h2`) | "Connected apps" |
 | Row list | One `<li>` per authorization of this user, newest first. Each row: app name (Body/600), client id (14px mono, muted), "Connected on {date}" (14px muted), and one `<form method="post">` with a secondary button "Disconnect" |
 | Footnote | "Apps you connected with a credential from the onboarding page are not listed here. They appear in Nextcloud under Settings, Security, Devices and sessions." |
-| Secondary action | Link "Connect an assistant app" to `/connect` |
+| Secondary action | Link with the text of `CONNECT_TITLE` to `/connect` |
 | Footer | Unchanged phase 3 default: "The password prompt is always Nextcloud itself. If any other page asks you for your Nextcloud password, close it." |
+
+**Reading order, and where the eye lands first.** This screen carries no accent colour and no
+primary button on purpose: nothing here is the one thing to do, the page is a list to inspect.
+The order it must read in is display, then the warning callout when it is there, then the
+rows, then the footnote. Weight and position carry that order, not colour.
+
+**Callout stacking, when both can appear at once.** A disconnect on an account whose access is
+paused produces the result callout of S8 and the pause warning of S5 in the same render. Fixed
+order, both as the first elements of the card and above the section heading: **result first,
+pause warning second**. The result answers what the user just did, the warning describes a
+standing condition. On the empty state S6, which has no section heading, the same two sit
+directly under the identity line in the same order.
 
 Content rules for a row, each of them load bearing:
 
@@ -226,7 +240,7 @@ Instead of the row list:
 |---------|---------|
 | Display | "No connected apps" |
 | Body | "No assistant app is connected to your Nextcloud through this connector. Connect one from the app itself, or use the onboarding page for an app that cannot sign in by itself." |
-| Secondary action | Link "Connect an assistant app" to `/connect` |
+| Secondary action | Link with the text of `CONNECT_TITLE` to `/connect` |
 
 The empty state is a state of the same page, not an error, and it answers **200**.
 
@@ -326,6 +340,17 @@ Three signals separate R1 from R2, and all three are deliberate:
 
 `Cache-Control: no-store` on R1, like every other answer of this package.
 
+**Where this leaves the convention, stated rather than hidden.** RFC 6750 describes a
+different shape for "the credential is valid, the decision is against you": a 403 that still
+carries `WWW-Authenticate: Bearer error="insufficient_scope"`. This contract omits the header
+on purpose, because there is no other scope and no other credential the client could come
+back with, and because the header is what pulls a client into the rediscovery loop above. The
+price is real and belongs in the plan, not in a footnote: a strict client may render only
+"forbidden" and drop the body, so the sentence reaches the user only when the client passes
+`error_description` through. If the plan finds a client that swallows it, the answer is not to
+add the challenge back; it is to accept that this user learns the reason in the Nextcloud
+settings instead.
+
 R1 is a transport level answer from `exapp/middleware.py`, the same boundary that produces R2
 and R3, because that is the one place both connection types pass (D-47, D-49). There is no
 second, tool level variant of this sentence: two sources for one sentence is how the two
@@ -394,7 +419,7 @@ Copy rules, inherited from phase 3 and enforced by the checker:
 | `CONNECTIONS_DETAIL_CONNECTED` | "Connected on" |
 | `CONNECTIONS_ROW_CONNECTED` | "Connected on {date}" |
 | `CONNECTIONS_FOOTNOTE` | "Apps you connected with a credential from the onboarding page are not listed here. They appear in Nextcloud under Settings, Security, Devices and sessions." |
-| `CONNECTIONS_ADD_ACTION` | "Connect an assistant app" |
+| ~~`CONNECTIONS_ADD_ACTION`~~ | Dropped. The text would have been "Connect an assistant app", which is `CONNECT_TITLE` (`strings.py:150`) word for word. Reuse that constant instead: two constants with the same text drift apart at the first edit |
 | `CONNECTIONS_EMPTY_TITLE` | "No connected apps" |
 | `CONNECTIONS_EMPTY_BODY` | "No assistant app is connected to your Nextcloud through this connector. Connect one from the app itself, or use the onboarding page for an app that cannot sign in by itself." |
 | `CONNECTIONS_PAUSED_TITLE` | "Access is paused" |
@@ -418,10 +443,22 @@ Copy rules, inherited from phase 3 and enforced by the checker:
 | `SETTINGS_FIELD_DESCRIPTION` | "Switching this off refuses every connected app immediately. Nothing is disconnected and nothing is deleted, so switching it back on restores every connection." |
 | `SETTINGS_PLACE` | "Settings, Security, MCP Connector" |
 
-`CONSENT_IDENTITY`, `WORDMARK`, `FOOTER_PASSWORD_PROMPT` and `CLIENT_NAME_FALLBACK` are
-reused unchanged. `SETTINGS_PLACE` exists so the place is named in one constant: it appears
-in `CONNECTIONS_PAUSED_BODY` and `ACCESS_DISABLED_DESCRIPTION`, and if the settings section
-id has to move, one edit moves every sentence with it.
+Reused unchanged from `exapp/ui/strings.py`, all of them existing constants and none of them
+retyped as a literal: `CONSENT_IDENTITY`, `WORDMARK`, `FOOTER_PASSWORD_PROMPT`,
+`CLIENT_NAME_FALLBACK`, `CONNECT_TITLE` (the action that leads to the onboarding page, see the
+dropped row above), and the two labels of the detail list on S7,
+`CONSENT_DETAIL_APP_NAME` (`strings.py:211`) and `CONSENT_DETAIL_CLIENT_ID` (`strings.py:215`).
+The last two matter because the phase 3 rule is absolute: no string literal inside a template
+function, not even a two word label.
+
+`SETTINGS_PLACE` exists so the place is named in one constant: it appears in
+`CONNECTIONS_PAUSED_BODY` and `ACCESS_DISABLED_DESCRIPTION`, and if the settings section id
+has to move, one edit moves every sentence with it.
+
+`DISCONNECT_ACTION` is the bare verb "Disconnect" on purpose. A row CTA repeating the client
+name would read as noise in a list where every row already carries that name as its heading;
+the name reaches assistive technology through `aria-label="Disconnect {client}"` instead, which
+the accessibility contract below requires.
 
 Placeholders added by this phase: `date` and `connections_url`. `client`, `host` and `user`
 are the phase 3 ones, reused.
@@ -550,11 +587,35 @@ library are enough, as in phase 3.
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+Reviewed 2026-08-16 by gsd-ui-checker. The three contested claims were verified against the
+code and the earlier phases rather than taken at face value: the PUBLIC route derivation
+against the `/authorize/decide` justification in `appinfo/info.xml` and the identity check in
+`exapp/auth.py` and `oauth/consent.py`, the R1 answer against the two existing 401 shapes in
+`exapp/middleware.py`, and the `external` storage claim against `pyproject.toml` and
+`02-RESEARCH.md`.
 
-**Approval:** pending
+- [x] Dimension 1 Copywriting: PASS (FLAG at review, resolved below)
+- [x] Dimension 2 Visuals: PASS (FLAG at review, resolved below)
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
+
+**Approval:** APPROVED, 6 of 6 dimensions.
+
+Two dimensions carried non-blocking FLAGs. Both were folded into this document on the same
+day rather than left as recommendations:
+
+| Finding | Where it is now answered |
+|---------|--------------------------|
+| Two visible labels on S7 with no constant assigned | Reuse list: `CONSENT_DETAIL_APP_NAME` and `CONSENT_DETAIL_CLIENT_ID` |
+| `CONNECTIONS_ADD_ACTION` duplicates the text of `CONNECT_TITLE` | Constant dropped, `CONNECT_TITLE` reused on S5 and S6 |
+| Bare verb "Disconnect" as row CTA | Kept deliberately, with the reason written down next to the constant |
+| Stacking order when the result and the pause callout appear together | "Callout stacking" under S5, including the S6 variant without a section heading |
+| No focal point declared for S5 | "Reading order" under S5 |
+
+Two further points from the review were not copy issues and are answered in the constraints
+table instead: the fallback if `storage_type: external` turns out to be unavailable for an
+ExApp registered form, and the fact that this document supersedes the older `preferences_ex`
+sketch in `.planning/research/ARCHITECTURE.md`. The RFC 6750 deviation of R1 is now stated in
+the refusal contract itself, with its price.
