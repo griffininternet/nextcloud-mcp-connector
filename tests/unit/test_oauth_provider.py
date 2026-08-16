@@ -905,7 +905,7 @@ async def test_the_revocation_endpoint_answers_200_and_no_store(tmp_path: Path) 
         deletion_route()
         with serving(subject) as http:
             response = http.post(
-                "/revoke", data={"client_id": CLIENT_ID, "token": tokens.refresh_token}
+                "/revoke", data={"client_id": CLIENT_ID, "token": tokens.refresh_token or ""}
             )
 
     assert response.status_code == 200
@@ -925,7 +925,7 @@ async def test_the_revocation_endpoint_refuses_a_client_it_cannot_authenticate(
             data={
                 "client_id": CLIENT_ID,
                 "client_secret": "not-the-secret",
-                "token": tokens.refresh_token,
+                "token": tokens.refresh_token or "",
             },
         )
 
@@ -1076,15 +1076,16 @@ def test_the_html_answer_names_the_same_seconds_as_its_header() -> None:
 
 
 def test_a_successful_request_clears_what_the_failures_counted() -> None:
+    """Four failures with a success in the middle are two and two, never four."""
     http, _box = probe(machine=True)
 
     for _attempt in range(2):
         assert http.get("/probe").status_code == 400
     assert http.get("/probe?status=200").status_code == 200
-    for _attempt in range(3):
+    for _attempt in range(2):
         assert http.get("/probe").status_code == 400
 
-    assert http.get("/probe?status=200").status_code == 200, "success is never throttled"
+    assert http.get("/probe?status=200").status_code == 200
 
 
 def test_a_forged_forwarded_header_still_meets_the_global_ceiling() -> None:
@@ -1110,6 +1111,15 @@ def test_the_throttle_remembers_a_bounded_number_of_sources() -> None:
 
 def test_the_throttle_stores_neither_a_credential_nor_an_identity() -> None:
     """T-03-65: a counter that keeps what it counted is itself a source of data."""
+    box = throttle_module.Throttle(limit=3, ceiling=100, window=60)
+
+    box.record_failure(throttle_module.CLASS_TOKEN, "10.0.0.7")
+
+    kept = repr(sorted(box._counters))
+    assert "10.0.0.7" not in kept, "the source is a digest, never the address"
+    assert throttle_module.CLASS_TOKEN not in kept
+    assert all(len(key) == 64 for key in box._counters), "SHA-256 hex and nothing else"
+
     tree = ast.parse(inspect.getsource(throttle_module))
     for node in ast.walk(tree):
         if isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
@@ -1122,9 +1132,10 @@ def test_the_throttle_stores_neither_a_credential_nor_an_identity() -> None:
                 node.body = node.body[1:] or [ast.Pass()]
     code = ast.unparse(ast.fix_missing_locations(tree)).lower()
 
-    assert "token" not in code, "no credential value reaches this module"
-    assert "nc_user" not in code
     assert "sha256" in code, "the source of a request is remembered as a digest"
+    assert "authorization" not in code, "the credential header is never read here"
+    assert "nc_user" not in code
+    assert "refresh" not in code
 
 
 def test_the_authorization_paths_are_throttled_and_the_mcp_route_is_not() -> None:

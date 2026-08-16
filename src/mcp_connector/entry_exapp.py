@@ -28,6 +28,7 @@ from .errors import ToolError
 from .exapp.lifecycle import lifecycle_routes
 from .exapp.middleware import RequireAppApi
 from .nextcloud.http import configure_logging
+from .oauth import throttle
 from .oauth.connect import connect_routes
 from .oauth.consent import consent_routes
 from .oauth.metadata import metadata_routes
@@ -89,6 +90,11 @@ def build_exapp_app(env: Mapping[str, str] | None = None) -> Starlette:
     # user through /revoke or from the reuse detection of the rotation, empties it in the
     # same process instead of waiting for the window to run out (SC 4, T-03-62).
     provider.on_revocation(verifier.invalidate)
+    # One throttle for the whole application, so the five path classes are five counters
+    # and not five objects with five ceilings (SC 5, D-37). It never reaches the MCP route:
+    # a tool call arrives with a verified bearer and is answered from the process cache,
+    # and rate limiting the actual work of this server would be our own denial of service.
+    counters = throttle.Throttle()
     guarded = 0
     for route in app.router.routes:
         if isinstance(route, Route) and route.path == MCP_PATH:
@@ -125,9 +131,9 @@ def build_exapp_app(env: Mapping[str, str] | None = None) -> Starlette:
     for route in (
         *lifecycle_routes(env),
         *metadata_routes(env, dcr_enabled=policy.dcr_enabled),
-        *connect_routes(env, store_provider=store),
-        *auth_routes(env, provider=provider),
-        *consent_routes(env, provider=provider),
+        *connect_routes(env, store_provider=store, throttle=counters),
+        *auth_routes(env, provider=provider, throttle=counters),
+        *consent_routes(env, provider=provider, throttle=counters),
     ):
         app.router.routes.append(route)
     return app

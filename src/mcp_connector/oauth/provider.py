@@ -55,7 +55,6 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from urllib.parse import unquote
 
-from mcp.server.auth.handlers.revoke import RevocationHandler
 from mcp.server.auth.handlers.token import TokenHandler
 from mcp.server.auth.middleware.client_auth import AuthenticationError, ClientAuthenticator
 from mcp.server.auth.provider import (
@@ -71,6 +70,7 @@ from mcp.server.auth.provider import (
 )
 from mcp.server.auth.routes import (
     AUTHORIZATION_PATH,
+    REGISTRATION_PATH,
     REVOCATION_PATH,
     TOKEN_PATH,
     cors_middleware,
@@ -79,14 +79,16 @@ from mcp.server.auth.routes import (
 from mcp.server.auth.settings import ClientRegistrationOptions, RevocationOptions
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 from mcp.shared.auth_utils import check_resource_allowed
-from pydantic import AnyHttpUrl, AnyUrl, ValidationError
+from pydantic import AnyHttpUrl, AnyUrl, BaseModel, ValidationError
 from starlette.datastructures import FormData, MutableHeaders
 from starlette.requests import Request
+from starlette.responses import Response
 from starlette.routing import Route
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from .. import config
 from ..errors import ToolError
+from ..exapp.responses import NO_STORE, json_response
 from ..exapp.ui.consent import consent_url
 from . import loginflow
 from .metadata import AS_METADATA_SUFFIX, REFRESH_SCOPE, RESOURCE_SUFFIX, TOOL_SCOPE
@@ -107,11 +109,14 @@ from .store import (
     store_opener,
     token_hash,
 )
+from .throttle import CLASS_REGISTER, CLASS_REVOKE, CLASS_TOKEN, Throttle, Throttled
 
 __all__ = [
     "FAMILY_BYTES",
     "HELD_ANSWER_LIMIT",
+    "SWEEP_LIMIT",
     "TOKEN_BYTES",
+    "FamilyRevocation",
     "HashedClientAuthenticator",
     "NextcloudOAuthProvider",
     "NoStore",
@@ -187,6 +192,12 @@ FLOW_ID_BYTES = 32
 #: cache of the verifier: the entries live ten seconds anyway, and a rule that cannot leak
 #: beats a clever one that can (T-03-67).
 HELD_ANSWER_LIMIT = 256
+
+#: How many abandoned sign ins one authorization request cleans up after. Every one of them
+#: costs a Nextcloud round trip on a path where a person is waiting, so the number is small
+#: and the sweep is a background chore that finishes over several connections rather than a
+#: batch job that delays one of them.
+SWEEP_LIMIT = 3
 
 logger = logging.getLogger("mcp_connector.oauth.provider")
 
@@ -408,6 +419,14 @@ class NextcloudOAuthProvider(
         except Exception:
             logger.exception("the authorization request could not be written to the store")
             raise AuthorizeError("server_error", "the request could not be remembered") from None
+
+        try:
+            # The chore of this project, on the one path that has a reason to pay for it:
+            # a new connection hands back the credentials of the sign ins nobody finished.
+            # It can never break an authorization, so it never raises out of here.
+            await self.sweep_abandoned()
+        except Exception as exc:  # pragma: no cover - the sweep guards itself already
+            logger.error("the sweep of abandoned sign ins failed: %s", type(exc).__name__)
 
         return consent_url(config.public_url(self._env), flow_id, started.login_url)
 
@@ -728,13 +747,152 @@ class NextcloudOAuthProvider(
         return None
 
     async def revoke_token(self, token: AccessToken | RefreshToken) -> None:
-        """Plan 03-07 revokes a family and deletes the app password behind it (SC 4).
+        """End the whole connection behind this value, and take the credential back (SC 4).
 
-        Doing nothing is the correct answer while no token exists: RFC 7009 requires a 200
-        for a token the server does not know, and that is exactly the state of this plan.
+        The protocol asks for a token to be revoked; a user asks for a connection to end,
+        and this method answers the user. One access token, one refresh token and the
+        family they belong to are one connection here, so whichever of them arrives, all of
+        them stop working and the Nextcloud app password behind them goes back.
+
+        Doing nothing for a value this server does not know is the correct answer, not a
+        missing branch: RFC 7009 §2.2 requires 200 for an unknown token, and an answer that
+        distinguished the two would turn this endpoint into an oracle.
         """
-        del token
-        return
+        await self._revoke(presented=token.token, client_id=None)
+
+    async def revoke_presented_token(self, client_id: str, presented: str) -> None:
+        """The same revocation, for a value that arrived at ``/revoke`` from a client.
+
+        The difference to :meth:`revoke_token` is the ownership check, which the SDK
+        handler does on its own model and which this application has to do on the store:
+        a client may only end connections that were issued to it, or ``/revoke`` would be a
+        way to disconnect somebody else's assistant with a guessed value.
+        """
+        await self._revoke(presented=presented, client_id=client_id)
+
+    async def _revoke(self, *, presented: str, client_id: str | None) -> None:
+        """The three steps of a revocation, in the order the user expects them in.
+
+        1. the store: the family and the authorization are marked as gone,
+        2. this process: the held answers and the verifier cache are emptied,
+        3. Nextcloud: the app password of the connection is handed back.
+
+        Step three is last and may fail. "Revoked" has to mean "revoked" the moment the
+        request returns, and Nextcloud is the slowest participant of this whole phase and
+        the only one that can be unreachable; a revocation that waited for it, or that gave
+        up because of it, would keep a connection alive that its owner just ended (pitfall
+        13, D-37). A failed deletion therefore leaves the connection revoked and a note in
+        the store that the credential is still out there (T-03-63).
+        """
+        try:
+            store = await self.store()
+            found = await self._connection_of(store, presented)
+        except Exception as exc:
+            # Nothing to answer with and nothing to leak: the endpoint answers 200 either
+            # way, and the kind of the failure is the only thing that reaches the log.
+            logger.error("a revocation could not read its store: %s", type(exc).__name__)
+            return
+
+        if found is None:
+            return
+        auth_id, family_id, owner = found
+        if client_id is not None and not secrets.compare_digest(owner, client_id):
+            logger.warning("a client presented a token of another client for revocation")
+            return
+
+        await self._end_connection(store, auth_id=auth_id, family_id=family_id, now=self._now())
+        await self._hand_back(store, auth_id)
+
+    async def _connection_of(
+        self, store: OAuthStore, presented: str
+    ) -> tuple[str, str, str] | None:
+        """The connection behind a presented value: its id, its family and its client.
+
+        Both kinds are looked up, because RFC 7009 lets a client hand in either and several
+        of them hand in the access token. The refresh token is asked first, since that is
+        the value the specification recommends and therefore the common case.
+        """
+        if not presented:
+            return None
+
+        refresh = await store.load_refresh_token(presented)
+        if refresh is not None:
+            authorization = await store.load_authorization(refresh.auth_id)
+            if authorization is not None:
+                return refresh.auth_id, refresh.family_id, authorization.client_id
+
+        access = await store.load_access_token(presented)
+        if access is not None:
+            authorization = await store.load_authorization(access.auth_id)
+            if authorization is not None:
+                return access.auth_id, access.family_id, authorization.client_id
+
+        return None
+
+    async def _hand_back(self, store: OAuthStore, auth_id: str) -> bool:
+        """Delete the Nextcloud app password of this connection. One attempt, no retry.
+
+        The note that the credential is an orphan was already written by
+        :meth:`_end_connection`, so the order here is "note first, attempt second, clear on
+        success". A process that dies in the middle of the attempt therefore leaves the
+        note behind, which is the state the sweep of :meth:`sweep_abandoned` and the admin
+        view of phase 4 can act on. Anything else, including a store that cannot be read,
+        is a failure that the revocation itself does not notice.
+        """
+        try:
+            row = await store.load_authorization(auth_id)
+            password = await store.app_password(auth_id)
+        except Exception:
+            logger.error("the app password of a revoked connection could not be read back")
+            return False
+
+        if row is None or not password:
+            return False
+        if not await loginflow.revoke_app_password(row.nc_user, password, env=self._env):
+            # loginflow logged what happened, without any value of the exchange.
+            return False
+
+        await store.clear_cleanup(auth_id)
+        return True
+
+    async def sweep_abandoned(self) -> int:
+        """Hand back the credentials of the sign ins nobody ever came back to.
+
+        The consent bridge has to write an authorization the moment the Login Flow v2 poll
+        answers, because that answer arrives exactly once and a Nextcloud app password
+        exists from then on (plan 03-05, pitfall 7). A user who closes the browser at that
+        moment leaves a working credential behind, and this project has no cron to find it
+        (T-03-17). So the sweep hangs where a new connection begins: whoever connects pays
+        for at most :data:`SWEEP_LIMIT` of the ones that were never finished, which bounds
+        the cost of one request by construction and needs no scheduler.
+
+        The row goes even when the deletion fails, for the same reason a denied consent
+        deletes it (plan 03-06): the connection never existed as far as its user is
+        concerned, and keeping a ciphertext of a credential nobody may use is worse than
+        losing the record of it. A failure is logged and counted as not swept.
+        """
+        try:
+            store = await self.store()
+            rows = await store.abandoned_authorizations(SWEEP_LIMIT, now=self._now())
+        except Exception as exc:
+            logger.error("the sweep of abandoned sign ins found no store: %s", type(exc).__name__)
+            return 0
+
+        swept = 0
+        for row in rows:
+            try:
+                password = await store.app_password(row.auth_id)
+            except Exception:
+                logger.error("the app password of an abandoned sign in could not be read back")
+                password = None
+            if password and await loginflow.revoke_app_password(
+                row.nc_user, password, env=self._env
+            ):
+                swept += 1
+            else:
+                logger.warning("an abandoned sign in was dropped without handing its password back")
+            await store.delete_authorization(row.auth_id)
+        return swept
 
     async def exchange_identity_assertion(
         self, client: OAuthClientInformationFull, params: IdentityAssertionParams
@@ -751,7 +909,10 @@ class NextcloudOAuthProvider(
 
 
 def auth_routes(
-    env: Mapping[str, str] | None = None, *, provider: NextcloudOAuthProvider
+    env: Mapping[str, str] | None = None,
+    *,
+    provider: NextcloudOAuthProvider,
+    throttle: Throttle | None = None,
 ) -> list[Route]:
     """The routes of the authorization server, with ``no-store`` over all of them.
 
@@ -788,8 +949,9 @@ def auth_routes(
     dropped = (AS_METADATA_SUFFIX, AUTHORIZATION_PATH, TOKEN_PATH, REVOCATION_PATH)
     kept = [route for route in routes if route.path not in dropped]
     # The two endpoints that authenticate a client are rebuilt with our own authenticator.
-    # Everything else about them stays the SDK's: the same handler, the same CORS wrapper
-    # and the same methods, because only the comparison of the secret is ours.
+    # For ``/token`` everything else about it stays the SDK's: the same handler, the same
+    # CORS wrapper and the same methods, because only the comparison of the secret is ours.
+    # ``/revoke`` needs more than that, see :class:`FamilyRevocation`.
     authenticator = HashedClientAuthenticator(provider)
     kept.append(
         Route(
@@ -802,14 +964,88 @@ def auth_routes(
         Route(
             REVOCATION_PATH,
             endpoint=cors_middleware(
-                RevocationHandler(provider, authenticator).handle, _MACHINE_VERBS
+                FamilyRevocation(provider, authenticator).handle, _MACHINE_VERBS
             ),
             methods=_MACHINE_VERBS,
         )
     )
+    classes = {
+        TOKEN_PATH: CLASS_TOKEN,
+        REGISTRATION_PATH: CLASS_REGISTER,
+        REVOCATION_PATH: CLASS_REVOKE,
+    }
+    counters = throttle if throttle is not None else Throttle()
     for route in kept:
+        # The order of the two wrappers is the order of what they answer: a throttled
+        # request never reaches the handler, and every answer of this server, the 429
+        # included, carries ``no-store``.
+        route.app = Throttled(
+            route.app, counters, classes.get(route.path, CLASS_TOKEN), machine=True, env=env
+        )
         route.app = NoStore(route.app)
     return kept
+
+
+class _RevocationRequest(BaseModel):
+    """The body of RFC 7009 §2.1, with the one field the SDK model gets wrong.
+
+    ``client_secret`` is declared as ``str | None`` without a default in the SDK, which
+    makes it a *required* field that may be null: a public client, which Claude.ai and
+    ChatGPT both are, sends no such field at all and would get a 400 from its own
+    revocation. Optional is what the RFC says and what this model does.
+
+    ``token_type_hint`` is absent on purpose rather than ignored: this server looks both
+    kinds up either way, so the hint would be a field nothing reads. Unknown fields are
+    dropped by pydantic, so a client that sends it is not refused for it.
+    """
+
+    token: str
+    client_id: str
+    client_secret: str | None = None
+
+
+class FamilyRevocation:
+    """``/revoke``, rebuilt because the SDK handler cannot see the tokens of this server.
+
+    The SDK resolves the presented value through ``load_access_token`` and then through
+    ``load_refresh_token``. The first of those refuses by design here (see the module
+    docstring: the bearer of a request is checked by ``oauth/verifier.py`` and by nothing
+    else), so a client that hands in its access token, which RFC 7009 explicitly allows,
+    would receive a 200 and keep a working connection. That is the one shape of silent
+    failure this endpoint may not have (SC 4).
+
+    Everything else is the SDK's shape, deliberately: the same request model, the same
+    client authentication, 401 for a client that cannot authenticate, 400 for a body that
+    is not a revocation request, and 200 for everything else, including a value this server
+    never issued and one that belongs to another client.
+    """
+
+    def __init__(
+        self, provider: "NextcloudOAuthProvider", authenticator: ClientAuthenticator
+    ) -> None:
+        self._provider = provider
+        self._authenticator = authenticator
+
+    async def handle(self, request: Request) -> Response:
+        try:
+            client = await self._authenticator.authenticate_request(request)
+        except AuthenticationError as exc:
+            return json_response(
+                {"error": "unauthorized_client", "error_description": exc.message}, status_code=401
+            )
+
+        try:
+            revocation = _RevocationRequest.model_validate(dict(await request.form()))
+        except ValidationError:
+            # The offending body carries a credential, so the shape of the error is named
+            # and its content is not (T-03-66).
+            return json_response(
+                {"error": "invalid_request", "error_description": "this is not a revocation"},
+                status_code=400,
+            )
+
+        await self._provider.revoke_presented_token(client.client_id, revocation.token)
+        return Response(status_code=200, headers=dict(NO_STORE))
 
 
 class HashedClientAuthenticator(ClientAuthenticator):

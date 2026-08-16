@@ -624,6 +624,67 @@ class OAuthStore:
 
         await self._write(work)
 
+    async def clear_cleanup(self, auth_id: str) -> None:
+        """The credential of this connection is gone from Nextcloud; the note can go too."""
+
+        def work(conn: sqlite3.Connection) -> None:
+            conn.execute(
+                "UPDATE authorizations SET cleanup_at = NULL WHERE auth_id = ?", (auth_id,)
+            )
+
+        await self._write(work)
+
+    async def abandoned_authorizations(
+        self, limit: int, *, now: int | None = None
+    ) -> list[AuthorizationRow]:
+        """Connections that were written by a sign in and then never used for anything.
+
+        The consent bridge writes the authorization the moment the Login Flow v2 poll
+        answers, because that answer arrives exactly once and carries a Nextcloud app
+        password that exists from then on (plan 03-05). A browser that is closed at that
+        moment leaves the row behind, and with it a working credential nobody will ever
+        use. This query finds exactly those rows: no flow record any more, no code, no
+        token of either kind, not revoked, and older than the deadline of a sign in, so a
+        flow that is still running cannot be caught by it.
+
+        A connection whose tokens all expired matches as well, and deliberately so: the
+        short lived rows are removed by every write, so a row without any of them is either
+        a sign in nobody finished or a connection that ended by running out. Both own an
+        app password that has to go back.
+
+        ``limit`` is not optional. The caller pays for every row with one Nextcloud request,
+        and an unbounded sweep on a browser path is a timeout waiting to happen.
+        """
+        moment = _moment(now)
+
+        def work(conn: sqlite3.Connection) -> list[AuthorizationRow]:
+            rows = conn.execute(
+                "SELECT a.auth_id, a.client_id, a.nc_user, a.scopes, a.resource, a.created_at, "
+                "a.revoked_at, a.cleanup_at FROM authorizations AS a "
+                "LEFT JOIN flows AS f ON f.flow_id = a.auth_id "
+                "WHERE a.revoked_at IS NULL AND f.flow_id IS NULL AND a.created_at < ? "
+                "AND NOT EXISTS (SELECT 1 FROM auth_codes AS c WHERE c.auth_id = a.auth_id) "
+                "AND NOT EXISTS (SELECT 1 FROM refresh_tokens AS r WHERE r.auth_id = a.auth_id) "
+                "AND NOT EXISTS (SELECT 1 FROM access_tokens AS t WHERE t.auth_id = a.auth_id) "
+                "ORDER BY a.created_at LIMIT ?",
+                (moment - FLOW_TTL, limit),
+            ).fetchall()
+            return [
+                AuthorizationRow(
+                    auth_id=row[0],
+                    client_id=row[1],
+                    nc_user=row[2],
+                    scopes=row[3],
+                    resource=row[4],
+                    created_at=row[5],
+                    revoked_at=row[6],
+                    cleanup_at=row[7],
+                )
+                for row in rows
+            ]
+
+        return await self._read(work)
+
     # --- authorization codes --------------------------------------------------------
 
     async def create_auth_code(

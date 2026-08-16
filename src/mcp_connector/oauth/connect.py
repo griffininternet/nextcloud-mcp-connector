@@ -57,6 +57,7 @@ from ..exapp.ui.connect import (
 )
 from . import crypto, loginflow
 from .store import STORE_FILENAME, OAuthStore
+from .throttle import CLASS_CONNECT, Throttle, Throttled
 
 __all__ = [
     "ACTION_CANCEL",
@@ -97,9 +98,17 @@ type StoreProvider = Callable[[], Awaitable[OAuthStore]]
 
 
 def connect_routes(
-    env: Mapping[str, str] | None = None, *, store_provider: StoreProvider | None = None
+    env: Mapping[str, str] | None = None,
+    *,
+    store_provider: StoreProvider | None = None,
+    throttle: Throttle | None = None,
 ) -> list[Route]:
     """Build the three onboarding routes against one environment.
+
+    Throttled as browser paths and with a path class of their own: this is the one surface
+    on which an anonymous caller can make this server open a Nextcloud login flow, which is
+    the anonymous flow creation T-03-35 handed to this plan (SC 5). A refused request here
+    is a page, so a throttled one is E6 with the same seconds in header and text.
 
     The store is opened once per application and not once per request, and the first open is
     also where :meth:`OAuthStore.purge_expired` runs: this project has no cron and no
@@ -149,11 +158,15 @@ def connect_routes(
         """One poll per load, and one of the four ends: waiting, result, expired, failed."""
         return await _wait(request.query_params.get(FLOW_PARAM) or "", store, env)
 
-    return [
+    counters = throttle if throttle is not None else Throttle()
+    routes = [
         Route(CONNECT_PATH, invitation, methods=["GET"]),
         Route(CONNECT_PATH, begin, methods=["POST"]),
         Route(WAIT_PATH, wait, methods=["GET"]),
     ]
+    for route in routes:
+        route.app = Throttled(route.app, counters, CLASS_CONNECT, machine=False, env=env)
+    return routes
 
 
 async def _start(store: StoreProvider, env: Mapping[str, str] | None) -> Response:

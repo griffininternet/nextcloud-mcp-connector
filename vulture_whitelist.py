@@ -64,51 +64,39 @@ NSMAP
 get_board
 
 # --- The store API of phase 3 ----------------------------------------------------------
-# oauth/store.py is the persistence layer of the OAuth phase and is built in one piece, in
-# plan 03-02, because its schema and its transactions only make sense together. Its callers
-# arrive in the plans that follow: the consent bridge (03-04) writes flows and
-# authorizations, the authorize and token endpoints (03-05, 03-06) write and redeem codes
-# and tokens, the verifier (03-06) reads access tokens, and the rotation with reuse
-# detection (03-07) is the whole reason redeem_refresh_token and revoke_family exist.
-# Every name below is exercised by tests/unit/test_oauth_store.py, which fails if one of
-# them stops behaving; none of them is reachable from the production call graph yet. The six
-# names the browser onboarding of plan 03-04 calls for real (save_client, touch_client,
-# create_flow, load_flow, delete_flow and purge_expired) left this list with that plan.
-_.load_client
-_.delete_client
-_.create_authorization
-_.load_authorization
-_.revoke_authorization
-_.create_auth_code
-_.redeem_auth_code
-_.create_access_token
+# oauth/store.py was built in one piece in plan 03-02, because its schema and its
+# transactions only make sense together, and its callers arrived plan by plan afterwards.
+# Plan 03-07 was the last of them: the rotation calls redeem_refresh_token, load_refresh_
+# token and revoke_family, and the revocation calls revoke_authorization, note_cleanup and
+# clear_cleanup. What is left below is the one name that is still reachable through the
+# store alone. Every entry that gained a production caller left this list with the plan
+# that called it.
+#
+# load_access_token: the store method is called by the verifier on every request, but the
+#   name also belongs to the provider method of the same name, which refuses on purpose and
+#   therefore has no caller (see the module docstring of oauth/provider.py). One whitelist
+#   entry covers both, and dropping it would flag the deliberate refusal as dead code.
 _.load_access_token
-_.create_refresh_token
-_.load_refresh_token
-_.redeem_refresh_token
-_.revoke_family
 
-# Fields of the row objects above that this phase writes and a later plan reads:
-# client_secret_hash (03-06 authenticates a confidential client with it), created_at and
-# revoked_at (03-07 and the admin view of phase 4), issued_at and used_at (the grace window
-# of D-41 is decided on used_at, and the auth code row keeps its own used_at as the record
-# that it was consumed), cleanup_at (03-07 writes it when a Nextcloud app password could
-# not be handed back; the sweep selects on the column in SQL and the admin view of phase 4
-# is what reads the field).
-_.client_secret_hash
+# Fields of the row objects that this phase writes and a later plan reads:
+# created_at and issued_at (the admin view of phase 4 shows when a connection was made),
+# cleanup_at (03-07 writes it when a Nextcloud app password could not be handed back; the
+# sweep selects on the column in SQL, and the field itself is for the same admin view).
 _.created_at
-_.revoked_at
 _.issued_at
-_.used_at
 _.cleanup_at
 
-# --- The eleven methods of the SDK provider protocol -----------------------------------
+# --- The methods of the SDK provider protocol ------------------------------------------
 # oauth/provider.py implements OAuthAuthorizationServerProvider. Every method below is
-# called by the SDK handlers of /authorize, /token, /register and /revoke, and by nothing
-# in this repository: create_auth_routes takes the object and wires the calls itself, the
-# same shape as verify_token above. All of them are driven directly by
+# called by the SDK handlers of /authorize, /token and /register, and by nothing in this
+# repository: create_auth_routes takes the object and wires the calls itself, the same
+# shape as verify_token above. All of them are driven directly by
 # tests/unit/test_oauth_provider.py, which is what keeps them honest. load_access_token is
 # absent from this list because it already stands in the store block above.
+#
+# revoke_token stays here although /revoke is served by our own FamilyRevocation now: the
+# handler calls revoke_presented_token, which adds the ownership check, and revoke_token is
+# the protocol method that any other SDK path would use. Both end in the same revocation.
 _.get_client
 _.register_client
 _.authorize
@@ -118,13 +106,3 @@ _.load_refresh_token
 _.exchange_refresh_token
 _.revoke_token
 _.exchange_identity_assertion
-
-# --- Two more names the SDK and the next plan call -------------------------------------
-# authenticate_request: the one method of the SDK ClientAuthenticator. The TokenHandler and
-#   the RevocationHandler call it on every request to /token and /revoke; nothing in this
-#   repository does. tests/unit/test_oauth_provider.py drives it through both endpoints.
-# invalidate: empties the process cache of the token verifier. Plan 03-07 calls it from the
-#   revocation path, where a cached answer of up to five seconds would keep a connection
-#   alive that the user just ended (D-34). tests/unit/test_oauth_verifier.py proves it.
-_.authenticate_request
-_.invalidate

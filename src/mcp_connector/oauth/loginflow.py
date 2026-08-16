@@ -51,6 +51,7 @@ __all__ = [
     "POLL_FAILED",
     "POLL_PATH",
     "POLL_PENDING",
+    "REVOKE_TIMEOUT",
     "AppCredentials",
     "FlowStart",
     "PollResult",
@@ -83,6 +84,12 @@ AGENT_NAME_LIMIT = 64
 #: What an app without a usable name is called. Never an empty user agent: an empty value
 #: would leave the user with an unnamed entry in a dialog that asks for trust.
 AGENT_FALLBACK = "unnamed app"
+
+#: How long the deletion of an app password may take. Deliberately far below the read
+#: timeout of the shared client: this call runs inside a revocation, a client gives that
+#: request about ten seconds, and the deletion is the one step of a revocation that is
+#: allowed to fail (pitfall 13, T-03-63).
+REVOKE_TIMEOUT = 5.0
 
 #: The three outcomes of one poll. Strings and not an enum, for the reason
 #: ``nextcloud/credentials.py`` states: the unknown case has to stay reachable in a test.
@@ -254,6 +261,7 @@ async def revoke_app_password(
             url,
             headers=dict(OCS_HEADERS),
             auth=httpx.BasicAuth(login_name, app_password),
+            timeout=REVOKE_TIMEOUT,
         )
     except httpx.HTTPError:
         logger.error("the app password deletion at %s did not reach Nextcloud", url)

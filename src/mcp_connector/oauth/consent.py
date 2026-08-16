@@ -77,6 +77,7 @@ from . import loginflow
 from .provider import NextcloudOAuthProvider
 from .registry import redirect_uri_allowed
 from .store import FlowRow, OAuthStore
+from .throttle import CLASS_AUTHORIZE, Throttle, Throttled
 
 __all__ = ["AUTHORIZATION_PATH", "CODE_BYTES", "CONSENT_PATH", "consent_routes"]
 
@@ -90,9 +91,18 @@ logger = logging.getLogger("mcp_connector.oauth.consent")
 
 
 def consent_routes(
-    env: Mapping[str, str] | None = None, *, provider: NextcloudOAuthProvider
+    env: Mapping[str, str] | None = None,
+    *,
+    provider: NextcloudOAuthProvider,
+    throttle: Throttle | None = None,
 ) -> list[Route]:
-    """The authorization endpoint of this app and the consent screen behind it."""
+    """The authorization endpoint of this app and the consent screen behind it.
+
+    Both routes are throttled, and both as browser paths: a refused request here ends on a
+    page, so the throttled one has to as well (E6 with the same seconds in its header and
+    in its text). They share one path class, because they are one surface to a caller: the
+    authorization request and the screen behind it are two halves of one attempt (D-37).
+    """
     handler = AuthorizationHandler(provider)
 
     async def authorize(request: Request) -> Response:
@@ -115,10 +125,14 @@ def consent_routes(
             return await _decide(await request.form(), provider, env)
         return await _screen(request.query_params, provider, env)
 
-    return [
+    counters = throttle if throttle is not None else Throttle()
+    routes = [
         Route(AUTHORIZATION_PATH, authorize, methods=["GET", "POST"]),
         Route(CONSENT_PATH, consent, methods=["GET", "POST"]),
     ]
+    for route in routes:
+        route.app = Throttled(route.app, counters, CLASS_AUTHORIZE, machine=False, env=env)
+    return routes
 
 
 async def _refuse(
