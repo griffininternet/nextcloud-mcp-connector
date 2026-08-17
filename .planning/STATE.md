@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 4 planned, 4 plans in 3 waves, checker passed
-last_updated: "2026-08-16T10:00:00.000Z"
-last_activity: 2026-08-16
+stopped_at: "Phase 4, Plan 04-01 fertig: der Per-User-Schalter liegt im Store und wirkt an der Transportgrenze. Nächstes: 04-02 (Wave 1 seriell, die Repo-weiten Gates kollidieren parallel)"
+last_updated: "2026-08-17T13:03:52.964Z"
+last_activity: 2026-08-17
 progress:
   total_phases: 5
   completed_phases: 3
-  total_plans: 30
-  completed_plans: 30
+  total_plans: 34
+  completed_plans: 31
   percent: 60
 ---
 
@@ -25,18 +25,18 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 
 ## Current Position
 
-Phase: 3
-Plan: 9 of 9
+Phase: 4
+Plan: 2 of 4
 Status: In progress
-Last activity: 2026-08-16
+Last activity: 2026-08-17
 
-Progress: [█████████░] 97%
+Progress: [█████████░] 91%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 29
+- Total plans completed: 31
 - Average duration: 35 min
 - Total execution time: 15.2 hours
 
@@ -47,6 +47,7 @@ Progress: [█████████░] 97%
 | 1 | 14 | - | - |
 | 2 | 7 | 254 min | 36 min |
 | 3 | 8 | 400 min | 50 min |
+| 4 | 1 | 60 min | 60 min |
 
 **Recent Trend:**
 
@@ -82,6 +83,7 @@ Progress: [█████████░] 97%
 | Phase 03 P06 | 40 min | 3 tasks | 16 files |
 | Phase 03 P07 | 40 min | 3 tasks | 11 files |
 | Phase 03 P08 | 80 min | 3 tasks | 11 files |
+| Phase 04 P01 | 60 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -242,6 +244,10 @@ Recent decisions affecting current work:
 - [Phase 03-oauth-2-1]: Die ExApp-Config wird mit POST auf .../ex-app/config/get-values und dem Rumpf {"configKeys": [...]} gelesen, nicht mit GET und configKeys[]; die Antwort nennt ihre Felder klein (configkey/configvalue), und beides zusammen war der Grund, warum kein Datenschluessel je gelesen werden konnte
 - [Phase 03-oauth-2-1]: Der geteilte httpx-Client fuehrt keinen Cookie-Jar mehr: Nextcloud setzt auf jede Antwort ein Session-Cookie, und auf einem prozessweiten Client wurde daraus eine Sitzung fuer alle Nutzer (gemessen: SEARCH mit dem Scope des einen und der Identitaet des anderen Nutzers)
 - [Phase 03-oauth-2-1]: SC 5 ist gemessen statt geschaetzt: genau ein Nextcloud-Roundtrip je MCP-Request mit Authorization-Header, angenommen wie abgelehnt; die eigene Drosselung antwortet beim elften abgelehnten Token-Request mit 429 und Retry-After 300, und der Testnutzer meldet sich danach normal an
+- [Phase 04]: Der Per-User-Schalter liegt in unserem Store und wird je Request lokal gelesen, ohne Prozess-Cache: nur so wirkt das Umlegen beim nächsten Aufruf (D-48), und es kostet keinen zweiten Nextcloud-Roundtrip (D-47)
+- [Phase 04]: Freigeben löscht die user_access-Zeile, statt sie auf null zu setzen: 'nie pausiert' und 'wieder freigegeben' sind damit dieselbe Wahrheit, und der Default 'an' kostet keine Zeile (D-50)
+- [Phase 04]: Ein Store-Ausfall am Schalter-Gate ist 503 mit no-store, nie ein Durchlass und nie ein behauptetes access_disabled (fail closed, D-37-Analogie); der AUTH-01-Zweig braucht damit ab jetzt ebenfalls den Store
+- [Phase 04]: R1 antwortet 403 ohne WWW-Authenticate, bewusst abweichend von RFC 6750: ein 401 mit Challenge schickt OAuth-Clients in die volle Rediscovery-Schleife und legt deren Last auf Nextcloud
 
 ### Pending Todos
 
@@ -270,6 +276,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-16T10:00:00.000Z
-Stopped at: Phase 4 planned (04-01..04-04, checker: 0 blockers, warnings folded in). Next: execute-phase 4, Wave 1 SERIELL (checker warning 3: whole-repo gates collide in parallel)
-Resume file: .planning/phases/04-per-user-verwaltung-und-prepare-context/04-01-PLAN.md
+Last session: 2026-08-17T13:03:14.561Z
+Stopped at: Phase 4, Plan 04-01 fertig: der Per-User-Schalter liegt im Store und wirkt an der Transportgrenze. Nächstes: 04-02 (Wave 1 seriell, die Repo-weiten Gates kollidieren parallel)
+Resume file: None

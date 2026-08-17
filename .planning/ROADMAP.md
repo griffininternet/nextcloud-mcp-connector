@@ -180,7 +180,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 04-01-PLAN.md - Schalter im Store und R1 an der Transportgrenze (Wave 1)
+- [x] 04-01-PLAN.md - Schalter im Store und R1 an der Transportgrenze (Wave 1)
 - [ ] 04-02-PLAN.md - prepare_context: Fan-out, Kurz/Voll, degraded, Tool-Oberfläche in einem Zug (Wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -216,7 +216,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Server-Kern | 14/14 | Complete    | 2026-08-14 |
 | 2. ExApp-Shell | 7/7 | Complete    | 2026-08-15 |
 | 3. OAuth 2.1 | 8/9 | In Progress|  |
-| 4. Per-User-Verwaltung und prepare_context | 0/TBD | Not started | - |
+| 4. Per-User-Verwaltung und prepare_context | 1/4 | In Progress|  |
 | 5. Hardening und Store-Einreichung | 0/TBD | Not started | - |
 
 ## Coverage
