@@ -1074,6 +1074,33 @@ def test_the_address_with_a_trailing_slash_is_served_and_never_redirected(
         assert response.headers["cache-control"] == "no-store"
 
 
+def test_a_body_far_larger_than_this_page_has_fields_for_is_refused_unread(
+    live: Deployment, caplog: pytest.LogCaptureFixture
+) -> None:
+    """LO-08: four short text fields, and no bound on what a caller could send.
+
+    ``request.form()`` reads an urlencoded body into memory whole and spools multipart parts
+    above a threshold into temporary files. The page needs an action, a handle and a value
+    of sixty four characters, so a few kilobytes is generous and anything above it is not a
+    browser filling in this form.
+    """
+    with caplog.at_level("WARNING", logger="mcp_connector.oauth.connections"):
+        response = live.client.post(
+            ui.CONNECTIONS_PATH,
+            data={
+                ui.ACTION_FIELD: ui.ACTION_PAUSE,
+                ui.CONFIRM_PARAM: live.switch_token_of(),
+                "padding": "p" * (routes.MAX_FORM_BYTES + 1),
+            },
+            headers=appapi_headers(NC_USER),
+        )
+
+    assert response.status_code == 400
+    assert SECTION_HEADING in response.text, "the list, exactly as an unknown action gets it"
+    assert run(live.store.access_disabled(NC_USER)) is False, "the body was never acted on"
+    assert caplog.records
+
+
 def test_a_form_body_that_cannot_be_parsed_is_a_page_and_never_an_unhandled_500(
     live: Deployment, caplog: pytest.LogCaptureFixture
 ) -> None:

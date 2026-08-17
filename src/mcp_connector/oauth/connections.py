@@ -73,7 +73,17 @@ from .crypto import PURPOSE_DISCONNECT, PURPOSE_SWITCH
 from .store import AuthorizationRow, OAuthStore
 from .throttle import CLASS_CONNECTIONS, Throttle, Throttled
 
-__all__ = ["SWITCH_HANDLE", "connections_routes"]
+__all__ = ["MAX_FORM_BYTES", "SWITCH_HANDLE", "connections_routes"]
+
+#: The largest form body this page reads (LO-08). Its fields are an action, a handle of 43
+#: characters and an anti forgery value of 64, well under two hundred bytes together, so
+#: four kilobytes is a browser with a lot of goodwill and anything above it is not this
+#: form. Checked against the announced length before anything is parsed, because
+#: ``request.form()`` reads an urlencoded body into memory whole and spools multipart parts
+#: above a threshold into temporary files. A caller that announces no length at all is not
+#: covered by this and is bounded by the parser alone; behind HaRP every request carries
+#: one.
+MAX_FORM_BYTES = 4096
 
 #: What the anti forgery value of the switch is derived from: this prefix plus the account,
 #: under :data:`~mcp_connector.oauth.crypto.PURPOSE_SWITCH`. The account in the handle is
@@ -137,6 +147,10 @@ def connections_routes(
 
         if request.method == "GET":
             return await _list(store, user, env)
+
+        if _oversized(request):
+            logger.warning("a form larger than this page has fields for was refused unread")
+            return await _list(store, user, env, status_code=400)
 
         form = await form_or_none(request)
         if form is None:
@@ -376,6 +390,20 @@ async def _client_name(client_id: str, store: OAuthStore) -> str:
         return _NO_NAME
     name = metadata.get("client_name") if isinstance(metadata, dict) else None
     return str(name) if isinstance(name, str) else _NO_NAME
+
+
+def _oversized(request: Request) -> bool:
+    """Whether this request announces more body than this page could possibly need (LO-08).
+
+    A header that is not a number is refused as well: it is not a browser sending this form
+    either, and reading a body whose length nobody can name is the case this check exists
+    against.
+    """
+    announced = request.headers.get("content-length") or "0"
+    try:
+        return int(announced) > MAX_FORM_BYTES
+    except ValueError:
+        return True
 
 
 def _confirmed(store: OAuthStore, handle: str, presented: str, *, purpose: str) -> bool:

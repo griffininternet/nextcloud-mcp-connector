@@ -88,7 +88,12 @@ _PAGES: dict[str, _ErrorPage] = {
     GENERIC: _ErrorPage(500, strings.ERROR_GENERIC_TITLE, strings.ERROR_GENERIC_BODY),
 }
 
-#: The eight identifiers of the contract, in the order of the table.
+#: The eight identifiers of the contract, in the order of the table above, which is not the
+#: order of their names (LO-05 of the phase 4 review): ``GENERIC`` is the
+#: last row because it is also the fallback of an unknown code, and E8 joined in front of it
+#: rather than behind it. Nothing depends on the order; the comment used to promise one it
+#: did not deliver, and a documentation or test that iterates over this would have believed
+#: it.
 CODES: Final = tuple(_PAGES)
 
 
