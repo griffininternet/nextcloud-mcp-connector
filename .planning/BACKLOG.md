@@ -106,3 +106,28 @@ eigene Betrachtung (SSRF, Zwischenspeicher, Groessengrenze).
 
 **Warum nicht in v1:** AUTH-04 ist mit DCR erfuellt, beide gehosteten Connectoren
 verbinden. CIMD ist die Zukunftssicherung, nicht die Voraussetzung.
+
+## BL-06: Admin-Settings-UI, Ein-Klick-Prinzip (Owner-Vorgabe 17.08.2026)
+
+**Owner-Vorgabe:** Alles soll einfach sein, ein Klick und man ist drin, und
+trotzdem muss der Admin die Gelegenheit haben, Einstellungen zu machen.
+
+**Ist-Zustand:** Die Nutzerseite erfuellt das Prinzip weitgehend (URL im
+Client einfuegen, anmelden, drin; Schalter und Trennen auf /connections).
+Die Admin-Seite ist reine Env-Var-Konfiguration (NC_MCP_OAUTH_DCR,
+NC_MCP_OAUTH_ALLOWLIST_ONLY, NC_MCP_OAUTH_ALLOWED_CLIENTS,
+NC_MCP_ALLOWED_HOSTS, NC_MCP_PUBLIC_URL, ...). Das kollidiert mit der
+Store-Installation per Klick (Phase 5 SC 2): ein Admin, der aus dem App
+Store installiert, setzt keine Env-Vars.
+
+**Was zu tun waere (Phase 5):** Admin-Settings-Zugang fuer die
+sicherheitsrelevanten Schalter (mindestens DCR an/aus und Allowlist), mit
+sicheren Defaults ab Installation, so dass der Ein-Klick-Weg ohne Pflicht-
+Konfiguration funktioniert und die Security-Note (oeffentliche Instanzen:
+Allowlist AN oder DCR AUS) per UI statt nur per Env erfuellbar ist.
+Recherche-Vorbehalt: Declarative Settings sind pull-only (04-RESEARCH);
+fuer Admin-Werte, die die ExApp zur Laufzeit braucht, ist der Speicherort
+(appconfig via AppAPI vs. eigener Store) zu klaeren.
+
+**Warum nicht in Phase 4:** Phase 4 war der Per-User-Slice; die
+Admin-Schalter haengen an der Store-Paketierung (EXAPP-04/05).
