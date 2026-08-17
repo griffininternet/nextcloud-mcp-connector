@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Phase 4, Plan 04-02 fertig: prepare_context bündelt Treffer und Termine, das 16. Tool ist bewusst eingetragen. Nächstes: 04-03 (Wave 2, Connections-Seite)"
-last_updated: "2026-08-17T13:30:00.000Z"
+stopped_at: "Phase 4, Plan 04-01 fertig: der Per-User-Schalter liegt im Store und wirkt an der Transportgrenze. Nächstes: 04-02 (Wave 1 seriell, die Repo-weiten Gates kollidieren parallel)"
+last_updated: "2026-08-17T14:01:23.908Z"
 last_activity: 2026-08-17
 progress:
   total_phases: 5
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 4
-Plan: 3 of 4
-Status: In progress
+Plan: 4 of 4
+Status: Ready to execute
 Last activity: 2026-08-17
 
 Progress: [█████████░] 94%
@@ -85,6 +85,7 @@ Progress: [█████████░] 94%
 | Phase 03 P08 | 80 min | 3 tasks | 11 files |
 | Phase 04 P01 | 60 min | 2 tasks | 7 files |
 | Phase 04 P02 | 25 min | 3 tasks | 5 files |
+| Phase 04 P03 | 70 | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -253,6 +254,9 @@ Recent decisions affecting current work:
 - [Phase 04]: Jede Teilquelle hat ihr eigenes Timeout, das Buendel keines: ein globaler Abbruch wuerde die bereits fertige Teilantwort verwerfen; der Kalender-Cap von 10 s lebt in context.py, calendar.py behaelt seine 20 s
 - [Phase 04]: Auch eine Kappung steht unter degraded (5 je Bucket, 10 Termine, 3 Auszüge): eine still verkuerzte Liste ist das Ergebnis, das ein Modell als "mehr gibt es nicht" weitergibt (SC 4)
 - [Phase 04]: Gegen Prompt-Injection wird nicht maskiert (D-57): Herkunft als Strukturfelder, Auszug als reines Datenfeld, Warnung in der Tool-Description, und ein Waechter-Test, der injizierten Anweisungstext zeichengenau als Daten ankommen laesst
+- [Phase 04]: Ein Schalter-HMAC ist zweckgebunden (access: plus Konto), damit ein Zeilen-Wert kein Konto pausieren kann und ein Konto-Wert kein fremdes
+- [Phase 04]: Der Zeilen-Widerruf laeuft ausschliesslich ueber provider.end_connection; ein Quelltext-Waechter haelt revoke_authorization und revoke_family aus Seiten- und Routenmodul heraus (T-04-35, Verifier-Cache)
+- [Phase 04]: Route 13 ist PUBLIC mit Identitaetspruefung in der App, aus dem gemessenen CR-01-Grund: eine USER-Route fuettert die HaRP-Blacklist mit genau den Abweisungen, die diese Seite als normalen Verkehr erzeugt
 
 ### Pending Todos
 
@@ -281,6 +285,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-17T13:03:14.561Z
+Last session: 2026-08-17T14:00:48.903Z
 Stopped at: Phase 4, Plan 04-01 fertig: der Per-User-Schalter liegt im Store und wirkt an der Transportgrenze. Nächstes: 04-02 (Wave 1 seriell, die Repo-weiten Gates kollidieren parallel)
 Resume file: None
