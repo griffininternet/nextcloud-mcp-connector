@@ -29,7 +29,7 @@ from starlette.responses import Response
 from starlette.routing import Route
 
 from ..errors import ToolError
-from . import status
+from . import settings_form, status
 from .auth import AppApiRejected, require_appapi
 from .responses import NO_STORE, json_response
 
@@ -81,6 +81,18 @@ def lifecycle_routes(env: Mapping[str, str] | None = None) -> list[Route]:
         value = request.query_params.get("enabled", "")
         if value not in ENABLED_VALUES:
             return json_response({"error": "enabled must be 0 or 1"}, status_code=400)
+
+        if value == "1":
+            try:
+                await settings_form.register_settings_form(env=env)
+            except Exception:
+                # Same asymmetry as the init progress push: a non empty error field makes
+                # AppAPI disable the app again at once, while a missing signpost costs
+                # discoverability and this one line (pitfall 11).
+                logger.error("the settings form registration failed, the signpost is missing")
+        # enabled=0 registers nothing and unregisters nothing: AppAPI hands out the forms of
+        # enabled apps only, so a disabled app disappears from the settings page by itself,
+        # and an uninstall is cleaned up on AppAPI's side (measured, 04-RESEARCH.md).
         return json_response({"error": ""})
 
     return [
