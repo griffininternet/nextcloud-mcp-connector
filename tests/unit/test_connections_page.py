@@ -34,9 +34,10 @@ from starlette.testclient import TestClient
 
 from mcp_connector import config
 from mcp_connector.exapp.ui import connections as ui
+from mcp_connector.exapp.ui import consent as ui_consent
 from mcp_connector.exapp.ui import errors, icons, layout, strings
 from mcp_connector.oauth import connections as routes
-from mcp_connector.oauth import loginflow, registry
+from mcp_connector.oauth import consent, loginflow, registry
 from mcp_connector.oauth import provider as provider_module
 from mcp_connector.oauth import store as store_module
 from mcp_connector.oauth import throttle as throttle_module
@@ -490,7 +491,7 @@ class Deployment:
     whether a token still works shares the store and the revocation hook with it (T-04-35).
     """
 
-    def __init__(self, tmp_path: Path) -> None:
+    def __init__(self, tmp_path: Path, *, throttle: throttle_module.Throttle | None = None) -> None:
         self.store = OAuthStore(tmp_path / "oauth.sqlite3", KEY)
         self.provider = provider_module.NextcloudOAuthProvider(
             env=SERVED_ENV,
@@ -502,16 +503,25 @@ class Deployment:
         )
         self.provider.on_revocation(self.verifier.invalidate)
         # High on purpose: the throttle has its own checks, and a page that throttles itself
-        # stops testing the refusals it is here for.
-        counters = throttle_module.Throttle(limit=10_000, ceiling=100_000, window=60)
+        # stops testing the refusals it is here for. A check about the throttle hands in one
+        # with the real limits, and it gets the consent surface next to the page, because the
+        # question of HI-01 is whether one surface can close the other.
+        counters = (
+            throttle
+            if throttle is not None
+            else throttle_module.Throttle(limit=10_000, ceiling=100_000, window=60)
+        )
         self.client = TestClient(
             Starlette(
-                routes=routes.connections_routes(
-                    SERVED_ENV,
-                    store_provider=self._open,
-                    end_connection=self.provider.end_connection,
-                    throttle=counters,
-                )
+                routes=[
+                    *routes.connections_routes(
+                        SERVED_ENV,
+                        store_provider=self._open,
+                        end_connection=self.provider.end_connection,
+                        throttle=counters,
+                    ),
+                    *consent.consent_routes(SERVED_ENV, provider=self.provider, throttle=counters),
+                ]
             )
         )
 
@@ -1014,8 +1024,14 @@ def test_the_page_never_ends_a_connection_on_a_path_of_its_own() -> None:
         assert "revoke_family" not in code, f"{path.name} revokes on its own"
 
 
-def test_the_page_is_throttled_as_the_browser_class_it_belongs_to() -> None:
-    """No new mechanics and no new class: the refusals of a browser path (T-04-37)."""
+def test_the_page_is_throttled_in_a_class_of_its_own() -> None:
+    """HI-01: the emergency brake may not hang in the class of the consent surface.
+
+    ``CLASS_AUTHORIZE`` counted the refusals of ``/authorize/consent``,
+    ``/authorize/decide`` and this page in one counter with one ceiling for the whole class,
+    so a flood on either of them closed the other two for everybody (T-04-37, and the
+    reason ``throttle.py`` splits classes at all).
+    """
     built = routes.connections_routes(
         SERVED_ENV,
         store_provider=_no_store,
@@ -1023,10 +1039,62 @@ def test_the_page_is_throttled_as_the_browser_class_it_belongs_to() -> None:
         throttle=throttle_module.Throttle(),
     )
 
-    assert len(built) == 1
-    guard = built[0].app
-    assert isinstance(guard, throttle_module.Throttled)
-    assert guard._path_class == throttle_module.CLASS_AUTHORIZE
+    for route in built:
+        guard = route.app
+        assert isinstance(guard, throttle_module.Throttled)
+        assert guard._path_class == throttle_module.CLASS_CONNECTIONS
+        assert guard._path_class != throttle_module.CLASS_AUTHORIZE
+
+
+def test_an_anonymous_flood_closes_neither_the_brake_nor_the_consent_surface(
+    tmp_path: Path,
+) -> None:
+    """HI-01, reproduced: 201 anonymous requests used to lock the page for five minutes.
+
+    Every answer is E8 with 403, so every one of them was counted, and the counter of a
+    whole path class is checked for every caller whatever its source. The account owner then
+    could neither disconnect anything nor pull the brake, which is the one function EXAPP-02
+    exists for, and every running authorization decision of the instance went with it.
+    """
+    deployment = Deployment(tmp_path, throttle=throttle_module.Throttle())
+    seed(deployment)
+    before = deployment.get()
+
+    for index in range(throttle_module.PATH_CEILING + 1):
+        flood = deployment.client.get(
+            ui.CONNECTIONS_PATH,
+            headers=appapi_headers("") | {"X-Forwarded-For": f"203.0.113.{index % 250}"},
+        )
+        assert flood.status_code == 403, "the flood is refused, and refusals are what count"
+
+    owner = deployment.get()
+    consent_surface = deployment.client.get(
+        f"{ui_consent.CONSENT_PATH}?{ui_consent.FLOW_PARAM}=a-flow-that-does-not-exist",
+        headers=appapi_headers(NC_USER),
+    )
+
+    assert before.status_code == 200
+    assert owner.status_code == 200, "the owner of the account still reaches their own brake"
+    assert CLIENT_NAME in owner.text
+    assert consent_surface.status_code != 429, "and no consent decision was locked out either"
+
+
+def test_the_refusals_of_one_account_do_not_lock_out_another(tmp_path: Path) -> None:
+    """The counter is keyed by the signed account and not by a forgeable header (HI-01).
+
+    A stale tab produces refusals as normal operation, and ``FAILURE_LIMIT`` of them are
+    enough to be sent away for five minutes. That may hit the account that produced them
+    and nobody else.
+    """
+    deployment = Deployment(tmp_path, throttle=throttle_module.Throttle())
+    seed(deployment)
+    seed(deployment, auth_id=FOREIGN_AUTH_ID, nc_user=OTHER_USER)
+
+    for _ in range(throttle_module.FAILURE_LIMIT + 1):
+        deployment.post({ui.ACTION_FIELD: "not-an-action-of-this-page"})
+
+    assert deployment.get().status_code == 429, "the account that flooded waits"
+    assert deployment.get(OTHER_USER).status_code == 200, "the other account does not"
 
 
 async def _no_store() -> OAuthStore:  # pragma: no cover - the route is never called here

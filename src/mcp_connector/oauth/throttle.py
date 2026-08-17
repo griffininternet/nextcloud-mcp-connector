@@ -51,6 +51,14 @@ why the second limit exists: a ceiling per path class that no header can escape.
 a forged header would buy an unbounded number of Nextcloud round trips; without the first
 limit a single flood behind one proxy would lock out every legitimate user of the instance.
 
+**And why one surface has neither of them in that shape (HI-01).** A ceiling per path class
+is shared fate: whoever fills it closes the class for everybody. That is the right trade on
+the endpoints an assistant app talks to, and the wrong one on the page a person opens to
+pull the brake on their own account, because the flood that fills it needs no credential at
+all. Where the counter can be keyed by the account the proxy signed, the forgeable source is
+gone and with it the reason for the ceiling, so ``/connections`` counts per account, without
+the class ceiling, and does not count the requests that carry no account.
+
 The state is process local, has a hard ceiling on how many counters it keeps, and losing it
 is harmless: a restart forgets who was attempting what, which costs one window of counting
 and nothing else. Two workers count separately, which makes the effective limit twice the
@@ -77,6 +85,7 @@ __all__ = [
     "CLASS_AUTHORIZE",
     "CLASS_AUTHORIZE_START",
     "CLASS_CONNECT",
+    "CLASS_CONNECTIONS",
     "CLASS_CONNECT_START",
     "CLASS_REGISTER",
     "CLASS_REVOKE",
@@ -91,13 +100,21 @@ __all__ = [
     "source_of",
 ]
 
-#: The seven path classes of this application. Separate counters, because a person fighting
+#: The eight path classes of this application. Separate counters, because a person fighting
 #: with the consent screen must not close the endpoint a working connector refreshes at.
 CLASS_TOKEN = "token"  # noqa: S105 - the name of a path class, not a credential
 CLASS_REGISTER = "register"
 CLASS_REVOKE = "revoke"
 CLASS_AUTHORIZE = "authorize"
 CLASS_CONNECT = "connect"
+
+#: The account page of EXAPP-02, and a class of its own since HI-01. It shared
+#: ``CLASS_AUTHORIZE`` with the consent screen, which put the emergency brake of every
+#: account and every running authorization decision behind one ceiling: two hundred anonymous
+#: requests on this public page closed all three for five minutes. This page is also the one
+#: surface whose counter is keyed by the account instead of by a forwarded address, see the
+#: ``identity`` argument of :class:`Throttled`.
+CLASS_CONNECTIONS = "connections"
 
 #: The two classes of the requests that open a Nextcloud login flow: the POST that starts
 #: the browser onboarding and the authorization endpoint. Classes of their own, because
@@ -179,7 +196,9 @@ class Throttle:
             f"Throttle(limit={self._limit!r}, ceiling={self._ceiling!r}, window={self._window!r})"
         )
 
-    def retry_after(self, path_class: str, source: str, *, limit: int | None = None) -> int:
+    def retry_after(
+        self, path_class: str, source: str, *, limit: int | None = None, shared: bool = True
+    ) -> int:
         """Seconds this caller has to wait, or ``0`` when it may go ahead.
 
         Never zero when a limit is reached: a page that promises an immediate retry invites
@@ -190,12 +209,19 @@ class Throttle:
         count every request can carry a higher one than the classes that count refusals
         (CR-02). The ceiling of the path class is not a parameter: it is the limit no
         forged header can escape, and one route must not be able to raise it.
+
+        ``shared=False`` leaves the counter of the whole path class out of the question, and
+        it is only correct where the source cannot be forged (HI-01). The ceiling exists
+        because a forwarded address is written by whoever sends the request, so a caller
+        could otherwise split its own counter without bound. Where the source is the account
+        id HaRP signs, that escape does not exist, and the ceiling then buys nothing and
+        costs the thing it is supposed to protect: shared fate between accounts, so a flood
+        of refusals closes a security page for the person who needs it.
         """
         now = self._clock()
-        pairs = (
-            (self._key(path_class, source), self._limit if limit is None else limit),
-            (self._whole(path_class), self._ceiling),
-        )
+        pairs = [(self._key(path_class, source), self._limit if limit is None else limit)]
+        if shared:
+            pairs.append((self._whole(path_class), self._ceiling))
         for key, limit in pairs:
             counter = self._counters.get(key)
             if counter is None or counter.until <= now:
@@ -204,16 +230,23 @@ class Throttle:
                 return max(1, math.ceil(counter.until - now))
         return 0
 
-    def record_attempt(self, path_class: str, source: str) -> None:
+    def record_attempt(self, path_class: str, source: str, *, shared: bool = True) -> None:
         """Count one attempt, for this source and for the path class as a whole.
 
         What an attempt is belongs to the caller: a refused request on the classes that
         count refusals, and every request on the two classes that count the cause, because
         there the cost is paid whether the answer is a 200 or a 400 (CR-02).
+
+        ``shared=False`` counts for the source alone, the counterpart of the same argument
+        of :meth:`retry_after` and correct under the same condition: the source is signed
+        and therefore not forgeable (HI-01).
         """
         now = self._clock()
         self._sweep(now)
-        for key in (self._key(path_class, source), self._whole(path_class)):
+        keys = [self._key(path_class, source)]
+        if shared:
+            keys.append(self._whole(path_class))
+        for key in keys:
             counter = self._counters.get(key)
             if counter is None or counter.until <= now:
                 self._counters[key] = _Counter(seen=1, until=now + self._window)
@@ -284,6 +317,16 @@ class Throttled:
     based counter never counted the one thing SC 5 is about. Counting before the work is
     also the honest moment: the round trip is caused by the request arriving, not by the
     answer being written, and a request that dies halfway must not be free.
+
+    ``identity`` is the third shape, and it exists for exactly one surface: the account page
+    of EXAPP-02, which is the emergency brake of an account and must not be closable from
+    outside (HI-01). Where it is given, two things change. The counter is keyed by the
+    account the proxy signed instead of by a forwarded address, so one account's refusals
+    can never send another account away, and the ceiling of the whole path class is left out
+    of it, because a signed source cannot be split by whoever sends the request. A request
+    without an account is not counted and not throttled at all: it is refused before
+    anything is read, it causes no Nextcloud round trip, and counting it was precisely the
+    defect, because two hundred anonymous requests then closed the page for its owner.
     """
 
     def __init__(
@@ -296,6 +339,7 @@ class Throttled:
         env: Mapping[str, str] | None = None,
         count_all: bool = False,
         limit: int | None = None,
+        identity: Callable[[Request], str] | None = None,
     ) -> None:
         self._app = app
         self._throttle = throttle
@@ -304,14 +348,28 @@ class Throttled:
         self._env = env
         self._count_all = count_all
         self._limit = limit
+        self._identity = identity
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":  # pragma: no cover - these routes are HTTP only
             await self._app(scope, receive, send)
             return
 
-        source = source_of(Request(scope))
-        wait = self._throttle.retry_after(self._path_class, source, limit=self._limit)
+        request = Request(scope)
+        if self._identity is not None:
+            account = self._identity(request)
+            if not account:
+                # Nothing to bound: this request is refused before a store is opened and it
+                # cannot cause a Nextcloud round trip (HI-01).
+                await self._app(scope, receive, send)
+                return
+            source, shared = account, False
+        else:
+            source, shared = source_of(request), True
+
+        wait = self._throttle.retry_after(
+            self._path_class, source, limit=self._limit, shared=shared
+        )
         if wait:
             await self._refuse(wait)(scope, receive, send)
             return
@@ -320,7 +378,7 @@ class Throttled:
             # Before the work, because the work is what it pays for. Nothing below may
             # forgive it either: on this class a successful request is exactly the
             # expensive one.
-            self._throttle.record_attempt(self._path_class, source)
+            self._throttle.record_attempt(self._path_class, source, shared=shared)
             await self._app(scope, receive, send)
             return
 
@@ -334,7 +392,7 @@ class Throttled:
 
         await self._app(scope, receive, watch)
         if status >= 400:
-            self._throttle.record_attempt(self._path_class, source)
+            self._throttle.record_attempt(self._path_class, source, shared=shared)
         else:
             self._throttle.forgive(self._path_class, source)
 

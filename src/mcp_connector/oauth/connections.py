@@ -64,7 +64,7 @@ from ..exapp.ui.connections import (
     connections_page,
 )
 from .store import AuthorizationRow, OAuthStore
-from .throttle import CLASS_AUTHORIZE, Throttle, Throttled
+from .throttle import CLASS_CONNECTIONS, Throttle, Throttled
 
 __all__ = ["SWITCH_HANDLE", "connections_routes"]
 
@@ -95,12 +95,24 @@ def connections_routes(
     end_connection: EndConnection,
     throttle: Throttle | None = None,
 ) -> list[Route]:
-    """The one route of the connections page, throttled as the browser path it is.
+    """The one route of the connections page, throttled as the emergency brake it is.
 
-    ``CLASS_AUTHORIZE`` and no class of its own: this page opens no login flow and costs no
-    Nextcloud round trip, so what has to be bounded here is its refusals, which is exactly
-    what the browser class of phase 3 counts (T-04-37, D-37). A refused request here is a
-    page, so a throttled one is E6 with the same seconds in its header and in its text.
+    A class of its own and a counter per account (HI-01). The page used to hang in
+    ``CLASS_AUTHORIZE`` with the argument that only refusals have to be bounded here, which
+    is true about the cost and wrong about the effect: what got bounded was not the attacker
+    but the way to the switch. Two hundred anonymous requests, each with a different forged
+    forwarded address, filled the ceiling of that whole class, and for the next five minutes
+    the page answered E6 to everybody, its owner included, and every consent decision of the
+    instance with it.
+
+    Three properties hold it now. The class is this page and nothing else, so no other
+    surface can close it and it can close no other surface. The counter is keyed by the
+    account HaRP signed rather than by a header the caller writes, so one account's refusals
+    never reach another account. And a request without an account is not counted at all: it
+    is E8 before anything is read and costs nothing worth bounding.
+
+    A refused request here is a page, so a throttled one is E6 with the same seconds in its
+    header and in its text (T-04-37, D-37).
     """
 
     async def connections(request: Request) -> Response:
@@ -119,9 +131,15 @@ def connections_routes(
             return await _list(store, user, env)
         return await _act(await request.form(), store, user, end_connection, env)
 
+    def account(request: Request) -> str:
+        """Who the counter of this request belongs to, or the empty string for nobody."""
+        return appapi_user(request, env=env)
+
     route = Route(CONNECTIONS_PATH, connections, methods=["GET", "POST"])
     counters = throttle if throttle is not None else Throttle()
-    route.app = Throttled(route.app, counters, CLASS_AUTHORIZE, machine=False, env=env)
+    route.app = Throttled(
+        route.app, counters, CLASS_CONNECTIONS, machine=False, env=env, identity=account
+    )
     return [route]
 
 
