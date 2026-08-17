@@ -70,8 +70,8 @@ What phase 4 adds:
 | Ownership check | A row may be shown and disconnected only when `authorizations.nc_user` equals the account HaRP resolved. Never the flow id, never a value from the request | The connection handle is guessable enough to be worth forging, and the account behind the browser is the only thing that answers "whose connection is this" |
 | State change | Only through `POST`. Two steps: confirm, then disconnect. No `GET` disconnects anything | The phase 3 rule (T-03-35) and the reason a link cannot be a destructive action |
 | Anti forgery | Hidden field, an HMAC of the connection handle under the installation data key, the same primitive as `CONFIRM_PARAM` of the consent form (T-03-50) | Needs no migration, survives a restart and a second worker, and no foreign origin can produce it |
-| Settings switch storage | Declarative Settings with **`storage_type: external`**, so the new value is pushed to this app when the user flips it | D-47 forbids a second Nextcloud roundtrip per MCP request and D-48 forbids a cache that delays the effect. `internal` storage would leave the value in Nextcloud preferences and force exactly the poll D-47 calls the worst answer. The concrete AppAPI endpoints for the external get and set are a plan question, not a design question, but a design that assumes `internal` is already wrong |
-| Fallback if `external` is unavailable | If AppAPI turns out not to support `storage_type: external` for an ExApp registered form, the switch does **not** silently fall back to a poll. The design falls back to the page: the on/off control moves onto `/connections` next to the list, and Nextcloud's settings section keeps only the link. D-44 asked for the switch to be findable where Nextcloud shows its app switches; that is a preference, while D-47 and D-48 are measured constraints, and the constraint wins | A poll would break the one measured number this phase is not allowed to worsen (SC 5 of phase 3, one Nextcloud roundtrip per MCP call), and a delayed effect would break SC 1. Losing the second entry point costs discoverability and nothing else |
+| Settings switch storage | **Resolved 2026-08-17, the fallback row below became the design.** The assumption that `external` means "pushed to this app" was measured false: AppAPI forces `external` and stores the value itself, and no call ever reaches the ExApp (04-RESEARCH.md) | D-47 forbids a second Nextcloud roundtrip per MCP request and D-48 forbids a cache that delays the effect; a value this app cannot observe satisfies neither |
+| Fallback if `external` is unavailable → **now the design** | The switch does **not** fall back to a poll. It lives on `/connections` next to the list (see "The Nextcloud Settings Entry" section), and Nextcloud's settings section carries a link-only entry (`fields: []`, measured working). D-44 asked for the switch to be findable where Nextcloud shows its app switches; that is a preference, while D-47 and D-48 are measured constraints, and the constraint wins | A poll would break the one measured number this phase is not allowed to worsen (SC 5 of phase 3, one Nextcloud roundtrip per MCP call), and a delayed effect would break SC 1. Losing the second entry point costs discoverability and nothing else |
 | Relationship to the old architecture draft | This table supersedes `.planning/research/ARCHITECTURE.md` lines 63 and 174, which still describe the earlier idea: the flag in `preferences_ex`, read from Nextcloud on every request. That is precisely the roundtrip D-47 forbids | The draft predates the SC 5 measurement of phase 3. Naming it here keeps the planner from implementing the older, cheaper looking sketch |
 | Settings rendering | Nextcloud renders the switch in its own design system. We supply `title`, `description`, `label`, `default` and `doc_url` and nothing else | This is the one surface of this app that must look like Nextcloud, because it is Nextcloud. Our own pages must never look like it (phase 3, T-03-23) |
 | New dependency | None. No template engine, no CSS framework, no icon package, no JavaScript | Unchanged from phase 3 |
@@ -358,30 +358,69 @@ drift apart.
 
 ---
 
-## The Nextcloud Settings Switch (D-44)
+## The Nextcloud Settings Entry, and where the switch really lives (D-44, resolved 2026-08-17)
 
-Rendered by Nextcloud from a Declarative Settings schema, registered through AppAPI. We own
-the words and the placement, and nothing else. Verified against the Nextcloud documentation
-for ExApp settings (`admin_manual/exapp_development/tech_details/api/settings.md` and
-`developer_manual/digging_deeper/declarative_settings.md`, read 2026-08-16).
+**The fallback of the constraints table is the design.** Phase research measured the
+Declarative Settings contract against the AppAPI source at tag v34.0.3 and against the live
+test topology (04-RESEARCH.md): AppAPI forces `storage_type: external` and stores the value
+itself in `preferences_ex`, and when a user flips a field, **no call reaches the ExApp**. No
+push, no webhook, no declarable route; the only way to learn the new value is an OCS
+roundtrip per request or a poll, both of which D-47 and D-48 forbid. A checkbox rendered by
+Nextcloud therefore cannot be the switch of this design.
+
+What replaces it, both parts measured against the running system:
+
+**1. The Nextcloud settings entry is link-only.** A Declarative Settings form with
+`fields: []` registers (200), passes core validation, and renders in the personal
+`security` section as a titled block with a description and a help icon. No fourteenth
+route, `SETTINGS_PLACE` holds.
 
 | Schema key | Value | Why |
 |-----------|-------|-----|
-| `section_type` | `personal` | It is the user's own switch. EXAPP-02 is per user by definition |
-| `section_id` | `security` | Where the user already manages "Devices and sessions", which is where every document of this project already sends them for app passwords and for ending a connection. If that section id turns out not to be addressable for an ExApp, the fallback is an own section titled "MCP Connector", and then **every** copy string that names the place changes with it. That is why the place is one constant and not a phrase repeated in four sentences |
-| `storage_type` | `external` | See Platform Constraints: `internal` would leave the value in Nextcloud and force a poll or a second roundtrip per request, which D-47 and D-48 both forbid |
+| `section_type` | `personal` | It is the user's own entry. EXAPP-02 is per user by definition |
+| `section_id` | `security` | Measured addressable for an ExApp form. Where the user already manages "Devices and sessions" |
 | `title` | "MCP Connector" | The name of the app, so the user recognises it in a long settings page |
-| `description` | "Assistant apps such as Claude or ChatGPT can reach your files, calendar, notes, contacts and Deck cards through this connector, exactly as far as your own account reaches. Your connected apps are listed at {connections_url}, where you can disconnect them one by one." | The `doc_url` below renders as a small help icon, and a help icon is easy to miss. The address is therefore also spelled out as text, so a user who never notices the icon still knows where to go |
+| `description` | "Assistant apps such as Claude or ChatGPT can reach your files, calendar, notes, contacts and Deck cards through this connector, exactly as far as your own account reaches. Your connected apps and the switch that pauses them are at {connections_url}." | The `doc_url` renders as a small help icon, and a help icon is easy to miss. The address is therefore also spelled out as text |
 | `doc_url` | The absolute public URL of `/connections` | The only link a Declarative Settings section can render. This is the link D-44 asks for |
-| `fields` | Exactly one, `type: checkbox` | One switch, one decision. A second field here would be a setting nobody asked for |
-| field `id` | `mcp_access_enabled` | |
-| field `title` | "MCP access" | |
-| field `label` | "Allow assistant apps to use my Nextcloud" | The sentence next to the box, in the first person, because the user is deciding about their own account |
-| field `description` | "Switching this off refuses every connected app immediately. Nothing is disconnected and nothing is deleted, so switching it back on restores every connection." | Says what the switch does and, just as important, what it does not do (D-46) |
-| field `default` | `true` | D-50: the switch is the emergency brake, not the doorman. A default of off produces the dead end where the connection succeeds and the first tool call fails anyway |
+| `fields` | `[]` | A field whose change the app cannot observe would be a switch that silently does nothing until the next poll, which is the worst of all versions of this feature |
 
-The switch is the only surface of this app that is allowed to look like Nextcloud, because
-Nextcloud draws it. Our own pages must stay visibly ours (T-03-23).
+Registration happens in the `/enabled` lifecycle handler
+(`POST /ocs/v2.php/apps/app_api/api/v1/ui/settings`, idempotent); disabling hides the entry,
+uninstalling cleans it up, both on AppAPI's side (04-RESEARCH.md).
+
+**2. The switch itself lives on `/connections` (S5 and S6), above the client list.** It is a
+`<form method="post">` with `action=toggle`, rendered as one sentence of state plus one
+button, because a checkbox that needs a submit button next to it is two controls pretending
+to be one:
+
+| State | Sentence (Body, 400) | Button |
+|-------|----------------------|--------|
+| Access on | `SWITCH_ON_STATE` = "MCP access is on. Connected apps can use your Nextcloud." | Secondary button `SWITCH_TURN_OFF` = "Pause access" |
+| Access off | `SWITCH_OFF_STATE` = "MCP access is paused. Connected apps are refused, nothing is disconnected." | **Primary** button `SWITCH_TURN_ON` = "Turn access back on" |
+
+- Turning **off** is the secondary style on purpose: it is the emergency brake, present but
+  not advertised, and the destructive red stays unused exactly as on the disconnect buttons
+  (nothing is destroyed, D-46).
+- Turning **on** is the one moment this page carries the accent colour: the page state is
+  degraded and the primary action is the way back. This amends the S5 note "no accent on
+  this page": it holds while access is on, and the paused state is the named exception.
+- The toggle POST carries the same anti forgery HMAC as the disconnect forms and answers
+  with the re-rendered list (CR-03 shape), where the pause callout appears or disappears as
+  the proof of effect. `SETTINGS_FIELD_TITLE`, `SETTINGS_FIELD_LABEL` and
+  `SETTINGS_FIELD_DESCRIPTION` from the copy table are retired with the checkbox; the four
+  `SWITCH_*` constants above replace them, and `SETTINGS_FIELD_DESCRIPTION`'s sentence about
+  what pausing does and does not do moves into `SWITCH_OFF_STATE` and the confirm-free flow
+  (no interstitial: pausing is reversible with one click on the same page, unlike a
+  disconnect, which is why the disconnect keeps its confirm step and the switch does not).
+- Default state remains **on** (D-50), now enforced by our own store rather than a schema
+  `default`.
+
+The pause callout of S5/S6 ("Access is paused") remains as specified; with the switch on the
+same page it stops being only a pointer to Nextcloud settings, so `CONNECTIONS_PAUSED_BODY`
+drops its last sentence ("Switch it on again in Nextcloud under...") in favour of the switch
+block directly above. `SETTINGS_PLACE` stays for the R1 wire answer, whose reader is not on
+this page: `ACCESS_DISABLED_DESCRIPTION` now ends "...can switch it back on on the
+connector's connections page, linked in Nextcloud under Settings, Security, MCP Connector."
 
 ---
 
@@ -423,7 +462,7 @@ Copy rules, inherited from phase 3 and enforced by the checker:
 | `CONNECTIONS_EMPTY_TITLE` | "No connected apps" |
 | `CONNECTIONS_EMPTY_BODY` | "No assistant app is connected to your Nextcloud through this connector. Connect one from the app itself, or use the onboarding page for an app that cannot sign in by itself." |
 | `CONNECTIONS_PAUSED_TITLE` | "Access is paused" |
-| `CONNECTIONS_PAUSED_BODY` | "MCP access is switched off for your account, so connected apps are refused. Nothing was disconnected. Switch it on again in Nextcloud under Settings, Security, MCP Connector." |
+| `CONNECTIONS_PAUSED_BODY` | "MCP access is switched off for your account, so connected apps are refused. Nothing was disconnected." (the pointer sentence was dropped on 2026-08-17: the switch now sits directly above this callout) |
 | `DISCONNECT_ACTION` | "Disconnect" |
 | `DISCONNECT_KEEP` | "Keep this connection" |
 | `DISCONNECT_TITLE` | "Disconnect {client}?" |
@@ -435,12 +474,14 @@ Copy rules, inherited from phase 3 and enforced by the checker:
 | `DISCONNECT_GONE_BODY` | "That connection is not listed any more. Nothing changed." |
 | `ERROR_SIGN_IN_TITLE` | "Sign in to see your connections" |
 | `ERROR_SIGN_IN_BODY` | "This page shows the apps connected to your own Nextcloud account. Sign in at {host} and open it again." |
-| `ACCESS_DISABLED_DESCRIPTION` | "MCP access is switched off for this Nextcloud account. The owner of the account can switch it back on in Nextcloud under Settings, Security, MCP Connector." |
+| `ACCESS_DISABLED_DESCRIPTION` | "MCP access is switched off for this Nextcloud account. The owner of the account can switch it back on on the connector's connections page, linked in Nextcloud under Settings, Security, MCP Connector." |
 | `SETTINGS_TITLE` | "MCP Connector" |
-| `SETTINGS_DESCRIPTION` | "Assistant apps such as Claude or ChatGPT can reach your files, calendar, notes, contacts and Deck cards through this connector, exactly as far as your own account reaches. Your connected apps are listed at {connections_url}, where you can disconnect them one by one." |
-| `SETTINGS_FIELD_TITLE` | "MCP access" |
-| `SETTINGS_FIELD_LABEL` | "Allow assistant apps to use my Nextcloud" |
-| `SETTINGS_FIELD_DESCRIPTION` | "Switching this off refuses every connected app immediately. Nothing is disconnected and nothing is deleted, so switching it back on restores every connection." |
+| `SETTINGS_DESCRIPTION` | "Assistant apps such as Claude or ChatGPT can reach your files, calendar, notes, contacts and Deck cards through this connector, exactly as far as your own account reaches. Your connected apps and the switch that pauses them are at {connections_url}." |
+| ~~`SETTINGS_FIELD_TITLE`~~, ~~`SETTINGS_FIELD_LABEL`~~, ~~`SETTINGS_FIELD_DESCRIPTION`~~ | Retired 2026-08-17 with the Nextcloud rendered checkbox (pull-only finding, 04-RESEARCH.md). Replaced by the four `SWITCH_*` constants below |
+| `SWITCH_ON_STATE` | "MCP access is on. Connected apps can use your Nextcloud." |
+| `SWITCH_OFF_STATE` | "MCP access is paused. Connected apps are refused, nothing is disconnected." |
+| `SWITCH_TURN_OFF` | "Pause access" |
+| `SWITCH_TURN_ON` | "Turn access back on" |
 | `SETTINGS_PLACE` | "Settings, Security, MCP Connector" |
 
 Reused unchanged from `exapp/ui/strings.py`, all of them existing constants and none of them
@@ -574,14 +615,15 @@ library are enough, as in phase 3.
 
 ## Open Questions for the Plan (not design questions)
 
-1. The exact AppAPI mechanism that pushes an `external` Declarative Settings value into this
-   app, and whether it needs its own declared route. If it does, that route is route fourteen
-   and needs the same justification as the other thirteen. The design assumes a push and
-   forbids a poll; the plan has to name the endpoint and measure that D-48 holds.
-2. Whether `section_id: security` is addressable for an ExApp registered form. If not, the
-   fallback is an own section, and `SETTINGS_PLACE` is the single constant that changes.
+1. **Answered 2026-08-17 (04-RESEARCH.md):** there is no push. AppAPI stores Declarative
+   Settings values itself and never calls the ExApp, so the checkbox design was impossible
+   and the fallback became the design: link-only settings entry, switch on `/connections`
+   (see "The Nextcloud Settings Entry" above). No fourteenth route.
+2. **Answered 2026-08-17 (04-RESEARCH.md):** `section_id: security` is addressable for an
+   ExApp registered form, measured against the live topology. `SETTINGS_PLACE` holds
+   unchanged.
 3. Whether a per authorization "last used" timestamp is worth a store column. Until it is,
-   the column stays out of the list (see S5).
+   the column stays out of the list (see S5). Still with the plan.
 
 ---
 
