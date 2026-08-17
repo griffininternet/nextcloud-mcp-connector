@@ -86,6 +86,31 @@ die laut Roadmap zu Phase 5 SC 4 gehört.
   ein Feld mehr zählt gegen das CI-Token-Budget, und ein Assistent trifft diese Wahl selten
   sinnvoll.
 
+### Nachtrag Owner 17.08. (während der Recherche ergänzt)
+
+- **D-57 (Injection):** `prepare_context` bündelt Inhalte, die andere geschrieben haben
+  können: geteilte Dateien, Kalendereinladungen fremder Absender, Deck-Karten anderer
+  Board-Mitglieder. Das Bündel-Tool vergrößert damit die Fläche für Prompt-Injection
+  gegenüber Einzel-Reads, weil ein Aufruf viele fremde Texte auf einmal in den Kontext des
+  Assistenten hebt. Der Plan muss das im Threat-Model führen und mindestens festschreiben:
+  jeder Treffer trägt seine Herkunft (Quelle + Id) als Struktur, nie als Fließtext;
+  Auszüge sind Daten und werden nicht mit Anweisungs-Rahmung ("the user wants…")
+  angereichert; die Tool-Description warnt den Client, dass Inhalte Dritter enthalten sein
+  können (dieselbe Ehrlichkeit wie die "Unverified client"-Callout in Phase 3); und es
+  gibt einen Guard-Test, der belegt, dass ein Treffertext mit Anweisungs-Injection
+  unverändert als Datenfeld ankommt statt Struktur oder Felder der Antwort zu verschieben.
+  Keine Inhalts-Filterung/Maskierung (Owner-Entscheid 14.08.: Maskierung ist
+  Scheinsicherheit); die Verteidigung ist Struktur und Kennzeichnung, nicht Zensur.
+- **D-58 (Contract-Gate):** Das bestehende Gate in `tests/contract/test_tool_surface.py`
+  ist die Wahrheit über die Tool-Oberfläche und bleibt es: `EXPECTED_TOOLS` ist ein
+  eingefrorenes Literal (ein 16. Tool schlägt fehl, bis es bewusst eingetragen wird), und
+  `test_the_readme_permission_table_matches_the_live_registry` erzwingt Mengengleichheit
+  README-Tabelle vs. Live-Registry samt Permission-Level. Der Plan für `prepare_context`
+  muss daher in EINEM Zug liefern: Eintrag in `EXPECTED_TOOLS`, Zeile in der
+  README-Permission-Tabelle (`read`), ehrliche Annotationen im Stil der bestehenden
+  Einzeltests, und einen eigenen Oberflächen-Test wie ihn jedes andere Tool hat. Das
+  CI-Token-Budget (`scripts/check_tool_budget.py`) gilt unverändert.
+
 ### Claude's Discretion
 
 - Die Zahl der Treffer je Quelle in Kurz und Voll, die konkreten Sekunden des Gesamtbudgets
