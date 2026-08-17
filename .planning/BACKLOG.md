@@ -134,6 +134,8 @@ Admin-Schalter haengen an der Store-Paketierung (EXAPP-04/05).
 
 ## BL-07: Datenschutz-Doku + Datenweitergabe-Disclosure (Owner-Frage 17.08.2026)
 
+**STATUS 17.08.: Doku-Teil ERLEDIGT** (docs/privacy.md gepusht; Datenweitergabe als Prosa in info.xml <description>, weil der Store kein data-sharing-Feld hat, siehe 05-store-research.md Frage 4). Offen bleibt nur, den Hinweis in die spaeteren Client-Setup-Docs zu spiegeln.
+
 **Anlass:** Datenschutz-Review des Connectors. Der Connector selbst ist
 datenschutzfreundlich (self-hosted, keine Telemetrie, keine Calls ausser an
 die eigene Nextcloud, App-Passwoerter verschluesselt at rest, Token nur als
