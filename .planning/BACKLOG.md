@@ -162,3 +162,100 @@ Drittlandtransfer). EU-/self-hosted-LLM (z.B. MUCGPT) entschaerft das.
 
 **Warum nicht in Phase 4:** Phase 4 war der Per-User-Slice; Store-Disclosure
 und Doku gehoeren zu Phase 5 (EXAPP-04/05, SC 1).
+
+## BL-08: Anti-Fälschungs-Werte mit Zeitfenster, oder als Restrisiko führen (Review 04, ME-02)
+
+**Befund:** `form_token` ist eine reine Funktion aus Datenschlüssel, Zweck und
+Handle. Der Wert hat keine Gültigkeitsdauer, kein Nonce, keinen Sitzungsbezug
+und keine Verbrauchszählung: für ein Konto ist der Schalter-Wert über die ganze
+Lebensdauer der Installation derselbe. Wer ihn einmal erlangt, kann den
+MCP-Zugang dieses Kontos zeitlich unbegrenzt per Cross-Site-POST pausieren und
+wieder freigeben, solange die Nutzerin bei Nextcloud angemeldet ist. Der einzige
+Rotationspunkt wäre der Datenschlüssel, und dessen Austausch macht jedes
+gespeicherte App-Passwort unlesbar, also alle Verbindungen kaputt.
+
+**Was zu entscheiden ist (Owner):** Ein Zeitfenster in die Ableitung nehmen, wie
+bei Double-Submit-Token üblich (Vorschlag des Reviews: `FORM_TOKEN_WINDOW = 3600`,
+aktuelles und vorheriges Fenster akzeptieren, beide mit `compare_digest`). Das ist
+eine UX-Entscheidung, keine reine Sicherheitsentscheidung: ein Formular, das
+länger als zwei Fenster offen liegt, wird ungültig, und der Nutzer bekommt die
+ruhige Ablehnung statt seiner Aktion. Alternative: den Sachverhalt als
+akzeptiertes Restrisiko mit Id führen, statt ihn in `crypto.py` als vollwertigen
+Schutz zu beschreiben.
+
+**Nicht im Review-Fix erledigt,** weil die Fensterbreite und das Verhalten
+offener Tabs eine Produktentscheidung sind. ME-01 (Zweckbindung) ist umgesetzt
+und unabhängig davon.
+
+## BL-09: Trunkierungsmarke von Auszügen aus dem Text herausziehen (Review 04, ME-03, D-57)
+
+**Befund:** `context._capped` hängt `EXCERPT_TRUNCATION` ohne Trenner an den
+Nutzertext, und `chatgpt.TRUNCATION_NOTE` läuft in denselben Textstrom. Ein
+Dokument, das dieselbe Zeichenfolge enthält, kann für das Modell so aussehen, als
+ende der Serverauszug dort und als folge danach eine Systemmitteilung: der
+Angreifer entscheidet über die Rahmung seines eigenen Texts, also genau über die
+Grenze, auf die sich D-57 stützt. Umgekehrt kann ein Dokument behaupten,
+vollständig zu sein, wo gekappt wurde.
+
+**Was zu entscheiden ist (Owner):** Sauber wäre ein eigenes Feld
+(`hit["excerpt_truncated"] = True`), das ein Dokument nicht erzeugen kann. Das
+ändert die Antwortstruktur von `prepare_context` und berührt bei `chatgpt.fetch`
+den ChatGPT-kompatiblen Vertrag, in dem die Marke bewusst im Text steht, damit ein
+Modell, das nur `text` liest, den Unterschied sieht. Beides zusammen ist eine
+Schema-Entscheidung (Tool-Budget, Client-Kompatibilität), keine lokale Korrektur.
+
+**Zwischenschritt, falls die Marke im Text bleiben soll:** einen Trenner
+verwenden, den `_capped` vorher aus dem Nutzertext filtert, und
+`chatgpt.TRUNCATION_NOTE` nicht ungeprüft in denselben Strom schreiben.
+
+## BL-10: Schalter auch dort durchsetzen, wo eine Zugangsberechtigung entsteht (Review 04, ME-04)
+
+**Befund:** Das Gate hängt ausschließlich an `MCP_PATH`. `/authorize`,
+`/authorize/decide` und `POST /connect` sind ungebremst, ein pausiertes Konto kann
+also einen kompletten Login-Flow abschließen, und Nextcloud legt dabei ein echtes
+App-Passwort an, das im Store landet. Erst der spätere Tool-Aufruf läuft in R1.
+Die Oberfläche sagt "MCP access is switched off for your account", und die Menge
+gültiger Nextcloud-App-Passwörter wächst trotz gezogener Bremse weiter.
+
+**Was zu entscheiden ist (Owner):** Entweder den Schalter an genau der Stelle
+mitprüfen, an der eine Zugangsberechtigung entsteht (vor `create_authorization` in
+`consent.py` und vor `_start` in `connect.py`, Antwort ist dieselbe Seite, die den
+Schalter zeigt), oder die Texte präzisieren (`SWITCH_OFF_STATE`,
+`CONNECTIONS_PAUSED_BODY`, `ACCESS_DISABLED_DESCRIPTION`) und den Sachverhalt als
+Restrisiko mit Id führen. Was nicht bleiben darf, ist die Differenz zwischen
+Zusage und Durchsetzung.
+
+**Nicht im Review-Fix erledigt,** weil beide Wege den App-Passwort-Flow berühren:
+die Prüfung fällt mitten in den Login-Flow-v2-Ablauf, in dem der Poll genau
+einmal antwortet und ein Abbruch nach dem Poll eine Rückgabe erzwingt. Das ist
+eine Design-Entscheidung, keine Raterei wert.
+
+## BL-11: Drei kleinere Befunde aus dem Phase-4-Review (LO-02, LO-03, LO-06)
+
+Alle drei sind kein Sicherheitsdefekt, aber jeder hat einen benennbaren Preis.
+
+**LO-02, `access_disabled` kostet mehr als der Docstring sagt.** Gemessen 1,54 ms
+pro Aufruf (300 Durchläufe, warm), weil `_connect` bei jedem Öffnen `mkdir`, drei
+Pragmas, `executescript(SCHEMA)` mit 13 Statements und zwei `PRAGMA table_info`
+ausführt. Das liegt auf jedem MCP-Request einer authentifizierten Identität, und
+`/mcp` trägt bewusst keine Drosselung. **Zu tun:** Schema nur beim ersten Öffnen
+pro Prozess ausführen (Flag im `OAuthStore`, gesetzt nach dem ersten
+erfolgreichen `_connect`) und den Docstring auf das korrigieren, was gemessen ist.
+Zu klären: Verhalten, wenn die Datei zur Laufzeit verschwindet.
+
+**LO-03, `user_access`-Zeilen werden nie aufgeräumt.** Die Tabelle wächst monoton
+und hält Zeilen für Konten, die es nicht mehr gibt; bei Verzeichnis-Setups mit
+Wiederverwendung von Konto-Ids startet ein neues Konto mit demselben Namen still
+pausiert. Über `/connections` sichtbar und behebbar, aber überraschend. **Zu tun:**
+`purge_expired` um ein Aufräumen für Konten ohne jede Autorisierung und mit altem
+`disabled_at` erweitern, oder auf ein `deleteUser`-Ereignis von Nextcloud hören
+(falls eine ExApp das erreichen kann), und den Grenzfall in `docs/` benennen.
+
+**LO-06, ein Auszug von 2 KB kostet bis zu 512 KB Transfer je Treffer.**
+`context._excerpt` ruft `chatgpt_tools.fetch`, und das liest bis
+`files.DEFAULT_MAX_BYTES` (512 KB), um daraus 2 KB zu behalten: bei `detail="full"`
+bis zu 1,5 MB Nextcloud-Transfer je Bundle-Aufruf, zeitlich durch
+`EXCERPT_TIMEOUT` begrenzt, mengenmäßig gar nicht. **Zu tun:** eine Leseobergrenze
+durch `fetch` durchreichen (etwa `max_bytes=EXCERPT_MAX_BYTES * 2`). Ändert nichts
+am Ergebnis und spart den Faktor 250; berührt aber die Signatur von `fetch`, die
+zum ChatGPT-Vertrag gehört, deshalb zusammen mit BL-09 zu entscheiden.
