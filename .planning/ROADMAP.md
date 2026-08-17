@@ -174,8 +174,22 @@ Plans:
   3. Ein prepare_context-Aufruf liefert relevante Dateien, Termine, Notizen und Deck-Karten zu einer Anfrage gebündelt in einer token-effizienten Antwort, mit Kurz/Voll-Parameter und parallelem Fan-out
   4. Fällt eine Teilquelle aus oder überschreitet ihr Budget/Timeout, ist sie im prepare_context-Ergebnis explizit als degradiert markiert (keine stillen Teil-Ergebnisse)
 
-**Plans**: TBD
+**Plans**: 4 plans in 3 waves
 **UI hint**: yes
+
+Plans:
+**Wave 1**
+
+- [ ] 04-01-PLAN.md - Schalter im Store und R1 an der Transportgrenze (Wave 1)
+- [ ] 04-02-PLAN.md - prepare_context: Fan-out, Kurz/Voll, degraded, Tool-Oberfläche in einem Zug (Wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 04-03-PLAN.md - Connections-Seite: Liste, Widerruf je Zeile, Schalter, Route 13, E2E-Wächter (Wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 04-04-PLAN.md - Settings-Wegweiser (Link-only-Form) und Live-Abnahme mit SC-5-Messung (Wave 3)
 
 ### Phase 5: Hardening und Store-Einreichung
 
