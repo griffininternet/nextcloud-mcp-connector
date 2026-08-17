@@ -6,18 +6,27 @@
 # GitHub release. This is the phase 5 counterpart of the cacheonly build in ci.yml
 # (D-25): here, and only here, the image is pushed.
 #
-# The store submission itself stays a manual step: it needs the private signing
-# key that belongs to the merged CSR certificate, which is not a repository
-# secret. See docs/store-submission.md. This workflow builds and signs the archive
-# only if NC_SIGN_KEY_B64 is present as a secret; otherwise it publishes the
-# unsigned archive and the maintainer signs it locally with
-# scripts/build_store_release.sh.
+# Two ways in:
+#   - push a tag v<version>: the real release, builds, pushes and publishes.
+#   - run it by hand (workflow_dispatch) with dry_run=true (the default): builds the
+#     multi arch image WITHOUT pushing and builds the store archive WITHOUT a
+#     release, so the workflow itself can be tested without publishing anything.
+#
+# The store submission stays a manual step: it needs the private signing key that
+# belongs to the merged CSR certificate, which is not a repository secret. See
+# docs/store-submission.md.
 name: release
 
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build only, do not push the image or publish a release"
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -29,54 +38,51 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Derive the version from the tag
-        id: version
-        # v0.1.0 -> 0.1.0. Fail loudly if the tag does not match info.xml <version>,
+      - name: Decide dry run and version
+        id: cfg
+        # A tag push is always a real release. A manual run is a dry run unless the
+        # operator unticks the box. The version comes from the tag on a tag push and
+        # from info.xml on a manual run, and a tag must match info.xml <version>,
         # because the store version and the pulled image tag have to be the same.
         run: |
-          tag="${GITHUB_REF_NAME#v}"
           xml="$(grep -oP '(?<=<version>)[^<]+' appinfo/info.xml)"
-          if [[ "$tag" != "$xml" ]]; then
-            echo "tag $tag does not match info.xml <version> $xml" >&2
-            exit 1
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            tag="${GITHUB_REF_NAME#v}"
+            if [[ "$tag" != "$xml" ]]; then
+              echo "tag $tag does not match info.xml <version> $xml" >&2
+              exit 1
+            fi
+            echo "dry=false" >> "$GITHUB_OUTPUT"
+            echo "version=$tag" >> "$GITHUB_OUTPUT"
+          else
+            echo "dry=${{ inputs.dry_run }}" >> "$GITHUB_OUTPUT"
+            echo "version=$xml" >> "$GITHUB_OUTPUT"
           fi
-          echo "version=$tag" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
       - name: Log in to ghcr.io
+        if: ${{ steps.cfg.outputs.dry == 'false' }}
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push the multi arch image
+      - name: Build the multi arch image (push only on a real release)
         uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ghcr.io/${{ github.repository_owner }}/mcp_connector:${{ steps.version.outputs.version }}
+          push: ${{ steps.cfg.outputs.dry == 'false' }}
+          tags: ghcr.io/${{ github.repository_owner }}/mcp_connector:${{ steps.cfg.outputs.version }}
 
       - name: Build the store archive
-        run: scripts/build_store_release.sh "${{ steps.version.outputs.version }}"
-        env:
-          # Optional: base64 of the signing key. When absent, the archive is built
-          # unsigned and the maintainer signs it locally before the store upload.
-          NC_SIGN_KEY_B64: ${{ secrets.NC_SIGN_KEY_B64 }}
-
-      - name: Decode the signing key if present
-        if: ${{ env.NC_SIGN_KEY_B64 != '' }}
-        env:
-          NC_SIGN_KEY_B64: ${{ secrets.NC_SIGN_KEY_B64 }}
-        run: |
-          mkdir -p "$HOME/.nextcloud/certificates"
-          echo "$NC_SIGN_KEY_B64" | base64 -d > "$HOME/.nextcloud/certificates/mcp_connector.key"
-          scripts/build_store_release.sh "${{ steps.version.outputs.version }}" | tee sign-output.txt
+        run: scripts/build_store_release.sh "${{ steps.cfg.outputs.version }}"
 
       - name: Attach the archive to the GitHub release
+        if: ${{ steps.cfg.outputs.dry == 'false' }}
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/mcp_connector-${{ steps.version.outputs.version }}.tar.gz
+          files: dist/mcp_connector-${{ steps.cfg.outputs.version }}.tar.gz
