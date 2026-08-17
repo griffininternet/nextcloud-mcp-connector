@@ -186,7 +186,7 @@ async def _act(
     auth_id = str(form.get(AUTH_PARAM) or "")
 
     if action == ACTION_CONFIRM:
-        return await _confirm(auth_id, store, user, env)
+        return await _confirm(auth_id, presented, store, user, env)
     if action == ACTION_DISCONNECT:
         return await _disconnect(auth_id, presented, store, user, end_connection, env)
     if action in (ACTION_PAUSE, ACTION_RESUME):
@@ -199,18 +199,28 @@ async def _act(
 
 
 async def _confirm(
-    auth_id: str, store: OAuthStore, user: str, env: Mapping[str, str] | None
+    auth_id: str, presented: str, store: OAuthStore, user: str, env: Mapping[str, str] | None
 ) -> Response:
     """S7 for a live connection of this account, and the S8 answer for everything else.
 
     The three cases an attacker can produce, an unknown handle, a handle of another account
     and one that was revoked, are answered by the same page as a resubmitted form: a page
     that told them apart would answer whether that connection exists (T-04-31).
+
+    The anti forgery value is asked for here as well, although this action changes nothing
+    (LO-07). What the answer carries is the value of the *next* action, and handing the
+    secret of a disconnect out over a request that carried none of its own is an edge worth
+    not having. It costs no markup: the form of the row renders the value already, which is
+    what the confirmation page needs it for.
     """
     row = await _owned(auth_id, store, user, env)
     if isinstance(row, Response):
         return row
     if row is None:
+        return await _list(store, user, env, result=RESULT_GONE)
+
+    if not _confirmed(store, auth_id, presented, purpose=PURPOSE_DISCONNECT):
+        logger.warning("a confirmation arrived without the anti forgery value of its connection")
         return await _list(store, user, env, result=RESULT_GONE)
     return confirm_page(await _connection(row, store), env=env)
 

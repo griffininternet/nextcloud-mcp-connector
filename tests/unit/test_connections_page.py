@@ -705,12 +705,39 @@ def test_a_browser_without_a_nextcloud_account_gets_e8_on_both_verbs(live: Deplo
 
 
 def test_a_confirm_of_an_own_connection_is_the_interstitial(live: Deployment) -> None:
-    response = live.post({ui.ACTION_FIELD: ui.ACTION_CONFIRM, ui.AUTH_PARAM: AUTH_ID})
+    response = live.post(
+        {
+            ui.ACTION_FIELD: ui.ACTION_CONFIRM,
+            ui.AUTH_PARAM: AUTH_ID,
+            ui.CONFIRM_PARAM: live.token_of(AUTH_ID),
+        }
+    )
 
     assert response.status_code == 200
     assert strings.DISCONNECT_TITLE.format(client=CLIENT_NAME) in response.text
     assert live.token_of(AUTH_ID) in response.text
     assert live.rows_of() == [AUTH_ID], "the interstitial changes nothing"
+
+
+def test_a_confirmation_without_the_anti_forgery_value_hands_no_value_out(
+    live: Deployment, caplog: pytest.LogCaptureFixture
+) -> None:
+    """LO-07: the interstitial changes nothing, and its page carries the next value.
+
+    A foreign origin can post this form. It cannot read the answer and it does not know the
+    handle either, so nothing was reachable through it; what remains is one of five actions
+    of this page answering a request that carried none of its own values, with the page that
+    renders the interstitial of a destructive action. The form of the row carries the value
+    already, so the closed enumeration is now closed in the same way five times over.
+    """
+    with caplog.at_level("WARNING", logger="mcp_connector.oauth.connections"):
+        response = live.post({ui.ACTION_FIELD: ui.ACTION_CONFIRM, ui.AUTH_PARAM: AUTH_ID})
+
+    assert response.status_code == 200
+    assert strings.DISCONNECT_GONE_TITLE in response.text, "the same calm answer as always"
+    assert strings.DISCONNECT_TITLE.format(client=CLIENT_NAME) not in response.text
+    assert live.rows_of() == [AUTH_ID]
+    assert caplog.records
 
 
 def test_an_unknown_a_foreign_and_a_revoked_handle_answer_the_same_page(
