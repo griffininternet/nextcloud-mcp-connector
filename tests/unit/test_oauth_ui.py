@@ -445,6 +445,10 @@ ERROR_PAGES = [
     ("E4", 408, strings.ERROR_TIMEOUT_TITLE, "Start the connection again"),
     ("E5", 400, strings.ERROR_REDIRECT_TITLE, "Start the connection again"),
     ("E6", 429, strings.ERROR_THROTTLED_TITLE, "Wait"),
+    # E8 joined the table in phase 4 and stands where the table declares it: before the
+    # generic page, which stays the last row because it is also the fallback of an unknown
+    # code (04-UI-SPEC.md, E8).
+    ("E8", 403, strings.ERROR_SIGN_IN_TITLE, "Sign in at"),
     ("E7", 500, strings.ERROR_GENERIC_TITLE, "Try again"),
 ]
 
@@ -513,7 +517,7 @@ def test_no_error_page_tells_the_attacker_which_check_fired(
         assert needle not in readable, f"{code} breaks a copy rule with {needle!r}"
 
 
-def test_the_table_has_exactly_the_seven_pages_of_the_contract() -> None:
+def test_the_table_has_exactly_the_eight_pages_of_the_contract() -> None:
     expected = tuple(code for code, _, _, _ in ERROR_PAGES)
     assert expected == errors.CODES
 

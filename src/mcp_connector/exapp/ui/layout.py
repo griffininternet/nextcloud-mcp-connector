@@ -42,6 +42,8 @@ __all__ = [
     "CLIENT_NAME_LIMIT",
     "CSP_TEMPLATE",
     "HEAD_EXTRA_PATTERN",
+    "ROW_MONO",
+    "ROW_MUTED",
     "STYLESHEET",
     "action",
     "app_path",
@@ -56,6 +58,7 @@ __all__ = [
     "page",
     "paragraph",
     "return_action",
+    "row_list",
     "section_heading",
     "status_line",
     "unordered_list",
@@ -96,6 +99,14 @@ _CALLOUT_ICONS = {
 }
 
 _TONES = {"": "", "error": " tone-error", "success": " tone-success"}
+
+#: The two shapes a secondary line of a row may take, and there is no third: a muted
+#: sentence and a monospace value. Both classes exist since phase 3, so a list of
+#: connections introduces no new type style (04-UI-SPEC.md, Typography).
+ROW_MUTED = "muted"
+ROW_MONO = "mono"
+
+_ROW_LINES = frozenset({ROW_MUTED, ROW_MONO})
 
 #: One block, one nonce, no external asset. The tokens are the ones of 03-UI-SPEC.md:
 #: four type sizes, two weights, spacing in multiples of four, 44px as the smallest
@@ -149,6 +160,17 @@ p:last-child { margin-bottom: 0; }
 a { color: #1F3A5F; }
 ul { margin: 0 0 16px; padding-left: 24px; }
 li { margin-bottom: 8px; }
+ul.rows { list-style: none; padding-left: 0; }
+li.row {
+  border-top: 1px solid #D5D8DD;
+  padding: 16px 0;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+.row-title { font-weight: 600; margin: 0 0 4px; }
 dl { margin: 0; }
 dt { font-size: 14px; font-weight: 600; margin-top: 16px; }
 dd { margin: 4px 0 0; }
@@ -311,6 +333,38 @@ def detail_list(items: Sequence[tuple[str, str]]) -> str:
     return f"<dl>{rows}</dl>"
 
 
+def row_list(rows: Sequence[tuple[str, Sequence[tuple[str, str]], str]]) -> str:
+    """The list of connected apps: one ``<li>`` per row, with an action of its own.
+
+    A row is a title, a sequence of secondary lines and one action fragment. The lines
+    carry their own style, and there are exactly two: :data:`ROW_MUTED` for a sentence and
+    :data:`ROW_MONO` for a value such as a client id. An unknown one raises rather than
+    falling back to the body style, for the reason :func:`callout` raises on an unknown
+    kind: a value that silently loses its look is the failure this module exists against.
+
+    A real list and not a table (04-UI-SPEC.md, Accessibility): a screen reader announces
+    how many connections there are, and at 560px a table with an action column either
+    scrolls sideways or stops being a table. No heading per row either, so the heading
+    outline of the page stays the one heading that means something.
+
+    ``action`` is a fragment built by :func:`form`, and it is the one argument of this
+    module that is not escaped here, exactly like the blocks :func:`page` receives.
+    Everything a caller passes as text goes through :func:`_escape` at this single point.
+    """
+    items = []
+    for title, lines, action_fragment in rows:
+        secondary = []
+        for style, value in lines:
+            if style not in _ROW_LINES:
+                raise ValueError(f"unknown row line style {style!r}")
+            secondary.append(f'<p class="{style}">{_escape(value)}</p>')
+        items.append(
+            f'<li class="row"><div><p class="row-title">{_escape(title)}</p>'
+            f"{''.join(secondary)}</div>{action_fragment}</li>"
+        )
+    return f'<ul class="rows">{"".join(items)}</ul>'
+
+
 def callout(kind: str, title: str, body: str) -> str:
     """An icon, a title and a body. Never colour alone (03-UI-SPEC.md, Color).
 
@@ -332,9 +386,15 @@ def button_primary(label: str, *, name: str, value: str) -> str:
     return _button(label, name=name, value=value, css="btn-primary")
 
 
-def button_secondary(label: str, *, name: str, value: str) -> str:
-    """The safe action. Rendered before the primary one, so it is reachable first."""
-    return _button(label, name=name, value=value, css="btn-secondary")
+def button_secondary(label: str, *, name: str, value: str, aria_label: str = "") -> str:
+    """The safe action. Rendered before the primary one, so it is reachable first.
+
+    ``aria_label`` exists for the one place a page carries several buttons with the same
+    visible label: the rows of the connections list, where every button reads "Disconnect"
+    and a screen reader would otherwise announce the same word five times in a row
+    (04-UI-SPEC.md, Accessibility). It never replaces the visible label, it names it.
+    """
+    return _button(label, name=name, value=value, css="btn-secondary", aria_label=aria_label)
 
 
 def app_path(target: str, env: Mapping[str, str] | None = None) -> str:
@@ -475,10 +535,11 @@ def _refresh_tag(target: str) -> str:
     return f'<meta http-equiv="refresh" content="0; url={_escape(target)}">\n'
 
 
-def _button(label: str, *, name: str, value: str, css: str) -> str:
+def _button(label: str, *, name: str, value: str, css: str, aria_label: str = "") -> str:
+    described = f' aria-label="{_escape(aria_label)}"' if aria_label else ""
     return (
         f'<button class="{css}" type="submit" name="{_escape(name)}" '
-        f'value="{_escape(value)}">{_escape(label)}</button>'
+        f'value="{_escape(value)}"{described}>{_escape(label)}</button>'
     )
 
 

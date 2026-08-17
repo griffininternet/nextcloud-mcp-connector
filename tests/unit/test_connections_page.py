@@ -44,6 +44,11 @@ SWITCH_TOKEN = "an-anti-forgery-value-of-the-switch"
 CREATED_AT = calendar.timegm((2026, 8, 12, 21, 30, 0, 0, 0, 0))
 CONNECTED_ON = "12 August 2026"
 
+#: The section heading as it stands in the document. Compared as markup on purpose: the
+#: words "Connected apps" also stand inside the sentence of the switch, so a bare substring
+#: would find the wrong one and an order check would silently assert nothing.
+SECTION_HEADING = f"<h2>{strings.CONNECTIONS_SECTION}</h2>"
+
 #: A client name as a registration could send it: markup, quotes, a line break and a
 #: control character. Nothing of it may reach the document as anything but text.
 HOSTILE_NAME = '<script>alert("x")</script>\r\n\x07Bad Client'
@@ -198,7 +203,7 @@ def test_the_switch_block_is_the_on_state_plus_a_secondary_button() -> None:
     assert f'class="btn-secondary" type="submit" name="{ui.ACTION_FIELD}"' in text
     assert f'value="{ui.ACTION_PAUSE}"' in text
     assert strings.CONNECTIONS_PAUSED_TITLE not in text
-    assert "btn-primary" not in text, "while access is on this page carries no accent button"
+    assert '<button class="btn-primary"' not in text, "access on: this page has no accent button"
 
 
 def test_a_paused_account_gets_the_primary_button_and_the_warning() -> None:
@@ -221,7 +226,7 @@ def test_the_switch_block_stands_directly_above_the_pause_warning() -> None:
         body(listing(paused=True)),
         strings.SWITCH_OFF_STATE,
         strings.CONNECTIONS_PAUSED_TITLE,
-        strings.CONNECTIONS_SECTION,
+        SECTION_HEADING,
     )
 
     assert state < warning < section
@@ -248,7 +253,7 @@ def test_the_empty_state_is_the_same_shell_and_answers_200() -> None:
     assert strings.CONNECTIONS_FOOTNOTE in document.text
     assert strings.CONNECT_TITLE in document.text
     assert "ul" not in document.tags, "no empty list, and no section heading above one"
-    assert strings.CONNECTIONS_SECTION not in document.text
+    assert SECTION_HEADING not in body(response)
 
 
 def test_the_empty_state_keeps_the_switch_and_its_warning() -> None:
@@ -278,7 +283,9 @@ def test_the_confirm_page_offers_keep_before_disconnect_in_one_form() -> None:
     """The safe action is reachable first, exactly as deny comes before approve (S3)."""
     response = ui.confirm_page(connection(), env=ENV)
     text = body(response)
-    keep, disconnect = order_of(text, strings.DISCONNECT_KEEP, strings.DISCONNECT_ACTION)
+    keep, disconnect = order_of(
+        text, f">{strings.DISCONNECT_KEEP}<", f">{strings.DISCONNECT_ACTION}<"
+    )
 
     assert keep < disconnect
     assert parse(response).tags.count("form") == 1
@@ -334,7 +341,7 @@ def test_the_result_callout_stands_before_the_pause_warning() -> None:
         body(listing(paused=True, result=ui.RESULT_DONE, result_client=CLIENT_NAME)),
         strings.DISCONNECT_DONE_TITLE,
         strings.CONNECTIONS_PAUSED_TITLE,
-        strings.CONNECTIONS_SECTION,
+        SECTION_HEADING,
     )
 
     assert result < warning < section

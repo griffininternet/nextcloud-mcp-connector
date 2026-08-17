@@ -11,8 +11,9 @@ deliberately not mirrored here as a dictionary: an unused mapping would be dead 
 dead code gate would report it, and a whitelist entry for a translation nobody serves yet
 is worse than a table in the document that owns the copy anyway.
 
-The placeholders are ``str.format`` names, and there are exactly six of them across the
-whole surface: ``client``, ``host``, ``user``, ``redirect_uri``, ``seconds`` and ``ref``.
+The placeholders are ``str.format`` names, and there are exactly eight of them across the
+whole surface: ``client``, ``host``, ``user``, ``redirect_uri``, ``seconds`` and ``ref``
+from phase 3, plus ``date`` and ``connections_url`` which phase 4 adds (04-UI-SPEC.md).
 Every one of them is filled at render time and escaped by ``layout``, at the single point
 where the template writes it.
 
@@ -33,6 +34,15 @@ __all__ = [
     "ACTION_CHECK_NOW",
     "ACTION_START_OVER",
     "CLIENT_NAME_FALLBACK",
+    "CONNECTIONS_DETAIL_CONNECTED",
+    "CONNECTIONS_EMPTY_BODY",
+    "CONNECTIONS_EMPTY_TITLE",
+    "CONNECTIONS_FOOTNOTE",
+    "CONNECTIONS_PAUSED_BODY",
+    "CONNECTIONS_PAUSED_TITLE",
+    "CONNECTIONS_ROW_CONNECTED",
+    "CONNECTIONS_SECTION",
+    "CONNECTIONS_TITLE",
     "CONNECT_BODY",
     "CONNECT_DETAIL_CREDENTIAL",
     "CONNECT_DETAIL_USER",
@@ -61,6 +71,15 @@ __all__ = [
     "CONSENT_TITLE",
     "CONSENT_WARNING_BODY",
     "CONSENT_WARNING_TITLE",
+    "DISCONNECT_ACTION",
+    "DISCONNECT_AGAIN",
+    "DISCONNECT_BODY",
+    "DISCONNECT_DONE_BODY",
+    "DISCONNECT_DONE_TITLE",
+    "DISCONNECT_GONE_BODY",
+    "DISCONNECT_GONE_TITLE",
+    "DISCONNECT_KEEP",
+    "DISCONNECT_TITLE",
     "EMPTY_BODY",
     "EMPTY_TITLE",
     "ERROR_ALLOWLIST_BODY",
@@ -73,6 +92,8 @@ __all__ = [
     "ERROR_REDIRECT_TITLE",
     "ERROR_REGISTRATION_OFF_BODY",
     "ERROR_REGISTRATION_OFF_TITLE",
+    "ERROR_SIGN_IN_BODY",
+    "ERROR_SIGN_IN_TITLE",
     "ERROR_THROTTLED_BODY",
     "ERROR_THROTTLED_TITLE",
     "ERROR_TIMEOUT_BODY",
@@ -84,10 +105,16 @@ __all__ = [
     "RESULT_DENIED_TITLE",
     "RESULT_RETURN_ACTION",
     "RESULT_RETURN_BODY",
+    "SETTINGS_DESCRIPTION",
     "SETTINGS_PLACE",
+    "SETTINGS_TITLE",
     "SIGNIN_BODY",
     "SIGNIN_CTA",
     "SIGNIN_TITLE",
+    "SWITCH_OFF_STATE",
+    "SWITCH_ON_STATE",
+    "SWITCH_TURN_OFF",
+    "SWITCH_TURN_ON",
     "WAIT_BODY",
     "WAIT_STATUS",
     "WAIT_TITLE",
@@ -272,7 +299,87 @@ EMPTY_BODY = (
     "in your assistant app."
 )
 
-# --- E1 to E7, the seven error pages -----------------------------------------------------
+# --- S5 to S8, the connections page of one account (EXAPP-02, 04-UI-SPEC.md) -------------
+#
+# The page a user opens to see which assistant apps can reach their Nextcloud, to end one
+# of those connections, and to pause the whole access of their account. "Disconnect" and
+# never "revoke": the word of the specification belongs in ``docs/``, where it talks to
+# administrators; the person on this page connected an app and wants it gone.
+
+CONNECTIONS_TITLE = "Your connections"
+
+CONNECTIONS_SECTION = "Connected apps"
+
+CONNECTIONS_DETAIL_CONNECTED = "Connected on"
+
+CONNECTIONS_ROW_CONNECTED = "Connected on {date}"
+
+CONNECTIONS_FOOTNOTE = (
+    "Apps you connected with a credential from the onboarding page are not listed here. "
+    "They appear in Nextcloud under Settings, Security, Devices and sessions."
+)
+
+CONNECTIONS_EMPTY_TITLE = "No connected apps"
+
+CONNECTIONS_EMPTY_BODY = (
+    "No assistant app is connected to your Nextcloud through this connector. Connect one "
+    "from the app itself, or use the onboarding page for an app that cannot sign in by "
+    "itself."
+)
+
+CONNECTIONS_PAUSED_TITLE = "Access is paused"
+
+#: Without a pointer to the Nextcloud settings on purpose (04-UI-SPEC.md, amended
+#: 2026-08-17): the switch that turns access back on is rendered directly above this
+#: callout, so a sentence that sent the reader somewhere else would be wrong by a line.
+CONNECTIONS_PAUSED_BODY = (
+    "MCP access is switched off for your account, so connected apps are refused. Nothing "
+    "was disconnected."
+)
+
+#: The bare verb, on purpose: every row already carries the app name as its title, and the
+#: name reaches assistive technology through the ``aria-label`` of the button instead.
+DISCONNECT_ACTION = "Disconnect"
+
+DISCONNECT_KEEP = "Keep this connection"
+
+DISCONNECT_TITLE = "Disconnect {client}?"
+
+DISCONNECT_BODY = (
+    "{client} loses access to your Nextcloud immediately. Nothing in your Nextcloud is "
+    "deleted or changed."
+)
+
+DISCONNECT_AGAIN = "You can connect it again at any time from the app itself."
+
+DISCONNECT_DONE_TITLE = "Disconnected"
+
+DISCONNECT_DONE_BODY = (
+    "{client} no longer has access. If the app is still open, it will report that it lost "
+    "its connection."
+)
+
+#: The answer to a resubmitted form, a handle that is gone and a handle of another account,
+#: which are one answer on purpose: a page that told them apart would answer a stranger who
+#: guessed a handle whether that connection exists (T-04-31).
+DISCONNECT_GONE_TITLE = "Already disconnected"
+
+DISCONNECT_GONE_BODY = "That connection is not listed any more. Nothing changed."
+
+# --- The switch, as it is rendered on that page ------------------------------------------
+#
+# One sentence of state plus one button, and the action is a named state (pause, resume)
+# rather than a toggle: a resubmitted form then re-states a state instead of flipping it.
+
+SWITCH_ON_STATE = "MCP access is on. Connected apps can use your Nextcloud."
+
+SWITCH_OFF_STATE = "MCP access is paused. Connected apps are refused, nothing is disconnected."
+
+SWITCH_TURN_OFF = "Pause access"
+
+SWITCH_TURN_ON = "Turn access back on"
+
+# --- E1 to E8, the eight error pages ------------------------------------------------------
 #
 # The trigger of each page and its status code live in ``errors.py``. Here is only the copy,
 # so that a wording fix never touches a status code and a status code fix never touches the
@@ -318,6 +425,17 @@ ERROR_THROTTLED_TITLE = "Too many attempts"
 
 ERROR_THROTTLED_BODY = "Wait {seconds} seconds and try again."
 
+#: E8, the connections page without a Nextcloud account behind the browser. The host is
+#: named in words and never as a link: the one outbound link of this app is the sign in
+#: address Nextcloud itself hands us, and inventing one here would be the phishing shape
+#: the footer of every page warns about (04-UI-SPEC.md, E8).
+ERROR_SIGN_IN_TITLE = "Sign in to see your connections"
+
+ERROR_SIGN_IN_BODY = (
+    "This page shows the apps connected to your own Nextcloud account. Sign in at {host} "
+    "and open it again."
+)
+
 ERROR_GENERIC_TITLE = "Something went wrong"
 
 ERROR_GENERIC_BODY = (
@@ -332,6 +450,22 @@ ERROR_GENERIC_BODY = (
 # whatever their assistant app prints from it, so the answer carries the whole sentence.
 # The two constants live here with the page copy because they are the same kind of thing,
 # one sentence a person reads, and because a later locale has to be a data change here too.
+
+# --- The entry Nextcloud renders in the personal settings (D-44, link only) ---------------
+#
+# A Declarative Settings form with no field at all: AppAPI stores the value of a field
+# itself and never calls the ExApp when a user changes it (04-RESEARCH.md), so a checkbox
+# there would be a switch this app cannot observe. What the entry does instead is point at
+# the page that carries the real switch, which is why the address is spelled out as text
+# next to the ``doc_url`` link. Consumed by the registration of plan 04-04.
+
+SETTINGS_TITLE = "MCP Connector"
+
+SETTINGS_DESCRIPTION = (
+    "Assistant apps such as Claude or ChatGPT can reach your files, calendar, notes, "
+    "contacts and Deck cards through this connector, exactly as far as your own account "
+    "reaches. Your connected apps and the switch that pauses them are at {connections_url}."
+)
 
 #: Where the entry of this app sits in Nextcloud, in one constant. The place is named once
 #: and only once (04-UI-SPEC.md): if the settings section has to move, one edit moves every

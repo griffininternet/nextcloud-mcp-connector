@@ -1,4 +1,4 @@
-"""The seven error pages of the authorization flow, from one table (03-UI-SPEC.md, E1 to E7).
+"""The eight error pages of the browser surface, from one table (E1 to E7, plus E8).
 
 The rule that gives this file its value: the user learns what went wrong and what to do
 next, and the attacker learns nothing about which check fired (T-03-24). Those two are in
@@ -19,15 +19,22 @@ the throttle (D-37, SC 5). E7 answers 500 and carries a reference that this func
 generates and hands back to the caller, which writes it into its one log line. The
 reference is random and decodes to nothing: it correlates a user report with a log entry
 and is useless to anyone who does not already have the log.
+
+E8 joined the table in phase 4 and is the same shape as the rest: the connections page
+without a Nextcloud account behind the browser. 403 and not 401, because a 401 from a page
+a browser opened invites the browser's own credential prompt, and this surface never puts a
+password prompt in front of a user (04-UI-SPEC.md, E8).
 """
 
 import secrets
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Final
+from urllib.parse import urlsplit
 
 from starlette.responses import Response
 
+from ... import config
 from . import icons, layout, strings
 
 __all__ = ["CODES", "REFERENCE_ALPHABET", "REFERENCE_LENGTH", "error_page", "new_reference"]
@@ -77,10 +84,11 @@ _PAGES: dict[str, _ErrorPage] = {
     ),
     "E5": _ErrorPage(400, strings.ERROR_REDIRECT_TITLE, strings.ERROR_REDIRECT_BODY),
     "E6": _ErrorPage(429, strings.ERROR_THROTTLED_TITLE, strings.ERROR_THROTTLED_BODY),
+    "E8": _ErrorPage(403, strings.ERROR_SIGN_IN_TITLE, strings.ERROR_SIGN_IN_BODY),
     GENERIC: _ErrorPage(500, strings.ERROR_GENERIC_TITLE, strings.ERROR_GENERIC_BODY),
 }
 
-#: The seven identifiers of the contract, in the order of the table.
+#: The eight identifiers of the contract, in the order of the table.
 CODES: Final = tuple(_PAGES)
 
 
@@ -110,6 +118,7 @@ def error_page(
         client=layout.client_name(client),
         seconds=wait,
         ref=reference,
+        host=_host(env),
     )
     blocks = [layout.paragraph(text)]
     if spec.action_label:
@@ -126,6 +135,16 @@ def error_page(
         heading_tone="error",
     )
     return response, reference
+
+
+def _host(env: Mapping[str, str] | None) -> str:
+    """The configured public host, never the Host header of the request (T-03-02).
+
+    Filled for every page instead of only for the one that names it, so a body that starts
+    naming the host later cannot ship with an unfilled placeholder in it.
+    """
+    configured = config.public_url(env)
+    return urlsplit(configured).netloc or configured
 
 
 def new_reference() -> str:
