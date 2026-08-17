@@ -88,6 +88,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from .. import config
 from ..errors import ToolError
+from ..exapp.auth import is_user
 from ..exapp.responses import NO_STORE, form_or_none, json_response
 from ..exapp.ui.consent import consent_url
 from . import loginflow
@@ -736,8 +737,8 @@ class NextcloudOAuthProvider(
             refresh_token=refresh,
         )
 
-    async def end_connection(self, auth_id: str) -> bool:
-        """End one connection by its handle, the way the user's own page asks for it.
+    async def end_connection(self, nc_user: str, auth_id: str) -> bool:
+        """End one connection of one account, the way the user's own page asks for it.
 
         The public form of :meth:`_end_connection`, and the only one the connections page
         of EXAPP-02 uses: a second revocation path would be a second place to forget the
@@ -745,9 +746,17 @@ class NextcloudOAuthProvider(
         of that window (T-03-62, T-04-35). What the page adds to the protocol paths is the
         handle instead of a token, so the families of the connection are looked up here.
 
-        ``False`` for a handle that does not exist and for one that was already revoked,
-        and nothing is written in either case: the page answers both with the same sentence
-        as a resubmitted form, which is what keeps it from being an existence oracle.
+        The account is a parameter and not an assumption (LO-01). The page compares it too,
+        before it ever gets here, and that is exactly the point: a method that ends somebody
+        else's access may not rely on its one caller for the only ownership check in the
+        chain. The next caller, an administrative view or a command of a later phase, would
+        hand in a handle it read somewhere. ``is_user`` refuses the empty identity, so the
+        app context owns nothing here.
+
+        ``False`` for a handle that does not exist, for one that was already revoked and for
+        one of another account, and nothing is written in any of the three: the page answers
+        all of them with the same sentence as a resubmitted form, which is what keeps it
+        from being an existence oracle.
 
         The Nextcloud app password of the connection goes back, exactly as on ``/revoke``
         (BL-01). It cannot be left to a sweep: ``abandoned_authorizations`` filters
@@ -766,7 +775,7 @@ class NextcloudOAuthProvider(
         """
         store = await self.store()
         row = await store.load_authorization(auth_id)
-        if row is None or row.revoked_at is not None:
+        if row is None or row.revoked_at is not None or not is_user(nc_user, row.nc_user):
             return False
         families = await store.families_of_authorization(auth_id)
         await self._end_connection(store, auth_id=auth_id, family_ids=families, now=self._now())

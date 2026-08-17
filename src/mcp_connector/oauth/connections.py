@@ -97,8 +97,10 @@ logger = logging.getLogger("mcp_connector.oauth.connections")
 type StoreProvider = Callable[[], Awaitable[OAuthStore]]
 
 #: The one revocation of this deployment, handed in rather than imported: the page ends a
-#: connection through ``provider.end_connection`` and never through the store (T-04-35).
-type EndConnection = Callable[[str], Awaitable[bool]]
+#: connection through ``provider.end_connection`` and never through the store (T-04-35). The
+#: account travels with the handle, so the comparison happens on both sides of the seam
+#: (LO-01).
+type EndConnection = Callable[[str, str], Awaitable[bool]]
 
 #: What a registration is called when its stored metadata cannot be read as a name. Empty
 #: on purpose: ``layout.client_name`` turns it into the fallback wording, so a row of a
@@ -267,7 +269,7 @@ async def _disconnect(
     # just lost access and the registration may be swept once nothing points at it.
     name = await _client_name(row.client_id, store)
     try:
-        ended = await end_connection(auth_id)
+        ended = await end_connection(user, auth_id)
     except Exception:
         logger.exception("a connection could not be ended")
         return _generic("the connection could not be ended", env)

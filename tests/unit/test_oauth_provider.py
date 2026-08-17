@@ -937,7 +937,7 @@ async def test_ending_a_connection_by_its_handle_hands_the_app_password_back(
 
     with respx.mock:
         deletion = deletion_route()
-        assert await subject.end_connection(AUTH_ID) is True
+        assert await subject.end_connection(NC_USER, AUTH_ID) is True
         assert deletion.call_count == 1, "one attempt, never a retry (D-37)"
 
     row = await store.load_authorization(AUTH_ID)
@@ -955,7 +955,7 @@ async def test_ending_a_connection_survives_a_nextcloud_that_refuses_the_deletio
 
     with respx.mock:
         deletion_route(status=500)
-        assert await subject.end_connection(AUTH_ID) is True
+        assert await subject.end_connection(NC_USER, AUTH_ID) is True
 
     assert await store.load_access_token(tokens.access_token) is None
     row = await store.load_authorization(AUTH_ID)
@@ -965,15 +965,36 @@ async def test_ending_a_connection_survives_a_nextcloud_that_refuses_the_deletio
 
 
 @pytest.mark.anyio
+async def test_ending_a_connection_of_another_account_changes_nothing(tmp_path: Path) -> None:
+    """LO-01: the method took a handle alone, and the whole ownership check sat in its one
+    caller. Correct today and a trap for the next one: an administrative view or a command
+    of a later phase would call it with a handle it read somewhere. The comparison is cheap,
+    it is the same ``is_user`` the page uses, and having it twice is the right direction for
+    a method that ends somebody's access."""
+    subject, store, tokens = await issued(tmp_path)
+
+    with respx.mock:
+        deletion = deletion_route()
+        assert await subject.end_connection("mallory", AUTH_ID) is False
+        assert await subject.end_connection("", AUTH_ID) is False, "the app context owns nothing"
+        assert not deletion.called
+
+    assert await store.load_access_token(tokens.access_token) is not None
+    row = await store.load_authorization(AUTH_ID)
+    assert row is not None
+    assert row.revoked_at is None
+
+
+@pytest.mark.anyio
 async def test_ending_an_unknown_connection_calls_nothing_at_all(tmp_path: Path) -> None:
     """The page answers the same sentence for unknown and revoked, and writes nothing."""
     subject, store, _tokens = await issued(tmp_path)
 
     with respx.mock:
         deletion = deletion_route()
-        assert await subject.end_connection("a-handle-of-nobody") is False
-        assert await subject.end_connection(AUTH_ID) is True
-        assert await subject.end_connection(AUTH_ID) is False, "already revoked"
+        assert await subject.end_connection(NC_USER, "a-handle-of-nobody") is False
+        assert await subject.end_connection(NC_USER, AUTH_ID) is True
+        assert await subject.end_connection(NC_USER, AUTH_ID) is False, "already revoked"
         assert deletion.call_count == 1, "the second attempt is not a second deletion"
 
     assert await store.load_authorization(AUTH_ID) is not None

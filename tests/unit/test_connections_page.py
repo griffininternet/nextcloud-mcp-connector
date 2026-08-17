@@ -1244,6 +1244,6 @@ async def _no_store() -> OAuthStore:  # pragma: no cover - the route is never ca
     raise sqlite3.Error("no store in this check")
 
 
-async def _never_ends(auth_id: str) -> bool:  # pragma: no cover - never called
-    del auth_id
+async def _never_ends(nc_user: str, auth_id: str) -> bool:  # pragma: no cover - never called
+    del nc_user, auth_id
     return False
