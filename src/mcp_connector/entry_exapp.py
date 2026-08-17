@@ -30,6 +30,7 @@ from .exapp.middleware import RequireAppApi
 from .nextcloud.http import configure_logging
 from .oauth import throttle
 from .oauth.connect import connect_routes
+from .oauth.connections import connections_routes
 from .oauth.consent import consent_routes
 from .oauth.metadata import metadata_routes
 from .oauth.provider import NextcloudOAuthProvider, auth_routes
@@ -130,6 +131,9 @@ def build_exapp_app(env: Mapping[str, str] | None = None) -> Starlette:
     # reason twice over: they are the browser half of this deployment mode, and a page that
     # hands out a Nextcloud credential has no business appearing in the standalone HTTP
     # server of phase 1, which has no store, no data key and no AppAPI identity (D-23, D-36).
+    # The connections page of EXAPP-02 joins them for the third reason of the same rule: it
+    # ends connections and pauses accounts, and it does so through this deployment's own
+    # provider, so it hangs where that provider is and nowhere else.
     #
     # The authorization server of plan 03-05 joins the same line: auth_routes builds the
     # endpoints of the SDK with create_auth_routes and our own provider, and consent_routes
@@ -147,6 +151,12 @@ def build_exapp_app(env: Mapping[str, str] | None = None) -> Starlette:
         *lifecycle_routes(env),
         *metadata_routes(env, dcr_enabled=policy.dcr_enabled),
         *connect_routes(env, store_provider=store, throttle=counters),
+        *connections_routes(
+            env,
+            store_provider=store,
+            end_connection=provider.end_connection,
+            throttle=counters,
+        ),
         *auth_routes(env, provider=provider, throttle=counters),
         *consent_routes(env, provider=provider, throttle=counters),
     ):

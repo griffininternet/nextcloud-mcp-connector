@@ -40,7 +40,7 @@ Every request runs under the identity of the signed in user, so an assistant nev
 			<image-tag>0.1.0</image-tag>
 		</docker-install>
 		<!--
-		  - Exactly twelve routes, and they are the whole external attack surface of this app.
+		  - Exactly thirteen routes, and they are the whole external attack surface of this app.
 		  -
 		  - The three AppAPI lifecycle paths (/heartbeat, /init and /enabled) are deliberately
 		  - absent, and this comment is the only place they appear here. A path that matches no
@@ -146,6 +146,27 @@ Every request runs under the identity of the signed in user, so an assistant nev
 		  - the app, because HaRP cannot make it. The relay attacker holds a valid Nextcloud
 		  - account too, so "signed in" is not the question, "signed in as whom" is. Same
 		  - trade the /mcp route above documents, for the same reason.
+		  -
+		  - /connections is the page of EXAPP-02, added in plan 04-03: a user sees the
+		  - assistant apps connected to their own account, disconnects one of them, and
+		  - pauses or resumes the MCP access of that account. GET lists and POST acts, and
+		  - there is deliberately no DELETE: every state change of this page is a POST with a
+		  - named action field and a hidden anti forgery value, which is also why the list,
+		  - the confirmation, the disconnect and the switch are one route instead of four.
+		  -
+		  - PUBLIC for the measured reason of /authorize/decide above, and it is that reason
+		  - twice: HaRP resolves the Nextcloud account of a request on a PUBLIC route too and
+		  - writes it into AUTHORIZATION-APP-API, empty when the caller sent no credential,
+		  - and this app refuses an empty one with a page of its own (403, "Sign in to see
+		  - your connections"). With access_level USER, HaRP would answer such a request
+		  - itself and record it in its blacklist: ten refusals from one address inside
+		  - HP_BLACKLIST_WINDOW (300 seconds by default, HP_BLACKLIST_COUNT of 10) ban that
+		  - address from the WHOLE ExApp, every route and every access level alike, with 502.
+		  - A page reached from a stale tab or an expired session produces exactly those
+		  - refusals as normal operation, so the level meant to harden this page would take
+		  - the connector down for the person it belongs to. The check that actually decides
+		  - stays where it has to be, in the app: it compares the account HaRP resolved with
+		  - the owner of every row it shows or ends.
 		-->
 		<routes>
 			<route>
@@ -217,6 +238,12 @@ Every request runs under the identity of the signed in user, so an assistant nev
 			<route>
 				<url>^/revoke/?$</url>
 				<verb>POST</verb>
+				<access_level>PUBLIC</access_level>
+				<headers_to_exclude>["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERSION","X-ORIGIN-IP"]</headers_to_exclude>
+			</route>
+			<route>
+				<url>^/connections/?$</url>
+				<verb>GET,POST</verb>
 				<access_level>PUBLIC</access_level>
 				<headers_to_exclude>["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERSION","X-ORIGIN-IP"]</headers_to_exclude>
 			</route>

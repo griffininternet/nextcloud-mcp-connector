@@ -79,18 +79,13 @@ get_board
 _.load_access_token
 
 # --- The store API of phase 4 ----------------------------------------------------------
-# The same shape as the block above, one phase later: plan 04-01 builds the per account
-# switch and the account's own connection list as store truths, and the callers arrive in
-# the plans that render them. Every entry leaves this list with the plan that calls it.
-#
-# access_disabled is absent on purpose: it left this list in task 2 of the same plan, which
-#   is the whole rule of this file at work. The transport boundary reads it on every MCP
-#   request now, through the wrapper of entry_exapp.build_exapp_app.
-# set_access: written by the pause and resume actions of the connections page (plan 04-03).
-# authorizations_of_user: the row list of S5, same plan. Both are driven directly by
-#   tests/unit/test_oauth_store.py, which is what keeps them honest until then.
-_.set_access
-_.authorizations_of_user
+# Empty, and that is the rule of this file at work rather than an omission. Plan 04-01
+# built the per account switch and the account's own connection list as store truths and
+# parked three names here; every one of them left the list with the plan that called it.
+# access_disabled went in task 2 of that plan (the transport boundary reads it on every MCP
+# request), set_access and authorizations_of_user went in plan 04-03, where the connections
+# page pauses an account and lists its connections. families_of_authorization never entered
+# the list at all: it arrived with its caller, provider.end_connection.
 
 # Fields of the row objects that this phase writes and a later plan reads:
 # created_at and issued_at (the admin view of phase 4 shows when a connection was made),

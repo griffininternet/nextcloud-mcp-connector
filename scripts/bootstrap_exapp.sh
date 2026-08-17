@@ -517,8 +517,10 @@ verify_image_digest() {
 # browser onboarding of plan 03-04 is used by a person who is not necessarily signed in to
 # Nextcloud yet. The four routes of the authorization server (plan 03-05) are public for
 # their own reasons: /authorize is a browser route and HaRP knows no sign in redirect, and
-# /token, /register and /revoke carry their own controls and no user session at all
-# (appinfo/info.xml carries the full reasoning, plans 03-01, 03-04 and 03-05).
+# /token, /register and /revoke carry their own controls and no user session at all. The
+# connections page of plan 04-03 is the thirteenth and is public for the reason its own
+# manifest comment gives: the identity check happens in the app
+# (appinfo/info.xml carries the full reasoning, plans 03-01, 03-04, 03-05 and 04-03).
 #
 # headers_to_exclude mirrors appinfo/info.xml: the proxy strips the headers it sets itself,
 # so a client cannot send a second AUTHORIZATION-APP-API next to the real one (WR-01).
@@ -542,7 +544,7 @@ EXCLUDED_HEADERS='["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERS
 json_info() {
   local daemon="$1" port="$2"
   cat <<JSON
-{"external-app":{"environment-variables":{"NC_MCP_PUBLIC_URL":{"name":"NC_MCP_PUBLIC_URL","value":"${PUBLIC_URL}"}}},"id":"${APP_ID}","name":"${APP_NAME}","daemon_config_name":"${daemon}","version":"${APP_VERSION}","secret":"${APP_SECRET}","port":${port},"docker-install":{"registry":"${REGISTRY}","image":"${IMAGE_NAME}","image-tag":"${APP_VERSION}"},"routes":[{"url":"^/mcp/?$","verb":"GET,POST,DELETE","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/\\\\.well-known/oauth-protected-resource/mcp$","verb":"GET","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/\\\\.well-known/openid-configuration$","verb":"GET","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/\\\\.well-known/oauth-authorization-server$","verb":"GET","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/connect/wait/?$","verb":"GET","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/connect/?$","verb":"GET,POST","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/authorize/?$","verb":"GET,POST","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/authorize/consent/?$","verb":"GET","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/authorize/decide/?$","verb":"POST","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/token/?$","verb":"POST","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/register/?$","verb":"POST","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/revoke/?$","verb":"POST","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}}]}
+{"external-app":{"environment-variables":{"NC_MCP_PUBLIC_URL":{"name":"NC_MCP_PUBLIC_URL","value":"${PUBLIC_URL}"}}},"id":"${APP_ID}","name":"${APP_NAME}","daemon_config_name":"${daemon}","version":"${APP_VERSION}","secret":"${APP_SECRET}","port":${port},"docker-install":{"registry":"${REGISTRY}","image":"${IMAGE_NAME}","image-tag":"${APP_VERSION}"},"routes":[{"url":"^/mcp/?$","verb":"GET,POST,DELETE","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/\\\\.well-known/oauth-protected-resource/mcp$","verb":"GET","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/\\\\.well-known/openid-configuration$","verb":"GET","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/\\\\.well-known/oauth-authorization-server$","verb":"GET","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/connect/wait/?$","verb":"GET","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/connect/?$","verb":"GET,POST","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/authorize/?$","verb":"GET,POST","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/authorize/consent/?$","verb":"GET","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/authorize/decide/?$","verb":"POST","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/token/?$","verb":"POST","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/register/?$","verb":"POST","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/revoke/?$","verb":"POST","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}},{"url":"^/connections/?$","verb":"GET,POST","access_level":0,"headers_to_exclude":${EXCLUDED_HEADERS}}]}
 JSON
 }
 
@@ -559,9 +561,11 @@ register_exapp() {
 # access_level travels as a number on purpose. AppAPI maps the names PUBLIC, USER and
 # ADMIN to 0, 1 and 2 only on the info.xml path (ExAppService::getAppInfo); a json-info
 # registration writes the value straight into the integer column of ex_apps_routes, and a
-# route whose access level reads "USER" is a route HaRP cannot evaluate. Eleven routes
-# carry 0 and one carries 1: /authorize/decide is the request that turns a finished sign in
-# into a grant, and HaRP has to resolve the signed in account for it (CR-01).
+# route whose access level reads "USER" is a route HaRP cannot evaluate. All thirteen routes
+# carry 0 (PUBLIC), the connections page of plan 04-03 included: HaRP resolves the signed in
+# account on a PUBLIC route as well and the app compares it itself, while a USER declaration
+# would feed the HaRP blacklist with the refusals those pages produce as normal traffic and
+# answer the whole ExApp with 502 (CR-01, appinfo/info.xml carries the full reasoning).
 ensure_exapp() {
   local output
   if occ app_api:app:list 2>/dev/null | grep "${APP_ID}" >/dev/null; then
