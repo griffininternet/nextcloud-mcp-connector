@@ -95,10 +95,25 @@ def build_exapp_app(env: Mapping[str, str] | None = None) -> Starlette:
     # a tool call arrives with a verified bearer and is answered from the process cache,
     # and rate limiting the actual work of this server would be our own denial of service.
     counters = throttle.Throttle()
+
+    async def access_disabled(nc_user: str) -> bool:
+        """Whether this Nextcloud account has paused its MCP access (EXAPP-02, D-47).
+
+        The switch comes out of the same store as the tokens, through the same opener, so
+        one deployment has one file and one answer to "may this account be served". A
+        second store here would be a second truth, exactly as a second provider would be.
+        The call is a local read per request and nothing caches it: that is what makes the
+        flip take effect on the next request instead of within five seconds (D-48).
+        """
+        opened = await store()
+        return await opened.access_disabled(nc_user)
+
     guarded = 0
     for route in app.router.routes:
         if isinstance(route, Route) and route.path == MCP_PATH:
-            route.app = RequireAppApi(route.app, env, token_verifier=verifier)
+            route.app = RequireAppApi(
+                route.app, env, token_verifier=verifier, access_check=access_disabled
+            )
             guarded += 1
     if guarded != 1:
         raise RuntimeError(

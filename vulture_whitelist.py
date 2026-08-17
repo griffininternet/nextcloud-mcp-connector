@@ -83,12 +83,12 @@ _.load_access_token
 # switch and the account's own connection list as store truths, and the callers arrive in
 # the plans that render them. Every entry leaves this list with the plan that calls it.
 #
-# access_disabled: the transport boundary reads it on every MCP request. Its caller lands in
-#   task 2 of plan 04-01, which is why this entry is the shortest lived one in this file.
+# access_disabled is absent on purpose: it left this list in task 2 of the same plan, which
+#   is the whole rule of this file at work. The transport boundary reads it on every MCP
+#   request now, through the wrapper of entry_exapp.build_exapp_app.
 # set_access: written by the pause and resume actions of the connections page (plan 04-03).
 # authorizations_of_user: the row list of S5, same plan. Both are driven directly by
 #   tests/unit/test_oauth_store.py, which is what keeps them honest until then.
-_.access_disabled
 _.set_access
 _.authorizations_of_user
 

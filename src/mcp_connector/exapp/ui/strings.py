@@ -27,6 +27,7 @@ exactly these names.
 """
 
 __all__ = [
+    "ACCESS_DISABLED_DESCRIPTION",
     "ACTION_CANCEL_CONNECTION",
     "ACTION_CANCEL_SIGN_IN",
     "ACTION_CHECK_NOW",
@@ -83,6 +84,7 @@ __all__ = [
     "RESULT_DENIED_TITLE",
     "RESULT_RETURN_ACTION",
     "RESULT_RETURN_BODY",
+    "SETTINGS_PLACE",
     "SIGNIN_BODY",
     "SIGNIN_CTA",
     "SIGNIN_TITLE",
@@ -321,4 +323,26 @@ ERROR_GENERIC_TITLE = "Something went wrong"
 ERROR_GENERIC_BODY = (
     "The connection could not be completed. Try again. If it keeps failing, an administrator "
     "can find the details in the app log under reference {ref}."
+)
+
+# --- R1, the refusal of a paused account ------------------------------------------------
+#
+# Not a page: the wire answer of the transport boundary when the owner of an account has
+# switched MCP access off (04-UI-SPEC.md "Refusal Contract", D-51). What the user sees is
+# whatever their assistant app prints from it, so the answer carries the whole sentence.
+# The two constants live here with the page copy because they are the same kind of thing,
+# one sentence a person reads, and because a later locale has to be a data change here too.
+
+#: Where the entry of this app sits in Nextcloud, in one constant. The place is named once
+#: and only once (04-UI-SPEC.md): if the settings section has to move, one edit moves every
+#: sentence that points at it.
+SETTINGS_PLACE = "Settings, Security, MCP Connector"
+
+#: The ``error_description`` of R1. A constant with no placeholder on purpose (T-03-66): it
+#: names the rule and the place and never a value out of the request, so no account name,
+#: no client name, no token fragment and no internal host can travel in it.
+ACCESS_DISABLED_DESCRIPTION = (
+    "MCP access is switched off for this Nextcloud account. The owner of the account can "
+    "switch it back on on the connector's connections page, linked in Nextcloud under "
+    f"{SETTINGS_PLACE}."
 )

@@ -134,6 +134,28 @@ class StubSwitch:
         return nc_user in self.paused
 
 
+def with_a_local_store(
+    base: dict[str, str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[dict[str, str], list[str]]:
+    """An environment with a store in ``tmp_path`` and a data key that costs no network.
+
+    The one thing a unit test cannot have is the OCS round trip that fetches the data key of
+    this installation, and since the transport boundary reads the per account switch, every
+    served request needs the store that holds it. The returned list counts the key fetches,
+    which is how the tests below assert that opening the store is a once per process cost and
+    not a Nextcloud round trip per MCP request (SC 5 of phase 3, D-47).
+    """
+    fetched: list[str] = []
+
+    async def fake_key(env: object = None) -> bytes:
+        del env
+        fetched.append("key")
+        return bytes(range(32))
+
+    monkeypatch.setattr(store.crypto, "data_key", fake_key)
+    return {**base, config.ENV_APP_PERSISTENT_STORAGE: str(tmp_path)}, fetched
+
+
 def guarded_app(
     verifier: StubVerifier | None = None,
     switch: Callable[[str], Awaitable[bool]] | None = None,
@@ -205,9 +227,19 @@ def test_initialize_without_a_valid_handshake_is_rejected(
     assert "www-authenticate" not in {key.lower() for key in response.headers}, name
 
 
-def test_initialize_with_a_valid_handshake_is_served() -> None:
-    """A resolved Nextcloud user is the AUTH-01 path and is not asked for a bearer."""
-    with TestClient(entry_exapp.build_exapp_app(SERVED_ENV)) as client:
+def test_initialize_with_a_valid_handshake_is_served(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A resolved Nextcloud user is the AUTH-01 path and is not asked for a bearer.
+
+    Since plan 04-01 this path reads the per account switch as well, so the application
+    needs the store it reads it from: a local file and a data key that does not come over
+    the network in a unit test. An account that never paused anything has no row there, and
+    a request of that account is served exactly as it was before the switch existed.
+    """
+    env, _ = with_a_local_store(SERVED_ENV, tmp_path, monkeypatch)
+
+    with TestClient(entry_exapp.build_exapp_app(env)) as client:
         response = client.post(
             "/mcp", json=INITIALIZE, headers={**MCP_HEADERS, **appapi_headers(user="alice")}
         )
@@ -572,6 +604,69 @@ def test_the_mcp_route_is_guarded_with_the_switch_of_this_deployment() -> None:
     guard = guards[0]
     assert isinstance(guard, RequireAppApi)
     assert guard._access_check is not None, "the boundary was built without the switch"
+
+
+def test_the_switch_costs_no_nextcloud_round_trip_per_request(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SC 5 of phase 3, which this phase may not worsen: one round trip per MCP call.
+
+    The switch is a local read, and the one network call the store needs at all, the data key
+    of this installation, is paid once per process by the opener both halves share. Three
+    served requests therefore fetch it once, and nothing else of the switch leaves the
+    container.
+    """
+    env, fetched = with_a_local_store(SERVED_ENV, tmp_path, monkeypatch)
+
+    with TestClient(entry_exapp.build_exapp_app(env)) as client:
+        for _ in range(3):
+            response = client.post(
+                "/mcp", json=INITIALIZE, headers={**MCP_HEADERS, **appapi_headers(user="alice")}
+            )
+            assert response.status_code == 200
+
+    assert fetched == ["key"], "the store was opened per request instead of per process"
+
+
+def test_a_paused_account_is_refused_by_the_wired_application(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The whole chain of this plan in one test: store, wiring, boundary, R1.
+
+    The switch is flipped in the file the running application reads, behind its back and
+    between two requests, which is what "the flip takes effect on the next request" means
+    (D-48). Nothing is disconnected by it, and turning it back on serves the same caller
+    again without a new sign in (D-46).
+    """
+    env, _ = with_a_local_store(SERVED_ENV, tmp_path, monkeypatch)
+    subject = store.OAuthStore(tmp_path / store.STORE_FILENAME, bytes(range(32)))
+
+    with TestClient(entry_exapp.build_exapp_app(env)) as client:
+        before = client.post(
+            "/mcp", json=INITIALIZE, headers={**MCP_HEADERS, **appapi_headers(user="alice")}
+        )
+        asyncio.run(subject.set_access("alice", disabled=True))
+        paused = client.post(
+            "/mcp", json=INITIALIZE, headers={**MCP_HEADERS, **appapi_headers(user="alice")}
+        )
+        other = client.post(
+            "/mcp", json=INITIALIZE, headers={**MCP_HEADERS, **appapi_headers(user="bob")}
+        )
+        asyncio.run(subject.set_access("alice", disabled=False))
+        after = client.post(
+            "/mcp", json=INITIALIZE, headers={**MCP_HEADERS, **appapi_headers(user="alice")}
+        )
+
+    assert before.status_code == 200
+    assert paused.status_code == 403
+    assert json.loads(paused.text) == {
+        "error": "access_disabled",
+        "error_description": strings.ACCESS_DISABLED_DESCRIPTION,
+    }
+    assert "www-authenticate" not in {key.lower() for key in paused.headers}
+    assert paused.headers["cache-control"] == "no-store"
+    assert other.status_code == 200, "the switch of one account is not the switch of another"
+    assert after.status_code == 200
 
 
 def test_the_switch_is_decided_at_the_boundary_and_nowhere_else() -> None:
