@@ -131,3 +131,34 @@ fuer Admin-Werte, die die ExApp zur Laufzeit braucht, ist der Speicherort
 
 **Warum nicht in Phase 4:** Phase 4 war der Per-User-Slice; die
 Admin-Schalter haengen an der Store-Paketierung (EXAPP-04/05).
+
+## BL-07: Datenschutz-Doku + Datenweitergabe-Disclosure (Owner-Frage 17.08.2026)
+
+**Anlass:** Datenschutz-Review des Connectors. Der Connector selbst ist
+datenschutzfreundlich (self-hosted, keine Telemetrie, keine Calls ausser an
+die eigene Nextcloud, App-Passwoerter verschluesselt at rest, Token nur als
+Hash, Zweckbindung: Assistent sieht nie mehr als der Nutzer im Web). Es fehlt
+aber jede Datenschutz-Doku in docs/.
+
+**Der DSGVO-Knackpunkt liegt hinter dem Connector:** Sobald ein Nutzer einen
+gehosteten KI-Client (Claude.ai, ChatGPT) verbindet, fliessen die abgerufenen
+Nextcloud-Inhalte (Dateien, Kalender, Kontakte, via prepare_context auch
+Datei-Auszuege) an den LLM-Anbieter, i.d.R. Drittland (US). Der Connector
+leitet nichts von sich aus weiter, ist aber das Tor. Betreiber brauchen dafuer
+eine Rechtsgrundlage (AVV mit dem LLM-Anbieter, ggf. Einwilligung, TIA fuer
+Drittlandtransfer). EU-/self-hosted-LLM (z.B. MUCGPT) entschaerft das.
+
+**Was zu tun waere (Phase 5, deckt zugleich SC 1 Datenweitergabe-Disclosure):**
+1. docs/privacy.md (oder datenschutz.md): welche personenbezogenen Daten der
+   Connector speichert (nc_user, verschluesseltes App-Passwort, Token-Hashes,
+   Zeitstempel), wo (SQLite im ExApp-Container), Verschluesselung, Loeschung
+   (Trennen/Deinstallation), Betroffenenrechte.
+2. Datenweitergabe-Disclosure fuer den App Store: klar benennen, dass Inhalte
+   an den vom Nutzer gewaehlten KI-Client gehen, mit Drittland-/LLM-Hinweis
+   und Empfehlung, den Datenschutz des Clients zu pruefen.
+3. info.xml-Beschreibung: die Zusicherung "sieht nie mehr als der Nutzer"
+   bleibt korrekt, darf aber nicht suggerieren, dass nach dem Tool-Call kein
+   Datenabfluss an den Client mehr stattfindet.
+
+**Warum nicht in Phase 4:** Phase 4 war der Per-User-Slice; Store-Disclosure
+und Doku gehoeren zu Phase 5 (EXAPP-04/05, SC 1).
