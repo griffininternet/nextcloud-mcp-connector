@@ -12,6 +12,7 @@
 Connect your Nextcloud to AI assistants that speak the Model Context Protocol, such as Claude, Cursor or your own agent.
 The connector exposes a curated, read first set of tools for files, calendar, notes, deck and contacts instead of a raw API surface.
 Every request runs under the identity of the signed in user, so an assistant never sees more than that user sees in the web interface.
+The connector itself sends no telemetry and calls no third party. Because an assistant reads your Nextcloud content, the data it reads is transmitted to the assistant you connect, in most cases a hosted provider. Choose your assistant accordingly. See the privacy and data flow note in the repository for details.
 	]]></description>
 	<version>0.1.0</version>
 	<licence>agpl</licence>
