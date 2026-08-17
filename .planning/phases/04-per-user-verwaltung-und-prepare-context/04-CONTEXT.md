@@ -215,6 +215,10 @@ die laut Roadmap zu Phase 5 SC 4 gehört.
   `03-SECURITY.md` als Restrisiken mit Datum verzeichnet. Vor der Store-Einreichung prüfen.
 - **Admin-Sicht auf die Verbindungen aller Nutzer**: kam nicht auf, wäre aber die
   naheliegende Erweiterung. Admin-Belange sind AUTH-07 und gehören nicht hierher.
+- **docs/oauth-setup.md und docs/client-setup.md um den Seiten-Widerruf ergänzen**
+  (Plan-Checker-Hinweis 17.08.): bewusst NICHT in Phase 4. Die Client-Doku ist
+  EXAPP-05 und gehört zu Phase 5; bis dahin bleibt der dokumentierte Widerrufsweg
+  "Devices and sessions", der weiter funktioniert.
 
 </deferred>
 

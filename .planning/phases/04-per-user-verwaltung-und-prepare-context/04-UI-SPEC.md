@@ -191,7 +191,7 @@ Continues the phase 3 numbering. S1 to S4 and E1 to E7 exist and are untouched.
 | Wordmark bar | Unchanged: "MCP Connector for Nextcloud" plus the configured public host, never the `Host` header |
 | Display (`h1`) | "Your connections" |
 | Identity line | "You are signed in as {user} at {host}." (the phase 3 constant, reused verbatim) |
-| Warning callout | Only when the switch is off. Title "Access is paused". Body: "MCP access is switched off for your account, so connected apps are refused. Nothing was disconnected. Switch it on again in Nextcloud under Settings, Security, MCP Connector." |
+| Warning callout | Only when the switch is off. Title "Access is paused". Body: "MCP access is switched off for your account, so connected apps are refused. Nothing was disconnected." The switch block that turns it back on sits directly above (amended 2026-08-17 with the on-page switch; the old pointer sentence to Nextcloud settings is gone) |
 | Section heading (`h2`) | "Connected apps" |
 | Row list | One `<li>` per authorization of this user, newest first. Each row: app name (Body/600), client id (14px mono, muted), "Connected on {date}" (14px muted), and one `<form method="post">` with a secondary button "Disconnect" |
 | Footnote | "Apps you connected with a credential from the onboarding page are not listed here. They appear in Nextcloud under Settings, Security, Devices and sessions." |
@@ -389,9 +389,12 @@ Registration happens in the `/enabled` lifecycle handler
 uninstalling cleans it up, both on AppAPI's side (04-RESEARCH.md).
 
 **2. The switch itself lives on `/connections` (S5 and S6), above the client list.** It is a
-`<form method="post">` with `action=toggle`, rendered as one sentence of state plus one
-button, because a checkbox that needs a submit button next to it is two controls pretending
-to be one:
+`<form method="post">` with a **named state as the action, `action=pause` or `action=resume`**,
+never a `toggle`: a resubmitted or replayed form then re-states a state instead of flipping
+it, the same idempotence that makes "Already disconnected" an answer and not an error.
+(Amended 2026-08-17; the first draft said `toggle`.) Rendered as one sentence of state plus
+one button, because a checkbox that needs a submit button next to it is two controls
+pretending to be one:
 
 | State | Sentence (Body, 400) | Button |
 |-------|----------------------|--------|
@@ -492,9 +495,10 @@ dropped row above), and the two labels of the detail list on S7,
 The last two matter because the phase 3 rule is absolute: no string literal inside a template
 function, not even a two word label.
 
-`SETTINGS_PLACE` exists so the place is named in one constant: it appears in
-`CONNECTIONS_PAUSED_BODY` and `ACCESS_DISABLED_DESCRIPTION`, and if the settings section id
-has to move, one edit moves every sentence with it.
+`SETTINGS_PLACE` exists so the place is named in one constant. Since the 2026-08-17 amendment
+it appears only in `ACCESS_DISABLED_DESCRIPTION` (`CONNECTIONS_PAUSED_BODY` dropped its
+pointer sentence, the switch sits on the same page); it stays a constant anyway, because if
+the settings section id has to move, one edit moves the sentence with it.
 
 `DISCONNECT_ACTION` is the bare verb "Disconnect" on purpose. A row CTA repeating the client
 name would read as noise in a list where every row already carries that name as its heading;

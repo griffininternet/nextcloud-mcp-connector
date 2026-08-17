@@ -724,23 +724,23 @@ CREATE TABLE IF NOT EXISTS user_access (
 | A3 | Die Empfehlungswerte (5 Treffer je Bucket, 3 Voll-Auszüge à 2000 Bytes, Fenster 7 Tage) sind sinnvolle Größenordnungen | Pattern 4 | Explizit Claude's Discretion; der Plan darf sie mit Begründung ändern |
 | A4 | `getUserConfigValues` des Preferences-OCS ist als Initial-Sync nutzbar, falls je gebraucht (nicht Teil der Empfehlung) | Declarative-Settings-Kontrakt | Ohne Belang für den empfohlenen Entwurf |
 
-## Open Questions
+## Open Questions (alle drei RESOLVED durch die Plaene vom 17.08., Nachtrag Plan-Checker)
 
-1. **"Last used" je Authorization (UI-SPEC Open Question 3)**
+1. **"Last used" je Authorization (UI-SPEC Open Question 3)** RESOLVED: v1 ohne Spalte, so uebernommen (kein Plan fuehrt sie)
    - What we know: `clients.last_used_at` gehört zur Registrierung, nicht zur Authorization;
      eine geteilte Registrierung würde einem Nutzer die Aktivität eines anderen zeigen.
    - What's unclear: ob eine neue Spalte `authorizations.last_used_at` den Store-Umbau wert ist.
    - Recommendation: in v1 weglassen (so steht es im UI-SPEC); wenn der Plan sie doch will,
      ist es eine Spalte plus ein Write im Verifier-Pfad und gehört als bewusste Entscheidung
      in den Plan, nicht als Beifang.
-2. **EXAPP-02-Wortlaut vs. Fallback**
+2. **EXAPP-02-Wortlaut vs. Fallback** RESOLVED: 04-04 Task 2 fuehrt die Verifikations-Notiz woertlich
    - What we know: Requirement sagt "in den Nextcloud-Settings aktivieren/deaktivieren";
      der gemessene AppAPI-Kontrakt macht das ohne D-47/D-48-Bruch unmöglich; CONTEXT und
      UI-SPEC entscheiden den Konflikt zugunsten der Constraints.
    - What's unclear: ob der Owner den Wortlaut von EXAPP-02 anpassen oder nur die
      Verifikations-Notiz akzeptieren will.
    - Recommendation: im PLAN als Verifikations-Notiz führen; keine Blockade.
-3. **Nachmessen von SC 5 mit aktivem Gate**
+3. **Nachmessen von SC 5 mit aktivem Gate** RESOLVED: Messung in 04-01 (verify) und 04-04 (live, Beweis 3)
    - What we know: der Schalter-Read ist lokal; theoretisch bleibt SC 5 exakt.
    - Recommendation: `scripts/oauth_flow_check.py --measure` nach dem Gate-Einbau einmal
      laufen lassen und die Zahl mit Datum ins VERIFICATION-Dokument schreiben (Projektregel).
