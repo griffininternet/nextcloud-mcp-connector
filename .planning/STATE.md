@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 4 UI-SPEC approved
+stopped_at: Phase 4 planned, 4 plans in 3 waves, checker passed
 last_updated: "2026-08-16T10:00:00.000Z"
 last_activity: 2026-08-16
 progress:
@@ -271,5 +271,5 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-08-16T10:00:00.000Z
-Stopped at: Phase 4 UI-SPEC approved (6/6 dimensions)
-Resume file: .planning/phases/04-per-user-verwaltung-und-prepare-context/04-UI-SPEC.md
+Stopped at: Phase 4 planned (04-01..04-04, checker: 0 blockers, warnings folded in). Next: execute-phase 4, Wave 1 SERIELL (checker warning 3: whole-repo gates collide in parallel)
+Resume file: .planning/phases/04-per-user-verwaltung-und-prepare-context/04-01-PLAN.md
