@@ -16,9 +16,11 @@ import base64
 import json
 from collections.abc import Awaitable, Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 from mcp.server.auth.provider import AccessToken
+from mcp.shared.auth import OAuthClientInformationFull
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse, Response
@@ -28,9 +30,10 @@ from starlette.testclient import TestClient
 from mcp_connector import config, entry_exapp, entry_http
 from mcp_connector.errors import ToolError
 from mcp_connector.exapp.middleware import RequireAppApi
+from mcp_connector.exapp.ui import connections as ui_connections
 from mcp_connector.exapp.ui import strings
-from mcp_connector.oauth import store
-from mcp_connector.oauth.metadata import PRM_SUFFIX, TOOL_SCOPE
+from mcp_connector.oauth import connections, store
+from mcp_connector.oauth.metadata import PRM_SUFFIX, RESOURCE_SUFFIX, TOOL_SCOPE
 from mcp_connector.oauth.verifier import OAUTH_STATE_ATTR, OAuthIdentity, StoreTokenVerifier
 
 APP_ID = "mcp_connector"
@@ -52,6 +55,11 @@ SERVED_ENV = {**EXAPP_ENV, config.ENV_DISABLE_DNS_REBINDING: "1"}
 OAUTH_ENV = {**SERVED_ENV, config.ENV_PUBLIC_URL: PUBLIC_URL}
 
 LIFECYCLE_PATHS = {"/heartbeat", "/init", "/enabled"}
+
+#: The registration behind the connection the end to end guard of this phase acts on, and
+#: the bearer that connection was issued. Both are values of this file and of nothing else.
+CONNECTED_CLIENT_ID = "9d0f8f1a-0b3c-4a0e-9f4c-000000000001"
+CONNECTED_TOKEN = "an-access-token-of-alice"
 
 INITIALIZE = {
     "jsonrpc": "2.0",
@@ -891,3 +899,146 @@ def test_a_blank_public_url_counts_as_missing(
     assert excinfo.value.code == 2
     messages = [record.getMessage() for record in caplog.records]
     assert any(config.ENV_PUBLIC_URL in message for message in messages), messages
+
+
+# --- the end to end guard of phase 4: the hand on the switch, and the refusal ------
+
+
+def a_connected_account(
+    tmp_path: Path, *, nc_user: str = "alice", token: str = CONNECTED_TOKEN
+) -> store.OAuthStore:
+    """One registered client and one live OAuth connection of that account, in the store.
+
+    Written straight into the file the application opens, because what this guard is about
+    happens after the connection exists: everything from the sign in to the consent has its
+    own tests, and repeating the whole dance here would test those again instead of this.
+    """
+    subject = store.OAuthStore(tmp_path / store.STORE_FILENAME, bytes(range(32)))
+    registration = OAuthClientInformationFull.model_validate(
+        {
+            "client_id": CONNECTED_CLIENT_ID,
+            "client_name": "Claude",
+            "redirect_uris": ["https://claude.ai/api/mcp/auth_callback"],
+            "grant_types": ["authorization_code", "refresh_token"],
+            "response_types": ["code"],
+            "token_endpoint_auth_method": "none",
+            "scope": TOOL_SCOPE,
+        }
+    ).model_dump_json(exclude={"client_secret"})
+    asyncio.run(subject.save_client(CONNECTED_CLIENT_ID, metadata_json=registration, allowed=True))
+    asyncio.run(subject.touch_client(CONNECTED_CLIENT_ID))
+    asyncio.run(
+        subject.create_authorization(
+            f"authorization-of-{nc_user}",
+            client_id=CONNECTED_CLIENT_ID,
+            nc_user=nc_user,
+            app_password="aaaaa-bbbbb-ccccc-ddddd-eeeee",
+            scopes=TOOL_SCOPE,
+            resource=f"{PUBLIC_URL}{RESOURCE_SUFFIX}",
+        )
+    )
+    asyncio.run(
+        subject.create_access_token(
+            token,
+            auth_id=f"authorization-of-{nc_user}",
+            family_id=f"family-of-{nc_user}",
+            scopes=TOOL_SCOPE,
+            resource=f"{PUBLIC_URL}{RESOURCE_SUFFIX}",
+        )
+    )
+    return subject
+
+
+def switch_form(subject: store.OAuthStore, action: str, nc_user: str = "alice") -> dict[str, str]:
+    """The form the page renders for that account, with the anti forgery value it carries."""
+    return {
+        ui_connections.ACTION_FIELD: action,
+        ui_connections.CONFIRM_PARAM: subject.form_token(f"{connections.SWITCH_HANDLE}{nc_user}"),
+    }
+
+
+def bearer_call(client: TestClient, token: str) -> Any:
+    """One MCP request of a connected client: the OAuth branch of the boundary."""
+    return client.post(
+        "/mcp",
+        json=INITIALIZE,
+        headers={**MCP_HEADERS, **appapi_headers(user=""), "Authorization": f"Bearer {token}"},
+    )
+
+
+def test_the_switch_on_the_page_refuses_the_very_next_call_of_that_token(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The end to end guard of this phase (SC 1): a hand on the switch, and the refusal.
+
+    Everything is the wired application: the user posts the pause form of ``/connections``
+    under their own AppAPI identity, and the very next MCP call of their assistant, with a
+    token that has not changed, is R1. A test that only checked the store round trip would
+    stay green with no gate in the boundary at all, which is exactly pitfall 1.
+    """
+    env, _ = with_a_local_store(OAUTH_ENV, tmp_path, monkeypatch)
+    subject = a_connected_account(tmp_path)
+
+    with TestClient(entry_exapp.build_exapp_app(env)) as client:
+        before = bearer_call(client, CONNECTED_TOKEN)
+        paused = client.post(
+            ui_connections.CONNECTIONS_PATH,
+            data=switch_form(subject, ui_connections.ACTION_PAUSE),
+            headers=appapi_headers(user="alice"),
+        )
+        refused = bearer_call(client, CONNECTED_TOKEN)
+        resumed = client.post(
+            ui_connections.CONNECTIONS_PATH,
+            data=switch_form(subject, ui_connections.ACTION_RESUME),
+            headers=appapi_headers(user="alice"),
+        )
+        after = bearer_call(client, CONNECTED_TOKEN)
+
+    assert before.status_code == 200, "the connection works before anything is switched"
+    assert paused.status_code == 200
+    assert strings.CONNECTIONS_PAUSED_TITLE in paused.text, "the page shows what it just did"
+    assert refused.status_code == 403
+    assert json.loads(refused.text) == {
+        "error": "access_disabled",
+        "error_description": strings.ACCESS_DISABLED_DESCRIPTION,
+    }
+    assert "www-authenticate" not in {key.lower() for key in refused.headers}
+    assert refused.headers["cache-control"] == "no-store"
+    assert resumed.status_code == 200
+    assert strings.CONNECTIONS_PAUSED_TITLE not in resumed.text
+    assert after.status_code == 200, "turning it back on needs no new sign in (D-46)"
+
+
+def test_the_switch_of_one_account_leaves_the_other_accounts_serving(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The negative probe of the same chain: a pause is one account's decision, not a mode."""
+    env, _ = with_a_local_store(OAUTH_ENV, tmp_path, monkeypatch)
+    subject = a_connected_account(tmp_path)
+
+    with TestClient(entry_exapp.build_exapp_app(env)) as client:
+        client.post(
+            ui_connections.CONNECTIONS_PATH,
+            data=switch_form(subject, ui_connections.ACTION_PAUSE),
+            headers=appapi_headers(user="alice"),
+        )
+        other = client.post(
+            "/mcp", json=INITIALIZE, headers={**MCP_HEADERS, **appapi_headers(user="bob")}
+        )
+
+    assert other.status_code == 200
+
+
+def test_the_page_of_this_deployment_is_wired_to_the_store_of_this_deployment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One store, one truth: the page lists the connection the token verifier knows about."""
+    env, _ = with_a_local_store(OAUTH_ENV, tmp_path, monkeypatch)
+    a_connected_account(tmp_path)
+
+    with TestClient(entry_exapp.build_exapp_app(env)) as client:
+        listed = client.get(ui_connections.CONNECTIONS_PATH, headers=appapi_headers(user="alice"))
+
+    assert listed.status_code == 200
+    assert "Claude" in listed.text
+    assert ui_connections.CONNECTIONS_PATH in paths(entry_exapp.build_exapp_app(env))

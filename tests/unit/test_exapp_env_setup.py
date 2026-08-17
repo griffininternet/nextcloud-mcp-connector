@@ -80,8 +80,9 @@ PROXY_OWNED_HEADERS = (
 
 #: What this phase opens: the MCP transport, the three discovery documents, the two pages
 #: of the browser onboarding, the four endpoints of the authorization server, the consent
-#: screen behind /authorize and the decision behind that screen (D-38, AUTH-02, AUTH-03).
-DECLARED_ROUTES = 12
+#: screen behind /authorize, the decision behind that screen, and since phase 4 the
+#: connections page of one account (D-38, AUTH-02, AUTH-03, EXAPP-02).
+DECLARED_ROUTES = 13
 
 #: The routes that must not be PUBLIC, and the level they carry instead. Empty, and that is
 #: the finding of the live counter check: HaRP records every refusal of a USER route in a
@@ -103,6 +104,11 @@ ALLOWED_ACCESS_LEVELS = frozenset({"PUBLIC", "USER"})
 #: served is a 404 nobody can explain, and one that is served but not declared is unreachable
 #: through the proxy.
 CONNECT_PATHS = ("/connect", "/connect/wait")
+
+#: The one route phase 4 adds: the page on which a user sees, ends and pauses their own
+#: connections (EXAPP-02). A family of its own and deliberately not one of the onboarding
+#: paths above, although it starts with the same eight characters.
+CONNECTIONS_PATH = "/connections"
 
 #: The four endpoints of the authorization server, compared with the manifest the same way.
 #: A declared endpoint the application does not serve is a 404 during a first connection,
@@ -216,9 +222,23 @@ def declared_connect_paths(root: etree._Element) -> set[str]:
     paths = set()
     for route in root.findall(".//route"):
         url = (route.findtext("url") or "").strip()
-        if not url.startswith("^/connect"):
+        literal = url.removeprefix("^").removesuffix("$").removesuffix("/?").replace("\\", "")
+        # On the segment boundary and not on the prefix: ``/connections`` starts with the
+        # same eight characters and is a different family with a different reason to exist.
+        if literal != "/connect" and not literal.startswith("/connect/"):
             continue
-        paths.add(url.removeprefix("^").removesuffix("$").removesuffix("/?").replace("\\", ""))
+        paths.add(literal)
+    return paths
+
+
+def declared_connections_paths(root: etree._Element) -> set[str]:
+    """The literal path behind the connections route of the manifest (EXAPP-02)."""
+    paths = set()
+    for route in root.findall(".//route"):
+        url = (route.findtext("url") or "").strip()
+        literal = url.removeprefix("^").removesuffix("$").removesuffix("/?").replace("\\", "")
+        if literal == CONNECTIONS_PATH:
+            paths.add(literal)
     return paths
 
 
@@ -614,7 +634,7 @@ def test_the_tunnel_probe_reads_the_process_table(
     assert result.returncode == expected_code, result.stderr
 
 
-def test_the_manifest_declares_exactly_the_twelve_routes_of_this_phase(
+def test_the_manifest_declares_exactly_the_thirteen_routes_of_this_phase(
     manifest_root: etree._Element,
 ) -> None:
     """D-38: /mcp is PUBLIC since plan 03-01, the one broad well-known route that carried the
@@ -623,7 +643,9 @@ def test_the_manifest_declares_exactly_the_twelve_routes_of_this_phase(
     server plus the consent screen behind /authorize. Every one of them is anchored at both
     ends and PUBLIC for a reason of its own, the decision behind the consent screen
     included: HaRP names the account that decides on a PUBLIC route too, and a USER
-    declaration would answer ten refusals with a five minute 502 on all twelve (CR-01)."""
+    declaration would answer ten refusals with a five minute 502 on all thirteen (CR-01).
+    Phase 4 adds the thirteenth, the connections page of one account, for the same measured
+    reason: a settings page reached from a stale tab produces refusals as normal traffic."""
     routes = [
         ((route.findtext("url") or "").strip(), (route.findtext("access_level") or "").strip())
         for route in manifest_root.findall(".//route")
@@ -641,6 +663,7 @@ def test_the_manifest_declares_exactly_the_twelve_routes_of_this_phase(
         ("^/token/?$", "PUBLIC"),
         ("^/register/?$", "PUBLIC"),
         ("^/revoke/?$", "PUBLIC"),
+        ("^/connections/?$", "PUBLIC"),
     ]
 
 
@@ -653,10 +676,40 @@ def test_the_declared_onboarding_routes_are_the_registered_ones(
         for path in (
             getattr(route, "path", "") for route in build_exapp_app(MANIFEST_ENV).router.routes
         )
-        if path.startswith("/connect")
+        if path == "/connect" or path.startswith("/connect/")
     }
 
     assert declared_connect_paths(manifest_root) == registered == set(CONNECT_PATHS)
+
+
+def test_the_declared_connections_page_is_the_registered_one(
+    manifest_root: etree._Element,
+) -> None:
+    """EXAPP-02: a page that is declared but not served is a 404 nobody can explain, and one
+    that is served but not declared is unreachable through the proxy."""
+    registered = {
+        path
+        for path in (
+            getattr(route, "path", "") for route in build_exapp_app(MANIFEST_ENV).router.routes
+        )
+        if path == CONNECTIONS_PATH
+    }
+
+    assert declared_connections_paths(manifest_root) == registered == {CONNECTIONS_PATH}
+
+
+def test_the_connections_route_declares_both_verbs_and_no_third(
+    manifest_root: etree._Element,
+) -> None:
+    """GET lists and POST acts. No DELETE: every state change of this page is a POST with a
+    named action and an anti forgery value, and a verb nobody serves is surface for free
+    (T-04-36)."""
+    verbs = {
+        (route.findtext("url") or "").strip(): (route.findtext("verb") or "").strip()
+        for route in manifest_root.findall(".//route")
+    }
+
+    assert verbs["^/connections/?$"] == "GET,POST"
 
 
 def test_the_onboarding_route_declares_the_verb_that_starts_a_sign_in(
@@ -864,7 +917,7 @@ def test_the_bootstrap_registration_strips_the_same_headers() -> None:
         assert f'"{header}"' in text, f"{header} is not stripped by the registration"
 
 
-def test_the_bootstrap_registration_declares_the_same_twelve_routes(
+def test_the_bootstrap_registration_declares_the_same_thirteen_routes(
     manifest_root: etree._Element,
 ) -> None:
     """The json-info payload overrides the manifest, so a route that only lives in
@@ -886,6 +939,8 @@ def test_the_bootstrap_registration_declares_the_same_twelve_routes(
     for path in declared_connect_paths(manifest_root):
         assert f'"^{path}/?$"' in text, path
     for path in declared_authorization_paths(manifest_root):
+        assert f'"^{path}/?$"' in text, path
+    for path in declared_connections_paths(manifest_root):
         assert f'"^{path}/?$"' in text, path
 
 
