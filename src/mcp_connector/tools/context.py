@@ -54,6 +54,14 @@ WINDOW_DAYS = 7
 #: Own, tighter ceiling for the calendar leg. ``calendar.PER_CALENDAR_TIMEOUT`` is 20 s and
 #: right for the standalone tool, but one stalling collection would fill the budget of the
 #: whole bundle alone (pitfall 5). The cap belongs here; ``calendar.py`` stays untouched.
+#:
+#: Measured on the live topology on 2026-08-17 (plan 04-04, live proof 5, one MCP session
+#: over client, proxy, HaRP, container and Nextcloud): ``detail="short"`` answered in
+#: **0.84 s**, ``detail="full"`` with three excerpts in **0.99 s**, both with an empty
+#: ``degraded`` list. That closes assumption A2 of 04-RESEARCH from the other side: the
+#: healthy case is two orders of magnitude away from the thirty seconds a client grants, so
+#: these budgets only ever bite when a source is actually stalling, which is what they are
+#: for. Reproduce with the command in 04-04-MEASUREMENTS.md.
 CALENDAR_BUDGET = 10.0
 
 #: Token predictability over completeness (D-54): five hits per kind are enough for a model
