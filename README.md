@@ -139,6 +139,7 @@ new objects but can never modify or remove existing ones.
 | `deck_create_card` | create-only | Create a new card in a stack; existing cards are never changed |
 | `contacts_search` | read | Search address book contacts |
 | `unified_search` | read | Query the Nextcloud unified search across providers, permission aware |
+| `prepare_context` | read | Bundle matching files, notes and cards with the next week of events for one question |
 | `search` | read | OpenAI compatible search entry point, delegates to unified search |
 | `fetch` | read | OpenAI compatible fetch entry point, resolves an id to a file, note, card or event |
 

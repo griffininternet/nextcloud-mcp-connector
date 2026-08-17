@@ -3,9 +3,13 @@
 RED on purpose in plan 01-01: ``mcp_connector.server`` does not exist yet. Plan 01-02
 delivers the walking skeleton (``files_read`` over stdio) and turns this file green.
 Plan 01-14 closes the phase and widens the file to the full surface: the section
-"the whole surface at once" below checks all 15 tools in one pass instead of one
-vertical at a time, so a sixteenth tool, a wrong annotation, a stray output schema or a
+"the whole surface at once" below checks all tools in one pass instead of one
+vertical at a time, so a new tool, a wrong annotation, a stray output schema or a
 user parameter cannot slip in between two plans.
+
+The sixteenth tool, ``prepare_context``, arrived in plan 04-02 and had to be entered here
+on purpose: the frozen literal below refused it until then, which is exactly the job of
+this file (D-58).
 """
 
 from pathlib import Path
@@ -38,6 +42,7 @@ EXPECTED_TOOLS = {
     "deck_create_card",
     "contacts_search",
     "unified_search",
+    "prepare_context",
     "search",
     "fetch",
 }
@@ -256,13 +261,52 @@ async def test_unified_search_is_listed_as_a_pure_read_over_all_providers() -> N
 
 
 @pytest.mark.anyio
+async def test_prepare_context_is_listed_as_a_bundling_read() -> None:
+    """TOOL-08 and D-58: two parameters, no output schema, and an honest warning.
+
+    The description carries the D-57 sentence for the same reason the unverified client
+    callout exists in the consent page: the bundle lifts text other people wrote into the
+    context of an assistant, and the client deserves to know that before it calls.
+    """
+    async with Client(mcp, raise_exceptions=True) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+
+    assert "prepare_context" in tools, "the bundling read is part of the curated set"
+    tool = tools["prepare_context"]
+
+    annotations = tool.annotations
+    assert annotations is not None
+    assert annotations.read_only_hint is True, "prepare_context only reads"
+    assert annotations.open_world_hint is False
+    assert tool.output_schema is None, "structured_output=False (schema diet)"
+
+    assert "third parties" in (tool.description or ""), (
+        "D-57: the client is told that the bundle can contain content written by others"
+    )
+
+    schema = tool.input_schema
+    assert set(schema.get("required", [])) >= {"query"}
+    assert set(schema.get("properties", {})) == {"query", "detail"}, (
+        "two parameters and no more: every field is paid for in every session (D-56)"
+    )
+    assert "$defs" not in schema, "no nested models in the input schema (schema diet)"
+    assert schema["properties"]["detail"]["type"] == "string", (
+        "a string beats a literal enum, which would push an anyOf into the schema (D-14)"
+    )
+    for value in ("short", "full"):
+        assert value in schema["properties"]["detail"]["description"], (
+            "the two values that work belong in the sentence the model reads"
+        )
+
+
+@pytest.mark.anyio
 async def test_the_curated_set_is_complete_and_only_the_chatgpt_profile_has_a_schema() -> None:
-    """The whole surface in one assertion: 15 tools, and the diet holds for 13 of them."""
+    """The whole surface in one assertion: 16 tools, and the diet holds for 14 of them."""
     async with Client(mcp, raise_exceptions=True) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
 
     assert set(tools) == EXPECTED_TOOLS
-    assert len(tools) == 15, "the curated set is 15 tools, no more and no fewer"
+    assert len(tools) == 16, "the curated set is 16 tools, no more and no fewer"
 
     with_schema = {name for name, tool in tools.items() if tool.output_schema is not None}
     assert with_schema == STRUCTURED_TOOLS, (
@@ -359,7 +403,7 @@ def _properties(schema: dict[str, Any]) -> list[tuple[str, Any]]:
 
 @pytest.mark.anyio
 async def test_every_tool_carries_honest_annotations() -> None:
-    """D-16 over the whole registry: four create-only tools, eleven pure reads."""
+    """D-16 over the whole registry: four create-only tools, twelve pure reads."""
     async with Client(mcp, raise_exceptions=True) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
 
@@ -407,7 +451,7 @@ async def test_no_input_schema_accepts_a_user_parameter() -> None:
     async with Client(mcp, raise_exceptions=True) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
 
-    assert set(tools) == EXPECTED_TOOLS, "the confused deputy check must cover all 15 schemas"
+    assert set(tools) == EXPECTED_TOOLS, "the confused deputy check must cover all 16 schemas"
 
     findings: list[str] = []
     for name, tool in sorted(tools.items()):
