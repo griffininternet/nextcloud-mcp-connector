@@ -115,6 +115,40 @@ def test_the_ciphertext_never_contains_the_plaintext() -> None:
     assert PLAINTEXT not in blob
 
 
+def test_one_handle_under_two_purposes_gives_two_different_values() -> None:
+    """ME-01: two privileged actions of this app are about the same id.
+
+    An authorization is written under the id of the flow it was born in, so ``auth_id`` and
+    ``flow_id`` are one string, and a value derived from the string alone authorised both
+    "approve this authorization request" and "end this connection". Domain separation is
+    exactly what stops a stolen value from changing its meaning.
+    """
+    handle = "the-one-id-both-forms-are-about"
+    purposes = (crypto.PURPOSE_CONSENT, crypto.PURPOSE_DISCONNECT, crypto.PURPOSE_SWITCH)
+
+    values = {purpose: crypto.form_token(KEY, handle, purpose=purpose) for purpose in purposes}
+
+    assert len(set(values.values())) == len(purposes), "one value per purpose, never shared"
+    assert (
+        crypto.form_token(KEY, handle, purpose=crypto.PURPOSE_CONSENT)
+        == values[crypto.PURPOSE_CONSENT]
+    ), "derived and not stored: the same render gives the same value"
+    assert (
+        crypto.form_token(OTHER_KEY, handle, purpose=crypto.PURPOSE_CONSENT)
+        != values[crypto.PURPOSE_CONSENT]
+    ), "and another deployment cannot produce it"
+
+
+def test_the_purpose_and_the_handle_cannot_be_shifted_into_each_other() -> None:
+    """The separator is what makes the two fields two fields (T-03-50).
+
+    Neither value is attacker controlled today, and this holds the property that lets it
+    stay that way: a purpose that ends in the start of a handle may not collide with the
+    next pair.
+    """
+    assert crypto.form_token(KEY, "b:c", purpose="a") != crypto.form_token(KEY, "c", purpose="a:b")
+
+
 @pytest.mark.parametrize("key", [b"", b"short", bytes(31), bytes(33)])
 def test_a_key_of_the_wrong_length_is_a_programming_error(key: bytes) -> None:
     """Not a ToolError: no operator can act on this, it is a bug in a call site."""

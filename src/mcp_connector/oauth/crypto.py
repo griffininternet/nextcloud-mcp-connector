@@ -72,6 +72,17 @@ CONFIG_KEY = "oauth_data_key"
 #: silent reinterpretation of an old one.
 _FORM_TOKEN_LABEL = b"consent-form-v1:"
 
+#: The three purposes a form value of this application can have, and the whole point of the
+#: parameter (ME-01). ``consent.py`` writes an authorization under the id of its own flow,
+#: so ``auth_id`` and ``flow_id`` are the same string: without a purpose in the derivation,
+#: the value that means "approve this authorization request" is byte for byte the value that
+#: means "end this connection". Whoever sees one of them once therefore holds the other one
+#: for good, and neither can be rotated, because the only key here is the data key and
+#: replacing it makes every stored app password unreadable.
+PURPOSE_CONSENT = "consent"
+PURPOSE_DISCONNECT = "disconnect"
+PURPOSE_SWITCH = "switch"
+
 #: The AppAPI route that stores ExApp configuration. ``sensitive`` marks the value as one
 #: Nextcloud must not show in any administrative interface.
 EXAPP_CONFIG_PATH = "/ocs/v2.php/apps/app_api/api/v1/ex-app/config"
@@ -136,22 +147,32 @@ def decrypt(key: bytes, blob: bytes, *, aad: str) -> bytes:
         raise DecryptionRejected from None
 
 
-def form_token(key: bytes, flow_id: str) -> str:
-    """The anti forgery value of one consent form, derived instead of stored (T-03-50).
+def form_token(key: bytes, handle: str, *, purpose: str) -> str:
+    """The anti forgery value of one form, for one handle and one purpose (T-03-50, ME-01).
 
-    A hidden field that binds a form to one authorization request has to be two things: it
-    must be impossible to produce without being this deployment, and it must be impossible
-    to reuse for another flow. An HMAC over the flow id with the data key is both, and it
-    is the one shape that needs no column: the ``flows`` table is written by plan 03-02 and
-    a schema change for a value that can be recomputed at every render is a migration for
-    nothing. It also survives a restart and a second worker process, which a token kept in
-    a dictionary would not.
+    A hidden field that binds a form to one action has to be three things: impossible to
+    produce without being this deployment, impossible to reuse for another handle, and
+    impossible to reuse for another action on the same handle. An HMAC over the purpose and
+    the handle with the data key is all three, and it is the one shape that needs no column:
+    a value that can be recomputed at every render is a migration for nothing. It also
+    survives a restart and a second worker process, which a token kept in a dictionary would
+    not.
 
-    The label keeps this value apart from anything else the same key might ever
-    authenticate, so one derived secret can never be mistaken for another.
+    ``purpose`` is not decoration. It closes the case where two different privileged actions
+    are about the same string, which is exactly what this application has: an authorization
+    is written under the id of the flow it was born in. The label keeps every value of this
+    function apart from anything else the same key might ever authenticate; the purpose keeps
+    them apart from each other.
+
+    The two fields are joined with the length of the first in front of them, so the split
+    between them is unambiguous whatever either of them contains. ``"a"`` plus ``"b:c"`` and
+    ``"a:b"`` plus ``"c"`` would otherwise be the same material and therefore the same value,
+    which is the classic way a domain separation stops separating. Neither field is attacker
+    controlled today, and this is what lets that stay a property rather than a coincidence.
     """
     _check_key(key)
-    return hmac.new(key, _FORM_TOKEN_LABEL + flow_id.encode("utf-8"), hashlib.sha256).hexdigest()
+    material = f"{len(purpose)}:{purpose}:{handle}".encode()
+    return hmac.new(key, _FORM_TOKEN_LABEL + material, hashlib.sha256).hexdigest()
 
 
 async def data_key(env: Mapping[str, str] | None = None) -> bytes:

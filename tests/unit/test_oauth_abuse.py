@@ -65,7 +65,7 @@ from mcp_connector import config
 from mcp_connector.exapp.middleware import RequireAppApi
 from mcp_connector.exapp.ui import consent as ui_consent
 from mcp_connector.exapp.ui import strings
-from mcp_connector.oauth import consent, loginflow, registry
+from mcp_connector.oauth import consent, crypto, loginflow, registry
 from mcp_connector.oauth import provider as provider_module
 from mcp_connector.oauth import throttle as throttle_module
 from mcp_connector.oauth import verifier as verifier_module
@@ -288,7 +288,9 @@ def approve(deployment: Deployment, flow_id: str) -> Any:
         data={
             ui_consent.FLOW_PARAM: flow_id,
             ui_consent.DECISION_PARAM: ui_consent.DECISION_APPROVE,
-            ui_consent.CONFIRM_PARAM: deployment.store.form_token(flow_id),
+            ui_consent.CONFIRM_PARAM: deployment.store.form_token(
+                flow_id, purpose=crypto.PURPOSE_CONSENT
+            ),
         },
         headers=as_user(),
         follow_redirects=False,

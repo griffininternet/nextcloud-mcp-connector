@@ -15,10 +15,13 @@ mechanics:
   the empty string, which :func:`is_user` never accepts. An empty identity is E8 on both
   verbs, before anything is read and long before anything is written (T-04-31).
 * **Every state change is a POST with an anti forgery value.** The value is an HMAC under
-  the data key of this installation, derived from the handle the form is about, and it is
-  compared in constant time. A row value is derived from the connection handle and the
-  switch value from ``access:`` plus the account, so a value of one row cannot operate the
-  switch and a value of one account cannot pause another (T-04-30).
+  the data key of this installation, derived from the purpose of the form and the handle it
+  is about, and it is compared in constant time. A row value is derived from the connection
+  handle and the switch value from ``access:`` plus the account, so a value of one row
+  cannot operate the switch and a value of one account cannot pause another (T-04-30). The
+  purpose is what keeps the two forms of one connection apart, because an authorization
+  carries the id of the flow it was born in and the consent form of that flow is about the
+  very same string (ME-01).
 * **Nothing here revokes anything itself.** The disconnect calls ``end_connection`` of the
   provider, the same sequence ``/revoke`` and the reuse detection of the rotation run,
   including the invalidation of the verifier cache. A second revocation path would be a
@@ -66,14 +69,16 @@ from ..exapp.ui.connections import (
     confirm_page,
     connections_page,
 )
+from .crypto import PURPOSE_DISCONNECT, PURPOSE_SWITCH
 from .store import AuthorizationRow, OAuthStore
 from .throttle import CLASS_CONNECTIONS, Throttle, Throttled
 
 __all__ = ["SWITCH_HANDLE", "connections_routes"]
 
-#: What the anti forgery value of the switch is derived from: this prefix plus the account.
-#: The purpose is bound into the handle so a value that was rendered for a row cannot pause
-#: an account, and a value of one account cannot pause another (T-04-30).
+#: What the anti forgery value of the switch is derived from: this prefix plus the account,
+#: under :data:`~mcp_connector.oauth.crypto.PURPOSE_SWITCH`. The account in the handle is
+#: what keeps the value of one account from pausing another; the prefix predates the purpose
+#: of ME-01 and stays because a handle that says what it is costs nothing (T-04-30).
 SWITCH_HANDLE = "access:"
 
 logger = logging.getLogger("mcp_connector.oauth.connections")
@@ -219,7 +224,7 @@ async def _disconnect(
     if row is None:
         return await _list(store, user, env, result=RESULT_GONE)
 
-    if not _confirmed(store, auth_id, presented):
+    if not _confirmed(store, auth_id, presented, purpose=PURPOSE_DISCONNECT):
         logger.warning("a disconnect arrived without the anti forgery value of its connection")
         return await _list(store, user, env, result=RESULT_GONE)
 
@@ -251,7 +256,7 @@ async def _switch(
     about a connection would be a wrong sentence; the state above the callout is what the
     reader has to be able to trust, and it is the truth either way.
     """
-    if not _confirmed(store, f"{SWITCH_HANDLE}{user}", presented):
+    if not _confirmed(store, f"{SWITCH_HANDLE}{user}", presented, purpose=PURPOSE_SWITCH):
         logger.warning("a switch arrived without the anti forgery value of its account")
         return await _list(store, user, env)
     try:
@@ -289,7 +294,7 @@ async def _list(
         connections,
         user=user,
         paused=paused,
-        switch_token=store.form_token(f"{SWITCH_HANDLE}{user}"),
+        switch_token=store.form_token(f"{SWITCH_HANDLE}{user}", purpose=PURPOSE_SWITCH),
         result=result,
         result_client=result_client,
         status_code=status_code,
@@ -324,7 +329,7 @@ async def _connection(row: AuthorizationRow, store: OAuthStore) -> Connection:
         client_name=await _client_name(row.client_id, store),
         client_id=row.client_id,
         created_at=row.created_at,
-        token=store.form_token(row.auth_id),
+        token=store.form_token(row.auth_id, purpose=PURPOSE_DISCONNECT),
     )
 
 
@@ -352,14 +357,17 @@ async def _client_name(client_id: str, store: OAuthStore) -> str:
     return str(name) if isinstance(name, str) else _NO_NAME
 
 
-def _confirmed(store: OAuthStore, handle: str, presented: str) -> bool:
-    """Whether this form came from a page this server rendered for this handle.
+def _confirmed(store: OAuthStore, handle: str, presented: str, *, purpose: str) -> bool:
+    """Whether this form came from a page this server rendered for this handle and purpose.
 
     ``compare_digest`` on bytes and not ``==``: the value arrives from a request, and a
     comparison that stops at the first different character leaks its prefix over enough
     attempts (the rule of ``exapp/auth.py`` and of the consent decision).
+
+    ``purpose`` is what keeps the value of the consent form of a connection from ending that
+    connection: both forms are about the same id (ME-01).
     """
-    expected = store.form_token(handle)
+    expected = store.form_token(handle, purpose=purpose)
     return bool(presented) and secrets.compare_digest(
         expected.encode("utf-8"), presented.encode("utf-8")
     )

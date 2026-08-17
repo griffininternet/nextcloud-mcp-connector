@@ -37,7 +37,7 @@ from mcp_connector.exapp.ui import connections as ui
 from mcp_connector.exapp.ui import consent as ui_consent
 from mcp_connector.exapp.ui import errors, icons, layout, strings
 from mcp_connector.oauth import connections as routes
-from mcp_connector.oauth import consent, loginflow, registry
+from mcp_connector.oauth import consent, crypto, loginflow, registry
 from mcp_connector.oauth import provider as provider_module
 from mcp_connector.oauth import store as store_module
 from mcp_connector.oauth import throttle as throttle_module
@@ -535,10 +535,10 @@ class Deployment:
         return self.client.post(ui.CONNECTIONS_PATH, data=data, headers=appapi_headers(user))
 
     def token_of(self, auth_id: str) -> str:
-        return self.store.form_token(auth_id)
+        return self.store.form_token(auth_id, purpose=crypto.PURPOSE_DISCONNECT)
 
     def switch_token_of(self, user: str = NC_USER) -> str:
-        return self.store.form_token(f"{routes.SWITCH_HANDLE}{user}")
+        return self.store.form_token(f"{routes.SWITCH_HANDLE}{user}", purpose=crypto.PURPOSE_SWITCH)
 
     def rows_of(self, user: str = NC_USER) -> list[str]:
         return [row.auth_id for row in run(self.store.authorizations_of_user(user))]
@@ -864,6 +864,34 @@ def test_the_row_value_of_one_connection_does_not_disconnect_another(live: Deplo
 
     assert strings.DISCONNECT_GONE_TITLE in response.text
     assert sorted(live.rows_of()) == sorted([AUTH_ID, SECOND_AUTH_ID])
+
+
+def test_the_value_of_a_consent_form_does_not_disconnect_that_connection(
+    live: Deployment, caplog: pytest.LogCaptureFixture
+) -> None:
+    """ME-01: the two forms are about the same id, so they must not carry the same value.
+
+    ``consent.py`` writes the authorization under the id of its own flow, which makes
+    ``auth_id`` and ``flow_id`` one string. A value derived from that string alone therefore
+    authorised two different privileged actions at once, and there is no way to rotate one
+    of them without breaking every stored app password. The purpose belongs in the
+    derivation, not only in the name of the field.
+    """
+    presented = live.store.form_token(AUTH_ID, purpose=crypto.PURPOSE_CONSENT)
+
+    with caplog.at_level("WARNING", logger="mcp_connector.oauth.connections"):
+        response = live.post(
+            {
+                ui.ACTION_FIELD: ui.ACTION_DISCONNECT,
+                ui.AUTH_PARAM: AUTH_ID,
+                ui.CONFIRM_PARAM: presented,
+            }
+        )
+
+    assert response.status_code == 200
+    assert strings.DISCONNECT_GONE_TITLE in response.text, "the same calm answer, no oracle"
+    assert live.rows_of() == [AUTH_ID], "nothing was disconnected"
+    assert caplog.records
 
 
 def test_the_switch_pauses_and_resumes_the_account_of_the_browser(live: Deployment) -> None:

@@ -96,7 +96,7 @@ from ..exapp.ui.consent import (
     handoff_page,
     waiting_page,
 )
-from . import loginflow
+from . import crypto, loginflow
 from .provider import NextcloudOAuthProvider
 from .registry import redirect_uri_allowed
 from .store import FlowRow, OAuthStore
@@ -354,7 +354,7 @@ def _decision(
         row.redirect_uri,
         user,
         row.flow_id,
-        store.form_token(row.flow_id),
+        store.form_token(row.flow_id, purpose=crypto.PURPOSE_CONSENT),
         unverified=not provider.policy.listed(client.client_id, addresses),
         env=env,
     )
@@ -547,7 +547,7 @@ def _confirmed(store: OAuthStore, flow_id: str, presented: str) -> bool:
     comparison that stops at the first different character leaks its prefix over enough
     attempts (the rule of ``exapp/auth.py``).
     """
-    expected = store.form_token(flow_id)
+    expected = store.form_token(flow_id, purpose=crypto.PURPOSE_CONSENT)
     return bool(presented) and secrets.compare_digest(
         expected.encode("utf-8"), presented.encode("utf-8")
     )

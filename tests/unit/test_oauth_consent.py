@@ -35,7 +35,7 @@ from mcp_connector import config
 from mcp_connector.entry_exapp import build_exapp_app
 from mcp_connector.exapp.ui import consent as ui_consent
 from mcp_connector.exapp.ui import strings
-from mcp_connector.oauth import consent, loginflow, registry
+from mcp_connector.oauth import consent, crypto, loginflow, registry
 from mcp_connector.oauth import provider as provider_module
 from mcp_connector.oauth import throttle as throttle_module
 from mcp_connector.oauth.store import AUTH_CODE_TTL, FLOW_TTL, OAuthStore, token_hash
@@ -555,7 +555,11 @@ def decide(
     ``None`` is the anonymous request: no headers at all, which is what an attacker without
     a Nextcloud session can send (CR-01).
     """
-    token = confirm if confirm is not None else (store.form_token(flow_id) if store else "")
+    token = (
+        confirm
+        if confirm is not None
+        else (store.form_token(flow_id, purpose=crypto.PURPOSE_CONSENT) if store else "")
+    )
     return client.post(
         ui_consent.DECIDE_PATH,
         data={
@@ -676,7 +680,7 @@ def test_a_get_never_grants_anything_whatever_it_carries(store: OAuthStore) -> N
 
     response = client.get(
         f"{consent_url(flow_id)}&{ui_consent.DECISION_PARAM}={ui_consent.DECISION_APPROVE}"
-        f"&{ui_consent.CONFIRM_PARAM}={store.form_token(flow_id)}",
+        f"&{ui_consent.CONFIRM_PARAM}={store.form_token(flow_id, purpose=crypto.PURPOSE_CONSENT)}",
         follow_redirects=False,
     )
 
@@ -721,6 +725,24 @@ def test_a_decision_without_the_anti_forgery_token_changes_nothing(
     before = snapshot(store)
 
     response = decide(client, flow_id, ui_consent.DECISION_APPROVE, confirm=confirm)
+
+    assert response.status_code == 400
+    assert "location" not in response.headers
+    assert snapshot(store) == before
+
+
+def test_the_value_of_a_disconnect_form_does_not_approve_a_consent(store: OAuthStore) -> None:
+    """ME-01: an authorization is written under the id of its own flow, so ``auth_id`` and
+    ``flow_id`` are the same string. Without a purpose in the derivation the value that says
+    "approve this request" is byte for byte the value that says "end this connection", and
+    whoever sees one of them holds the other for good."""
+    provider = make(store)
+    register(provider)
+    client, flow_id, _page = signed_in(provider)
+    before = snapshot(store)
+
+    other_purpose = store.form_token(flow_id, purpose=crypto.PURPOSE_DISCONNECT)
+    response = decide(client, flow_id, ui_consent.DECISION_APPROVE, confirm=other_purpose)
 
     assert response.status_code == 400
     assert "location" not in response.headers
@@ -934,7 +956,7 @@ def test_a_forged_identity_header_is_not_an_identity(store: OAuthStore) -> None:
         data={
             ui_consent.FLOW_PARAM: flow_id,
             ui_consent.DECISION_PARAM: ui_consent.DECISION_APPROVE,
-            ui_consent.CONFIRM_PARAM: store.form_token(flow_id),
+            ui_consent.CONFIRM_PARAM: store.form_token(flow_id, purpose=crypto.PURPOSE_CONSENT),
         },
         headers={
             "EX-APP-ID": ENV[config.ENV_APP_ID],
@@ -1046,7 +1068,8 @@ def test_the_form_is_a_post_with_two_named_buttons_and_deny_first(store: OAuthSt
     assert f'name="{ui_consent.DECISION_PARAM}" value="{ui_consent.DECISION_DENY}"' in page
     assert f'name="{ui_consent.DECISION_PARAM}" value="{ui_consent.DECISION_APPROVE}"' in page
     assert page.index(strings.CONSENT_DENY) < page.index(strings.CONSENT_APPROVE)
-    assert f'name="{ui_consent.CONFIRM_PARAM}" value="{store.form_token(flow_id)}"' in page, (
+    expected = store.form_token(flow_id, purpose=crypto.PURPOSE_CONSENT)
+    assert f'name="{ui_consent.CONFIRM_PARAM}" value="{expected}"' in page, (
         "the form carries the value that binds it to this authorization request"
     )
     assert "<script" not in page

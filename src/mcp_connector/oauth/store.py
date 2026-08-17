@@ -374,14 +374,19 @@ class OAuthStore:
     def path(self) -> Path:
         return self._path
 
-    def form_token(self, flow_id: str) -> str:
-        """The anti forgery value of the consent form of one flow (T-03-50).
+    def form_token(self, handle: str, *, purpose: str) -> str:
+        """The anti forgery value of one form: this handle, this purpose (T-03-50, ME-01).
 
         It lives on this object because the data key does, and nowhere else in the process
         holds that key. Nothing is read or written: the value is derived, which is why it
         is the same for every render of the same form and different for every deployment.
+
+        ``purpose`` is one of the constants of :mod:`.crypto` and is required, because the
+        handles of two different actions can be the same string: an authorization carries
+        the id of the flow it was born in, so the consent form and the disconnect form of
+        one connection would otherwise be authorised by one value.
         """
-        return crypto.form_token(self._key, flow_id)
+        return crypto.form_token(self._key, handle, purpose=purpose)
 
     # --- clients --------------------------------------------------------------------
 

@@ -32,7 +32,7 @@ from mcp_connector.errors import ToolError
 from mcp_connector.exapp.middleware import RequireAppApi
 from mcp_connector.exapp.ui import connections as ui_connections
 from mcp_connector.exapp.ui import strings
-from mcp_connector.oauth import connections, store
+from mcp_connector.oauth import connections, crypto, store
 from mcp_connector.oauth.metadata import PRM_SUFFIX, RESOURCE_SUFFIX, TOOL_SCOPE
 from mcp_connector.oauth.verifier import OAUTH_STATE_ATTR, OAuthIdentity, StoreTokenVerifier
 
@@ -953,7 +953,9 @@ def switch_form(subject: store.OAuthStore, action: str, nc_user: str = "alice") 
     """The form the page renders for that account, with the anti forgery value it carries."""
     return {
         ui_connections.ACTION_FIELD: action,
-        ui_connections.CONFIRM_PARAM: subject.form_token(f"{connections.SWITCH_HANDLE}{nc_user}"),
+        ui_connections.CONFIRM_PARAM: subject.form_token(
+            f"{connections.SWITCH_HANDLE}{nc_user}", purpose=crypto.PURPOSE_SWITCH
+        ),
     }
 
 
