@@ -948,6 +948,54 @@ def test_a_forged_identity_header_is_not_an_identity(store: OAuthStore) -> None:
     assert rows(store, "auth_codes") == []
 
 
+def test_a_decision_body_that_cannot_be_parsed_is_a_page_and_grants_nothing(
+    store: OAuthStore,
+) -> None:
+    """HI-02 on the decision route: ``Request.form()`` raises on a broken multipart body.
+
+    The exception of ``python-multipart`` is not the one Starlette catches, so this used to
+    leave the route as an unhandled 500. It carries no flow, so it is the same answer as a
+    decision without one: the page that says the link is no longer valid.
+    """
+    provider = make(store)
+    register(provider)
+    client, _flow_id, _page = signed_in(provider)
+    before = snapshot(store)
+
+    response = client.post(
+        ui_consent.DECIDE_PATH,
+        headers=appapi_headers(LOGIN_NAME)
+        | {"Content-Type": "multipart/form-data; boundary=the-boundary"},
+        content=b"this is not a multipart body",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 400
+    assert response.headers["cache-control"] == "no-store"
+    assert "Traceback" not in response.text
+    assert snapshot(store) == before, "not one row of the store moved"
+
+
+def test_an_authorize_body_that_cannot_be_parsed_is_a_page_and_never_a_traceback(
+    store: OAuthStore,
+) -> None:
+    """The same on the front door, which reads a form when it is asked with a POST."""
+    provider = make(store)
+    register(provider)
+    client = TestClient(Starlette(routes=consent.consent_routes(ENV, provider=provider)))
+
+    response = client.post(
+        consent.AUTHORIZATION_PATH,
+        headers={"Content-Type": "multipart/form-data; boundary=the-boundary"},
+        content=b"this is not a multipart body",
+        follow_redirects=False,
+    )
+
+    assert response.status_code < 500
+    assert response.headers["cache-control"] == "no-store"
+    assert "Traceback" not in response.text
+
+
 def test_a_denial_by_a_stranger_leaves_the_connection_alone(store: OAuthStore) -> None:
     """The refusal is the whole decision, not only the granting half of it: a stranger who
     could deny would end a connection somebody else is making and hand back their

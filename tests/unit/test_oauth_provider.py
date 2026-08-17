@@ -1051,6 +1051,36 @@ async def test_the_revocation_endpoint_refuses_a_body_without_a_token(tmp_path: 
     assert response.json()["error"] == "invalid_request"
 
 
+@pytest.mark.anyio
+async def test_a_body_no_parser_can_read_is_refused_by_both_client_endpoints(
+    tmp_path: Path,
+) -> None:
+    """HI-02 on the two machine endpoints: ``Request.form()`` is not a total function.
+
+    ``python-multipart`` raises an exception Starlette does not translate, so a broken
+    multipart body left ``/token`` and ``/revoke`` as an unhandled 500 with a traceback in
+    the log instead of the error shapes both of them promise. The body of such a request may
+    carry a client secret, which is the second reason it may not reach a traceback.
+    """
+    subject, _store = build(tmp_path)
+    await subject.register_client(registration())
+    broken = {"Content-Type": "multipart/form-data; boundary=the-boundary"}
+
+    with serving(subject) as http:
+        revocation = http.post("/revoke", headers=broken, content=b"not a multipart body")
+        token = http.post("/token", headers=broken, content=b"not a multipart body")
+
+    # Both land in the client authentication, which reads the body first and now refuses a
+    # request it cannot read instead of raising through it. 401 is the honest answer:
+    # nothing in that body authenticated anybody. The error name is each endpoint's own,
+    # ours on /revoke and the SDK's on /token, and neither is a traceback.
+    for refusal in (revocation, token):
+        assert refusal.status_code == 401
+        assert refusal.headers["cache-control"] == "no-store"
+    assert revocation.json()["error"] == "unauthorized_client"
+    assert token.json()["error"] == "invalid_client"
+
+
 # --- the sweep of the sign ins nobody finished ---------------------------------------------
 
 

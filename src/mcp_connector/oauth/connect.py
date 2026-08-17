@@ -44,7 +44,7 @@ from starlette.routing import Route
 from .. import config
 from ..errors import ToolError
 from ..exapp.auth import appapi_user, is_user
-from ..exapp.responses import NO_STORE
+from ..exapp.responses import NO_STORE, form_or_none
 from ..exapp.ui import errors
 from ..exapp.ui.connect import (
     ACTION_CANCEL,
@@ -151,7 +151,11 @@ def connect_routes(
 
     async def begin(request: Request) -> Response:
         """Start a sign in, or cancel a running one. The only state changing route here."""
-        form = await request.form()
+        form = await form_or_none(request)
+        if form is None:
+            # A body no parser can read is the same case as an action this route does not
+            # know, and it gets the same answer rather than a traceback (HI-02).
+            return _with_status(invitation_page(env=env), 400)
         action = str(form.get(ACTION_FIELD) or "")
         if action == ACTION_CANCEL:
             return await _cancel(str(form.get(FLOW_PARAM) or ""), store, env)

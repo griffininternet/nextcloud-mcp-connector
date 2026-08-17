@@ -76,6 +76,7 @@ from starlette.routing import Route
 from .. import config
 from ..errors import ToolError
 from ..exapp.auth import appapi_user, is_user
+from ..exapp.responses import form_or_none
 from ..exapp.ui import errors
 from ..exapp.ui.consent import (
     CONFIRM_PARAM,
@@ -144,7 +145,16 @@ def consent_routes(
 
     async def authorize(request: Request) -> Response:
         """The front door: refuse readably, or let the SDK do its work."""
-        params = request.query_params if request.method == "GET" else await request.form()
+        if request.method == "GET":
+            params: Mapping[str, str] | FormData = request.query_params
+        else:
+            form = await form_or_none(request)
+            if form is None:
+                # A body no parser can read carries no authorization request, so it is
+                # refused as one that names nothing, on a page and never as a traceback
+                # (HI-02).
+                return _page(errors.error_page("E3", env=env))
+            params = form
         refusal = await _refuse(params, provider, env)
         if refusal is not None:
             return refusal
@@ -375,7 +385,11 @@ async def _decide(
     A caller without a Nextcloud credential arrives with an empty id, which :func:`is_user`
     never accepts, so the anonymous case is refused here and needs no help from the proxy.
     """
-    form = await request.form()
+    form = await form_or_none(request)
+    if form is None:
+        # The same answer as a decision without a flow, for the same reason: this request
+        # names none, and a body the parser refused may not leave as a 500 (HI-02).
+        return _page(errors.error_page("E3", env=env))
     flow_id = str(form.get(FLOW_PARAM) or "")
     if not flow_id:
         return _page(errors.error_page("E3", env=env))

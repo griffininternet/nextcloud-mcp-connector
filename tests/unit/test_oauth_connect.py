@@ -258,6 +258,27 @@ def test_an_unknown_action_changes_nothing(client: TestClient, store: OAuthStore
     assert flow_ids(store) == []
 
 
+def test_a_body_that_cannot_be_parsed_changes_nothing_and_stays_a_page(
+    client: TestClient, store: OAuthStore
+) -> None:
+    """HI-02 on the older half of the family: ``Request.form()`` can raise.
+
+    The parser of ``python-multipart`` raises an exception Starlette does not catch, so this
+    body used to leave the route as a bare 500 with a traceback in the log. It is the same
+    case as an action this route does not understand, and it gets the same answer.
+    """
+    response = client.post(
+        connect.CONNECT_PATH,
+        headers={"Content-Type": "multipart/form-data; boundary=the-boundary"},
+        content=b"this is not a multipart body",
+    )
+
+    assert response.status_code == 400
+    assert response.headers["cache-control"] == "no-store"
+    assert "Traceback" not in response.text
+    assert flow_ids(store) == []
+
+
 # --- waiting (T-03-34) --------------------------------------------------------------------
 
 

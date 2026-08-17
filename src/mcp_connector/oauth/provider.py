@@ -88,7 +88,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from .. import config
 from ..errors import ToolError
-from ..exapp.responses import NO_STORE, json_response
+from ..exapp.responses import NO_STORE, form_or_none, json_response
 from ..exapp.ui.consent import consent_url
 from . import loginflow
 from .metadata import (
@@ -1193,8 +1193,17 @@ class FamilyRevocation:
                 {"error": "unauthorized_client", "error_description": exc.message}, status_code=401
             )
 
+        form = await form_or_none(request)
+        if form is None:
+            # A body no parser can read is not a revocation request either, so it gets the
+            # answer of one, and not the traceback the framework used to write (HI-02).
+            return json_response(
+                {"error": "invalid_request", "error_description": "this is not a revocation"},
+                status_code=400,
+            )
+
         try:
-            revocation = _RevocationRequest.model_validate(dict(await request.form()))
+            revocation = _RevocationRequest.model_validate(dict(form))
         except ValidationError:
             # The offending body carries a credential, so the shape of the error is named
             # and its content is not (T-03-66).
@@ -1228,7 +1237,12 @@ class HashedClientAuthenticator(ClientAuthenticator):
         self._provider = provider
 
     async def authenticate_request(self, request: Request) -> OAuthClientInformationFull:
-        form = await request.form()
+        form = await form_or_none(request)
+        if form is None:
+            # A body that cannot be parsed authenticates nobody, and it may carry a client
+            # secret, so it becomes a refused authentication and never a traceback (HI-02,
+            # T-03-66).
+            raise AuthenticationError("The client could not be authenticated")
         client_id = str(form.get("client_id") or "")
         if not client_id:
             raise AuthenticationError("Missing client_id")
