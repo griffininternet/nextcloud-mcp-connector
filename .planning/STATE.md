@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: "Phase 4, Plan 04-01 fertig: der Per-User-Schalter liegt im Store und wirkt an der Transportgrenze. Nächstes: 04-02 (Wave 1 seriell, die Repo-weiten Gates kollidieren parallel)"
-last_updated: "2026-08-17T14:01:23.908Z"
+status: verifying
+stopped_at: "Phase 4 komplett: 04-04 fertig, EXAPP-02 abgehakt, fünf Live-Beweise protokolliert. Nächstes: Phase-4-Verifikation"
+last_updated: "2026-08-17T14:32:11.165Z"
 last_activity: 2026-08-17
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 34
-  completed_plans: 32
-  percent: 60
+  completed_plans: 34
+  percent: 80
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 
 Phase: 4
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete, ready for verification
 Last activity: 2026-08-17
 
-Progress: [█████████░] 94%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -86,6 +86,7 @@ Progress: [█████████░] 94%
 | Phase 04 P01 | 60 min | 2 tasks | 7 files |
 | Phase 04 P02 | 25 min | 3 tasks | 5 files |
 | Phase 04 P03 | 70 | 3 tasks | 11 files |
+| Phase 4 P04 | 90 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -257,6 +258,8 @@ Recent decisions affecting current work:
 - [Phase 04]: Ein Schalter-HMAC ist zweckgebunden (access: plus Konto), damit ein Zeilen-Wert kein Konto pausieren kann und ein Konto-Wert kein fremdes
 - [Phase 04]: Der Zeilen-Widerruf laeuft ausschliesslich ueber provider.end_connection; ein Quelltext-Waechter haelt revoke_authorization und revoke_family aus Seiten- und Routenmodul heraus (T-04-35, Verifier-Cache)
 - [Phase 04]: Route 13 ist PUBLIC mit Identitaetspruefung in der App, aus dem gemessenen CR-01-Grund: eine USER-Route fuettert die HaRP-Blacklist mit genau den Abweisungen, die diese Seite als normalen Verkehr erzeugt
+- [Phase 04]: Der Settings-Eintrag ist ein Wegweiser mit leerem fields, weil AppAPI eine Wertaenderung nie an die ExApp meldet; der Schalter lebt auf /connections. Gemessener AppAPI-Kontrakt (04-RESEARCH Frage 1): eine Checkbox waere ein Schalter, den die Transportgrenze nicht durchsetzt (D-47, D-48)
+- [Phase 04]: Die Registrierung der Settings-Form laeuft fire-and-forget bei enabled=1. Ein 500 aus /enabled deaktiviert die App sofort wieder, ein fehlgeschlagener Wegweiser kostet nur eine Logzeile (Pitfall 11)
 
 ### Pending Todos
 
@@ -266,7 +269,8 @@ Recent decisions affecting current work:
 - **Owner-Schritt 01-14:** Ein Durchgang mit Claude Desktop selbst nach docs/client-setup.md. Die Anleitung ist gegen die Referenz-Clients der Testsuite verprobt (mcp 2.0 und mcp 1.29 gegen denselben laufenden Endpoint, plus scripts/acceptance_all_tools.py ueber alle 15 Tools per stdio); die Konfigurationspfade fuer Claude Desktop stammen aus der offiziellen Dokumentation und sind auf diesem Rechner nicht verifiziert.
 - **Nextcloud-AIO-Smoke (Phase 5, D-31):** Der zweite Smoke-Schritt aus Success Criterion 1 ist an Phase 5 uebergeben. Er scheitert auf diesem Rechner an AIOs Domain-Validierung (oeffentliche Domain plus gueltiges TLS). Die fehlenden Schritte stehen in docs/exapp-install.md, Abschnitt Nextcloud AIO: Host mit oeffentlicher Domain und Zertifikat, AIO-Mastercontainer starten, optionalen HaRP-Container aktivieren (Annahme A6 unverifiziert), App als ExApp installieren, den Permission-Fidelity-Smoke wiederholen und occ app_api:app:list festhalten.
 - **WR-12 Linux-socat-Loop (Phase 5):** Die Linux-Variante des --manual-Entwicklungsloops (socat auf das Compose-Gateway) ist dokumentiert, aber auf diesem Windows-Host nicht durchgespielt; Entwicklungs-Komfort, nicht der ausgelieferte Pfad.
-- **ExApp-Topologie:** Nach 03-08 wieder heruntergefahren (`down` mit erhaltenen Volumes, danach `docker stop`/`docker rm nc_app_mcp_connector` und `docker network rm nc-mcp-exapp-net`). Wieder anfahren: `export HP_SHARED_KEY=$(openssl rand -hex 32)` und in DERSELBEN Zeile weiterarbeiten (die Shell-Env ueberlebt einen Aufruf nicht, und jedes `docker compose` gegen diese Datei braucht die Variable), `up -d --wait`, `occ app_api:app:unregister mcp_connector --silent --force`, `occ app_api:daemon:unregister harp_proxy_docker`, dann `bash scripts/bootstrap_exapp.sh` (baut das Image neu und setzt NC_MCP_PUBLIC_URL). Ohne das Neubauen laeuft ein veraltetes Image.
+- **Browser-Blick auf /settings/user/security (Assumption A1, Phase-4-Verifikation):** Gemessen ist, dass Nextcloud die Link-only-Form ausliefert (forms-Endpoint, Initial-State der Seite, Mount-Punkt `<div id="mcp_connector_mcp_connector_settings">`). Der gerenderte Pixel ist nicht gemessen, im Live-Lauf war kein Browser beteiligt. Schadensfall waere ein fehlender Wegweiser, keine Funktionsstoerung. Details in 04-04-MEASUREMENTS.md, Beweis 1.
+- **ExApp-Topologie:** Nach 04-04 wieder heruntergefahren (`down` mit erhaltenen Volumes, danach `docker stop`/`docker rm nc_app_mcp_connector` und `docker network rm nc-mcp-exapp-net`). Wieder anfahren: `export HP_SHARED_KEY=$(openssl rand -hex 32)` und in DERSELBEN Zeile weiterarbeiten (die Shell-Env ueberlebt einen Aufruf nicht, und jedes `docker compose` gegen diese Datei braucht die Variable), `up -d --wait`, `occ app_api:app:unregister mcp_connector --silent --force`, `occ app_api:daemon:unregister harp_proxy_docker`, dann `bash scripts/bootstrap_exapp.sh` (baut das Image neu und setzt NC_MCP_PUBLIC_URL). Ohne das Neubauen laeuft ein veraltetes Image.
 - **Aufraeumen (optional):** Die Docker-Testinstanz traegt jetzt zusaetzlich die Calendar-App 6.5.3 und die Abnahme-Artefakte. Fuer einen sauberen Stand: `docker compose -f compose.test.yml down -v` und danach `bash scripts/bootstrap_test_nc.sh`.
 
 ### Blockers/Concerns
@@ -285,6 +289,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-17T14:00:48.903Z
-Stopped at: Phase 4, Plan 04-01 fertig: der Per-User-Schalter liegt im Store und wirkt an der Transportgrenze. Nächstes: 04-02 (Wave 1 seriell, die Repo-weiten Gates kollidieren parallel)
+Last session: 2026-08-17T14:30:12.600Z
+Stopped at: Phase 4 komplett: 04-04 fertig, EXAPP-02 abgehakt, fünf Live-Beweise in 04-04-MEASUREMENTS.md protokolliert (Settings-Wegweiser, Schalter-Kette live, SC 5 unverändert, /connections von außen, prepare_context 0,84 s kurz und 0,99 s voll). Nächstes: Phase-4-Verifikation
 Resume file: None

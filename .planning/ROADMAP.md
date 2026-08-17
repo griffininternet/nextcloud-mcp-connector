@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: ExApp-Shell** - Installation über AppAPI, Berechtigungs-Durchgriff, Discovery- und DAV-Spikes
  (completed 2026-08-15)
 - [x] **Phase 3: OAuth 2.1** - Spec-konformes OAuth mit E2E-Beweis gegen Claude.ai und ChatGPT, Login Flow v2 als Fallback (completed 2026-08-16)
-- [ ] **Phase 4: Per-User-Verwaltung und prepare_context** - Settings-UI mit Token-Kontrolle plus Bündel-Tool
+- [x] **Phase 4: Per-User-Verwaltung und prepare_context** - Settings-UI mit Token-Kontrolle plus Bündel-Tool (completed 2026-08-17)
 - [ ] **Phase 5: Hardening und Store-Einreichung** - Sicherheits-Tests, Signatur, Listing, Client-Doku vor der Conference
 
 ## Phase Details
@@ -185,11 +185,11 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 04-03-PLAN.md - Connections-Seite: Liste, Widerruf je Zeile, Schalter, Route 13, E2E-Wächter (Wave 2)
+- [x] 04-03-PLAN.md - Connections-Seite: Liste, Widerruf je Zeile, Schalter, Route 13, E2E-Wächter (Wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 04-04-PLAN.md - Settings-Wegweiser (Link-only-Form) und Live-Abnahme mit SC-5-Messung (Wave 3)
+- [x] 04-04-PLAN.md - Settings-Wegweiser (Link-only-Form) und Live-Abnahme mit SC-5-Messung (Wave 3)
 
 ### Phase 5: Hardening und Store-Einreichung
 
@@ -216,7 +216,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Server-Kern | 14/14 | Complete    | 2026-08-14 |
 | 2. ExApp-Shell | 7/7 | Complete    | 2026-08-15 |
 | 3. OAuth 2.1 | 8/9 | In Progress|  |
-| 4. Per-User-Verwaltung und prepare_context | 2/4 | In Progress|  |
+| 4. Per-User-Verwaltung und prepare_context | 4/4 | Complete   | 2026-08-17 |
 | 5. Hardening und Store-Einreichung | 0/TBD | Not started | - |
 
 ## Coverage

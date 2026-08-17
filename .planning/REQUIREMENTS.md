@@ -38,7 +38,7 @@
 ### ExApp und Distribution (EXAPP)
 
 - [x] **EXAPP-01**: Admin kann die App als ExApp über AppAPI installieren (Container-Backend, Heartbeat/Init/enabled_handler, Deploy Daemon; HaRP-Smoke-Test vor Einreichung)
-- [ ] **EXAPP-02**: Nutzer kann in den Nextcloud-Settings den MCP-Zugriff aktivieren/deaktivieren, verbundene Clients einsehen und Tokens widerrufen (Per-User-Verwaltung, Declarative Settings)
+- [x] **EXAPP-02**: Nutzer kann in den Nextcloud-Settings den MCP-Zugriff aktivieren/deaktivieren, verbundene Clients einsehen und Tokens widerrufen (Per-User-Verwaltung, Declarative Settings)
 - [x] **EXAPP-03**: App-ID ist in Woche 1 eingefroren (ohne "nextcloud" im Namen, Store-Regel; Zertifikat hängt an der ID)
 - [ ] **EXAPP-04**: App ist im Nextcloud App Store eingereicht (Zertifikat via CSR-PR, Signatur, info.xml-Validierung, Datenweitergabe-Disclosure) vor der Nextcloud Conference September 2026
 - [ ] **EXAPP-05**: Setup-Doku pro Client (Claude.ai/Desktop, ChatGPT, Cursor, Open WebUI, MUCGPT) mit den bekannten Stolperstellen
@@ -104,7 +104,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AUTH-03 | Phase 3 | Complete |
 | AUTH-04 | Phase 3 | Complete |
 | AUTH-07 | Phase 3 | Complete |
-| EXAPP-02 | Phase 4 | Pending |
+| EXAPP-02 | Phase 4 | Complete |
 | TOOL-08 | Phase 4 | Complete |
 | EXAPP-04 | Phase 5 | Pending |
 | EXAPP-05 | Phase 5 | Pending |
