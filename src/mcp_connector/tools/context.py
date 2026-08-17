@@ -40,6 +40,7 @@ import httpx
 from ..errors import ToolError
 from ..nextcloud import NcClients
 from . import calendar as calendar_tools
+from . import chatgpt as chatgpt_tools
 from . import search as search_tools
 
 #: Hits requested from the search. Wider than any single bucket cap on purpose: the
@@ -65,6 +66,20 @@ MAX_EVENTS = 10
 KIND_BUCKETS = ("file", "note", "card")
 OTHER_BUCKET = "other"
 BUCKETS = (*KIND_BUCKETS, OTHER_BUCKET)
+
+#: How much of a document reaches the answer in the full form. Three excerpts of two
+#: kilobytes each are a paragraph of context per source, not a document dump: the model
+#: decides from them whether it is worth calling ``fetch`` for the whole text (D-54).
+MAX_EXCERPTS = 3
+EXCERPT_MAX_BYTES = 2000
+
+#: Own budget per excerpt, for the same reason the calendar has one: three reads that
+#: cannot be finished must cost three sentences under ``degraded``, never the bundle.
+EXCERPT_TIMEOUT = 5.0
+
+#: Marked inside the text and not only beside it, exactly as ``chatgpt.fetch`` does it: a
+#: model that only reads the excerpt must still be able to tell it from a whole document.
+EXCERPT_TRUNCATION = "[excerpt truncated; call fetch with this id for the full text]"
 
 SHORT = "short"
 FULL = "full"
@@ -107,8 +122,8 @@ async def prepare_context(clients: NcClients, query: str, detail: str = SHORT) -
             hint="; ".join(item["reason"] for item in degraded),
         )
 
-    # detail="full" adds excerpts in plan 04-02 task 2; until then it answers exactly like
-    # "short" rather than pretending to have loaded something.
+    if mode == FULL:
+        await _excerpts(clients, results, degraded)
 
     result: dict[str, Any] = {
         "query": term,
@@ -210,6 +225,64 @@ def _schedule(
     raw = outcome.get("events")
     events = [item for item in raw if isinstance(item, dict)] if isinstance(raw, list) else []
     return events[:MAX_EVENTS]
+
+
+async def _excerpts(
+    clients: NcClients,
+    results: dict[str, list[dict[str, Any]]],
+    degraded: list[dict[str, str]],
+) -> None:
+    """Add a short excerpt to the first few resolvable hits, in place and in parallel.
+
+    The order is the documented one: files first, then notes, then cards, and inside a kind
+    the order the search returned. It is deliberately fixed rather than clever, because a
+    ranking would be a second opinion about relevance next to the one Nextcloud already
+    gave, and this tool has no more information than the search it just called.
+
+    The content itself comes from ``chatgpt.fetch``: the id codec, the prefix discipline,
+    the refusal to request a foreign url and the readers of the three kinds all live there
+    and are tested there (threat T-01-75, T-01-77). A second routing here would be a second
+    place to get exactly those decisions wrong. The excerpt is a data field and nothing
+    else: no sentence of this module turns it into a request or an instruction (D-57).
+    """
+    targets = [
+        hit for name in KIND_BUCKETS for hit in results[name] if hit.get("resolvable") is not False
+    ][:MAX_EXCERPTS]
+
+    outcomes = await asyncio.gather(
+        *(_excerpt(clients, str(hit["id"])) for hit in targets), return_exceptions=True
+    )
+    for hit, outcome in zip(targets, outcomes, strict=True):
+        if isinstance(outcome, BaseException):
+            # The hit was found, and that stays true even when its content cannot be read.
+            degraded.append(
+                {
+                    "source": str(hit["id"]),
+                    "reason": _reason(outcome, "excerpt source", EXCERPT_TIMEOUT),
+                }
+            )
+            continue
+        hit["excerpt"] = outcome
+
+
+async def _excerpt(clients: NcClients, identifier: str) -> str:
+    """One excerpt, under its own ceiling, through the routing that already exists."""
+    async with asyncio.timeout(EXCERPT_TIMEOUT):
+        fetched = await chatgpt_tools.fetch(clients, identifier)
+    return _capped(str(fetched.get("text") or ""))
+
+
+def _capped(text: str) -> str:
+    """Cut an excerpt to its byte ceiling and say inside the text that it was cut.
+
+    Bytes and not characters, because the ceiling is about the payload and an umlaut is two
+    bytes. ``errors="ignore"`` drops a character that the cut split in half, which is the
+    right trade for a preview and would be the wrong one for a document.
+    """
+    encoded = text.encode("utf-8")
+    if len(encoded) <= EXCERPT_MAX_BYTES:
+        return text
+    return f"{encoded[:EXCERPT_MAX_BYTES].decode('utf-8', errors='ignore')}\n\n{EXCERPT_TRUNCATION}"
 
 
 def _degraded_of(answer: dict[str, Any]) -> list[dict[str, str]]:
