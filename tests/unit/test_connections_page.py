@@ -1,4 +1,4 @@
-"""The connections page of EXAPP-02: the four screens and E8 (04-UI-SPEC.md, S5 to S8).
+"""The connections page of EXAPP-02: the four screens, E8 and the routes behind them.
 
 Two rules drive the harsher checks of this file, both inherited from phase 3:
 
@@ -7,22 +7,40 @@ Two rules drive the harsher checks of this file, both inherited from phase 3:
   element sequence instead of looking for a substring: a substring check passes happily
   while the page grew a second form;
 * the connection handle is the value a stranger would guess (T-04-31), so it may travel in
-  a hidden field and nowhere else.
+  a hidden field and nowhere else, and the three cases "unknown", "not yours" and "already
+  revoked" have to answer the same page.
 
-Nothing here talks to Nextcloud: the pages are pure functions of their arguments, and the
-host in every sentence comes from the configured public URL and never from a request
-(T-03-02).
+Nothing here talks to Nextcloud: the store is a SQLite file in ``tmp_path``, the data key
+is a constant of this file, and the identity of a request is the AppAPI header HaRP would
+sign. The host in every sentence comes from the configured public URL and never from a
+request (T-03-02).
 """
 
+import asyncio
+import base64
 import calendar
 import re
+import sqlite3
+from collections.abc import Awaitable
 from html.parser import HTMLParser
+from pathlib import Path
 
+import pytest
+from starlette.applications import Starlette
 from starlette.responses import Response
+from starlette.testclient import TestClient
 
 from mcp_connector import config
 from mcp_connector.exapp.ui import connections as ui
 from mcp_connector.exapp.ui import errors, icons, layout, strings
+from mcp_connector.oauth import connections as routes
+from mcp_connector.oauth import provider as provider_module
+from mcp_connector.oauth import registry
+from mcp_connector.oauth import throttle as throttle_module
+from mcp_connector.oauth import verifier as verifier_module
+from mcp_connector.oauth.metadata import TOOL_SCOPE
+from mcp_connector.oauth import store as store_module
+from mcp_connector.oauth.store import OAuthStore
 
 PUBLIC_URL = "https://cloud.example.com/exapps/mcp_connector"
 HOST = "cloud.example.com"
@@ -30,12 +48,35 @@ PREFIX = "/exapps/mcp_connector"
 
 ENV = {config.ENV_PUBLIC_URL: PUBLIC_URL}
 
+APP_ID = "mcp_connector"
+APP_SECRET = "app-secret-test"
+APP_VERSION = "0.1.0"
+
+#: The deploy environment of a running ExApp, which the routes need for two things: the
+#: prefix of every form action, and the AppAPI handshake that names the account.
+SERVED_ENV = {
+    **ENV,
+    config.ENV_APP_ID: APP_ID,
+    config.ENV_APP_SECRET: APP_SECRET,
+    config.ENV_APP_VERSION: APP_VERSION,
+    config.ENV_NEXTCLOUD_URL: "http://nc.test",
+}
+
+#: A key that is not secret, because it never leaves this file.
+KEY = bytes(range(32))
+
 NC_USER = "alice"
+OTHER_USER = "bob"
+APP_PASSWORD = "aaaaa-bbbbb-ccccc-ddddd-eeeee"
+RESOURCE = f"{PUBLIC_URL}/mcp"
 
 CLIENT_ID = "9d0f8f1a-0b3c-4a0e-9f4c-000000000001"
+SECOND_CLIENT_ID = "9d0f8f1a-0b3c-4a0e-9f4c-000000000002"
 CLIENT_NAME = "Claude"
+SECOND_CLIENT_NAME = "Another assistant"
 AUTH_ID = "authorization-of-alice-0001"
 SECOND_AUTH_ID = "authorization-of-alice-0002"
+FOREIGN_AUTH_ID = "authorization-of-bob-0001"
 TOKEN = "an-anti-forgery-value-of-this-row"
 SWITCH_TOKEN = "an-anti-forgery-value-of-the-switch"
 
@@ -434,3 +475,468 @@ def test_every_page_of_this_family_carries_the_five_required_headers() -> None:
         assert response.headers["referrer-policy"] == "no-referrer"
         assert "form-action 'self'" in response.headers["content-security-policy"]
         assert response.headers["content-type"] == "text/html; charset=utf-8"
+
+
+# --- the routes behind those screens ------------------------------------------------
+
+
+class Deployment:
+    """The connections route with the store and the provider of one deployment.
+
+    Assembled the way ``entry_exapp`` assembles it, so the disconnect of a row runs through
+    the very same ``end_connection`` the token endpoint uses, and the verifier that decides
+    whether a token still works shares the store and the revocation hook with it (T-04-35).
+    """
+
+    def __init__(self, tmp_path: Path) -> None:
+        self.store = OAuthStore(tmp_path / "oauth.sqlite3", KEY)
+        self.provider = provider_module.NextcloudOAuthProvider(
+            env=SERVED_ENV,
+            policy=registry.client_policy(SERVED_ENV),
+            store_provider=self._open,
+        )
+        self.verifier = verifier_module.StoreTokenVerifier(
+            store_provider=self._open, get_client=self.provider.get_client, env=SERVED_ENV
+        )
+        self.provider.on_revocation(self.verifier.invalidate)
+        # High on purpose: the throttle has its own checks, and a page that throttles itself
+        # stops testing the refusals it is here for.
+        counters = throttle_module.Throttle(limit=10_000, ceiling=100_000, window=60)
+        self.client = TestClient(
+            Starlette(
+                routes=routes.connections_routes(
+                    SERVED_ENV,
+                    store_provider=self._open,
+                    end_connection=self.provider.end_connection,
+                    throttle=counters,
+                )
+            )
+        )
+
+    async def _open(self) -> OAuthStore:
+        return self.store
+
+    def get(self, user: str = NC_USER) -> Response:
+        return self.client.get(ui.CONNECTIONS_PATH, headers=appapi_headers(user))
+
+    def post(self, data: dict[str, str], user: str = NC_USER) -> Response:
+        return self.client.post(ui.CONNECTIONS_PATH, data=data, headers=appapi_headers(user))
+
+    def token_of(self, auth_id: str) -> str:
+        return self.store.form_token(auth_id)
+
+    def switch_token_of(self, user: str = NC_USER) -> str:
+        return self.store.form_token(f"{routes.SWITCH_HANDLE}{user}")
+
+    def rows_of(self, user: str = NC_USER) -> list[str]:
+        return [row.auth_id for row in run(self.store.authorizations_of_user(user))]
+
+
+def run(work: Awaitable[object]) -> object:
+    """One asynchronous call from a synchronous test, the shape the other files use."""
+    return asyncio.run(work)
+
+
+def appapi_headers(user: str) -> dict[str, str]:
+    """What HaRP signs onto every request it forwards: an account, or the empty string."""
+    token = base64.b64encode(f"{user}:{APP_SECRET}".encode()).decode()
+    return {
+        "EX-APP-ID": APP_ID,
+        "EX-APP-VERSION": APP_VERSION,
+        "AUTHORIZATION-APP-API": token,
+    }
+
+
+def seed(
+    deployment: Deployment,
+    *,
+    auth_id: str = AUTH_ID,
+    client_id: str = CLIENT_ID,
+    client_name: str = CLIENT_NAME,
+    nc_user: str = NC_USER,
+    created_at: int = CREATED_AT,
+) -> None:
+    """One registered client and one live connection of that client to that account."""
+    store = deployment.store
+    metadata = '{"client_name": "NAME"}'.replace("NAME", client_name)
+    run(store.save_client(client_id, metadata_json=metadata, allowed=True))
+    run(store.touch_client(client_id))
+    run(
+        store.create_authorization(
+            auth_id,
+            client_id=client_id,
+            nc_user=nc_user,
+            app_password=APP_PASSWORD,
+            scopes=TOOL_SCOPE,
+            resource=RESOURCE,
+            now=created_at,
+        )
+    )
+
+
+def issue(deployment: Deployment, token: str, *, auth_id: str = AUTH_ID) -> None:
+    """An access token and a refresh family of one connection, as the token endpoint does."""
+    family = f"family-of-{auth_id}"
+    run(
+        deployment.store.create_access_token(
+            token, auth_id=auth_id, family_id=family, scopes=TOOL_SCOPE, resource=RESOURCE
+        )
+    )
+    run(deployment.store.create_refresh_token(f"refresh-{token}", auth_id=auth_id, family_id=family))
+
+
+def comparable(response: Response) -> str:
+    """The answer without the two values that differ per response: the nonce, twice.
+
+    Everything else has to be identical for the three cases of S8, or the page is an
+    existence oracle for whoever guesses a handle (T-04-31).
+    """
+    return re.sub(r'nonce[-=]"?[A-Za-z0-9_-]+', "nonce", response.text)
+
+
+@pytest.fixture
+def live(tmp_path: Path) -> Deployment:
+    deployment = Deployment(tmp_path)
+    seed(deployment)
+    return deployment
+
+
+def test_the_page_lists_the_connections_of_the_account_behind_the_browser(
+    live: Deployment,
+) -> None:
+    """S5 over the wire: this account's rows, newest first, and nobody else's."""
+    seed(
+        live,
+        auth_id=SECOND_AUTH_ID,
+        client_id=SECOND_CLIENT_ID,
+        client_name=SECOND_CLIENT_NAME,
+        created_at=CREATED_AT + 86400,
+    )
+    seed(live, auth_id=FOREIGN_AUTH_ID, nc_user=OTHER_USER)
+
+    response = live.get()
+    newest, oldest = order_of(response.text, SECOND_CLIENT_NAME, CLIENT_NAME)
+
+    assert response.status_code == 200
+    assert newest < oldest, "newest first"
+    assert FOREIGN_AUTH_ID not in response.text, "another account's connections are not listed"
+    assert live.token_of(AUTH_ID) in response.text, "every row carries its own hidden value"
+
+
+def test_an_account_without_connections_gets_the_empty_state(tmp_path: Path) -> None:
+    response = Deployment(tmp_path).get()
+
+    assert response.status_code == 200
+    assert strings.CONNECTIONS_EMPTY_TITLE in response.text
+
+
+def test_a_browser_without_a_nextcloud_account_gets_e8_on_both_verbs(live: Deployment) -> None:
+    """E8: 403, and nothing about whether that account exists or has connections."""
+    listed = live.client.get(ui.CONNECTIONS_PATH, headers=appapi_headers(""))
+    acted = live.client.post(
+        ui.CONNECTIONS_PATH,
+        data={ui.ACTION_FIELD: ui.ACTION_DISCONNECT, ui.AUTH_PARAM: AUTH_ID},
+        headers=appapi_headers(""),
+    )
+
+    for response in (listed, acted):
+        assert response.status_code == 403
+        assert strings.ERROR_SIGN_IN_TITLE in response.text
+        assert CLIENT_NAME not in response.text
+    assert live.rows_of() == [AUTH_ID], "a refused request changes nothing"
+
+
+def test_a_confirm_of_an_own_connection_is_the_interstitial(live: Deployment) -> None:
+    response = live.post({ui.ACTION_FIELD: ui.ACTION_CONFIRM, ui.AUTH_PARAM: AUTH_ID})
+
+    assert response.status_code == 200
+    assert strings.DISCONNECT_TITLE.format(client=CLIENT_NAME) in response.text
+    assert live.token_of(AUTH_ID) in response.text
+    assert live.rows_of() == [AUTH_ID], "the interstitial changes nothing"
+
+
+def test_an_unknown_a_foreign_and_a_revoked_handle_answer_the_same_page(
+    live: Deployment,
+) -> None:
+    """T-04-31: a page that told them apart would answer whether a connection exists."""
+    seed(live, auth_id=FOREIGN_AUTH_ID, nc_user=OTHER_USER)
+    seed(live, auth_id=SECOND_AUTH_ID, client_id=SECOND_CLIENT_ID, client_name=SECOND_CLIENT_NAME)
+    run(live.store.revoke_authorization(SECOND_AUTH_ID))
+
+    unknown = live.post({ui.ACTION_FIELD: ui.ACTION_CONFIRM, ui.AUTH_PARAM: "never-existed"})
+    foreign = live.post({ui.ACTION_FIELD: ui.ACTION_CONFIRM, ui.AUTH_PARAM: FOREIGN_AUTH_ID})
+    revoked = live.post({ui.ACTION_FIELD: ui.ACTION_CONFIRM, ui.AUTH_PARAM: SECOND_AUTH_ID})
+
+    assert comparable(unknown) == comparable(foreign) == comparable(revoked)
+    assert strings.DISCONNECT_GONE_TITLE in unknown.text
+    assert unknown.status_code == 200
+
+
+def test_a_disconnect_ends_that_one_connection_and_says_so(live: Deployment) -> None:
+    """SC 2: the row is gone, the page says which app lost access, and it stays a page."""
+    response = live.post(
+        {
+            ui.ACTION_FIELD: ui.ACTION_DISCONNECT,
+            ui.AUTH_PARAM: AUTH_ID,
+            ui.CONFIRM_PARAM: live.token_of(AUTH_ID),
+        }
+    )
+    row = run(live.store.load_authorization(AUTH_ID))
+
+    assert response.status_code == 200
+    assert strings.DISCONNECT_DONE_TITLE in response.text
+    assert strings.DISCONNECT_DONE_BODY.format(client=CLIENT_NAME) in response.text
+    assert live.rows_of() == []
+    assert row is not None
+    assert row.revoked_at is not None
+    assert row.cleanup_at is not None, "the app password of that connection is still out there"
+
+
+def test_the_same_form_submitted_again_is_already_disconnected(live: Deployment) -> None:
+    """A reload resubmits the form, which is why this answer exists and is not an error."""
+    form = {
+        ui.ACTION_FIELD: ui.ACTION_DISCONNECT,
+        ui.AUTH_PARAM: AUTH_ID,
+        ui.CONFIRM_PARAM: live.token_of(AUTH_ID),
+    }
+    live.post(form)
+
+    again = live.post(form)
+
+    assert again.status_code == 200
+    assert strings.DISCONNECT_GONE_TITLE in again.text
+
+
+def test_a_disconnect_leaves_every_other_connection_alone(live: Deployment) -> None:
+    """SC 2 in its second half: without affecting the other apps, or another account."""
+    seed(live, auth_id=SECOND_AUTH_ID, client_id=SECOND_CLIENT_ID, client_name=SECOND_CLIENT_NAME)
+    seed(live, auth_id=FOREIGN_AUTH_ID, nc_user=OTHER_USER)
+
+    live.post(
+        {
+            ui.ACTION_FIELD: ui.ACTION_DISCONNECT,
+            ui.AUTH_PARAM: AUTH_ID,
+            ui.CONFIRM_PARAM: live.token_of(AUTH_ID),
+        }
+    )
+
+    assert live.rows_of() == [SECOND_AUTH_ID]
+    assert live.rows_of(OTHER_USER) == [FOREIGN_AUTH_ID]
+
+
+@pytest.mark.parametrize("presented", ["", "a-value-of-another-page", "  "])
+def test_a_disconnect_without_the_anti_forgery_value_changes_nothing(
+    live: Deployment, presented: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    """T-04-30: a foreign origin can post this form, and it cannot produce this value."""
+    with caplog.at_level("WARNING", logger="mcp_connector.oauth.connections"):
+        response = live.post(
+            {
+                ui.ACTION_FIELD: ui.ACTION_DISCONNECT,
+                ui.AUTH_PARAM: AUTH_ID,
+                ui.CONFIRM_PARAM: presented,
+            }
+        )
+
+    assert response.status_code == 200
+    assert strings.DISCONNECT_GONE_TITLE in response.text, "no oracle, the same calm answer"
+    assert live.rows_of() == [AUTH_ID]
+    assert caplog.records, "a forged form is worth exactly one log line"
+
+
+def test_the_row_value_of_one_connection_does_not_disconnect_another(live: Deployment) -> None:
+    """The value is derived from the handle, so it fits one row and one row only."""
+    seed(live, auth_id=SECOND_AUTH_ID, client_id=SECOND_CLIENT_ID, client_name=SECOND_CLIENT_NAME)
+
+    response = live.post(
+        {
+            ui.ACTION_FIELD: ui.ACTION_DISCONNECT,
+            ui.AUTH_PARAM: SECOND_AUTH_ID,
+            ui.CONFIRM_PARAM: live.token_of(AUTH_ID),
+        }
+    )
+
+    assert strings.DISCONNECT_GONE_TITLE in response.text
+    assert sorted(live.rows_of()) == sorted([AUTH_ID, SECOND_AUTH_ID])
+
+
+def test_the_switch_pauses_and_resumes_the_account_of_the_browser(live: Deployment) -> None:
+    """The proof of effect is the page itself: the callout appears and disappears."""
+    paused = live.post({ui.ACTION_FIELD: ui.ACTION_PAUSE, ui.CONFIRM_PARAM: live.switch_token_of()})
+
+    assert paused.status_code == 200
+    assert strings.CONNECTIONS_PAUSED_TITLE in paused.text
+    assert run(live.store.access_disabled(NC_USER)) is True
+    assert live.rows_of() == [AUTH_ID], "pausing disconnects nothing (D-46)"
+
+    resumed = live.post(
+        {ui.ACTION_FIELD: ui.ACTION_RESUME, ui.CONFIRM_PARAM: live.switch_token_of()}
+    )
+
+    assert strings.CONNECTIONS_PAUSED_TITLE not in resumed.text
+    assert run(live.store.access_disabled(NC_USER)) is False
+
+
+def test_the_switch_is_a_named_state_and_survives_a_resubmitted_form(live: Deployment) -> None:
+    """pause and resume, never toggle: a replayed form re-states a state (04-UI-SPEC.md)."""
+    form = {ui.ACTION_FIELD: ui.ACTION_PAUSE, ui.CONFIRM_PARAM: live.switch_token_of()}
+    live.post(form)
+    live.post(form)
+
+    assert run(live.store.access_disabled(NC_USER)) is True
+
+
+def test_the_switch_of_one_account_is_never_the_switch_of_another(live: Deployment) -> None:
+    live.post({ui.ACTION_FIELD: ui.ACTION_PAUSE, ui.CONFIRM_PARAM: live.switch_token_of()})
+
+    assert run(live.store.access_disabled(OTHER_USER)) is False
+
+
+def test_a_row_value_cannot_pause_the_account(
+    live: Deployment, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The switch value is bound to the account, so a value of a row does not fit it."""
+    with caplog.at_level("WARNING", logger="mcp_connector.oauth.connections"):
+        response = live.post(
+            {ui.ACTION_FIELD: ui.ACTION_PAUSE, ui.CONFIRM_PARAM: live.token_of(AUTH_ID)}
+        )
+
+    assert response.status_code == 200
+    assert run(live.store.access_disabled(NC_USER)) is False
+    assert strings.CONNECTIONS_PAUSED_TITLE not in response.text
+    assert caplog.records
+
+
+def test_the_switch_value_of_one_account_does_not_pause_another(live: Deployment) -> None:
+    response = live.post(
+        {ui.ACTION_FIELD: ui.ACTION_PAUSE, ui.CONFIRM_PARAM: live.switch_token_of(OTHER_USER)}
+    )
+
+    assert run(live.store.access_disabled(NC_USER)) is False
+    assert strings.CONNECTIONS_PAUSED_TITLE not in response.text
+
+
+def test_the_keep_button_answers_the_plain_list(live: Deployment) -> None:
+    response = live.post({ui.ACTION_FIELD: ui.ACTION_KEEP})
+
+    assert response.status_code == 200
+    assert SECTION_HEADING in response.text
+    assert strings.DISCONNECT_GONE_TITLE not in response.text
+    assert live.rows_of() == [AUTH_ID]
+
+
+def test_an_action_this_route_does_not_know_is_the_list_and_a_400(live: Deployment) -> None:
+    """Not an error a user can act on differently, and not a page of its own."""
+    response = live.post({ui.ACTION_FIELD: "delete-everything"})
+
+    assert response.status_code == 400
+    assert SECTION_HEADING in response.text
+    assert live.rows_of() == [AUTH_ID]
+
+
+def test_a_get_never_changes_anything(live: Deployment) -> None:
+    """T-03-35: the rule that makes a link safe on a page that can end a connection."""
+    before = Path(live.store.path).read_bytes()
+
+    live.get()
+    live.client.get(
+        f"{ui.CONNECTIONS_PATH}?{ui.ACTION_FIELD}={ui.ACTION_DISCONNECT}",
+        headers=appapi_headers(NC_USER),
+    )
+
+    assert Path(live.store.path).read_bytes() == before
+
+
+def test_a_disconnect_stops_the_token_of_that_connection_at_once(live: Deployment) -> None:
+    """T-03-62: the verifier answers from a five second cache, and this empties it."""
+    issue(live, "an-access-token-of-this-connection")
+    assert run(live.verifier.verify_token("an-access-token-of-this-connection")) is not None
+
+    live.post(
+        {
+            ui.ACTION_FIELD: ui.ACTION_DISCONNECT,
+            ui.AUTH_PARAM: AUTH_ID,
+            ui.CONFIRM_PARAM: live.token_of(AUTH_ID),
+        }
+    )
+
+    assert run(live.verifier.verify_token("an-access-token-of-this-connection")) is None
+
+
+def test_a_disconnect_revokes_the_refresh_family_of_that_connection(live: Deployment) -> None:
+    """The whole connection ends, not only the access token that happened to be cached."""
+    issue(live, "an-access-token-of-this-connection")
+
+    live.post(
+        {
+            ui.ACTION_FIELD: ui.ACTION_DISCONNECT,
+            ui.AUTH_PARAM: AUTH_ID,
+            ui.CONFIRM_PARAM: live.token_of(AUTH_ID),
+        }
+    )
+    refresh = run(live.store.load_refresh_token("refresh-an-access-token-of-this-connection"))
+
+    assert refresh is not None
+    assert refresh.state == store_module.STATE_REVOKED
+
+
+def test_a_store_that_cannot_be_read_answers_a_page_and_never_a_traceback(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Fail closed (D-37): the reader can do nothing about it, the log carries the detail."""
+    deployment = Deployment(tmp_path)
+    seed(deployment)
+    Path(deployment.store.path).write_bytes(b"this is not a SQLite file")
+
+    with caplog.at_level("ERROR", logger="mcp_connector.oauth.connections"):
+        response = deployment.get()
+
+    assert response.status_code == 500
+    assert strings.ERROR_GENERIC_TITLE in response.text
+    assert "Traceback" not in response.text
+    assert caplog.records
+
+
+def test_the_page_never_ends_a_connection_on_a_path_of_its_own() -> None:
+    """T-04-35, the source guard of pitfall 3: one revocation path, and it is the provider's.
+
+    A direct ``revoke_authorization`` in either module would end a connection without
+    emptying the verifier cache, so a revoked token would keep working for up to five
+    seconds. Counter checked by hand: a store call written into ``oauth/connections.py``
+    turns this test red.
+    """
+    for path in (
+        Path("src/mcp_connector/oauth/connections.py"),
+        Path("src/mcp_connector/exapp/ui/connections.py"),
+    ):
+        code = "\n".join(
+            line
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if not line.lstrip().startswith("#")
+        )
+        assert "revoke_authorization" not in code, f"{path.name} revokes on its own"
+        assert "revoke_family" not in code, f"{path.name} revokes on its own"
+
+
+def test_the_page_is_throttled_as_the_browser_class_it_belongs_to() -> None:
+    """No new mechanics and no new class: the refusals of a browser path (T-04-37)."""
+    built = routes.connections_routes(
+        SERVED_ENV,
+        store_provider=_no_store,
+        end_connection=_never_ends,
+        throttle=throttle_module.Throttle(),
+    )
+
+    assert len(built) == 1
+    guard = built[0].app
+    assert isinstance(guard, throttle_module.Throttled)
+    assert guard._path_class == throttle_module.CLASS_AUTHORIZE
+
+
+async def _no_store() -> OAuthStore:  # pragma: no cover - the route is never called here
+    raise sqlite3.Error("no store in this check")
+
+
+async def _never_ends(auth_id: str) -> bool:  # pragma: no cover - never called
+    del auth_id
+    return False
