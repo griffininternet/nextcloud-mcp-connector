@@ -986,6 +986,34 @@ def test_a_disconnect_revokes_the_refresh_family_of_that_connection(live: Deploy
     assert refresh.state == store_module.STATE_REVOKED
 
 
+def test_a_form_body_that_cannot_be_parsed_is_a_page_and_never_an_unhandled_500(
+    live: Deployment, caplog: pytest.LogCaptureFixture
+) -> None:
+    """HI-02: the module promises that no refusal escapes as a 500, and this one did.
+
+    Starlette catches its own ``MultiPartException`` inside ``Request.form()`` and turns it
+    into a 400; the ``MultipartParseError`` of ``python_multipart`` is not covered by that
+    and ran through untouched. The answer was a bare ``text/plain`` 500 without
+    ``no-store``, without a reference a user could report, and with a full traceback in the
+    log for every request: a cheap log flooder that any signed in account could fire.
+    """
+    with caplog.at_level("ERROR", logger="mcp_connector"):
+        response = live.client.post(
+            ui.CONNECTIONS_PATH,
+            headers=appapi_headers(NC_USER)
+            | {"Content-Type": "multipart/form-data; boundary=the-boundary"},
+            content=b"this is not a multipart body",
+        )
+
+    assert response.status_code == 500
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["content-type"] == "text/html; charset=utf-8"
+    assert strings.ERROR_GENERIC_TITLE in response.text
+    assert "Traceback" not in response.text
+    assert caplog.records, "one log line with the reference of the page, and no traceback"
+    assert live.rows_of() == [AUTH_ID], "a body nobody could read changes nothing"
+
+
 def test_a_store_that_cannot_be_read_answers_a_page_and_never_a_traceback(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:

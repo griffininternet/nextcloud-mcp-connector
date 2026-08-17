@@ -31,7 +31,9 @@ mechanics:
 Every answer is a page and never a redirect (CR-03): the answer of a form submission may
 not be a redirect a browser checks against ``form-action 'self'``. The guards return a
 response instead of raising, so no refusal escapes as a 500, and a store that cannot be
-read is E7 with a reference in the log (fail closed, D-37).
+read is E7 with a reference in the log (fail closed, D-37). That promise now includes the
+body itself: a form that cannot be parsed is answered by ``form_or_none`` with a page and
+not by the framework with a traceback (HI-02).
 """
 
 import json
@@ -46,6 +48,7 @@ from starlette.routing import Route
 
 from ..errors import ToolError
 from ..exapp.auth import appapi_user, is_user
+from ..exapp.responses import form_or_none
 from ..exapp.ui import errors
 from ..exapp.ui.connections import (
     ACTION_CONFIRM,
@@ -129,7 +132,14 @@ def connections_routes(
 
         if request.method == "GET":
             return await _list(store, user, env)
-        return await _act(await request.form(), store, user, end_connection, env)
+
+        form = await form_or_none(request)
+        if form is None:
+            # A body this server cannot read is not a refusal of one of the guards below,
+            # so it is the generic page with a reference in the log, and never the traceback
+            # the framework used to answer with (HI-02).
+            return _generic("a submitted form could not be parsed", env)
+        return await _act(form, store, user, end_connection, env)
 
     def account(request: Request) -> str:
         """Who the counter of this request belongs to, or the empty string for nobody."""
