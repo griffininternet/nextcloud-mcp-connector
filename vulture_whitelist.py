@@ -78,6 +78,20 @@ get_board
 #   entry covers both, and dropping it would flag the deliberate refusal as dead code.
 _.load_access_token
 
+# --- The store API of phase 4 ----------------------------------------------------------
+# The same shape as the block above, one phase later: plan 04-01 builds the per account
+# switch and the account's own connection list as store truths, and the callers arrive in
+# the plans that render them. Every entry leaves this list with the plan that calls it.
+#
+# access_disabled: the transport boundary reads it on every MCP request. Its caller lands in
+#   task 2 of plan 04-01, which is why this entry is the shortest lived one in this file.
+# set_access: written by the pause and resume actions of the connections page (plan 04-03).
+# authorizations_of_user: the row list of S5, same plan. Both are driven directly by
+#   tests/unit/test_oauth_store.py, which is what keeps them honest until then.
+_.access_disabled
+_.set_access
+_.authorizations_of_user
+
 # Fields of the row objects that this phase writes and a later plan reads:
 # created_at and issued_at (the admin view of phase 4 shows when a connection was made),
 # cleanup_at (03-07 writes it when a Nextcloud app password could not be handed back; the

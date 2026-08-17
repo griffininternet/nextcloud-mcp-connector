@@ -132,7 +132,10 @@ REDEEM_EXPIRED = "expired"
 REDEEM_REUSED = "reused"
 
 #: The schema of 03-RESEARCH.md, verbatim except for the ``IF NOT EXISTS`` that makes it
-#: idempotent for a second process opening the same file.
+#: idempotent for a second process opening the same file, plus the one table phase 4 adds
+#: (``user_access``, the per account switch of EXAPP-02). ``CREATE TABLE IF NOT EXISTS``
+#: here is the whole migration for a new table: ``_connect`` runs this script on every
+#: open, so a store file written by an earlier build grows the table on its next use.
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS clients (
   client_id TEXT PRIMARY KEY,
@@ -166,6 +169,13 @@ CREATE TABLE IF NOT EXISTS authorizations (
   created_at INTEGER NOT NULL,
   revoked_at INTEGER,
   cleanup_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS authorizations_nc_user ON authorizations(nc_user);
+
+CREATE TABLE IF NOT EXISTS user_access (
+  nc_user TEXT PRIMARY KEY,
+  disabled_at INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS auth_codes (
@@ -546,18 +556,7 @@ class OAuthStore:
                 "cleanup_at FROM authorizations WHERE auth_id = ?",
                 (auth_id,),
             ).fetchone()
-            if row is None:
-                return None
-            return AuthorizationRow(
-                auth_id=row[0],
-                client_id=row[1],
-                nc_user=row[2],
-                scopes=row[3],
-                resource=row[4],
-                created_at=row[5],
-                revoked_at=row[6],
-                cleanup_at=row[7],
-            )
+            return None if row is None else _authorization_row(row)
 
         return await self._read(work)
 
@@ -655,19 +654,87 @@ class OAuthStore:
                 "ORDER BY created_at LIMIT ?",
                 (client_id, limit),
             ).fetchall()
-            return [
-                AuthorizationRow(
-                    auth_id=row[0],
-                    client_id=row[1],
-                    nc_user=row[2],
-                    scopes=row[3],
-                    resource=row[4],
-                    created_at=row[5],
-                    revoked_at=row[6],
-                    cleanup_at=row[7],
+            return [_authorization_row(row) for row in rows]
+
+        return await self._read(work)
+
+    async def authorizations_of_user(self, nc_user: str) -> list[AuthorizationRow]:
+        """The live connections of one account, newest first (S5 of the connections page).
+
+        Only what still exists: a revoked connection ended, and the page that lists it is
+        the page a user opens to see who can reach their Nextcloud right now. No ``limit``
+        here, unlike :meth:`authorizations_of_client`: this list costs one local read and
+        never one Nextcloud request per row, and a page that silently dropped the oldest
+        connection would leave a user unable to disconnect it.
+
+        An empty account id returns an empty list rather than every row of every account:
+        the app context has no connections of its own (pitfall 10 of 04-RESEARCH.md).
+        """
+        if not nc_user.strip():
+            return []
+
+        def work(conn: sqlite3.Connection) -> list[AuthorizationRow]:
+            rows = conn.execute(
+                "SELECT auth_id, client_id, nc_user, scopes, resource, created_at, "
+                "revoked_at, cleanup_at FROM authorizations WHERE nc_user = ? "
+                "AND revoked_at IS NULL ORDER BY created_at DESC",
+                (nc_user,),
+            ).fetchall()
+            return [_authorization_row(row) for row in rows]
+
+        return await self._read(work)
+
+    # --- the per account access switch (EXAPP-02) -----------------------------------
+
+    async def set_access(self, nc_user: str, *, disabled: bool, now: int | None = None) -> None:
+        """Pause or resume the MCP access of one Nextcloud account (D-47).
+
+        Idempotent in both directions, and asymmetric on purpose. Pausing writes at most one
+        row and keeps the first ``disabled_at``, so the moment the user pulled the brake
+        stands even if the form is submitted twice. Resuming *deletes* the row instead of
+        writing a zero into it: an account that was never paused and an account that was
+        resumed are then the same truth in the file, and no reader can tell them apart
+        wrongly. Being switched on therefore costs no row at all (D-50).
+
+        A blank account id is a programming error and not a state: the app context has no
+        switch, and a row under the empty string would be a switch nobody can reach and
+        every empty identity would hit.
+        """
+        if not nc_user.strip():
+            raise ValueError("nc_user must name an account; the app context has no switch")
+        moment = _moment(now)
+
+        def work(conn: sqlite3.Connection) -> None:
+            if disabled:
+                conn.execute(
+                    "INSERT INTO user_access (nc_user, disabled_at) VALUES (?, ?) "
+                    "ON CONFLICT(nc_user) DO NOTHING",
+                    (nc_user, moment),
                 )
-                for row in rows
-            ]
+                return
+            conn.execute("DELETE FROM user_access WHERE nc_user = ?", (nc_user,))
+
+        await self._write(work)
+
+    async def access_disabled(self, nc_user: str) -> bool:
+        """Whether this account has paused its MCP access. One local read, never a cache.
+
+        This runs at the transport boundary on every MCP request, which is why it is a
+        ``SELECT 1`` against a primary key in the file this container already owns: the
+        switch may not cost a second Nextcloud roundtrip (D-47), and it may not be answered
+        from a process cache either, because flipping it has to take effect on the very next
+        request (D-48).
+
+        A blank account id is never paused and is answered without opening the file: the app
+        context has no switch, and the OAuth branch of the boundary decides on the bearer
+        (pitfall 10 of 04-RESEARCH.md).
+        """
+        if not nc_user.strip():
+            return False
+
+        def work(conn: sqlite3.Connection) -> bool:
+            row = conn.execute("SELECT 1 FROM user_access WHERE nc_user = ?", (nc_user,)).fetchone()
+            return row is not None
 
         return await self._read(work)
 
@@ -1168,6 +1235,22 @@ def _add_missing_columns(conn: sqlite3.Connection) -> None:
     columns = {row[1] for row in conn.execute("PRAGMA table_info(authorizations)")}
     if "cleanup_at" not in columns:
         conn.execute("ALTER TABLE authorizations ADD COLUMN cleanup_at INTEGER")
+
+
+def _authorization_row(row: tuple[Any, ...]) -> AuthorizationRow:
+    """One shape for the three places that read a connection, in the column order they
+    all select. The third reader arrived with the connections page of phase 4, and a third
+    hand written copy of eight fields is how two of them end up meaning different things."""
+    return AuthorizationRow(
+        auth_id=row[0],
+        client_id=row[1],
+        nc_user=row[2],
+        scopes=row[3],
+        resource=row[4],
+        created_at=row[5],
+        revoked_at=row[6],
+        cleanup_at=row[7],
+    )
 
 
 def _auth_code_row(row: tuple[Any, ...]) -> AuthCodeRow:
