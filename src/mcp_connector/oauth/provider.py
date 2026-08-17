@@ -51,7 +51,7 @@ import json
 import logging
 import secrets
 import time
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from urllib.parse import unquote
 
@@ -707,7 +707,7 @@ class NextcloudOAuthProvider(
                 "the token family of that connection is revoked"
             )
             await self._end_connection(
-                store, auth_id=redeemed.auth_id, family_id=redeemed.family_id, now=moment
+                store, auth_id=redeemed.auth_id, family_ids=[redeemed.family_id], now=moment
             )
 
         raise TokenError("invalid_grant", _GRANT_GONE)
@@ -736,22 +736,52 @@ class NextcloudOAuthProvider(
             refresh_token=refresh,
         )
 
+    async def end_connection(self, auth_id: str) -> bool:
+        """End one connection by its handle, the way the user's own page asks for it.
+
+        The public form of :meth:`_end_connection`, and the only one the connections page
+        of EXAPP-02 uses: a second revocation path would be a second place to forget the
+        verifier cache in, and a revoked token would then keep working for the five seconds
+        of that window (T-03-62, T-04-35). What the page adds to the protocol paths is the
+        handle instead of a token, so the families of the connection are looked up here.
+
+        ``False`` for a handle that does not exist and for one that was already revoked,
+        and nothing is written in either case: the page answers both with the same sentence
+        as a resubmitted form, which is what keeps it from being an existence oracle.
+
+        No Nextcloud call, exactly as on the token paths: the app password of the
+        connection is marked as an orphan and handed back by the sweep, so ending a
+        connection cannot hang on the slowest participant of this deployment (pitfall 13).
+        """
+        store = await self.store()
+        row = await store.load_authorization(auth_id)
+        if row is None or row.revoked_at is not None:
+            return False
+        families = await store.families_of_authorization(auth_id)
+        await self._end_connection(store, auth_id=auth_id, family_ids=families, now=self._now())
+        return True
+
     async def _end_connection(
-        self, store: OAuthStore, *, auth_id: str, family_id: str, now: int
+        self, store: OAuthStore, *, auth_id: str, family_ids: Sequence[str], now: int
     ) -> None:
         """End one connection in the store, and make it visible in this process at once.
 
-        Three writes and one call, in this order and never another: the family first,
+        Three writes and one call, in this order and never another: the families first,
         because that is what a presented token is checked against; the authorization
         second, so every token ever issued under it dies with it and the app password
         behind it is marked as something somebody still has to hand back; the held answers
         and the verifier cache last, because both are the five to ten seconds in which a
         revoked token would still work (T-03-62).
 
+        A token path knows the one family it just refused and hands in exactly that one; a
+        disconnect on the connections page hands in every family of the connection, because
+        a connection that a user ended must not keep a second family alive.
+
         No Nextcloud call. This runs on the token path as well, where a round trip is the
         sporadic timeout nobody can reproduce afterwards (pitfall 13).
         """
-        await store.revoke_family(family_id, now=now)
+        for family_id in family_ids:
+            await store.revoke_family(family_id, now=now)
         await store.revoke_authorization(auth_id, now=now)
         await store.note_cleanup(auth_id, now=now)
         self._held.clear()
@@ -846,7 +876,7 @@ class NextcloudOAuthProvider(
             logger.warning("a client presented a token of another client for revocation")
             return
 
-        await self._end_connection(store, auth_id=auth_id, family_id=family_id, now=self._now())
+        await self._end_connection(store, auth_id=auth_id, family_ids=[family_id], now=self._now())
         await self._hand_back(store, auth_id)
 
     async def _connection_of(

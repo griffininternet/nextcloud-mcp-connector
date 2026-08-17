@@ -1074,6 +1074,26 @@ class OAuthStore:
 
         await self._transaction(work)
 
+    async def families_of_authorization(self, auth_id: str) -> list[str]:
+        """Every token family that was ever opened under one connection.
+
+        The token paths know the family they are dealing with, because a presented token
+        names it. The connections page of EXAPP-02 does not: it holds a handle, and a
+        connection that a user ended must not keep a second family alive, so the families
+        are read here rather than guessed. Both tables are asked, because a family whose
+        refresh token has already been purged can still have a live access token in it.
+        """
+
+        def work(conn: sqlite3.Connection) -> list[str]:
+            rows = conn.execute(
+                "SELECT family_id FROM refresh_tokens WHERE auth_id = ? "
+                "UNION SELECT family_id FROM access_tokens WHERE auth_id = ?",
+                (auth_id, auth_id),
+            ).fetchall()
+            return [row[0] for row in rows]
+
+        return await self._read(work)
+
     # --- housekeeping ---------------------------------------------------------------
 
     async def purge_expired(self, *, now: int | None = None) -> None:

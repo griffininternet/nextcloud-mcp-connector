@@ -21,11 +21,13 @@ import base64
 import calendar
 import re
 import sqlite3
-from collections.abc import Awaitable
+from collections.abc import Coroutine
 from html.parser import HTMLParser
 from pathlib import Path
+from typing import Any
 
 import pytest
+from mcp.shared.auth import OAuthClientInformationFull
 from starlette.applications import Starlette
 from starlette.responses import Response
 from starlette.testclient import TestClient
@@ -36,10 +38,10 @@ from mcp_connector.exapp.ui import errors, icons, layout, strings
 from mcp_connector.oauth import connections as routes
 from mcp_connector.oauth import provider as provider_module
 from mcp_connector.oauth import registry
+from mcp_connector.oauth import store as store_module
 from mcp_connector.oauth import throttle as throttle_module
 from mcp_connector.oauth import verifier as verifier_module
 from mcp_connector.oauth.metadata import TOOL_SCOPE
-from mcp_connector.oauth import store as store_module
 from mcp_connector.oauth.store import OAuthStore
 
 PUBLIC_URL = "https://cloud.example.com/exapps/mcp_connector"
@@ -516,10 +518,10 @@ class Deployment:
     async def _open(self) -> OAuthStore:
         return self.store
 
-    def get(self, user: str = NC_USER) -> Response:
+    def get(self, user: str = NC_USER) -> Any:
         return self.client.get(ui.CONNECTIONS_PATH, headers=appapi_headers(user))
 
-    def post(self, data: dict[str, str], user: str = NC_USER) -> Response:
+    def post(self, data: dict[str, str], user: str = NC_USER) -> Any:
         return self.client.post(ui.CONNECTIONS_PATH, data=data, headers=appapi_headers(user))
 
     def token_of(self, auth_id: str) -> str:
@@ -532,7 +534,7 @@ class Deployment:
         return [row.auth_id for row in run(self.store.authorizations_of_user(user))]
 
 
-def run(work: Awaitable[object]) -> object:
+def run[T](work: Coroutine[Any, Any, T]) -> T:
     """One asynchronous call from a synchronous test, the shape the other files use."""
     return asyncio.run(work)
 
@@ -547,6 +549,21 @@ def appapi_headers(user: str) -> dict[str, str]:
     }
 
 
+def registration(client_id: str, client_name: str) -> str:
+    """A registration as the DCR endpoint stores it, so ``get_client`` accepts it again."""
+    return OAuthClientInformationFull.model_validate(
+        {
+            "client_id": client_id,
+            "client_name": client_name,
+            "redirect_uris": ["https://claude.ai/api/mcp/auth_callback"],
+            "grant_types": ["authorization_code", "refresh_token"],
+            "response_types": ["code"],
+            "token_endpoint_auth_method": "none",
+            "scope": TOOL_SCOPE,
+        }
+    ).model_dump_json(exclude={"client_secret"})
+
+
 def seed(
     deployment: Deployment,
     *,
@@ -558,8 +575,11 @@ def seed(
 ) -> None:
     """One registered client and one live connection of that client to that account."""
     store = deployment.store
-    metadata = '{"client_name": "NAME"}'.replace("NAME", client_name)
-    run(store.save_client(client_id, metadata_json=metadata, allowed=True))
+    run(
+        store.save_client(
+            client_id, metadata_json=registration(client_id, client_name), allowed=True
+        )
+    )
     run(store.touch_client(client_id))
     run(
         store.create_authorization(
@@ -582,10 +602,12 @@ def issue(deployment: Deployment, token: str, *, auth_id: str = AUTH_ID) -> None
             token, auth_id=auth_id, family_id=family, scopes=TOOL_SCOPE, resource=RESOURCE
         )
     )
-    run(deployment.store.create_refresh_token(f"refresh-{token}", auth_id=auth_id, family_id=family))
+    run(
+        deployment.store.create_refresh_token(f"refresh-{token}", auth_id=auth_id, family_id=family)
+    )
 
 
-def comparable(response: Response) -> str:
+def comparable(response: Any) -> str:
     """The answer without the two values that differ per response: the nonce, twice.
 
     Everything else has to be identical for the three cases of S8, or the page is an
