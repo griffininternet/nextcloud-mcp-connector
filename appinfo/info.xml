@@ -21,6 +21,7 @@ The connector itself sends no telemetry and calls no third party. Because an ass
 	<category>integration</category>
 	<bugs>https://github.com/street1983nk/nextcloud-mcp-connector/issues</bugs>
 	<repository type="git">https://github.com/street1983nk/nextcloud-mcp-connector</repository>
+	<screenshot>https://raw.githubusercontent.com/street1983nk/nextcloud-mcp-connector/main/docs/screenshots/connections.png</screenshot>
 	<dependencies>
 		<!--
 		  - min 32: HaRP is the recommended deploy daemon from Nextcloud 32 on, and the
