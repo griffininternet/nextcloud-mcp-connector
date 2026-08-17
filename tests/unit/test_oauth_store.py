@@ -26,6 +26,7 @@ CLIENT_ID = "client-4711"
 AUTH_ID = "auth-0001"
 FAMILY = "family-0001"
 NC_USER = "alice"
+OTHER_USER = "bob"
 SCOPES = "nextcloud"
 RESOURCE = "https://cloud.example.com/exapps/mcp_connector/mcp"
 REDIRECT_URI = "https://claude.ai/api/mcp/auth_callback"
@@ -58,6 +59,25 @@ async def with_authorization(subject: store.OAuthStore, *, now: int | None = Non
         resource=RESOURCE,
         now=now,
     )
+
+
+async def with_three_connections(subject: store.OAuthStore) -> None:
+    """Two connections of one account and one of another, with a known order in time."""
+    await with_client(subject)
+    for auth_id, nc_user, moment in (
+        ("auth-older", NC_USER, 1_000),
+        ("auth-newer", NC_USER, 2_000),
+        ("auth-of-bob", OTHER_USER, 3_000),
+    ):
+        await subject.create_authorization(
+            auth_id,
+            client_id=CLIENT_ID,
+            nc_user=nc_user,
+            app_password=APP_PASSWORD,
+            scopes=SCOPES,
+            resource=RESOURCE,
+            now=moment,
+        )
 
 
 def all_bytes(tmp_path: Path) -> bytes:
@@ -107,6 +127,7 @@ async def test_the_schema_is_created_on_first_use_and_a_second_open_changes_noth
         "auth_codes",
         "refresh_tokens",
         "access_tokens",
+        "user_access",
     }
 
 
@@ -265,6 +286,123 @@ async def test_revoking_an_authorization_is_visible_and_idempotent(tmp_path: Pat
     row = await subject.load_authorization(AUTH_ID)
     assert row is not None
     assert row.revoked_at
+
+
+# --- the connections of one account (EXAPP-02) -------------------------------------
+
+
+@pytest.mark.anyio
+async def test_the_connections_of_one_account_are_listed_newest_first(tmp_path: Path) -> None:
+    """S5 lists an account's own connections, newest first, and nobody else's."""
+    subject = open_store(tmp_path)
+    await with_three_connections(subject)
+
+    rows = await subject.authorizations_of_user(NC_USER)
+
+    assert [row.auth_id for row in rows] == ["auth-newer", "auth-older"]
+    assert {row.nc_user for row in rows} == {NC_USER}
+
+
+@pytest.mark.anyio
+async def test_a_disconnected_connection_leaves_the_list_of_its_account(tmp_path: Path) -> None:
+    """Revoked is gone as far as this page is concerned, and only for this account."""
+    subject = open_store(tmp_path)
+    await with_three_connections(subject)
+
+    await subject.revoke_authorization("auth-newer")
+
+    assert [row.auth_id for row in await subject.authorizations_of_user(NC_USER)] == ["auth-older"]
+    assert [row.auth_id for row in await subject.authorizations_of_user(OTHER_USER)] == [
+        "auth-of-bob"
+    ]
+
+
+@pytest.mark.anyio
+async def test_an_unknown_or_empty_account_has_an_empty_connection_list(tmp_path: Path) -> None:
+    subject = open_store(tmp_path)
+    await with_three_connections(subject)
+
+    assert await subject.authorizations_of_user("carol") == []
+    assert await subject.authorizations_of_user("") == []
+
+
+# --- the per account access switch (EXAPP-02, D-47 to D-50) ------------------------
+
+
+@pytest.mark.anyio
+async def test_an_account_without_a_row_has_access(tmp_path: Path) -> None:
+    """D-50: on is the default, and being on costs no row, no write and no migration."""
+    subject = open_store(tmp_path)
+
+    assert await subject.access_disabled(NC_USER) is False
+
+
+@pytest.mark.anyio
+async def test_pausing_an_account_is_visible_and_keeps_the_first_moment(tmp_path: Path) -> None:
+    """Idempotent in the pausing direction: the moment the user pulled the brake stands."""
+    subject = open_store(tmp_path)
+
+    await subject.set_access(NC_USER, disabled=True, now=1_000)
+    await subject.set_access(NC_USER, disabled=True, now=2_000)
+
+    assert await subject.access_disabled(NC_USER) is True
+    assert query(tmp_path, "SELECT nc_user, disabled_at FROM user_access") == [(NC_USER, 1_000)]
+
+
+@pytest.mark.anyio
+async def test_resuming_an_account_removes_the_row_and_is_a_no_op_without_one(
+    tmp_path: Path,
+) -> None:
+    """Resume deletes the row instead of writing a zero into it: the default state and the
+    resumed state are then the same truth, and no reader can tell them apart wrongly."""
+    subject = open_store(tmp_path)
+    await subject.set_access(NC_USER, disabled=True)
+
+    await subject.set_access(NC_USER, disabled=False)
+    await subject.set_access(NC_USER, disabled=False)
+
+    assert await subject.access_disabled(NC_USER) is False
+    assert query(tmp_path, "SELECT nc_user FROM user_access") == []
+
+
+@pytest.mark.anyio
+async def test_the_switch_of_one_account_leaves_every_other_account_alone(tmp_path: Path) -> None:
+    subject = open_store(tmp_path)
+
+    await subject.set_access(NC_USER, disabled=True)
+
+    assert await subject.access_disabled(NC_USER) is True
+    assert await subject.access_disabled(OTHER_USER) is False
+
+
+@pytest.mark.anyio
+async def test_pausing_an_account_disconnects_nothing(tmp_path: Path) -> None:
+    """D-46: the switch blocks, it does not revoke, so every row stays as it was."""
+    subject = open_store(tmp_path)
+    await with_three_connections(subject)
+
+    await subject.set_access(NC_USER, disabled=True)
+
+    rows = await subject.authorizations_of_user(NC_USER)
+    assert [row.auth_id for row in rows] == ["auth-newer", "auth-older"]
+    assert all(row.revoked_at is None for row in rows)
+
+
+@pytest.mark.anyio
+async def test_an_empty_account_id_is_never_a_switch(tmp_path: Path) -> None:
+    """The app context has no switch (pitfall 10). Reading it is False without touching the
+    file, and writing it is a programming error refused before anything is opened."""
+    subject = open_store(tmp_path)
+
+    assert await subject.access_disabled("") is False
+    assert await subject.access_disabled("   ") is False
+    for blank in ("", "   "):
+        with pytest.raises(ValueError, match="nc_user"):
+            await subject.set_access(blank, disabled=True)
+        with pytest.raises(ValueError, match="nc_user"):
+            await subject.set_access(blank, disabled=False)
+
+    assert not (tmp_path / store.STORE_FILENAME).exists()
 
 
 # --- clients -----------------------------------------------------------------------
