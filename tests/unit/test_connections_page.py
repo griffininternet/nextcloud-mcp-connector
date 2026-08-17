@@ -1014,6 +1014,39 @@ def test_a_disconnect_revokes_the_refresh_family_of_that_connection(live: Deploy
     assert refresh.state == store_module.STATE_REVOKED
 
 
+def test_the_address_with_a_trailing_slash_is_served_and_never_redirected(
+    live: Deployment,
+) -> None:
+    """ME-05: the manifest allows ``^/connections/?$`` and Starlette served one of the two.
+
+    The other one got a 307 that Starlette builds out of the request URL, so the ``Location``
+    came from the Host header and carried no application prefix: in a browser that lands on
+    ``https://cloud.example.com/connections``, outside ``/exapps/mcp_connector/``, where
+    Nextcloud answers 404. A bookmark or an autocompleted address then hid the switch and the
+    disconnect exactly when somebody went looking for them. It also broke T-03-02, the rule
+    that every address of this app comes from the configured public URL and never from a
+    request, and the redirect carried no ``no-store``.
+    """
+    listed = live.client.get(
+        f"{ui.CONNECTIONS_PATH}/", headers=appapi_headers(NC_USER), follow_redirects=False
+    )
+    paused = live.client.post(
+        f"{ui.CONNECTIONS_PATH}/",
+        data={ui.ACTION_FIELD: ui.ACTION_PAUSE, ui.CONFIRM_PARAM: live.switch_token_of()},
+        headers=appapi_headers(NC_USER),
+        follow_redirects=False,
+    )
+
+    assert listed.status_code == 200
+    assert CLIENT_NAME in listed.text
+    assert paused.status_code == 200
+    assert strings.CONNECTIONS_PAUSED_TITLE in paused.text
+    assert run(live.store.access_disabled(NC_USER)) is True
+    for response in (listed, paused):
+        assert "location" not in response.headers
+        assert response.headers["cache-control"] == "no-store"
+
+
 def test_a_form_body_that_cannot_be_parsed_is_a_page_and_never_an_unhandled_500(
     live: Deployment, caplog: pytest.LogCaptureFixture
 ) -> None:

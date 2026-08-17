@@ -150,12 +150,23 @@ def connections_routes(
         """Who the counter of this request belongs to, or the empty string for nobody."""
         return appapi_user(request, env=env)
 
-    route = Route(CONNECTIONS_PATH, connections, methods=["GET", "POST"])
+    # Both spellings of the address, because the manifest allows both (ME-05). With one
+    # route Starlette answered the other one with a 307 it built out of the request URL, so
+    # the Location carried the Host header and no application prefix: in a browser that
+    # lands outside ``/exapps/<app>/``, where Nextcloud answers 404, and the way to the
+    # switch is gone for whoever arrived with a bookmark. It is also the one place where an
+    # address of this app came from a request instead of from the configured public URL
+    # (T-03-02), and a redirect the framework writes carries no ``no-store``.
     counters = throttle if throttle is not None else Throttle()
-    route.app = Throttled(
-        route.app, counters, CLASS_CONNECTIONS, machine=False, env=env, identity=account
-    )
-    return [route]
+    built = [
+        Route(path, connections, methods=["GET", "POST"])
+        for path in (CONNECTIONS_PATH, f"{CONNECTIONS_PATH}/")
+    ]
+    for route in built:
+        route.app = Throttled(
+            route.app, counters, CLASS_CONNECTIONS, machine=False, env=env, identity=account
+        )
+    return built
 
 
 async def _act(
