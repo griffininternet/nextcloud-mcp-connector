@@ -11,7 +11,10 @@ no longer decides who reaches it: an AppAPI context without a user id has to pas
 bearer check or leave with a 401 that points at the metadata (pitfall 6, T-03-01).
 """
 
+import asyncio
 import base64
+import json
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 import pytest
@@ -25,6 +28,8 @@ from starlette.testclient import TestClient
 from mcp_connector import config, entry_exapp, entry_http
 from mcp_connector.errors import ToolError
 from mcp_connector.exapp.middleware import RequireAppApi
+from mcp_connector.exapp.ui import strings
+from mcp_connector.oauth import store
 from mcp_connector.oauth.metadata import PRM_SUFFIX, TOOL_SCOPE
 from mcp_connector.oauth.verifier import OAUTH_STATE_ATTR, OAuthIdentity, StoreTokenVerifier
 
@@ -108,8 +113,32 @@ class StubSource(StubVerifier):
         return self._identity
 
 
-def guarded_app(verifier: StubVerifier | None = None) -> Starlette:
-    """One route behind the real boundary, so a verifier can be handed in.
+class StubSwitch:
+    """The per account switch of the boundary, over a set of paused accounts (EXAPP-02).
+
+    The shape ``entry_exapp`` hands in: one async call that takes a Nextcloud account and
+    answers whether that account paused its MCP access. ``asked`` is what the tests of the
+    check order assert on, because "was never asked" is the property that keeps an invalid
+    token from learning whether an account exists.
+    """
+
+    def __init__(self, paused: set[str] | None = None, *, breaks: bool = False) -> None:
+        self.paused = set(paused or ())
+        self.breaks = breaks
+        self.asked: list[str] = []
+
+    async def __call__(self, nc_user: str) -> bool:
+        self.asked.append(nc_user)
+        if self.breaks:
+            raise RuntimeError("the store of this deployment cannot be read")
+        return nc_user in self.paused
+
+
+def guarded_app(
+    verifier: StubVerifier | None = None,
+    switch: Callable[[str], Awaitable[bool]] | None = None,
+) -> Starlette:
+    """One route behind the real boundary, so a verifier and a switch can be handed in.
 
     The route answers with the identity the boundary deposited, when there is one: that is
     the hand over the credential layer of ``deps.py`` reads on every tool call.
@@ -122,7 +151,9 @@ def guarded_app(verifier: StubVerifier | None = None) -> Starlette:
     app = Starlette(routes=[Route("/mcp", served, methods=["GET", "POST"])])
     for route in app.router.routes:
         if isinstance(route, Route):
-            route.app = RequireAppApi(route.app, OAUTH_ENV, token_verifier=verifier)
+            route.app = RequireAppApi(
+                route.app, OAUTH_ENV, token_verifier=verifier, access_check=switch
+            )
     return app
 
 
@@ -343,6 +374,212 @@ def test_a_duplicated_route_wrap_is_a_build_error(monkeypatch: pytest.MonkeyPatc
         entry_exapp.build_exapp_app(EXAPP_ENV)
 
     assert original == "/mcp"
+
+
+# --- the per account switch of the same boundary (EXAPP-02, R1, D-49) --------------
+
+
+def test_a_paused_account_is_refused_on_the_appapi_branch() -> None:
+    """D-49: the switch blocks the app password way in, and the answer is R1, not a 401."""
+    switch = StubSwitch(paused={"alice"})
+
+    with TestClient(guarded_app(switch=switch)) as client:
+        response = client.get("/mcp", headers=appapi_headers(user="alice"))
+
+    assert response.status_code == 403
+    assert json.loads(response.text)["error"] == "access_disabled"
+    assert switch.asked == ["alice"]
+
+
+def test_a_paused_account_is_refused_on_the_oauth_branch_as_well() -> None:
+    """The other way in, same account, same answer: one decision for both (D-49)."""
+    identity = OAuthIdentity(
+        nc_user="alice", app_password="app-password", auth_id="auth-1", client_id="client-1"
+    )
+    source = StubSource(accepted="a-good-token", identity=identity)
+    switch = StubSwitch(paused={"alice"})
+
+    with TestClient(guarded_app(source, switch)) as client:
+        response = client.get(
+            "/mcp", headers={**appapi_headers(user=""), "Authorization": "Bearer a-good-token"}
+        )
+
+    assert response.status_code == 403
+    assert json.loads(response.text)["error"] == "access_disabled"
+    assert switch.asked == ["alice"], "the identity of the token is what the switch is asked about"
+
+
+def test_the_refusal_of_a_paused_account_is_the_wire_contract_of_the_ui_spec() -> None:
+    """R1 word for word: 403, the named code, the sentence, no challenge, no-store.
+
+    The missing ``WWW-Authenticate`` is the deliberate deviation from RFC 6750: there is no
+    other scope and no other credential to come back with, and the header is what would pull
+    an OAuth client into the whole discovery loop again for a decision its user made.
+    """
+    switch = StubSwitch(paused={"alice"})
+
+    with TestClient(guarded_app(switch=switch)) as client:
+        response = client.get("/mcp", headers=appapi_headers(user="alice"))
+
+    assert response.status_code == 403
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["content-type"].startswith("application/json")
+    assert "www-authenticate" not in {key.lower() for key in response.headers}
+    body = json.loads(response.text)
+    assert body == {
+        "error": "access_disabled",
+        "error_description": strings.ACCESS_DISABLED_DESCRIPTION,
+    }
+    assert strings.SETTINGS_PLACE in body["error_description"], "the sentence names the place"
+    # T-03-66: the sentence states the rule, never a value out of the request.
+    assert "alice" not in response.text
+    assert APP_SECRET not in response.text
+
+
+def test_an_invalid_bearer_of_a_paused_account_is_still_the_discovery_401() -> None:
+    """The check order is the security here (pitfall 2): handshake, credential, switch.
+
+    A 403 in front of the credential check would tell anyone who guesses an account name
+    that the account exists and that it paused its access.
+    """
+    verifier = StubVerifier(accepted="a-good-token")
+    switch = StubSwitch(paused={"alice"})
+
+    with TestClient(guarded_app(verifier, switch)) as client:
+        response = client.get(
+            "/mcp", headers={**appapi_headers(user=""), "Authorization": "Bearer a-stolen-token"}
+        )
+
+    assert response.status_code == 401
+    assert "resource_metadata=" in response.headers["www-authenticate"]
+    assert switch.asked == [], "an unauthenticated caller must not reach the switch at all"
+
+
+def test_a_broken_handshake_of_a_paused_account_is_still_the_bare_401() -> None:
+    """R3 is unchanged, and it stays first: no detail, no challenge, no switch (T-02-03)."""
+    switch = StubSwitch(paused={"alice"})
+
+    with TestClient(guarded_app(switch=switch)) as client:
+        response = client.get("/mcp", headers={"EX-APP-ID": APP_ID})
+
+    assert response.status_code == 401
+    assert response.content == b""
+    assert "www-authenticate" not in {key.lower() for key in response.headers}
+    assert switch.asked == []
+
+
+def test_the_app_context_is_never_asked_for_a_switch() -> None:
+    """Pitfall 10: an empty resolved identity has no switch, and the bearer already decided."""
+    verifier = StubVerifier(accepted="a-good-token")
+    switch = StubSwitch(paused={"alice"})
+
+    with TestClient(guarded_app(verifier, switch)) as client:
+        response = client.get(
+            "/mcp", headers={**appapi_headers(user=""), "Authorization": "Bearer a-good-token"}
+        )
+
+    assert response.status_code == 200
+    assert response.text == "served"
+    assert switch.asked == []
+
+
+def test_flipping_the_switch_takes_effect_on_the_very_next_request() -> None:
+    """D-48 and D-46 in one run, on one application instance and one token.
+
+    No cache may soften the pause, and switching back on restores the connection without a
+    new sign in: the same credential is served again on the third request.
+    """
+    switch = StubSwitch()
+
+    with TestClient(guarded_app(switch=switch)) as client:
+        before = client.get("/mcp", headers=appapi_headers(user="alice"))
+        switch.paused.add("alice")
+        paused = client.get("/mcp", headers=appapi_headers(user="alice"))
+        switch.paused.discard("alice")
+        after = client.get("/mcp", headers=appapi_headers(user="alice"))
+
+    assert before.status_code == 200
+    assert paused.status_code == 403
+    assert after.status_code == 200
+    assert switch.asked == ["alice", "alice", "alice"], "every request reads the switch again"
+
+
+def test_the_switch_of_the_real_store_reaches_the_boundary(tmp_path: Path) -> None:
+    """The end to end guard of this plan, with the store instead of a stub.
+
+    A test that only checked the store round trip would stay green with no gate in the
+    boundary at all, which is the whole of pitfall 1: the write is flipped behind the
+    running application, and the very next request has to be the refusal.
+    """
+    subject = store.OAuthStore(tmp_path / store.STORE_FILENAME, bytes(range(32)))
+
+    with TestClient(guarded_app(switch=subject.access_disabled)) as client:
+        before = client.get("/mcp", headers=appapi_headers(user="alice"))
+        asyncio.run(subject.set_access("alice", disabled=True))
+        paused = client.get("/mcp", headers=appapi_headers(user="alice"))
+        asyncio.run(subject.set_access("alice", disabled=False))
+        after = client.get("/mcp", headers=appapi_headers(user="alice"))
+
+    assert before.status_code == 200
+    assert paused.status_code == 403
+    assert json.loads(paused.text)["error"] == "access_disabled"
+    assert after.status_code == 200
+
+
+def test_a_store_that_cannot_answer_the_switch_refuses_instead_of_letting_through(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Fail closed (the D-37 analogy): a store outage is not a decision of the user.
+
+    So it is neither a pass through nor a claim that the account paused its access. It is a
+    503 that says nothing else, plus one log line for the administrator.
+    """
+    switch = StubSwitch(breaks=True)
+
+    with (
+        caplog.at_level("ERROR", logger="mcp_connector.exapp.middleware"),
+        TestClient(guarded_app(switch=switch)) as client,
+    ):
+        response = client.get("/mcp", headers=appapi_headers(user="alice"))
+
+    assert response.status_code == 503
+    assert response.content == b""
+    assert response.headers["cache-control"] == "no-store"
+    assert "access_disabled" not in response.text
+    assert caplog.records, "a store that cannot be read has to say so once"
+
+
+def test_a_boundary_without_a_switch_serves_exactly_as_before() -> None:
+    """The default of the new parameter is the behaviour of phase 3, unchanged."""
+    with TestClient(guarded_app()) as client:
+        response = client.get("/mcp", headers=appapi_headers(user="alice"))
+
+    assert response.status_code == 200
+    assert response.text == "served"
+
+
+def test_the_mcp_route_is_guarded_with_the_switch_of_this_deployment() -> None:
+    """The wiring: the store that holds the tokens is the store that holds the switch."""
+    app = entry_exapp.build_exapp_app(OAUTH_ENV)
+
+    guards = [
+        route.app
+        for route in app.router.routes
+        if isinstance(route, Route) and route.path == entry_exapp.MCP_PATH
+    ]
+
+    assert len(guards) == 1
+    guard = guards[0]
+    assert isinstance(guard, RequireAppApi)
+    assert guard._access_check is not None, "the boundary was built without the switch"
+
+
+def test_the_switch_is_decided_at_the_boundary_and_nowhere_else() -> None:
+    """One source for one sentence: no tool may carry a second copy of this decision."""
+    tools = Path("src/mcp_connector/tools").glob("*.py")
+    offenders = [path.name for path in tools if "access_disabled" in path.read_text("utf-8")]
+
+    assert offenders == []
 
 
 def test_the_standalone_http_app_serves_mcp_without_any_appapi_header() -> None:
