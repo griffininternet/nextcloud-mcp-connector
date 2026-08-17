@@ -22,7 +22,7 @@
 - [x] **TOOL-05**: Nutzer kann Kontakte suchen (CardDAV, lesend)
 - [x] **TOOL-06**: Nutzer kann berechtigungstreu über die ganze Cloud suchen (Unified Search OCS, provider-parallel)
 - [x] **TOOL-07**: ChatGPT-Kompatibilitätsprofil: Tools `search` und `fetch` mit OpenAI-Schema (id/title/url bzw. id/title/text/url/metadata)
-- [ ] **TOOL-08**: Gamechanger prepare_context: ein Aufruf bündelt relevante Dateien, Termine, Notizen und Karten zu einer Anfrage token-effizient (mit Kurz/Voll-Parameter)
+- [x] **TOOL-08**: Gamechanger prepare_context: ein Aufruf bündelt relevante Dateien, Termine, Notizen und Karten zu einer Anfrage token-effizient (mit Kurz/Voll-Parameter)
 - [x] **TOOL-09**: Kein Tool kann löschen, überschreiben oder Freigaben ändern; Permission-Level pro Tool ist dokumentiert und sichtbar
 
 ### Auth und Berechtigungen (AUTH)
@@ -105,7 +105,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AUTH-04 | Phase 3 | Complete |
 | AUTH-07 | Phase 3 | Complete |
 | EXAPP-02 | Phase 4 | Pending |
-| TOOL-08 | Phase 4 | Pending |
+| TOOL-08 | Phase 4 | Complete |
 | EXAPP-04 | Phase 5 | Pending |
 | EXAPP-05 | Phase 5 | Pending |
 

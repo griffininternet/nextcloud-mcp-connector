@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Phase 4, Plan 04-01 fertig: der Per-User-Schalter liegt im Store und wirkt an der Transportgrenze. Nächstes: 04-02 (Wave 1 seriell, die Repo-weiten Gates kollidieren parallel)"
-last_updated: "2026-08-17T13:03:52.964Z"
+stopped_at: "Phase 4, Plan 04-02 fertig: prepare_context bündelt Treffer und Termine, das 16. Tool ist bewusst eingetragen. Nächstes: 04-03 (Wave 2, Connections-Seite)"
+last_updated: "2026-08-17T13:30:00.000Z"
 last_activity: 2026-08-17
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 34
-  completed_plans: 31
+  completed_plans: 32
   percent: 60
 ---
 
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 4
-Plan: 2 of 4
+Plan: 3 of 4
 Status: In progress
 Last activity: 2026-08-17
 
-Progress: [█████████░] 91%
+Progress: [█████████░] 94%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 31
+- Total plans completed: 32
 - Average duration: 35 min
 - Total execution time: 15.2 hours
 
@@ -47,7 +47,7 @@ Progress: [█████████░] 91%
 | 1 | 14 | - | - |
 | 2 | 7 | 254 min | 36 min |
 | 3 | 8 | 400 min | 50 min |
-| 4 | 1 | 60 min | 60 min |
+| 4 | 2 | 85 min | 43 min |
 
 **Recent Trend:**
 
@@ -84,6 +84,7 @@ Progress: [█████████░] 91%
 | Phase 03 P07 | 40 min | 3 tasks | 11 files |
 | Phase 03 P08 | 80 min | 3 tasks | 11 files |
 | Phase 04 P01 | 60 min | 2 tasks | 7 files |
+| Phase 04 P02 | 25 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -248,6 +249,10 @@ Recent decisions affecting current work:
 - [Phase 04]: Freigeben löscht die user_access-Zeile, statt sie auf null zu setzen: 'nie pausiert' und 'wieder freigegeben' sind damit dieselbe Wahrheit, und der Default 'an' kostet keine Zeile (D-50)
 - [Phase 04]: Ein Store-Ausfall am Schalter-Gate ist 503 mit no-store, nie ein Durchlass und nie ein behauptetes access_disabled (fail closed, D-37-Analogie); der AUTH-01-Zweig braucht damit ab jetzt ebenfalls den Store
 - [Phase 04]: R1 antwortet 403 ohne WWW-Authenticate, bewusst abweichend von RFC 6750: ein 401 mit Challenge schickt OAuth-Clients in die volle Rediscovery-Schleife und legt deren Last auf Nextcloud
+- [Phase 04]: prepare_context fragt die Unified Search OHNE Provider-Einschraenkung und buendelt nach dem kind-Feld: eine feste Providerliste wuerde ein installiertes Findling aussperren (D-53), und der Deck-Provider heisst search-deck-card-board (Pitfall 9)
+- [Phase 04]: Jede Teilquelle hat ihr eigenes Timeout, das Buendel keines: ein globaler Abbruch wuerde die bereits fertige Teilantwort verwerfen; der Kalender-Cap von 10 s lebt in context.py, calendar.py behaelt seine 20 s
+- [Phase 04]: Auch eine Kappung steht unter degraded (5 je Bucket, 10 Termine, 3 Auszüge): eine still verkuerzte Liste ist das Ergebnis, das ein Modell als "mehr gibt es nicht" weitergibt (SC 4)
+- [Phase 04]: Gegen Prompt-Injection wird nicht maskiert (D-57): Herkunft als Strukturfelder, Auszug als reines Datenfeld, Warnung in der Tool-Description, und ein Waechter-Test, der injizierten Anweisungstext zeichengenau als Daten ankommen laesst
 
 ### Pending Todos
 
