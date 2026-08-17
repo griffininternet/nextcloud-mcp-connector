@@ -111,6 +111,11 @@ UNUSED_CLIENT_TTL = 24 * 3600
 #: A client that has not been seen for a season goes, and takes its authorizations along.
 IDLE_CLIENT_TTL = 90 * 24 * 3600
 
+#: SQLite's own spelling of "no upper bound": a negative ``LIMIT`` expression returns every
+#: row. It lets a read that must not be capped keep one constant statement with one
+#: placeholder, instead of assembling SQL around a value (BL-01).
+_NO_LIMIT = -1
+
 # --- refresh token states ------------------------------------------------------------
 
 STATE_ACTIVE = "active"
@@ -634,7 +639,9 @@ class OAuthStore:
 
         await self._write(work)
 
-    async def authorizations_of_client(self, client_id: str, limit: int) -> list[AuthorizationRow]:
+    async def authorizations_of_client(
+        self, client_id: str, limit: int | None = None
+    ) -> list[AuthorizationRow]:
         """The connections booked under one client, oldest first (WR-04).
 
         Read before a client row is deleted, because ``authorizations`` points at
@@ -643,16 +650,25 @@ class OAuthStore:
         back first leaves them at Nextcloud with no record left that they exist, so no
         later sweep can find them either.
 
-        ``limit`` is not optional, for the reason it is not optional on the sweep: the
-        caller pays for every row with one Nextcloud request.
+        ``limit`` is optional since BL-01, and the default is deliberately "all of them".
+        A capped read in front of a cascading delete is not a bound on the work, it is a
+        bound on how many credentials are handed back before the rest is destroyed: the
+        rows beyond the cap went with the client row, ciphertext included, and nothing
+        could find them afterwards. A caller that wants to bound its own cost bounds the
+        number of *clients* it sweeps, which is what ``sweep_expired_clients`` does.
+
+        ``None`` travels as ``LIMIT -1``, which is SQLite's own spelling of "no upper bound"
+        (a negative limit expression). The statement therefore stays one constant string with
+        one placeholder, and no branch of this method builds SQL out of a value.
         """
+        capped = _NO_LIMIT if limit is None else limit
 
         def work(conn: sqlite3.Connection) -> list[AuthorizationRow]:
             rows = conn.execute(
                 "SELECT auth_id, client_id, nc_user, scopes, resource, created_at, "
                 "revoked_at, cleanup_at FROM authorizations WHERE client_id = ? "
                 "ORDER BY created_at LIMIT ?",
-                (client_id, limit),
+                (client_id, capped),
             ).fetchall()
             return [_authorization_row(row) for row in rows]
 

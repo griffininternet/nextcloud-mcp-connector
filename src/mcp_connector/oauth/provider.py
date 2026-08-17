@@ -749,9 +749,20 @@ class NextcloudOAuthProvider(
         and nothing is written in either case: the page answers both with the same sentence
         as a resubmitted form, which is what keeps it from being an existence oracle.
 
-        No Nextcloud call, exactly as on the token paths: the app password of the
-        connection is marked as an orphan and handed back by the sweep, so ending a
-        connection cannot hang on the slowest participant of this deployment (pitfall 13).
+        The Nextcloud app password of the connection goes back, exactly as on ``/revoke``
+        (BL-01). It cannot be left to a sweep: ``abandoned_authorizations`` filters
+        ``revoked_at IS NULL``, so a row this method just revoked is invisible to
+        :meth:`sweep_abandoned` by construction, and the only other path is
+        :meth:`sweep_expired_clients`, which waits for a registration to be unused for
+        ``IDLE_CLIENT_TTL`` and therefore never runs for a client somebody keeps using. The
+        credential behind a connection is a full Nextcloud credential and not an MCP token,
+        so a "Disconnect" that left it valid would be strictly weaker than the machine path
+        (WR-04, D-34).
+
+        The attempt is best effort and the last thing that happens, the order of
+        :meth:`_revoke`: the connection is revoked in the store before Nextcloud is asked,
+        so a deployment whose Nextcloud is unreachable ends the connection anyway and keeps
+        the note that its credential is still out there (pitfall 13, D-37).
         """
         store = await self.store()
         row = await store.load_authorization(auth_id)
@@ -759,6 +770,7 @@ class NextcloudOAuthProvider(
             return False
         families = await store.families_of_authorization(auth_id)
         await self._end_connection(store, auth_id=auth_id, family_ids=families, now=self._now())
+        await self._hand_back(store, auth_id)
         return True
 
     async def _end_connection(
@@ -1008,9 +1020,21 @@ class NextcloudOAuthProvider(
         is worse than losing the record of it, and the failure is logged and counted
         nowhere else (D-34, plan 03-06). What must not happen is the silent case, and that
         is exactly what the cascade used to do.
+
+        **Every connection of the client, and not a page of them (BL-01).** The read used to
+        stop at :data:`SWEEP_LIMIT` although the ``delete_client`` of the caller cascades over
+        all of them, so from the fourth connection of one registration on the ciphertext was
+        deleted without ever being handed back, and no later sweep could find it either. The
+        cap belongs on how many *clients* one request pays for, which is where
+        :meth:`sweep_expired_clients` applies it, and not on how many credentials of one
+        registration may survive its deletion. So this reads without a limit, and the price
+        is named rather than hidden: a registration with many connections costs one Nextcloud
+        request per connection, once, in the request that expires it. Paying that is the
+        cheaper of the two, because the alternative is a credential that stays valid at
+        Nextcloud with no record left that it exists.
         """
         try:
-            rows = await store.authorizations_of_client(client_id, SWEEP_LIMIT)
+            rows = await store.authorizations_of_client(client_id)
         except Exception as exc:
             logger.error(
                 "the connections of an expired client could not be read: %s", type(exc).__name__

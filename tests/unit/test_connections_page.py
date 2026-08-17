@@ -36,8 +36,8 @@ from mcp_connector import config
 from mcp_connector.exapp.ui import connections as ui
 from mcp_connector.exapp.ui import errors, icons, layout, strings
 from mcp_connector.oauth import connections as routes
+from mcp_connector.oauth import loginflow, registry
 from mcp_connector.oauth import provider as provider_module
-from mcp_connector.oauth import registry
 from mcp_connector.oauth import store as store_module
 from mcp_connector.oauth import throttle as throttle_module
 from mcp_connector.oauth import verifier as verifier_module
@@ -616,6 +616,32 @@ def comparable(response: Any) -> str:
     return re.sub(r'nonce[-=]"?[A-Za-z0-9_-]+', "nonce", response.text)
 
 
+class Nextcloud:
+    """The one Nextcloud call this page can cause, recorded instead of sent.
+
+    A disconnect hands the app password of the connection back (BL-01), which is a
+    ``DELETE`` against Nextcloud. Nothing in this file opens a socket, so the call is
+    recorded here and the answer is what a test wants it to be.
+    """
+
+    def __init__(self) -> None:
+        self.deleted: list[tuple[str, str]] = []
+        self.answer = True
+
+    async def revoke(self, login_name: str, app_password: str, *, env: Any = None) -> bool:
+        del env
+        self.deleted.append((login_name, app_password))
+        return self.answer
+
+
+@pytest.fixture(autouse=True)
+def nextcloud(monkeypatch: pytest.MonkeyPatch) -> Nextcloud:
+    """Autouse: no test of this file may reach a network, not even by accident."""
+    recorder = Nextcloud()
+    monkeypatch.setattr(loginflow, "revoke_app_password", recorder.revoke)
+    return recorder
+
+
 @pytest.fixture
 def live(tmp_path: Path) -> Deployment:
     deployment = Deployment(tmp_path)
@@ -711,7 +737,55 @@ def test_a_disconnect_ends_that_one_connection_and_says_so(live: Deployment) -> 
     assert live.rows_of() == []
     assert row is not None
     assert row.revoked_at is not None
-    assert row.cleanup_at is not None, "the app password of that connection is still out there"
+    assert row.cleanup_at is None, "the app password went back, so nothing is left to clean up"
+
+
+def test_a_disconnect_hands_the_app_password_back_to_nextcloud(
+    live: Deployment, nextcloud: Nextcloud
+) -> None:
+    """BL-01: the value behind a connection is a full Nextcloud credential, not a token.
+
+    The page promised "{client} loses access to your Nextcloud immediately" while the app
+    password stayed valid at Nextcloud for good: no sweep can see a revoked row
+    (``abandoned_authorizations`` filters ``revoked_at IS NULL``), so the visible way out
+    was strictly weaker than the machine path of ``/revoke``, which hands it back (WR-04,
+    D-34).
+    """
+    live.post(
+        {
+            ui.ACTION_FIELD: ui.ACTION_DISCONNECT,
+            ui.AUTH_PARAM: AUTH_ID,
+            ui.CONFIRM_PARAM: live.token_of(AUTH_ID),
+        }
+    )
+    row = run(live.store.load_authorization(AUTH_ID))
+
+    assert nextcloud.deleted == [(NC_USER, APP_PASSWORD)], "one attempt, never a retry"
+    assert row is not None
+    assert row.cleanup_at is None, "the credential is gone from Nextcloud"
+
+
+def test_a_failed_deletion_still_ends_the_connection_and_keeps_the_note(
+    live: Deployment, nextcloud: Nextcloud
+) -> None:
+    """Pitfall 13: Nextcloud is the slowest participant and may not hold up a disconnect."""
+    nextcloud.answer = False
+
+    response = live.post(
+        {
+            ui.ACTION_FIELD: ui.ACTION_DISCONNECT,
+            ui.AUTH_PARAM: AUTH_ID,
+            ui.CONFIRM_PARAM: live.token_of(AUTH_ID),
+        }
+    )
+    row = run(live.store.load_authorization(AUTH_ID))
+
+    assert response.status_code == 200
+    assert strings.DISCONNECT_DONE_TITLE in response.text
+    assert live.rows_of() == []
+    assert row is not None
+    assert row.revoked_at is not None
+    assert row.cleanup_at is not None, "the orphaned credential is noted, not forgotten"
 
 
 def test_the_same_form_submitted_again_is_already_disconnected(live: Deployment) -> None:

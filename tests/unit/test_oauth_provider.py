@@ -923,6 +923,63 @@ async def test_a_failed_deletion_does_not_hold_up_the_revocation(tmp_path: Path)
 
 
 @pytest.mark.anyio
+async def test_ending_a_connection_by_its_handle_hands_the_app_password_back(
+    tmp_path: Path,
+) -> None:
+    """BL-01: the handle path of the user's own page ends where the token path ends.
+
+    ``end_connection`` wrote the three revocations and stopped, so the credential stayed
+    valid at Nextcloud: the sweep named in its docstring reads
+    ``abandoned_authorizations``, which filters ``revoked_at IS NULL`` and can therefore
+    never see a row this method just revoked.
+    """
+    subject, store, _tokens = await issued(tmp_path)
+
+    with respx.mock:
+        deletion = deletion_route()
+        assert await subject.end_connection(AUTH_ID) is True
+        assert deletion.call_count == 1, "one attempt, never a retry (D-37)"
+
+    row = await store.load_authorization(AUTH_ID)
+    assert row is not None
+    assert row.revoked_at is not None
+    assert row.cleanup_at is None, "the credential is gone, so nothing is left to clean up"
+
+
+@pytest.mark.anyio
+async def test_ending_a_connection_survives_a_nextcloud_that_refuses_the_deletion(
+    tmp_path: Path,
+) -> None:
+    """Pitfall 13: "disconnected" has to mean disconnected when the request returns."""
+    subject, store, tokens = await issued(tmp_path)
+
+    with respx.mock:
+        deletion_route(status=500)
+        assert await subject.end_connection(AUTH_ID) is True
+
+    assert await store.load_access_token(tokens.access_token) is None
+    row = await store.load_authorization(AUTH_ID)
+    assert row is not None
+    assert row.revoked_at is not None
+    assert row.cleanup_at is not None, "the orphaned credential is noted, not forgotten"
+
+
+@pytest.mark.anyio
+async def test_ending_an_unknown_connection_calls_nothing_at_all(tmp_path: Path) -> None:
+    """The page answers the same sentence for unknown and revoked, and writes nothing."""
+    subject, store, _tokens = await issued(tmp_path)
+
+    with respx.mock:
+        deletion = deletion_route()
+        assert await subject.end_connection("a-handle-of-nobody") is False
+        assert await subject.end_connection(AUTH_ID) is True
+        assert await subject.end_connection(AUTH_ID) is False, "already revoked"
+        assert deletion.call_count == 1, "the second attempt is not a second deletion"
+
+    assert await store.load_authorization(AUTH_ID) is not None
+
+
+@pytest.mark.anyio
 async def test_a_token_this_server_never_issued_changes_nothing(tmp_path: Path) -> None:
     """RFC 7009 section 2.2: 200 for an unknown token, and no hint that it was unknown."""
     subject, store, tokens = await issued(tmp_path)
@@ -1133,6 +1190,44 @@ async def test_the_client_lookup_hands_the_credentials_back_when_it_expires_a_ro
 
     assert deletion.call_count == 1
     assert await store.load_authorization(AUTH_ID) is None
+
+
+@pytest.mark.anyio
+async def test_an_expired_client_hands_back_more_connections_than_the_sweep_limit(
+    tmp_path: Path,
+) -> None:
+    """BL-01, point 4: ``delete_client`` cascades, so a capped read loses the rest silently.
+
+    ``authorizations_of_client`` was read once with ``SWEEP_LIMIT`` and the delete of the
+    client row took every further connection with it, ciphertext included. From the fourth
+    connection of one registration on, the app password was neither handed back nor
+    findable by any later sweep, which is exactly the failure mode WR-04 was built against.
+    """
+    subject, store = build(tmp_path)
+    await store.save_client(
+        CLIENT_ID,
+        metadata_json=registration().model_dump_json(),
+        now=int(time.time()) - UNUSED_CLIENT_TTL - 1,
+    )
+    handles = [f"connection-{index}" for index in range(provider_module.SWEEP_LIMIT + 2)]
+    for handle in handles:
+        await store.create_authorization(
+            handle,
+            client_id=CLIENT_ID,
+            nc_user=NC_USER,
+            app_password=APP_PASSWORD,
+            scopes=metadata.TOOL_SCOPE,
+            resource=RESOURCE,
+        )
+
+    with respx.mock:
+        deletion = deletion_route()
+        swept = await subject.sweep_expired_clients()
+
+    assert swept == 1
+    assert deletion.call_count == len(handles), "every credential of that client went back"
+    for handle in handles:
+        assert await store.load_authorization(handle) is None
 
 
 @pytest.mark.anyio

@@ -847,6 +847,26 @@ async def test_the_connections_of_a_client_are_readable_before_it_is_deleted(
 
 
 @pytest.mark.anyio
+async def test_the_connections_of_a_client_are_uncapped_unless_a_limit_is_given(
+    tmp_path: Path,
+) -> None:
+    """BL-01: a capped read in front of a cascading delete loses the rest of them silently.
+
+    ``None`` travels as ``LIMIT -1``, which is SQLite's "no upper bound". Asserted here and
+    not only in the provider, because the whole property of the caller rests on this
+    spelling behaving that way.
+    """
+    subject = open_store(tmp_path)
+    await with_three_connections(subject)
+
+    every = await subject.authorizations_of_client(CLIENT_ID)
+    capped = await subject.authorizations_of_client(CLIENT_ID, 2)
+
+    assert [row.auth_id for row in every] == ["auth-older", "auth-newer", "auth-of-bob"]
+    assert len(capped) == 2, "a caller that asks for a page still gets exactly that page"
+
+
+@pytest.mark.anyio
 async def test_a_used_client_that_is_merely_older_than_a_day_stays(tmp_path: Path) -> None:
     subject = open_store(tmp_path)
     two_days = int(time.time()) - 2 * 24 * 3600
