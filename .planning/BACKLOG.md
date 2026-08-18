@@ -261,3 +261,34 @@ bis zu 1,5 MB Nextcloud-Transfer je Bundle-Aufruf, zeitlich durch
 durch `fetch` durchreichen (etwa `max_bytes=EXCERPT_MAX_BYTES * 2`). Ändert nichts
 am Ergebnis und spart den Faktor 250; berührt aber die Signatur von `fetch`, die
 zum ChatGPT-Vertrag gehört, deshalb zusammen mit BL-09 zu entscheiden.
+
+## BL-12: MUCGPT-Anbindung, Auth-Modell klaeren (Owner-Frage 18.08.2026)
+
+**Anlass:** Owner plant Outreach an das MUCGPT-Team (it@M / Stadt Muenchen),
+sobald der Connector online ist. Frage: braucht MUCGPT eine angepasste Version?
+
+**Recherche-Befund (verifiziert am Repo it-at-m/mucgpt):**
+- MUCGPT IST ein vollwertiger MCP-Client: mucgpt-core-service/app/agent/tools/
+  mcp.py nutzt langchain_mcp_adapters + mcp.ClientSession, MCP-Server sind per
+  config.yaml (MCP:-Sektion) zuschaltbar, es gibt einen McpBearerAuthProvider.
+  Also KEINE geforkte/angepasste Connector-Version noetig, Protokoll passt.
+- ABER MUCGPTs MCP-Auth kann NUR statische Credentials: forward_auth_override
+  (z.B. "Basic base64(email:app-password)"), custom headers, oder forward_token
+  (reicht MUCGPTs eigenen Keycloak-OIDC-Token durch). KEIN OAuth-2.1-Discovery/
+  DCR/Browser-Login, den Claude.ai/ChatGPT nutzen.
+- KNACKPUNKT = Identitaet, nicht Protokoll: Ueber ein statisches App-Passwort
+  laufen ALLE MUCGPT-Nutzer unter EINEM Nextcloud-Konto -> kollidiert mit
+  unserem Kern "jeder Request unter der Identitaet des Nutzers". Fuer echte
+  Per-User-Trennung muesste entweder MUCGPT per-user-Credentials durchreichen
+  (deren Arbeit) ODER wir eine Erweiterung bauen, die MUCGPTs OIDC-Token
+  akzeptiert und gegen Nextcloud eintauscht (Token-Exchange) = die eventuell
+  "verlangte angepasste Version".
+
+**Fuer Phase 5 SC4 (MUCGPT-Setup-Doku, gegen echten Client verprobt):**
+- Out-of-the-box-Weg dokumentieren: App-Passwort via forward_auth_override
+  (Service-Konto oder je Nutzer). Funktioniert mit dem credential-based Pfad.
+- Im Erstkontakt die Auth-Frage stellen: reicht ein Team-/Service-Konto, oder
+  braucht ihr Per-User-Berechtigungstreue (dann Token-Exchange als Feature)?
+- Datenschutz-Pluspunkt betonen: EU/self-hosted, KEIN Drittland-Abfluss (im
+  Gegensatz zu Claude.ai). MUCGPT hat selbst inference_location/Datenresidenz
+  (Issue #1116), passt exakt zu docs/privacy.md.
