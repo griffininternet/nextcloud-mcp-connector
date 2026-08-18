@@ -35,28 +35,28 @@ proves Findling's PHP recheck holds behind our impersonation.
 **Why:** The synergy claim ("assistant searches inside documents, permissions
 intact") must be a measured fact before it goes into any README or pitch.
 
-## BL-03: Findling synergy, demo video "Frag deine Cloud" (optional, after BL-02)
+## BL-03: Findling synergy, demo video (optional, after BL-02)
 
-**What:** Short promo: assistant is asked a question, unified_search hits the
-passage inside a scanned PDF (Findling), files_read fetches it, answer with source.
-Both products on screen, on-prem framing. Owner publishes.
+**What:** Short promo (German working title "Frag deine Cloud"): assistant is asked
+a question, unified_search hits the passage inside a scanned PDF (Findling),
+files_read fetches it, answer with source. Both products on screen, on-prem framing.
+Owner publishes.
 
 **Decision note:** No direct connector-to-Findling tool. Everything goes through
 the Nextcloud unified search, so Nextcloud stays the single permission boundary,
 as both threat models require.
 
-## BL-04: Lokale Clients (Loopback, private-use scheme) als OAuth-Client
+## BL-04: Local clients (loopback, private-use scheme) as OAuth clients
 
-**Befund (03-RESEARCH.md):** Claude Code nutzt Loopback-Redirects und CIMD und
-passt nicht ins exakte Redirect-Matching der v1. In v1 bleibt Claude Code auf dem
-App-Passwort-Pfad (AUTH-01, funktioniert heute). Spaeter: Loopback-Ausnahme nach
-RFC 8252 Abschnitt 7.3 (beliebiger Port auf 127.0.0.1) sauber implementieren.
+**Finding (03-RESEARCH.md):** Claude Code uses loopback redirects and CIMD and does
+not fit the exact redirect matching of v1. In v1 Claude Code stays on the app
+password path (AUTH-01, works today). Later: implement the loopback exception per
+RFC 8252 section 7.3 (any port on 127.0.0.1) cleanly.
 
-**Gemessen am 16.08.2026 gegen Staging (03-09-MEASUREMENTS.md, Lauf 4):** Die
-Vermutung war falsch. Loopback ist nicht das Hindernis, D-35 lässt ihn zu:
-eine Registrierung mit `http://127.0.0.1:49731/callback` allein wird mit 201
-angenommen. Cursor scheitert an etwas anderem. Cursor registriert drei
-Rückkehradressen auf einmal:
+**Measured 2026-08-16 against staging (03-09-MEASUREMENTS.md, run 4):** The
+assumption was wrong. Loopback is not the obstacle, D-35 allows it: a registration
+with `http://127.0.0.1:49731/callback` alone is accepted with 201. Cursor fails on
+something else. Cursor registers three redirect URIs at once:
 
 ```
 cursor://anysphere.cursor-mcp/oauth/callback
@@ -64,231 +64,217 @@ https://www.cursor.com/agents/mcp/oauth/callback
 http://localhost:8787/callback
 ```
 
-Die erste ist ein private-use URI scheme. Unsere Regel kennt nur https und
-Loopback, und sie prüft das ganze Feld: ein unzulässiger Eintrag lässt die
-gesamte Registrierung mit 400 `invalid_redirect_uri` scheitern, obwohl zwei
-zulässige Adressen dabeistehen. Gegenprobe: derselbe Rumpf ohne den ersten
-Eintrag wird mit 201 angenommen. Cursor zeigt unsere Fehlermeldung wörtlich in
-seinem eigenen Log an und verbindet sich nicht.
+The first is a private-use URI scheme. Our rule only knows https and loopback, and
+it validates the whole field: one disallowed entry makes the entire registration
+fail with 400 `invalid_redirect_uri`, even though two allowed addresses are present.
+Counter-check: the same body without the first entry is accepted with 201. Cursor
+prints our error message verbatim in its own log and does not connect.
 
-**Damit sind es zwei getrennte Entscheidungen, nicht eine:**
+**So these are two separate decisions, not one:**
 
-1. **Alles-oder-nichts beim Feld `redirect_uris`.** Ein Server darf unzulässige
-   Einträge auch verwerfen und den Rest registrieren. Dann käme Cursor durch,
-   weil es beim Autorisieren ohnehin eine der verbleibenden Adressen wählen
-   müsste. Fail-closed ist die strengere und heute gewählte Lesart.
-2. **Private-use URI schemes.** RFC 8252 nennt sie in Abschnitt 7.1 als eine der
-   drei zulässigen Formen für native Clients; D-35 hat bewusst nur 7.2 (https)
-   und 7.3 (Loopback) zugelassen, weil ein Schema auf dem Desktop niemandem
-   exklusiv gehört und jede andere Anwendung es abfangen kann. Diese Begründung
-   steht weiterhin. Neu ist nur der gemessene Preis: eine ganze Client-Klasse
-   bleibt draußen.
+1. **All-or-nothing on the `redirect_uris` field.** A server may also drop disallowed
+   entries and register the rest. Then Cursor would get through, because it would
+   have to pick one of the remaining addresses when authorizing anyway. Fail-closed
+   is the stricter reading, and the one chosen today.
+2. **Private-use URI schemes.** RFC 8252 names them in section 7.1 as one of the
+   three allowed forms for native clients; D-35 deliberately allowed only 7.2 (https)
+   and 7.3 (loopback), because a scheme on the desktop belongs to nobody
+   exclusively and any other application can intercept it. That reasoning still
+   stands. What is new is only the measured price: a whole client class stays out.
 
-**Offen bleibt** die ursprüngliche Portfrage: Cursor benutzt einen festen Port
-(8787), also sagt dieser Lauf nichts darüber, ob ein Client mit wechselndem
-Loopback-Port an unserem exakten Matching scheitert. Wer das beantworten will,
-braucht einen Client, der den Port je Lauf neu wählt (Claude Code ist der
-Kandidat).
+**Still open** is the original port question: Cursor uses a fixed port (8787), so
+this run says nothing about whether a client with a changing loopback port fails at
+our exact matching. Answering that needs a client that picks a fresh port per run
+(Claude Code is the candidate).
 
-## BL-05: Client ID Metadata Documents als Nachfolger von DCR
+## BL-05: Client ID Metadata Documents as the successor to DCR
 
-**Anlass (Plan 03-09):** Die MCP-Authorization-Spec fuehrt Client ID Metadata
-Documents (CIMD) und markiert Dynamic Client Registration als ueberholt. Heute
-traegt dieser Server ausschliesslich DCR; ein Client, der sich per CIMD ausweist
-(Claude Code tut das), kann sich hier nicht anmelden.
+**Trigger (plan 03-09):** The MCP authorization spec introduces Client ID Metadata
+Documents (CIMD) and marks Dynamic Client Registration as superseded. Today this
+server carries DCR exclusively; a client that identifies itself via CIMD (Claude
+Code does) cannot sign in here.
 
-**Was zu tun waere:** Die Client-Identitaet zusaetzlich aus einem vom Client
-genannten Metadatendokument beziehen duerfen, mit denselben Kontrollen wie heute
-bei DCR: Rueckkehradressen pruefen, Allowlist-Modus (AUTH-07) greift auch hier,
-und ein abgeschaltetes DCR darf nicht ueber CIMD umgangen werden. Die Abholung
-des Dokuments ist ein ausgehender Request der Instanz und braucht deshalb eine
-eigene Betrachtung (SSRF, Zwischenspeicher, Groessengrenze).
+**What would be needed:** Allow deriving the client identity additionally from a
+metadata document named by the client, with the same controls as DCR today: check
+redirect URIs, the allowlist mode (AUTH-07) applies here too, and a disabled DCR
+must not be bypassed via CIMD. Fetching the document is an outbound request from the
+instance and therefore needs its own review (SSRF, cache, size limit).
 
-**Warum nicht in v1:** AUTH-04 ist mit DCR erfuellt, beide gehosteten Connectoren
-verbinden. CIMD ist die Zukunftssicherung, nicht die Voraussetzung.
+**Why not in v1:** AUTH-04 is satisfied with DCR, both hosted connectors connect.
+CIMD is future-proofing, not a prerequisite.
 
-## BL-06: Admin-Settings-UI, Ein-Klick-Prinzip (Owner-Vorgabe 17.08.2026)
+## BL-06: Admin settings UI, one-click principle (owner directive 2026-08-17)
 
-**Owner-Vorgabe:** Alles soll einfach sein, ein Klick und man ist drin, und
-trotzdem muss der Admin die Gelegenheit haben, Einstellungen zu machen.
+**Owner directive:** Everything should be simple, one click and you are in, and the
+admin must still have the opportunity to make settings.
 
-**Ist-Zustand:** Die Nutzerseite erfuellt das Prinzip weitgehend (URL im
-Client einfuegen, anmelden, drin; Schalter und Trennen auf /connections).
-Die Admin-Seite ist reine Env-Var-Konfiguration (NC_MCP_OAUTH_DCR,
-NC_MCP_OAUTH_ALLOWLIST_ONLY, NC_MCP_OAUTH_ALLOWED_CLIENTS,
-NC_MCP_ALLOWED_HOSTS, NC_MCP_PUBLIC_URL, ...). Das kollidiert mit der
-Store-Installation per Klick (Phase 5 SC 2): ein Admin, der aus dem App
-Store installiert, setzt keine Env-Vars.
+**Current state:** The user side largely fulfils the principle (paste the URL into
+the client, sign in, done; switch and disconnect on /connections). The admin side is
+pure env-var configuration (NC_MCP_OAUTH_DCR, NC_MCP_OAUTH_ALLOWLIST_ONLY,
+NC_MCP_OAUTH_ALLOWED_CLIENTS, NC_MCP_ALLOWED_HOSTS, NC_MCP_PUBLIC_URL, ...). This
+collides with one-click store installation (phase 5 SC 2): an admin installing from
+the app store sets no env vars.
 
-**Was zu tun waere (Phase 5):** Admin-Settings-Zugang fuer die
-sicherheitsrelevanten Schalter (mindestens DCR an/aus und Allowlist), mit
-sicheren Defaults ab Installation, so dass der Ein-Klick-Weg ohne Pflicht-
-Konfiguration funktioniert und die Security-Note (oeffentliche Instanzen:
-Allowlist AN oder DCR AUS) per UI statt nur per Env erfuellbar ist.
-Recherche-Vorbehalt: Declarative Settings sind pull-only (04-RESEARCH);
-fuer Admin-Werte, die die ExApp zur Laufzeit braucht, ist der Speicherort
-(appconfig via AppAPI vs. eigener Store) zu klaeren.
+**What would be needed (phase 5):** An admin settings entry for the security-relevant
+switches (at least DCR on/off and allowlist), with safe defaults from installation,
+so the one-click path works without mandatory configuration and the security note
+(public instances: allowlist ON or DCR OFF) is satisfiable via UI instead of only
+via env. Research caveat: declarative settings are pull-only (04-RESEARCH); for admin
+values the ExApp needs at runtime, the storage location (appconfig via AppAPI vs. own
+store) has to be clarified.
 
-**Warum nicht in Phase 4:** Phase 4 war der Per-User-Slice; die
-Admin-Schalter haengen an der Store-Paketierung (EXAPP-04/05).
+**Why not in phase 4:** Phase 4 was the per-user slice; the admin switches hang on
+store packaging (EXAPP-04/05).
 
-## BL-07: Datenschutz-Doku + Datenweitergabe-Disclosure (Owner-Frage 17.08.2026)
+## BL-07: Privacy doc and data-sharing disclosure (owner question 2026-08-17)
 
-**STATUS 17.08.: Doku-Teil ERLEDIGT** (docs/privacy.md gepusht; Datenweitergabe als Prosa in info.xml <description>, weil der Store kein data-sharing-Feld hat, siehe 05-store-research.md Frage 4). Offen bleibt nur, den Hinweis in die spaeteren Client-Setup-Docs zu spiegeln.
+**STATUS 2026-08-17: doc part DONE** (docs/privacy.md pushed; data sharing described
+as prose in info.xml <description>, because the store has no data-sharing field, see
+05-store-research.md question 4). The only remaining item is to mirror the note into
+the later client setup docs.
 
-**Anlass:** Datenschutz-Review des Connectors. Der Connector selbst ist
-datenschutzfreundlich (self-hosted, keine Telemetrie, keine Calls ausser an
-die eigene Nextcloud, App-Passwoerter verschluesselt at rest, Token nur als
-Hash, Zweckbindung: Assistent sieht nie mehr als der Nutzer im Web). Es fehlt
-aber jede Datenschutz-Doku in docs/.
+**Trigger:** Privacy review of the connector. The connector itself is
+privacy-friendly (self-hosted, no telemetry, no calls except to its own Nextcloud,
+app passwords encrypted at rest, tokens only as a hash, purpose limitation: the
+assistant never sees more than the user does on the web). But there was no privacy
+doc in docs/.
 
-**Der DSGVO-Knackpunkt liegt hinter dem Connector:** Sobald ein Nutzer einen
-gehosteten KI-Client (Claude.ai, ChatGPT) verbindet, fliessen die abgerufenen
-Nextcloud-Inhalte (Dateien, Kalender, Kontakte, via prepare_context auch
-Datei-Auszuege) an den LLM-Anbieter, i.d.R. Drittland (US). Der Connector
-leitet nichts von sich aus weiter, ist aber das Tor. Betreiber brauchen dafuer
-eine Rechtsgrundlage (AVV mit dem LLM-Anbieter, ggf. Einwilligung, TIA fuer
-Drittlandtransfer). EU-/self-hosted-LLM (z.B. MUCGPT) entschaerft das.
+**The GDPR crux is behind the connector:** Once a user connects a hosted AI client
+(Claude.ai, ChatGPT), the retrieved Nextcloud content (files, calendar, contacts, and
+via prepare_context also file excerpts) flows to the LLM provider, usually a third
+country (US). The connector transmits nothing on its own but is the door. Operators
+need a legal basis for this (data processing agreement with the LLM provider, where
+applicable consent, a transfer impact assessment for the third-country transfer). An
+EU/self-hosted LLM (e.g. MUCGPT) defuses this.
 
-**Was zu tun waere (Phase 5, deckt zugleich SC 1 Datenweitergabe-Disclosure):**
-1. docs/privacy.md (oder datenschutz.md): welche personenbezogenen Daten der
-   Connector speichert (nc_user, verschluesseltes App-Passwort, Token-Hashes,
-   Zeitstempel), wo (SQLite im ExApp-Container), Verschluesselung, Loeschung
-   (Trennen/Deinstallation), Betroffenenrechte.
-2. Datenweitergabe-Disclosure fuer den App Store: klar benennen, dass Inhalte
-   an den vom Nutzer gewaehlten KI-Client gehen, mit Drittland-/LLM-Hinweis
-   und Empfehlung, den Datenschutz des Clients zu pruefen.
-3. info.xml-Beschreibung: die Zusicherung "sieht nie mehr als der Nutzer"
-   bleibt korrekt, darf aber nicht suggerieren, dass nach dem Tool-Call kein
-   Datenabfluss an den Client mehr stattfindet.
+**What would be needed (phase 5, also covers SC 1 data-sharing disclosure):**
+1. docs/privacy.md (or datenschutz.md): which personal data the connector stores
+   (nc_user, encrypted app password, token hashes, timestamps), where (SQLite in the
+   ExApp container), encryption, deletion (disconnect/uninstall), data subject rights.
+2. Data-sharing disclosure for the app store: state clearly that content goes to the
+   AI client chosen by the user, with a third-country/LLM note and a recommendation
+   to review the client's privacy terms.
+3. info.xml description: the assurance "never sees more than the user" stays correct
+   but must not suggest that no data flows to the client after the tool call.
 
-**Warum nicht in Phase 4:** Phase 4 war der Per-User-Slice; Store-Disclosure
-und Doku gehoeren zu Phase 5 (EXAPP-04/05, SC 1).
+**Why not in phase 4:** Phase 4 was the per-user slice; store disclosure and docs
+belong to phase 5 (EXAPP-04/05, SC 1).
 
-## BL-08: Anti-Fälschungs-Werte mit Zeitfenster, oder als Restrisiko führen (Review 04, ME-02)
+## BL-08: Anti-forgery values with a time window, or track as accepted risk (review 04, ME-02)
 
-**Befund:** `form_token` ist eine reine Funktion aus Datenschlüssel, Zweck und
-Handle. Der Wert hat keine Gültigkeitsdauer, kein Nonce, keinen Sitzungsbezug
-und keine Verbrauchszählung: für ein Konto ist der Schalter-Wert über die ganze
-Lebensdauer der Installation derselbe. Wer ihn einmal erlangt, kann den
-MCP-Zugang dieses Kontos zeitlich unbegrenzt per Cross-Site-POST pausieren und
-wieder freigeben, solange die Nutzerin bei Nextcloud angemeldet ist. Der einzige
-Rotationspunkt wäre der Datenschlüssel, und dessen Austausch macht jedes
-gespeicherte App-Passwort unlesbar, also alle Verbindungen kaputt.
+**Finding:** `form_token` is a pure function of data key, purpose and handle. The
+value has no validity period, no nonce, no session binding and no consumption count:
+for one account the switch value stays the same over the whole lifetime of the
+installation. Whoever obtains it once can pause and resume that account's MCP access
+indefinitely via cross-site POST, as long as the user is signed in to Nextcloud. The
+only rotation point would be the data key, and rotating it makes every stored app
+password unreadable, so it breaks all connections.
 
-**Was zu entscheiden ist (Owner):** Ein Zeitfenster in die Ableitung nehmen, wie
-bei Double-Submit-Token üblich (Vorschlag des Reviews: `FORM_TOKEN_WINDOW = 3600`,
-aktuelles und vorheriges Fenster akzeptieren, beide mit `compare_digest`). Das ist
-eine UX-Entscheidung, keine reine Sicherheitsentscheidung: ein Formular, das
-länger als zwei Fenster offen liegt, wird ungültig, und der Nutzer bekommt die
-ruhige Ablehnung statt seiner Aktion. Alternative: den Sachverhalt als
-akzeptiertes Restrisiko mit Id führen, statt ihn in `crypto.py` als vollwertigen
-Schutz zu beschreiben.
+**What to decide (owner):** Take a time window into the derivation, as is common for
+double-submit tokens (review proposal: `FORM_TOKEN_WINDOW = 3600`, accept the current
+and previous window, both with `compare_digest`). This is a UX decision, not a pure
+security decision: a form left open longer than two windows becomes invalid, and the
+user gets the quiet refusal instead of their action. Alternative: track the matter as
+an accepted risk with an id, instead of describing it in `crypto.py` as a full
+protection.
 
-**Nicht im Review-Fix erledigt,** weil die Fensterbreite und das Verhalten
-offener Tabs eine Produktentscheidung sind. ME-01 (Zweckbindung) ist umgesetzt
-und unabhängig davon.
+**Not done in the review fix,** because the window width and the behavior of open tabs
+are a product decision. ME-01 (purpose binding) is implemented and independent of it.
 
-## BL-09: Trunkierungsmarke von Auszügen aus dem Text herausziehen (Review 04, ME-03, D-57)
+## BL-09: Pull the excerpt truncation marker out of the text (review 04, ME-03, D-57)
 
-**Befund:** `context._capped` hängt `EXCERPT_TRUNCATION` ohne Trenner an den
-Nutzertext, und `chatgpt.TRUNCATION_NOTE` läuft in denselben Textstrom. Ein
-Dokument, das dieselbe Zeichenfolge enthält, kann für das Modell so aussehen, als
-ende der Serverauszug dort und als folge danach eine Systemmitteilung: der
-Angreifer entscheidet über die Rahmung seines eigenen Texts, also genau über die
-Grenze, auf die sich D-57 stützt. Umgekehrt kann ein Dokument behaupten,
-vollständig zu sein, wo gekappt wurde.
+**Finding:** `context._capped` appends `EXCERPT_TRUNCATION` to the user text without a
+separator, and `chatgpt.TRUNCATION_NOTE` runs into the same text stream. A document
+containing the same character sequence can look to the model as if the server excerpt
+ends there and a system message follows: the attacker decides on the framing of their
+own text, which is exactly the boundary D-57 relies on. Conversely a document can
+claim to be complete where it was truncated.
 
-**Was zu entscheiden ist (Owner):** Sauber wäre ein eigenes Feld
-(`hit["excerpt_truncated"] = True`), das ein Dokument nicht erzeugen kann. Das
-ändert die Antwortstruktur von `prepare_context` und berührt bei `chatgpt.fetch`
-den ChatGPT-kompatiblen Vertrag, in dem die Marke bewusst im Text steht, damit ein
-Modell, das nur `text` liest, den Unterschied sieht. Beides zusammen ist eine
-Schema-Entscheidung (Tool-Budget, Client-Kompatibilität), keine lokale Korrektur.
+**What to decide (owner):** The clean way is a separate field
+(`hit["excerpt_truncated"] = True`) that a document cannot produce. This changes the
+response structure of `prepare_context` and, at `chatgpt.fetch`, touches the
+ChatGPT-compatible contract, in which the marker deliberately sits in the text so a
+model that only reads `text` sees the difference. Both together are a schema decision
+(tool budget, client compatibility), not a local fix.
 
-**Zwischenschritt, falls die Marke im Text bleiben soll:** einen Trenner
-verwenden, den `_capped` vorher aus dem Nutzertext filtert, und
-`chatgpt.TRUNCATION_NOTE` nicht ungeprüft in denselben Strom schreiben.
+**Interim step, if the marker should stay in the text:** use a separator that
+`_capped` filters out of the user text beforehand, and do not write
+`chatgpt.TRUNCATION_NOTE` unchecked into the same stream.
 
-## BL-10: Schalter auch dort durchsetzen, wo eine Zugangsberechtigung entsteht (Review 04, ME-04)
+## BL-10: Enforce the switch where an authorization is created too (review 04, ME-04)
 
-**Befund:** Das Gate hängt ausschließlich an `MCP_PATH`. `/authorize`,
-`/authorize/decide` und `POST /connect` sind ungebremst, ein pausiertes Konto kann
-also einen kompletten Login-Flow abschließen, und Nextcloud legt dabei ein echtes
-App-Passwort an, das im Store landet. Erst der spätere Tool-Aufruf läuft in R1.
-Die Oberfläche sagt "MCP access is switched off for your account", und die Menge
-gültiger Nextcloud-App-Passwörter wächst trotz gezogener Bremse weiter.
+**Finding:** The gate hangs on `MCP_PATH` only. `/authorize`, `/authorize/decide` and
+`POST /connect` are unthrottled, so a paused account can complete a full login flow,
+and Nextcloud creates a real app password in the process that lands in the store. Only
+the later tool call runs into R1. The UI says "MCP access is switched off for your
+account", and the set of valid Nextcloud app passwords keeps growing despite the
+pulled brake.
 
-**Was zu entscheiden ist (Owner):** Entweder den Schalter an genau der Stelle
-mitprüfen, an der eine Zugangsberechtigung entsteht (vor `create_authorization` in
-`consent.py` und vor `_start` in `connect.py`, Antwort ist dieselbe Seite, die den
-Schalter zeigt), oder die Texte präzisieren (`SWITCH_OFF_STATE`,
-`CONNECTIONS_PAUSED_BODY`, `ACCESS_DISABLED_DESCRIPTION`) und den Sachverhalt als
-Restrisiko mit Id führen. Was nicht bleiben darf, ist die Differenz zwischen
-Zusage und Durchsetzung.
+**What to decide (owner):** Either check the switch at exactly the point where an
+authorization is created (before `create_authorization` in `consent.py` and before
+`_start` in `connect.py`, the response being the same page that shows the switch), or
+sharpen the texts (`SWITCH_OFF_STATE`, `CONNECTIONS_PAUSED_BODY`,
+`ACCESS_DISABLED_DESCRIPTION`) and track the matter as a risk with an id. What must not
+stay is the gap between promise and enforcement.
 
-**Nicht im Review-Fix erledigt,** weil beide Wege den App-Passwort-Flow berühren:
-die Prüfung fällt mitten in den Login-Flow-v2-Ablauf, in dem der Poll genau
-einmal antwortet und ein Abbruch nach dem Poll eine Rückgabe erzwingt. Das ist
-eine Design-Entscheidung, keine Raterei wert.
+**Not done in the review fix,** because both ways touch the app password flow: the
+check falls in the middle of the Login Flow v2 sequence, in which the poll answers
+exactly once and an abort after the poll forces a return. That is a design decision,
+not worth guessing.
 
-## BL-11: Drei kleinere Befunde aus dem Phase-4-Review (LO-02, LO-03, LO-06)
+## BL-11: Three smaller findings from the phase 4 review (LO-02, LO-03, LO-06)
 
-Alle drei sind kein Sicherheitsdefekt, aber jeder hat einen benennbaren Preis.
+None of the three is a security defect, but each has a nameable price.
 
-**LO-02, `access_disabled` kostet mehr als der Docstring sagt.** Gemessen 1,54 ms
-pro Aufruf (300 Durchläufe, warm), weil `_connect` bei jedem Öffnen `mkdir`, drei
-Pragmas, `executescript(SCHEMA)` mit 13 Statements und zwei `PRAGMA table_info`
-ausführt. Das liegt auf jedem MCP-Request einer authentifizierten Identität, und
-`/mcp` trägt bewusst keine Drosselung. **Zu tun:** Schema nur beim ersten Öffnen
-pro Prozess ausführen (Flag im `OAuthStore`, gesetzt nach dem ersten
-erfolgreichen `_connect`) und den Docstring auf das korrigieren, was gemessen ist.
-Zu klären: Verhalten, wenn die Datei zur Laufzeit verschwindet.
+**LO-02, `access_disabled` costs more than the docstring says.** Measured 1.54 ms per
+call (300 runs, warm), because `_connect` runs `mkdir`, three pragmas,
+`executescript(SCHEMA)` with 13 statements and two `PRAGMA table_info` on every open.
+This sits on every MCP request of an authenticated identity, and `/mcp` deliberately
+carries no throttling. **To do:** run the schema only on the first open per process
+(flag in `OAuthStore`, set after the first successful `_connect`) and fix the docstring
+to what was measured. To clarify: behavior when the file disappears at runtime.
 
-**LO-03, `user_access`-Zeilen werden nie aufgeräumt.** Die Tabelle wächst monoton
-und hält Zeilen für Konten, die es nicht mehr gibt; bei Verzeichnis-Setups mit
-Wiederverwendung von Konto-Ids startet ein neues Konto mit demselben Namen still
-pausiert. Über `/connections` sichtbar und behebbar, aber überraschend. **Zu tun:**
-`purge_expired` um ein Aufräumen für Konten ohne jede Autorisierung und mit altem
-`disabled_at` erweitern, oder auf ein `deleteUser`-Ereignis von Nextcloud hören
-(falls eine ExApp das erreichen kann), und den Grenzfall in `docs/` benennen.
+**LO-03, `user_access` rows are never cleaned up.** The table grows monotonically and
+holds rows for accounts that no longer exist; on directory setups that reuse account
+ids, a new account with the same name starts silently paused. Visible and fixable via
+/connections, but surprising. **To do:** extend `purge_expired` to clean up accounts
+with no authorization at all and an old `disabled_at`, or listen for a `deleteUser`
+event from Nextcloud (if an ExApp can reach it), and name the edge case in `docs/`.
 
-**LO-06, ein Auszug von 2 KB kostet bis zu 512 KB Transfer je Treffer.**
-`context._excerpt` ruft `chatgpt_tools.fetch`, und das liest bis
-`files.DEFAULT_MAX_BYTES` (512 KB), um daraus 2 KB zu behalten: bei `detail="full"`
-bis zu 1,5 MB Nextcloud-Transfer je Bundle-Aufruf, zeitlich durch
-`EXCERPT_TIMEOUT` begrenzt, mengenmäßig gar nicht. **Zu tun:** eine Leseobergrenze
-durch `fetch` durchreichen (etwa `max_bytes=EXCERPT_MAX_BYTES * 2`). Ändert nichts
-am Ergebnis und spart den Faktor 250; berührt aber die Signatur von `fetch`, die
-zum ChatGPT-Vertrag gehört, deshalb zusammen mit BL-09 zu entscheiden.
+**LO-06, a 2 KB excerpt costs up to 512 KB of transfer per hit.** `context._excerpt`
+calls `chatgpt_tools.fetch`, which reads up to `files.DEFAULT_MAX_BYTES` (512 KB) to
+keep 2 KB of it: at `detail="full"` up to 1.5 MB of Nextcloud transfer per bundle
+call, bounded in time by `EXCERPT_TIMEOUT`, in volume not at all. **To do:** pass a read
+limit through `fetch` (e.g. `max_bytes=EXCERPT_MAX_BYTES * 2`). Changes nothing about
+the result and saves the factor 250; but it touches the signature of `fetch`, which
+belongs to the ChatGPT contract, so decide it together with BL-09.
 
-## BL-12: MUCGPT-Anbindung, Auth-Modell klaeren (Owner-Frage 18.08.2026)
+## BL-12: MUCGPT integration, clarify the auth model (owner question 2026-08-18)
 
-**Anlass:** Owner plant Outreach an das MUCGPT-Team (it@M / Stadt Muenchen),
-sobald der Connector online ist. Frage: braucht MUCGPT eine angepasste Version?
+**Trigger:** Owner plans outreach to the MUCGPT team (it@M / City of Munich) once the
+connector is online. Question: does MUCGPT need an adapted version?
 
-**Recherche-Befund (verifiziert am Repo it-at-m/mucgpt):**
-- MUCGPT IST ein vollwertiger MCP-Client: mucgpt-core-service/app/agent/tools/
-  mcp.py nutzt langchain_mcp_adapters + mcp.ClientSession, MCP-Server sind per
-  config.yaml (MCP:-Sektion) zuschaltbar, es gibt einen McpBearerAuthProvider.
-  Also KEINE geforkte/angepasste Connector-Version noetig, Protokoll passt.
-- ABER MUCGPTs MCP-Auth kann NUR statische Credentials: forward_auth_override
-  (z.B. "Basic base64(email:app-password)"), custom headers, oder forward_token
-  (reicht MUCGPTs eigenen Keycloak-OIDC-Token durch). KEIN OAuth-2.1-Discovery/
-  DCR/Browser-Login, den Claude.ai/ChatGPT nutzen.
-- KNACKPUNKT = Identitaet, nicht Protokoll: Ueber ein statisches App-Passwort
-  laufen ALLE MUCGPT-Nutzer unter EINEM Nextcloud-Konto -> kollidiert mit
-  unserem Kern "jeder Request unter der Identitaet des Nutzers". Fuer echte
-  Per-User-Trennung muesste entweder MUCGPT per-user-Credentials durchreichen
-  (deren Arbeit) ODER wir eine Erweiterung bauen, die MUCGPTs OIDC-Token
-  akzeptiert und gegen Nextcloud eintauscht (Token-Exchange) = die eventuell
-  "verlangte angepasste Version".
+**Research finding (verified against the repo it-at-m/mucgpt):**
+- MUCGPT IS a full MCP client: mucgpt-core-service/app/agent/tools/mcp.py uses
+  langchain_mcp_adapters + mcp.ClientSession, MCP servers are configurable via
+  config.yaml (MCP: section), and there is an McpBearerAuthProvider. So NO forked or
+  adapted connector version is needed, the protocol fits.
+- BUT MUCGPT's MCP auth can only do static credentials: forward_auth_override (e.g.
+  "Basic base64(email:app-password)"), custom headers, or forward_token (passes
+  MUCGPT's own Keycloak OIDC token through). NO OAuth 2.1 discovery/DCR/browser login
+  as Claude.ai/ChatGPT use.
+- CRUX = identity, not protocol: with a static app password, ALL MUCGPT users run
+  under ONE Nextcloud account, which collides with our core "every request under the
+  user's identity". For real per-user separation, either MUCGPT would pass per-user
+  credentials through (their work) OR we build an extension that accepts MUCGPT's OIDC
+  token and exchanges it against Nextcloud (token exchange) = the possibly "requested
+  adapted version".
 
-**Fuer Phase 5 SC4 (MUCGPT-Setup-Doku, gegen echten Client verprobt):**
-- Out-of-the-box-Weg dokumentieren: App-Passwort via forward_auth_override
-  (Service-Konto oder je Nutzer). Funktioniert mit dem credential-based Pfad.
-- Im Erstkontakt die Auth-Frage stellen: reicht ein Team-/Service-Konto, oder
-  braucht ihr Per-User-Berechtigungstreue (dann Token-Exchange als Feature)?
-- Datenschutz-Pluspunkt betonen: EU/self-hosted, KEIN Drittland-Abfluss (im
-  Gegensatz zu Claude.ai). MUCGPT hat selbst inference_location/Datenresidenz
-  (Issue #1116), passt exakt zu docs/privacy.md.
+**For phase 5 SC4 (MUCGPT setup doc, verified against the real client):**
+- Document the out-of-the-box path: app password via forward_auth_override (service
+  account or per user). Works with the credential-based path.
+- Ask the auth question in first contact: is a team/service account enough, or do you
+  need per-user permission fidelity (then token exchange as a feature)?
+- Stress the privacy advantage: EU/self-hosted, NO third-country flow (unlike
+  Claude.ai). MUCGPT itself has inference_location/data residency (issue #1116), which
+  matches docs/privacy.md exactly.
