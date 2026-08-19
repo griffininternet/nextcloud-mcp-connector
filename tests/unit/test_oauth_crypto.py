@@ -477,7 +477,7 @@ async def test_delete_key_sends_one_delete_that_names_the_config_key() -> None:
     sent = route.calls.last.request
     assert sent.method == "DELETE"
     assert str(sent.url) == CONFIG_URL, "the write path, not the read path with its suffix"
-    assert json.loads(sent.content) == {"configKey": crypto.CONFIG_KEY}
+    assert json.loads(sent.content) == {"configKeys": [crypto.CONFIG_KEY]}
     assert sent.headers["OCS-APIRequest"] == "true"
     assert sent.headers["EX-APP-ID"] == APP_ID
     assert sent.headers["EX-APP-VERSION"] == APP_VERSION
@@ -486,7 +486,7 @@ async def test_delete_key_sends_one_delete_that_names_the_config_key() -> None:
 
 @pytest.mark.anyio
 @respx.mock
-@pytest.mark.parametrize("status_code", [400, 401, 404, 500])
+@pytest.mark.parametrize("status_code", [400, 401, 500])
 async def test_a_refused_deletion_is_false_and_one_log_line(
     caplog: pytest.LogCaptureFixture, status_code: int
 ) -> None:
@@ -497,6 +497,26 @@ async def test_a_refused_deletion_is_false_and_one_log_line(
         assert await crypto.delete_key(ENV) is False
 
     assert [record for record in caplog.records if record.levelno >= logging.ERROR]
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_deletion_that_finds_no_key_is_true_and_no_error(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """404 is this endpoint saying it deleted zero rows, so the key is not there.
+
+    ``AppConfigController::deleteAppConfigValues`` raises ``OCSNotFoundException`` ("No
+    appconfig_ex values deleted") when nothing matched, and that is the end state the caller
+    asked for. Reporting ``key_deleted: false`` for it would tell an administrator to go
+    looking for a value that does not exist (measured against AppAPI 34.0.0, plan 05-08).
+    """
+    respx.delete(CONFIG_URL).mock(return_value=httpx.Response(404, json={}))
+
+    with caplog.at_level(logging.DEBUG):
+        assert await crypto.delete_key(ENV) is True
+
+    assert not [record for record in caplog.records if record.levelno >= logging.ERROR]
 
 
 @pytest.mark.anyio

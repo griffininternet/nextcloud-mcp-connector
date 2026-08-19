@@ -307,8 +307,12 @@ async def delete_key(env: Mapping[str, str] | None = None) -> bool:
 
     The third verb of the same resource the rest of this module already talks to
     (``POST`` writes, ``POST /get-values`` reads, ``DELETE`` removes; see
-    :data:`EXAPP_CONFIG_PATH`). The body names the key with the same field the write side
-    uses, so both halves of this resource stay one shape.
+    :data:`EXAPP_CONFIG_PATH`). The delete half takes a list under ``configKeys``, the same
+    field the read half takes, not the singular one the write half uses: that is measured,
+    not chosen. ``AppConfigController::deleteAppConfigValues(array $configKeys)`` in AppAPI
+    34.0.0 has no other parameter, so a body naming ``configKey`` is a missing argument and
+    the call answers 400. Plan 05-08 found exactly that on a live instance, where the purge
+    reported ``key_deleted: false`` while everything else had worked.
 
     Unlike every other call here it returns instead of raising, and that asymmetry is the
     point. :func:`data_key` raises because a missing key would tempt a caller into running
@@ -330,7 +334,7 @@ async def delete_key(env: Mapping[str, str] | None = None) -> bool:
         response = await client.request(
             "DELETE",
             url,
-            json={"configKey": CONFIG_KEY},
+            json={"configKeys": [CONFIG_KEY]},
             headers=_headers(settings),
         )
     except httpx.HTTPError:
@@ -338,6 +342,14 @@ async def delete_key(env: Mapping[str, str] | None = None) -> bool:
         # app secret and the value is key material (T-03-16).
         logger.error("the ExApp configuration at %s could not be deleted", url)
         return False
+
+    if response.status_code == 404:
+        # This endpoint answers 404 when it deleted zero rows ("No appconfig_ex values
+        # deleted"), which means the value is not there. That is the end state the caller
+        # wanted, so it is a success with a different sentence, not a failure: a False here
+        # would send an administrator looking for a key that does not exist.
+        logger.info("there was no data key of this app left to delete")
+        return True
 
     if response.status_code // 100 != 2:
         logger.error("the deletion of the data key at %s answered %s", url, response.status_code)
