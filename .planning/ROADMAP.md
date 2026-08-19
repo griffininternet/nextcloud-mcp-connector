@@ -220,7 +220,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 05-06-PLAN.md - Purge-Kommando, Store-Wipe, Data-Key-Loeschung, privacy.md-Korrektur (SC 2) (Wave 3)
+- [x] 05-06-PLAN.md - Purge-Kommando, Store-Wipe, Data-Key-Loeschung, privacy.md-Korrektur (SC 2) (Wave 3)
 - [ ] 05-07-PLAN.md - Client-Doku Open WebUI und MUCGPT (EXAPP-05, SC 4) (Wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
@@ -243,7 +243,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. ExApp-Shell | 7/7 | Complete    | 2026-08-15 |
 | 3. OAuth 2.1 | 8/9 | In Progress|  |
 | 4. Per-User-Verwaltung und prepare_context | 4/4 | Complete   | 2026-08-17 |
-| 5. Hardening und Store-Einreichung | 5/10 | In Progress|  |
+| 5. Hardening und Store-Einreichung | 6/10 | In Progress|  |
 
 ## Coverage
 

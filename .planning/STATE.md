@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Plan 05-05 fertig: Credential-Flood gemessen (Quotient 1,00 Nextcloud-Runden pro Angreifer-Request, Bruteforce nur bei Basic und auf der HaRP-Adresse), Admin-Empfehlung im Installations-Runbook. Naechstes: Plan 05-06"
-last_updated: "2026-08-19T17:23:28.774Z"
+stopped_at: "Plan 05-06 fertig: occ mcp_connector:purge (Handler ohne Route, Doppelsicherung, force-Pflicht, erzwungene Reihenfolge Widerruf-Leeren-Schluessel), docs/privacy.md korrigiert. Offen: Assumption A5 (Live-Lauf des occ-Kommandos) in Plan 05-08. Naechstes: Plan 05-07"
+last_updated: "2026-08-19T17:56:40.786Z"
 last_activity: 2026-08-19
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 44
-  completed_plans: 39
-  percent: 89
+  completed_plans: 40
+  percent: 80
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 05 (hardening-und-store-einreichung) — EXECUTING
-Plan: 6 of 10
+Plan: 7 of 10
 Status: Ready to execute
 Last activity: 2026-08-19
 
-Progress: [█████████░] 89%
+Progress: [█████████░] 91%
 
 ## Performance Metrics
 
@@ -92,6 +92,7 @@ Progress: [█████████░] 89%
 | Phase 05 P02 | 20 min | 2 tasks tasks | 8 files files |
 | Phase 05 P04 | 18 min | 2 tasks | 7 files |
 | Phase 05 P05 | 25 min | 2 tasks | 3 files |
+| Phase 05 P06 | 25 min | 2 tasks tasks | 12 files files |
 
 ## Accumulated Context
 
@@ -289,6 +290,12 @@ Recent decisions affecting current work:
 - [Phase 05]: Ein Test, der Instanzzustand aendert, liest den Vorzustand und stellt ihn im finally zurueck: der Lasttest schaltet den vom Bootstrap deaktivierten Bruteforce-Waechter fuer die Messung ein, weil ein leerer Zaehler sonst ein Artefakt der Fixture waere, und setzt danach alle Zaehler mit Nachweis zurueck (T-05-24)
 - [Phase 05]: Der Lasttest spricht mit docker exec und den festen Containernamen statt mit docker compose exec: jeder compose-Aufruf gegen compose.exapp.yml verlangt HP_SHARED_KEY in der Umgebung (WR-11), und der messende Prozess hat mit diesem Schluessel nichts zu tun; genau daran scheiterte der erste Bootstrap-Lauf still ("Nextcloud is still not installed", obwohl occ status installed: true meldete)
 - [Phase 05]: Alle dreizehn Routen des Manifests sind seit CR-01 PUBLIC; das Installations-Runbook fuehrte /authorize/decide noch als user-Route und kannte /connections nicht, und die Zugriffsklasse in dem Dokument, mit dem ein Admin installiert, ist mehr als eine veraltete Zahl
+- [Phase 05]: Der Purge-Handler bekommt keine Route im Manifest: der occ-Aufruf kommt ueber PublicFunctions und braucht keine, waehrend eine Deklaration eine unumkehrbare instanzweite Loeschung fuer jeden im Internet aufrufbar machte, weil der PHP-Proxy gueltige AppAPI-Header selbst anhaengt (T-02-20, T-05-26)
+- [Phase 05]: Die Loesch-Reihenfolge lebt im Handler und nicht in der Doku: erst jedes App-Passwort zurueckgeben, dann die Tabellen leeren, dann den Datenschluessel loeschen; ein Test prueft die Aufrufreihenfolge auf dem Draht (T-05-30)
+- [Phase 05]: all_authorizations filtert nicht auf revoked_at IS NULL: die Frage des Purge ist, welches Nextcloud-App-Passwort noch gueltig sein kann, und eine widerrufene Zeile antwortet darauf mit ja
+- [Phase 05]: Der enabled=0-Zweig bleibt leer: derselbe Hook feuert bei jedem Update (lib/Command/ExApp/Update.php), ein Aufraeumen dort loeschte bei jedem Update jede Verbindung jeder Nutzerin (T-05-28)
+- [Phase 05]: Die force-Pruefung akzeptiert jede plausible Draht-Form der occ-Option, weil ihre genaue Form Assumption A5 ist und ein still nichts tuender Purge einen Admin mit falscher Sicherheit in die Deinstallation schickt
+- [Phase 05]: Das Destruktiv-Gate bekommt eine dritte enge, gegengeprobte Ausnahme fuer den einen HTTP-DELETE in oauth/crypto.py: geloescht wird ein Wert, den die App ueber sich selbst geschrieben hat, TOOL-09 ist ein Versprechen ueber Nutzerdaten in Nextcloud
 
 ### Pending Todos
 
@@ -318,6 +325,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-19T17:23:28.759Z
-Stopped at: Plan 05-05 fertig: Credential-Flood gemessen (Quotient 1,00 Nextcloud-Runden pro Angreifer-Request, Bruteforce nur bei Basic und auf der HaRP-Adresse), Admin-Empfehlung im Installations-Runbook. Naechstes: Plan 05-06
+Last session: 2026-08-19T17:55:01.553Z
+Stopped at: Plan 05-06 fertig: occ mcp_connector:purge (Handler ohne Route, Doppelsicherung, force-Pflicht, erzwungene Reihenfolge Widerruf-Leeren-Schluessel), docs/privacy.md korrigiert. Offen: Assumption A5 (Live-Lauf des occ-Kommandos) in Plan 05-08. Naechstes: Plan 05-07
 Resume file: None
