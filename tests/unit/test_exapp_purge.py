@@ -234,6 +234,17 @@ def test_a_request_with_a_wrong_app_secret_is_401(live: Deployment) -> None:
     assert live.counts()["authorizations"] == len(CONNECTIONS)
 
 
+def test_the_proxy_marker_is_the_same_header_the_lifecycle_routes_refuse() -> None:
+    """The header is spelled in two modules, so this is where the two are held equal.
+
+    ``exapp/lifecycle.py`` imports ``exapp/occ.py``, which imports ``exapp/purge.py``, so an
+    import back would close a cycle. The duplicate string is the price and this assertion is
+    the guard: a rename in one module without the other would leave the purge open to the
+    PHP proxy path (T-05-26).
+    """
+    assert purge.HEADER_ORIGIN_IP == lifecycle.HEADER_ORIGIN_IP
+
+
 def test_the_handler_path_is_declared_in_no_route_of_the_manifest() -> None:
     """T-02-20 and pitfall 13: a declared route would publish an instance wide deletion.
 
