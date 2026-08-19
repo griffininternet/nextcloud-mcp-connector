@@ -276,16 +276,16 @@ def main() -> None:
     # administrator set in Nextcloud are part of the environment of this process from here on
     # (plan 05-04). The read happens after the refusal above, so a misconfigured process never
     # opens a socket, and before every check, so the checks judge the values that will be used.
-    env = _resolved_env()
+    resolved = _resolved_env()
 
     try:
-        config.exapp_settings(env)
+        config.exapp_settings(resolved)
         # The place the OAuth store writes to, checked before the first request and not on
         # the first authorization: a missing or read only volume answers every question
         # correctly until the container restarts and then has lost every connection
         # (pitfall 12, T-03-15). The data key is not fetched here; that needs a running
         # event loop and a reachable Nextcloud, and the store asks for it when it opens.
-        config.persistent_storage(env)
+        config.persistent_storage(resolved)
         # The one value an installation has to set (WR-09). It becomes the issuer, the audience
         # of every token, the resource_metadata pointer, the prefix of every form action and
         # the target of the consent redirect.
@@ -302,8 +302,11 @@ def main() -> None:
         # sets that variable with https replaced by http and it may be an internal address. A
         # derived value would be a silent default with broken discovery, which looks exactly
         # like a configured installation and is the failure this plan removes.
-        if config.exapp_configured(env) and not (env.get(config.ENV_PUBLIC_URL) or "").strip():
-            app_id = (env.get(config.ENV_APP_ID) or "").strip()
+        if (
+            config.exapp_configured(resolved)
+            and not (resolved.get(config.ENV_PUBLIC_URL) or "").strip()
+        ):
+            app_id = (resolved.get(config.ENV_APP_ID) or "").strip()
             logger.error(
                 "%s is not set and no public address is stored in Nextcloud either. Until one "
                 "is, every discovery document, the audience of every token and the consent "
@@ -321,23 +324,23 @@ def main() -> None:
         # an issuer that is not https unless it is loopback. Building the application here
         # turns that refusal into the same named exit as a missing volume, instead of into
         # a traceback in a container log.
-        app = build_exapp_app(env)
+        app = build_exapp_app(resolved)
     except ToolError as exc:
         logger.error("%s %s", exc.message, exc.hint)
         raise SystemExit(2) from None
 
-    if (env.get(config.ENV_HP_SHARED_KEY) or "").strip():
+    if (resolved.get(config.ENV_HP_SHARED_KEY) or "").strip():
         # HaRP with the FRP tunnel: the unix socket is the transport, frpc runs beside us.
-        socket_path = env.get(config.ENV_HP_EXAPP_SOCK) or DEFAULT_EXAPP_SOCK
+        socket_path = resolved.get(config.ENV_HP_EXAPP_SOCK) or DEFAULT_EXAPP_SOCK
         logger.info("MCP Connector is serving as an ExApp on %s", socket_path)
         uvicorn.run(app, uds=socket_path)
         return
 
-    _warn_when_the_host_check_is_a_trap(env)
+    _warn_when_the_host_check_is_a_trap(resolved)
 
-    host = env.get(config.ENV_APP_HOST) or "127.0.0.1"
+    host = resolved.get(config.ENV_APP_HOST) or "127.0.0.1"
     try:
-        port = int(env[config.ENV_APP_PORT])
+        port = int(resolved[config.ENV_APP_PORT])
     except (KeyError, ValueError):
         logger.error(
             "%s is not set to a port number. The AppAPI deploy daemon sets it when it "
