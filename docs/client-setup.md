@@ -6,14 +6,14 @@ Three ways to connect an assistant to your Nextcloud with this server:
 |-----------|---------------|-------------|
 | **stdio** | One person, one machine. Claude Desktop, Claude Code, Cursor and every other client that starts a local process. | App password from the environment |
 | **Streamable HTTP** | A shared or remote deployment. One process can serve several people. | App password per request, in the `Authorization` header |
-| **ExApp (AppAPI)** | An administrator installs the server into Nextcloud itself, and every user connects with their own identity. | App password per request; HaRP resolves it to the user (OAuth in phase 3) |
+| **ExApp (AppAPI)** | An administrator installs the server into Nextcloud itself, and every user connects with their own identity. | OAuth 2.1 per user, or an app password per request; HaRP resolves either to the user |
 
-All three speak the same 15 tools. The only difference is where the credentials come from and
+All three speak the same 16 tools. The only difference is where the credentials come from and
 where the identity is resolved.
 
-The stdio and Streamable HTTP transports were verified in phase 1; the ExApp mode was added in
-phase 2 and has its own installation guide in [exapp-install.md](exapp-install.md). The full
-client matrix (ChatGPT, Cursor, Open WebUI, MUCGPT) follows in a later phase.
+The ExApp mode has its own installation guide in [exapp-install.md](exapp-install.md). Per
+client, this page covers Claude Desktop, Claude Code, Claude.ai, ChatGPT, Cursor, Open WebUI
+and MUCGPT; each section says what was measured and against which version.
 
 ## Before you start: get an app password
 
@@ -71,7 +71,7 @@ Edit `claude_desktop_config.json`:
 }
 ```
 
-Restart Claude Desktop completely, not just the window. The 15 tools then appear in the
+Restart Claude Desktop completely, not just the window. The 16 tools then appear in the
 tools menu of a new conversation.
 
 If `nc-mcp` is not found, the desktop app does not see your shell PATH. Use the absolute
@@ -177,7 +177,7 @@ off with `NC_MCP_DISABLE_DNS_REBINDING_PROTECTION=true`.
 ## ExApp mode (installed through AppAPI)
 
 The third way to run this server is as a Nextcloud ExApp, installed by an administrator
-through AppAPI. It sits beside stdio and the standalone HTTP mode above: same code, same 15
+through AppAPI. It sits beside stdio and the standalone HTTP mode above: same code, same 16
 tools, a different place the identity comes from. Installing it is a separate document,
 [exapp-install.md](exapp-install.md); this section is about connecting a client to an
 instance where it is already installed.
@@ -191,8 +191,9 @@ https://<nextcloud>/exapps/mcp_connector/mcp
 That is the public Nextcloud URL with the ExApp prefix, not a port of its own. AppAPI reaches
 every ExApp under `/exapps/<appid>`, and the reverse proxy in front of Nextcloud forwards it.
 
-In phase 2 the authentication is a Nextcloud username and an app password, sent as an ordinary
-Basic header, exactly as in the HTTP passthrough above:
+There are two ways to authenticate against it, and both are supported. The simpler one is a
+Nextcloud username and an app password, sent as an ordinary Basic header, exactly as in the HTTP
+passthrough above:
 
 ```
 Authorization: Basic base64(alice:xxxxx-xxxxx-xxxxx-xxxxx-xxxxx)
@@ -204,10 +205,13 @@ server never receives the app password as a Nextcloud credential of its own; it 
 the user is, and every Nextcloud request then runs under that user's own permissions. This is
 why the permission promise holds through the whole chain and not only in our client layer.
 
-OAuth is the phase 3 way to authenticate here, so a client will later present a token instead
-of a Basic header. Until then the app password is the supported credential, and the endpoint
-is otherwise the same, so nothing about the client configuration changes when OAuth arrives
-except the header.
+The other way is OAuth 2.1, and it is the one to prefer where the client can speak it: the
+client registers itself, each user signs in on Nextcloud's own page, and no app password is
+copied anywhere. The endpoint is the same one, so the only difference in the client
+configuration is the header. See the OAuth section further down and, for the server side,
+[oauth-setup.md](./oauth-setup.md). The app password stays supported for every client that
+cannot do OAuth, which is what the rest of this section and the MUCGPT section below are
+about.
 
 In Claude Code, the same command as the HTTP mode points at the ExApp endpoint:
 
@@ -228,7 +232,7 @@ claude mcp add --transport http nextcloud https://cloud.example.com/exapps/mcp_c
    let alone serves `/mcp`, and the failure looks like a Nextcloud problem rather than a proxy
    one. The bundled Caddy of Nextcloud All-in-One ships this rule, and `deploy/Caddyfile`
    rebuilds it for the local topology.
-3. **Discovery lives at a pointer, not at the canonical path.** The RFC 9728 metadata a phase 3
+3. **Discovery lives at a pointer, not at the canonical path.** The RFC 9728 metadata an
    OAuth client looks for is reachable unauthenticated over the ExApp, but the canonical
    `/.well-known/oauth-protected-resource/...` root path is answered by Nextcloud with a 404, so
    a client has to follow the `resource_metadata` pointer from the `WWW-Authenticate` header
@@ -515,6 +519,75 @@ sentence is this server's. Cursor registers a private-use URI scheme
 (`cursor://anysphere.cursor-mcp/oauth/callback`) alongside two acceptable addresses, and
 this server refuses a registration that contains an address it does not admit. There is no
 setting that changes this today. Use the app password way above for such clients.
+
+### MUCGPT
+
+MUCGPT is a real MCP client, so no adapted build of this connector is needed: it speaks
+Streamable HTTP and it reads MCP servers out of its own `config.yaml`. What it cannot do is
+OAuth. It knows no discovery, no dynamic client registration and no browser sign in, so the
+credential has to be configured, and there is exactly one place it can go.
+
+**A gap, named up front:** this section is not verified against a running MUCGPT instance.
+Everything below is derived from the source of `it-at-m/mucgpt` as of 2026-08-18, not from a run,
+because there is no access to such an instance here. That is a real gap and not a formality: it
+is the only client section on this page
+without a measurement behind it. What a proof would need is small and named, so it can be closed
+in one sitting by anybody who has the access: an instance with its Keycloak, one account on it,
+and a `config.yaml` carrying the MCP source below. The three things to check are that the
+`Authorization` header arrives at all, that the tool list comes back, and that a tool call
+answers with content of the configured Nextcloud account.
+
+**What works**
+
+The MCP source in `config.yaml`, with the two keys that are not optional:
+
+```yaml
+MCP:
+  - name: nextcloud
+    transport: streamable_http
+    url: https://<nextcloud>/exapps/mcp_connector/mcp
+    forward_token: true
+    forward_auth_override: "Basic <base64 of user:app-password>"
+```
+
+`forward_token: true` and `forward_auth_override` belong together, and MUCGPT enforces exactly
+that pairing: its own validator refuses a configuration with the override and without the
+forward, with `forward_auth_override requires forward_token=true`.
+
+**An `Authorization` entry under `headers` is silently dropped.** This is worth spelling out
+because it is the configuration a reader would try first, and it fails without a useful message:
+when MUCGPT copies the `headers` block of a source, it filters out the key `authorization` on
+purpose. So a header set there never arrives, the request reaches this server without a
+credential, and the answer is a `401` that looks like a broken server. The warning sign is
+MUCGPT's own log line listing the header names configured for the source: `Authorization` is not
+among them. The two keys above are the only way in.
+
+**The price, and it is not a detail**
+
+`forward_auth_override` is one single value per MCP source, not one per person. Whatever account
+is in that base64 string, every MUCGPT user of that source runs as that account. So this path is
+a **team or service account**, and it has to be treated as one:
+
+* Give it its own Nextcloud account and its own app password, not a person's. Name it so that
+  the entry under Settings, Security, Devices and sessions is recognisable.
+* Give that account access to exactly what the group may see, and nothing else. The permission
+  promise of this connector still holds, but it holds for the service account: this server never
+  sees more than that account may see, and it also never sees less, so it cannot tell two MUCGPT
+  users apart.
+* Say so to your users. A shared account is a legitimate setup and a bad surprise.
+
+Real per user fidelity needs one of two things, and neither is a fix we can ship on our side
+alone: either MUCGPT forwards a credential per person, or its own per user OIDC token is
+exchanged for a Nextcloud identity, which needs a trust anchor (which issuer may do this) and an
+identity mapping (the same accounts on both sides, so SSO or LDAP). That is a feature and not a
+repair, and it is not part of v1.
+
+**The one advantage over a hosted assistant**
+
+MUCGPT is self hosted or EU based, so the flow of content to the assistant's provider that
+[privacy.md](privacy.md) asks an operator to account for does not leave for a third country
+here. That is the section "What leaves your control" of that document, and MUCGPT is the case it
+names as the way to avoid the transfer.
 
 ### If the client cannot find the authorization server
 
