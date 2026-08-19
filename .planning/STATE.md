@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Plan 05-02 fertig: BL-10 geschlossen, der Per-User-Schalter wirkt an allen drei Punkten, an denen eine Verbindung entsteht (Seite E9, App-Passwort-Widerruf je Ablehnung). Naechstes: Plan 05-04"
-last_updated: "2026-08-19T16:34:32.051Z"
+stopped_at: "Plan 05-04 fertig: BL-06 geschlossen (Admin-Werte wirken beim Start, Setup-Zustand statt Exit 2 auf /connections). Naechstes: Plan 05-05"
+last_updated: "2026-08-19T16:57:01.966Z"
 last_activity: 2026-08-19
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 44
-  completed_plans: 37
+  completed_plans: 38
   percent: 80
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 05 (hardening-und-store-einreichung) — EXECUTING
-Plan: 4 of 10
+Plan: 5 of 10
 Status: Ready to execute
 Last activity: 2026-08-19
 
-Progress: [████████░░] 84%
+Progress: [█████████░] 86%
 
 ## Performance Metrics
 
@@ -90,6 +90,7 @@ Progress: [████████░░] 84%
 | Phase 05 P01 | 14 min | 2 tasks tasks | 6 files files |
 | Phase 05 P03 | 25 min | 2 tasks | 5 files |
 | Phase 05 P02 | 20 min | 2 tasks tasks | 8 files files |
+| Phase 05 P04 | 18 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -276,6 +277,10 @@ Recent decisions affecting current work:
 - [Phase 05]: Ein Sicherheitsschalter wird mit drei Zustaenden gelesen (pausiert, nicht pausiert, keine Antwort): ein bool muesste fuer den Ausfall einen Default raten, und beide Defaults sind falsch (True sperrt eine gesunde Installation aus, False ist der Durchlass, gegen den BL-10 gebaut ist)
 - [Phase 05]: Die Ablehnung eines pausierten Kontos auf der Zustimmungsseite bekommt keine access_denied-Weiterleitung, sondern die Seite E9: dieser Fehlercode heisst 'die Nutzerin hat abgelehnt', und hier hat sie nichts abgelehnt (T-05-09)
 - [Phase 05]: /authorize und connect._start bleiben ungeprueft, und der Grund steht als Docstring-Absatz an genau diesen Stellen; zwei Quelltext-Tests halten ihn dort, damit die Luecke nicht fuer ein Versehen gehalten wird
+- [Phase 05]: Die Admin-Werte werden genau einmal beim Prozessstart aufgeloest und als Umgebung an build_exapp_app gegeben, nicht pro Request nachgelesen: config.public_url bleibt synchron und pur, ein Prozess-Cache waere verbotener Modulzustand (D-20), und ein Lesen pro Request waere ein zweiter Nextcloud-Roundtrip je Anfrage (SC 5 der Phase 3); der Preis ist der Wiederaktivieren-Schritt und er steht an drei Stellen
+- [Phase 05]: Eine fehlende oeffentliche Adresse beendet den Prozess nicht mehr mit Exit 2: mit Abbruch wird die App nie enabled, das Admin-Formular wird nie registriert und der Admin hat keinen Ort fuer den Wert; 'keine stille Fehlkonfiguration' halten jetzt die Fehlerzeile und der sichtbare Setup-Zustand auf /connections
+- [Phase 05]: Keine Herleitung der oeffentlichen Adresse aus NEXTCLOUD_URL (Assumption A2): AppAPI setzt sie mit herabgesetztem Schema und moeglicherweise intern, ein hergeleiteter Wert waere ein stiller Default mit kaputter Discovery
+- [Phase 05]: Der Startzeit-Lesevorgang bringt seinen eigenen kurzlebigen httpx-Client mit (read_values und admin_overlay nehmen ihn als Parameter): shared_client bindet seinen Pool an den Event-Loop des ersten Aufrufs, und dieser Loop ist geschlossen, bevor uvicorn seinen eigenen oeffnet
 
 ### Pending Todos
 
@@ -305,6 +310,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-19T16:34:32.034Z
-Stopped at: Plan 05-02 fertig: BL-10 geschlossen, der Per-User-Schalter wirkt an allen drei Punkten, an denen eine Verbindung entsteht (Seite E9, App-Passwort-Widerruf je Ablehnung). Naechstes: Plan 05-04
+Last session: 2026-08-19T16:57:01.951Z
+Stopped at: Plan 05-04 fertig: BL-06 geschlossen (Admin-Werte wirken beim Start, Setup-Zustand statt Exit 2 auf /connections). Naechstes: Plan 05-05
 Resume file: None

@@ -215,7 +215,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 05-02-PLAN.md - Schalter-Durchsetzung dort, wo eine Autorisierung entsteht (BL-10) (Wave 2)
-- [ ] 05-04-PLAN.md - Admin-Werte wirken, Setup-Zustand statt Startabbruch (BL-06, Teil 2) (Wave 2)
+- [x] 05-04-PLAN.md - Admin-Werte wirken, Setup-Zustand statt Startabbruch (BL-06, Teil 2) (Wave 2)
 - [ ] 05-05-PLAN.md - Negativ-Credential-Lasttest und Admin-Sicherheitsdoku (SC 3) (Wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
@@ -243,7 +243,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. ExApp-Shell | 7/7 | Complete    | 2026-08-15 |
 | 3. OAuth 2.1 | 8/9 | In Progress|  |
 | 4. Per-User-Verwaltung und prepare_context | 4/4 | Complete   | 2026-08-17 |
-| 5. Hardening und Store-Einreichung | 3/10 | In Progress|  |
+| 5. Hardening und Store-Einreichung | 4/10 | In Progress|  |
 
 ## Coverage
 
