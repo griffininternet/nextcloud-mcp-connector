@@ -102,7 +102,7 @@ completed: 2026-08-19
 
 ## Files Created/Modified
 
-- `docs/uninstall.md` (neu, 285 Zeilen) - Ueberblick mit dem einen Satz, der die Seite noetig macht; die erzwungene Reihenfolge mit Warnblock und Schritt 0; die Versionstabelle 32/33/34 samt dem NC-34-Befund im Detail; Linie A mit acht kopierbaren Pruefungen und ihren echten Ausgaben; Linie B mit der Feldtabelle der Purge-Antwort, vier Gegenproben und fuenf nach `--rm-data`; sechs Known pitfalls (Falschreihenfolge, deaktivierte App, Weiterarbeiten nach dem Purge, die falsche Tabelle fuer den Schluessel, die fehlende Oberflaeche, `HP_SHARED_KEY`); Security notes; Related auf `exapp-install.md`, `privacy.md`, `oauth-setup.md`, `faq.md`.
+- `docs/uninstall.md` (neu, 283 Zeilen) - Ueberblick mit dem einen Satz, der die Seite noetig macht; die erzwungene Reihenfolge mit Warnblock und Schritt 0; die Versionstabelle 32/33/34 samt dem NC-34-Befund im Detail; Linie A mit acht kopierbaren Pruefungen und ihren echten Ausgaben; Linie B mit der Feldtabelle der Purge-Antwort, vier Gegenproben und fuenf nach `--rm-data`; sechs Known pitfalls (Falschreihenfolge, deaktivierte App, Weiterarbeiten nach dem Purge, die falsche Tabelle fuer den Schluessel, die fehlende Oberflaeche, `HP_SHARED_KEY`); Security notes; Related auf `exapp-install.md`, `privacy.md`, `oauth-setup.md`, `faq.md`.
 - `.planning/phases/05-hardening-und-store-einreichung/05-08-MEASUREMENTS.md` (neu, 11 Abschnitte) - jede Ausgabe dieses Laufs mit Kommando und Uhrzeit, inklusive der Fehlersuche in AppAPI und der Linie 0.
 - `src/mcp_connector/exapp/purge.py` - `OCC_ENVELOPE` mit der gemessenen Herkunft im Kommentar; `_forced_in` steigt genau eine Ebene in die Huelle und behaelt jede bisherige Form; der Docstring von `_forced` nennt jetzt die Messung statt der Annahme.
 - `src/mcp_connector/oauth/crypto.py` - `delete_key` sendet `{"configKeys": [CONFIG_KEY]}` und liest 404 als Erfolg mit einer Info-Zeile; der Docstring nennt die Signatur des Controllers und das Fehlbild, das ohne diese Zeile entstand.
@@ -282,3 +282,13 @@ anfahren wie in STATE.md beschrieben, `HP_SHARED_KEY` zuruecklesen statt neu erz
 - **Fuer 05-10 (Release und CHANGELOG):** dieser Plan liefert die Begruendung und die Belege. Die gelistete 0.1.0 ist per Klick nicht installierbar (Exit 2 ohne `NC_MCP_PUBLIC_URL`) und traegt weder den Purge noch die zwei hier gefundenen Korrekturen. Der CHANGELOG-Eintrag von 0.1.1 kann sich auf Abschnitt 9.2 des Messprotokolls stuetzen; die Installationsanleitung des Release-Textes muss den occ-Weg nennen, weil Nextcloud 34.0.2 keinen Knopf hat.
 - **Fuer die Phasen-Verifikation:** SC 2 ist belegt, A5 ist geschlossen, D-31 ist descopte Zeile mit Voraussetzung. Offen bleibt der zurueckgestellte 401-Fund der Admin-Werte.
 - **Fuer einen Upstream-Bericht:** die Kette aus Abschnitt 9.1 ist vollstaendig genug fuer ein Issue an Nextcloud (Cache ok, Backend ok, Frontend ruft `initialize` nie, alte Route 500).
+
+## Self-Check: PASSED
+
+- `docs/uninstall.md` (283 Zeilen), `05-08-MEASUREMENTS.md` und `05-08-SUMMARY.md` liegen auf der Platte; `purge.py` traegt `OCC_ENVELOPE` (3 Stellen), `crypto.py` traegt `configKeys` (6 Stellen).
+- Alle fuenf Commits (`505eaba`, `872cb0b`, `e90cfd2`, `2a51a9f`, `bc0a6af`) sind im Log.
+- Volle Suite 1776 gruen, alle Gates gruen, `uv.lock` unberuehrt, keine Datei geloescht.
+
+---
+*Phase: 05-hardening-und-store-einreichung*
+*Completed: 2026-08-19*
