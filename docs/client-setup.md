@@ -356,6 +356,124 @@ the allowlist mode, because the address cannot be known before the connector exi
 than deleting and recreating it; a re-run picks up the changed server side without losing
 the entry.
 
+### Open WebUI, step by step
+
+Measured on 2026-08-19 against Open WebUI 0.11.0
+(`ghcr.io/open-webui/open-webui:main`, digest
+`sha256:6a773e5c3a246b65cbe74ce942b294292c0e5f81c138f703d111bc162f7d7c3d`) and this connector
+installed as an ExApp.
+
+Open WebUI speaks the MCP authorization specification since 0.6.31, and that changes what this
+section has to say about it: it is not a proxy case any more. It registers itself, so there is
+no client id to create; it authenticates every user of your instance separately, so one
+connection is not shared; and it registers exactly **one** return address, which is why the
+`cursor://` problem of the next section does not apply here. Nothing is copied by hand and no
+app password is involved.
+
+**Before you start**
+
+* An **administrator** account in Open WebUI. Only an administrator may add a tool server; the
+  sign in that follows is done by each user for themselves.
+* The connector URL, `https://<nextcloud>/exapps/mcp_connector/mcp`.
+* Open WebUI reachable under an address this server accepts as a return target. That is the one
+  thing that can go wrong before anything else does, see stumbling block 3 below.
+
+**The steps**
+
+1. In the admin settings, open **Tool Servers** and press **Add Connection**.
+2. **Connection Type:** pick **MCP** with the transport **Streamable HTTP**. Not OpenAPI: an
+   OpenAPI connection asks the address for an `openapi.json`, and this server does not serve
+   one, it speaks MCP.
+3. **URL:** `https://<nextcloud>/exapps/mcp_connector/mcp`, with `/mcp` and **without a
+   trailing slash**, for the reason given at the start of this section: the string has to match
+   the `resource` value of the protected resource document character for character.
+4. **Auth:** **OAuth 2.1**. Not **OAuth 2.1 (Static)**, which is the variant for a server where
+   an administrator pastes a client id and a secret; this server hands both out itself. Leave
+   the key field empty.
+5. **Save.** Open WebUI now registers itself. Expected result, in this server's log, in this
+   order:
+
+   ```
+   POST /mcp                                        401 Unauthorized
+   GET  /.well-known/oauth-protected-resource/mcp   200 OK
+   GET  /.well-known/oauth-authorization-server     200 OK
+   POST /register                                   201 Created
+   ```
+
+   The first line is not an error. Open WebUI sends an unauthenticated `initialize` on purpose
+   and reads the address of the metadata out of the `WWW-Authenticate` header of the 401. The
+   registration that arrives carries the client name `Open WebUI`, exactly one return address
+   (`http://localhost:3030/oauth/clients/mcp:<server id>/callback` in the measured run), the
+   grant types `authorization_code` and `refresh_token`, and the scope `nextcloud`, which Open
+   WebUI takes from `scopes_supported` of the protected resource document rather than from the
+   larger catalogue of the authorization server. This server records the registration with
+   `nextcloud offline_access`, and that added scope is what later produces a refresh token.
+6. The connector now appears in the tool list as one entry named after the connection. Each
+   user opens it once and starts the sign in (**Authenticate**). What happens then is the flow
+   described at the start of this chapter: Nextcloud's own sign in page, then this connector's
+   consent page naming `Open WebUI`, then back to Open WebUI.
+7. **Check that it worked.** After the approval, this server's log shows
+   `POST /token 200 OK`, and a tool call from Open WebUI appears as `POST /mcp 200 OK`. In the
+   measured run Open WebUI listed all 16 tools and `files_search` answered with files of the
+   account that had signed in.
+
+**Six things that go wrong, and what each one looks like**
+
+1. **The connection type is OpenAPI instead of MCP.** Then Open WebUI asks for an
+   `openapi.json` and reports a broken tool server, although the address is right. The type is
+   not a label, it selects a different protocol.
+2. **`WEBUI_SECRET_KEY` is not pinned.** Open WebUI derives the keys that encrypt the stored
+   client registration and the stored OAuth tokens from it
+   (`OAUTH_CLIENT_INFO_ENCRYPTION_KEY` and `OAUTH_SESSION_TOKEN_ENCRYPTION_KEY` default to it).
+   In 0.11.0 the process refuses to start without it and the shipped `start.sh` generates one
+   into `.webui_secret_key` in the working directory instead, which is **not** inside the data
+   volume. So a container started without the variable and without that file preserved comes up
+   with a new key, and every connection of every user has to be authorized again. Set it:
+
+   ```bash
+   docker run -e WEBUI_SECRET_KEY="$(openssl rand -hex 32)" ...
+   ```
+3. **Open WebUI is reached over `http` on anything but a loopback address.** This is the one
+   that looks like a fault of this server and is not. The return address Open WebUI registers is
+   built from its own address, so an instance at `http://192.168.1.50:3000` or
+   `http://openwebui.lan` asks to register an `http` address that is not loopback, and this
+   server refuses with `400`:
+
+   ```json
+   {"error":"invalid_redirect_uri",
+    "error_description":"redirect_uris must use https, except loopback addresses of native clients"}
+   ```
+
+   In Open WebUI the same refusal reads:
+
+   ```
+   Failed to register OAuth client: Dynamic client registration failed:
+   {"error":"invalid_redirect_uri","error_description":"redirect_uris must use https, except
+   loopback addresses of native clients"}
+   ```
+
+   The rule is deliberate and it is not going to be relaxed: `https` is accepted on any host,
+   and `http` only on `127.0.0.1`, `localhost` and `::1`, which is the exemption the OAuth 2.1
+   security guidance grants a native client for its own callback. A return address that travels
+   over plain `http` across a network carries an authorization code across that network.
+   The fix belongs to whoever runs Open WebUI, not to this server: put it behind TLS, or reach
+   it on `localhost`.
+4. **`WEBUI_URL` does not match the address people use.** The return address is built from
+   Open WebUI's configured own URL, falling back to the address of the incoming request. If the
+   configured value is wrong, the registration is refused for the wrong reason or the browser
+   comes back to an address nobody can open. Set it to the address your users type.
+5. **The connector is a tool group, not an always on tool.** After the authorization it appears
+   as one selectable entry (measured: `server:mcp:nextcloud`), and a chat has to switch it on or
+   a model has to be granted it. A chat that was never given the tool answers from the model
+   alone, which looks like a broken connection and is a switch that is off.
+6. **Only an administrator can add the server, and every user signs in separately.** The tool
+   server list is an administrator screen, while the sign in and the token belong to each
+   account: Open WebUI stores one OAuth session per user and per server, and an account that has
+   not signed in gets no token, therefore no `Authorization` header, therefore a `401` from
+   this server. That is the intended behaviour, not a missing bulk setting. It is also the
+   reason the permission promise of this connector survives a shared Open WebUI: every request
+   carries the identity of the person who signed in.
+
 ### Cursor and other clients with a `cursor://` style callback
 
 Cursor is configured by writing `~/.cursor/mcp.json`, no button involved:
