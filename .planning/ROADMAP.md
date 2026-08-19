@@ -210,7 +210,7 @@ Plans:
 **Wave 1**
 
 - [x] 05-01-PLAN.md - Admin-Werte lesen und Admin-Settings-Form registrieren (BL-06, Teil 1) (Wave 1)
-- [ ] 05-03-PLAN.md - Permission-Parity mit Read-only-Share plus Create-only ueber die Kette (SC 3) (Wave 1)
+- [x] 05-03-PLAN.md - Permission-Parity mit Read-only-Share plus Create-only ueber die Kette (SC 3) (Wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -243,7 +243,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. ExApp-Shell | 7/7 | Complete    | 2026-08-15 |
 | 3. OAuth 2.1 | 8/9 | In Progress|  |
 | 4. Per-User-Verwaltung und prepare_context | 4/4 | Complete   | 2026-08-17 |
-| 5. Hardening und Store-Einreichung | 1/10 | In Progress|  |
+| 5. Hardening und Store-Einreichung | 2/10 | In Progress|  |
 
 ## Coverage
 

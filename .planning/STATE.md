@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Plan 05-01 fertig: Admin-Form mit vier Feldern registriert und config_values liest die Werte als NC_MCP_-Overlay (fail soft). Naechstes: Plan 05-02"
-last_updated: "2026-08-19T15:37:47.955Z"
+stopped_at: "Plan 05-03 fertig: Permission-Parity und Create-only live ueber die volle Kette gemessen (5/5 gruen), ensure_readonly_share als Bootstrap-Fixture. Naechstes: Plan 05-04"
+last_updated: "2026-08-19T16:10:46.836Z"
 last_activity: 2026-08-19
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 44
-  completed_plans: 35
+  completed_plans: 36
   percent: 80
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 05 (hardening-und-store-einreichung) — EXECUTING
-Plan: 2 of 10
+Plan: 3 of 10
 Status: Ready to execute
 Last activity: 2026-08-19
 
-Progress: [████████░░] 80%
+Progress: [████████░░] 82%
 
 ## Performance Metrics
 
@@ -88,6 +88,7 @@ Progress: [████████░░] 80%
 | Phase 04 P03 | 70 | 3 tasks | 11 files |
 | Phase 4 P04 | 90 min | 2 tasks | 6 files |
 | Phase 05 P01 | 14 min | 2 tasks tasks | 6 files files |
+| Phase 05 P03 | 25 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -265,6 +266,10 @@ Recent decisions affecting current work:
 - [Phase 05]: Die Vorrangregel Admin-Wert vor NC_MCP_-Env vor Code-Default entsteht durch Auslassen: admin_overlay traegt nur brauchbare Werte, ein leerer oder ungueltiger Wert fehlt einfach
 - [Phase 05]: Die vier Feld-Ids der Admin-Form kommen aus config_values.CONFIG_KEYS, kein Feld traegt sensitive (ICrypto-Blob) und keines ist ein Button (Declarative Settings kennen keinen)
 - [Phase 05]: Die zweite Formular-Registrierung liegt im enabled=1-Zweig in einem eigenen try-Block: ein Fehlschlag der einen Form darf die andere nicht kosten, und /enabled antwortet immer mit leerem error-Feld (Pitfall 11 der Phase 2)
+- [Phase 05]: Permission-Parity braucht eine Asymmetrie in den DATEN: alice teilt einen Ordner read-only mit bob (permissions=1) und eine zweite Datei nie; ein Vergleich zweier gleicher Aufrufe ueber dieselben Schnittstellen waere immer gruen und wuerde nichts beweisen (05-RESEARCH Pitfall 6)
+- [Phase 05]: Die Fixture-Namen werden wie APP_SECRET aus .env.exapp zurueckgelesen und nur beim ersten Mal erzeugt: ein frischer Suffix pro Lauf haette die Instanz mit einer zweiten Freigabe hinterlassen, und der Test haette gemessen, welche die Verbindungsdatei gerade nennt
+- [Phase 05]: Die Fixture-Pfade stehen relativ zur Nutzerwurzel in .env.exapp und nc_status haengt den Statuscode an den Rumpf statt ihn nach /dev/null zu schreiben: Git Bash schreibt exportierte absolute POSIX-Pfade beim Prozessstart um, und mit dem exportierten MSYS_NO_PATHCONV=1 existiert /dev/null fuer curl.exe nicht (beides live gemessen, 05-03-MEASUREMENTS Schritte 4 und 6)
+- [Phase 05]: Die Fixture legt ihre Objekte ueber WebDAV und OCS an, nicht per docker exec ins Datenverzeichnis: eine dort abgelegte Datei hat bis zum naechsten files:scan keine File-Id, und ein Ordner ohne File-Id ist nicht teilbar
 
 ### Pending Todos
 
@@ -275,7 +280,7 @@ Recent decisions affecting current work:
 - **Nextcloud-AIO-Smoke (Phase 5, D-31):** Der zweite Smoke-Schritt aus Success Criterion 1 ist an Phase 5 uebergeben. Er scheitert auf diesem Rechner an AIOs Domain-Validierung (oeffentliche Domain plus gueltiges TLS). Die fehlenden Schritte stehen in docs/exapp-install.md, Abschnitt Nextcloud AIO: Host mit oeffentlicher Domain und Zertifikat, AIO-Mastercontainer starten, optionalen HaRP-Container aktivieren (Annahme A6 unverifiziert), App als ExApp installieren, den Permission-Fidelity-Smoke wiederholen und occ app_api:app:list festhalten.
 - **WR-12 Linux-socat-Loop (Phase 5):** Die Linux-Variante des --manual-Entwicklungsloops (socat auf das Compose-Gateway) ist dokumentiert, aber auf diesem Windows-Host nicht durchgespielt; Entwicklungs-Komfort, nicht der ausgelieferte Pfad.
 - **Browser-Blick auf /settings/user/security (Assumption A1, Phase-4-Verifikation):** Gemessen ist, dass Nextcloud die Link-only-Form ausliefert (forms-Endpoint, Initial-State der Seite, Mount-Punkt `<div id="mcp_connector_mcp_connector_settings">`). Der gerenderte Pixel ist nicht gemessen, im Live-Lauf war kein Browser beteiligt. Schadensfall waere ein fehlender Wegweiser, keine Funktionsstoerung. Details in 04-04-MEASUREMENTS.md, Beweis 1.
-- **ExApp-Topologie:** Nach 04-04 wieder heruntergefahren (`down` mit erhaltenen Volumes, danach `docker stop`/`docker rm nc_app_mcp_connector` und `docker network rm nc-mcp-exapp-net`). Wieder anfahren: `export HP_SHARED_KEY=$(openssl rand -hex 32)` und in DERSELBEN Zeile weiterarbeiten (die Shell-Env ueberlebt einen Aufruf nicht, und jedes `docker compose` gegen diese Datei braucht die Variable), `up -d --wait`, `occ app_api:app:unregister mcp_connector --silent --force`, `occ app_api:daemon:unregister harp_proxy_docker`, dann `bash scripts/bootstrap_exapp.sh` (baut das Image neu und setzt NC_MCP_PUBLIC_URL). Ohne das Neubauen laeuft ein veraltetes Image.
+- **ExApp-Topologie:** Nach 05-03 wieder heruntergefahren (`down` mit erhaltenen Volumes, danach `docker stop`/`docker rm nc_app_mcp_connector` und `docker network rm nc-mcp-exapp-net`). Die Volumes tragen jetzt zusaetzlich die Fixture von 05-03 (read-only geteilter Ordner plus ungeteilte Datei); die zugehoerigen vier Werte stehen in `.env.exapp` und werden beim naechsten Bootstrap wiederverwendet, nicht neu erzeugt. Wieder anfahren: `export HP_SHARED_KEY=$(openssl rand -hex 32)` und in DERSELBEN Zeile weiterarbeiten (die Shell-Env ueberlebt einen Aufruf nicht, und jedes `docker compose` gegen diese Datei braucht die Variable), `up -d --wait`, `occ app_api:app:unregister mcp_connector --silent --force`, `occ app_api:daemon:unregister harp_proxy_docker`, dann `bash scripts/bootstrap_exapp.sh` (baut das Image neu und setzt NC_MCP_PUBLIC_URL). Ohne das Neubauen laeuft ein veraltetes Image.
 - **Aufraeumen (optional):** Die Docker-Testinstanz traegt jetzt zusaetzlich die Calendar-App 6.5.3 und die Abnahme-Artefakte. Fuer einen sauberen Stand: `docker compose -f compose.test.yml down -v` und danach `bash scripts/bootstrap_test_nc.sh`.
 
 ### Blockers/Concerns
@@ -294,6 +299,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-19T15:37:47.938Z
-Stopped at: Plan 05-01 fertig: Admin-Form mit vier Feldern registriert und config_values liest die Werte als NC_MCP_-Overlay (fail soft). Naechstes: Plan 05-02
+Last session: 2026-08-19T16:10:39.737Z
+Stopped at: Plan 05-03 fertig: Permission-Parity und Create-only live ueber die volle Kette gemessen (5/5 gruen), ensure_readonly_share als Bootstrap-Fixture. Naechstes: Plan 05-04
 Resume file: None
