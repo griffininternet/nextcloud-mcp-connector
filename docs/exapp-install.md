@@ -1,7 +1,7 @@
 # ExApp installation
 
 **Status:** proven on a local HaRP topology
-**Measured on:** 2026-08-15
+**Measured on:** 2026-08-15; the credential flood numbers in the Security notes on 2026-08-19
 **Scope:** installing this app as an AppAPI ExApp with the HaRP deploy daemon, on
 `docker compose`, from a locally built image. Nextcloud All-in-One is the second smoke step
 and is handled as a named handoff to phase 5 in the Nextcloud AIO section below.
@@ -28,26 +28,29 @@ installation fails at the very first step, the heartbeat, with "heartbeat check 
 Make sure that Nextcloud instance and ExApp can reach it other." Nextcloud All-in-One ships
 exactly this rule in its bundled Caddy, and `deploy/Caddyfile` rebuilds it.
 
-The app declares twelve routes, and they are its whole external surface. As of phase 3 they
-are these:
+The app declares thirteen routes, and they are its whole external surface. As of phase 4 they
+are these, in the order `appinfo/info.xml` declares them:
 
 | Route | Access | What it is for |
 |-------|--------|----------------|
 | `/mcp` | public | The MCP transport. Public since plan 03-01, because the OAuth discovery flow begins with a 401 that this app has to answer itself; the protection it replaced is a bearer check inside the container. |
 | `/.well-known/oauth-protected-resource/mcp` | public | RFC 9728, the document the 401 points at. |
-| `/.well-known/oauth-authorization-server` | public | RFC 8414, and the rewrite target of the optional reverse proxy rule. |
 | `/.well-known/openid-configuration` | public | The same document at the one path that survives a stripped prefix. |
+| `/.well-known/oauth-authorization-server` | public | RFC 8414, and the rewrite target of the optional reverse proxy rule. |
 | `/connect`, `/connect/wait` | public | The browser onboarding for clients that cannot speak OAuth (AUTH-02). |
 | `/authorize`, `/authorize/consent` | public | The authorization endpoint and the consent screen. |
-| `/authorize/decide` | user | The decision behind the consent screen. The one route that is not public: HaRP resolves the signed in Nextcloud account for it, and the app grants nothing unless that account is the one that signed in (CR-01). |
+| `/authorize/decide` | public | The decision behind the consent screen. It resolves the signed in Nextcloud account out of the AppAPI header HaRP writes on a public route too, and the app grants nothing unless that account is the one that signed in (CR-01). |
 | `/token`, `/register`, `/revoke` | public | The machine endpoints of the authorization server. |
+| `/connections` | public | The per user page of phase 4: it lists the connections of the signed in account and carries the pause switch. Public for the same measured reason as `/authorize/decide`: a `user` route feeds the HaRP blacklist with exactly the rejections this page produces as normal traffic (CR-01). |
 
-Public here means that HaRP does not decide access; every one of these routes carries its
-own check, and `/mcp` refuses any request without a bearer this app issued. The one `user`
-route is the exception in both directions: HaRP refuses it without a Nextcloud session, and
-the app refuses it unless the session belongs to the account whose sign in it decides. The OAuth half
-is configured in [oauth-setup.md](./oauth-setup.md), which also lists the four deploy
-variables the manifest declares.
+Every route is public, and public here means only that HaRP does not decide access. Each one
+carries its own check: `/mcp` refuses any request without a bearer this app issued,
+`/authorize/decide` and `/connections` compare the account HaRP resolved with the account the
+request is about, and the machine endpoints authenticate their client. HaRP signs every
+forwarded request with `AUTHORIZATION-APP-API` and writes the resolved account into it, empty
+when the caller sent no Nextcloud credential, which is why an app can do that check on a
+public route at all. The OAuth half is configured in [oauth-setup.md](./oauth-setup.md), which
+also lists the four deploy variables the manifest declares.
 
 Two more properties of the file are deliberate:
 
@@ -153,8 +156,15 @@ Content-Type: text/plain
 Via: 1.1 Caddy
 ```
 
-The 403 comes from HaRP, not from the app: the route is declared with `access_level` `USER`,
-and HaRP could not resolve a user for the request. The request never reaches the container.
+The 403 comes from HaRP, not from the app: at the time of this run the route was declared with
+`access_level` `USER`, and HaRP could not resolve a user for the request. The request never
+reached the container.
+
+That is the one measurement on this page the manifest has since moved past. Since plan 03-01
+the route is `PUBLIC` and the refusal is the app's own. Measured again on **2026-08-19** with
+the same call, twenty times: `401` every time, and the Nextcloud access log grew by nothing at
+all, because HaRP asks Nextcloud who the caller is only for a request that carries an
+`Authorization` header. The Security notes section below turns that into numbers.
 
 ### 5. The MCP route serves a request with a user app password
 
@@ -310,6 +320,105 @@ is reachable from a network.
 **`.env.exapp` carries working secrets** (app passwords, the HaRP shared key and the app
 secret). It is git-ignored; `.env.exapp.example` documents the variable names and holds
 placeholders only.
+
+### A flood of invalid credentials is amplified against Nextcloud
+
+This is the one abuse case that costs your Nextcloud rather than this app, and the numbers
+below are measured, not estimated. Both runs sent 200 requests to
+`/exapps/mcp_connector/mcp`, 20 in flight, on **2026-08-19** against Nextcloud 34.0.2 with
+AppAPI 34.0.0 and HaRP:
+
+```
+uv run --no-sync pytest tests/integration/test_credential_flood.py -m integration -q -s
+```
+
+| 200 requests with | Answer | Nextcloud requests | Per attacker request | Brute force entries |
+|-------------------|--------|--------------------|----------------------|---------------------|
+| an invalid bearer | 200 x 401 | 200 | 1.00 | 0 |
+| an invalid basic | 200 x 401 | 200 | 1.00 | 27 |
+| no `Authorization` header | 20 x 401 | 0 | 0.00 | 0 |
+
+**Every request that carries any `Authorization` header costs one full Nextcloud PHP round
+trip**, and there is nothing this app can do about it: HaRP resolves the caller for each such
+request with a `GET /index.php/apps/app_api/harp/user-info`, on public routes as well, and it
+caches that answer for cookie sessions only. Our own token check adds nothing to Nextcloud, but
+it does not save the round trip either, and it caches positive results only, so an invalid
+bearer never becomes cheap. The last row is the useful part of the finding: a flood without
+credentials costs Nextcloud nothing, so the rule you write only needs to look at requests that
+carry credentials.
+
+**An invalid basic password additionally throttles your instance for everybody.** Nextcloud
+counts failed logins per source address, and in a HaRP topology that address is HaRP's, not the
+attacker's: the measurement found the entries on the HaRP container address while the gateway,
+the reverse proxy and the ExApp container all stayed at zero. Every user of every ExApp behind
+that proxy therefore shares one brute force counter. The counter also explains the low number
+in the table: once the guard has reached its maximum delay it refuses without checking, so 200
+rejected logins produce 27 entries and the flood becomes cheaper for Nextcloud and more
+expensive for your users at the same time.
+
+**`/mcp` carries no throttle of its own, and that is deliberate.** Rate limiting the actual
+work of this server would be a denial of service with our own name on it (D-37), and the
+manifest declares no `bruteforce_protection` on that route because the OAuth discovery flow
+begins with a rejected request by specification, so a throttle armed on that status would lock
+out legitimate first connections (T-02-21). The authorization endpoints of this app do carry
+their own limits (`oauth/throttle.py`), which is a different problem: those are the routes that
+make this server start a Nextcloud login flow.
+
+**The brake belongs in your reverse proxy**, as a rate limit rule on the
+`/exapps/mcp_connector/` path: that is the only place that can refuse a request before HaRP
+asks Nextcloud about it, and the only place that still knows the address of the client. Set the
+ceiling far above one real session: a single assistant conversation can issue dozens of tool
+calls, and each one is a legitimate request with a valid bearer.
+
+Caddy, with the `rate_limit` module
+(`xcaddy build --with github.com/mholt/caddy-ratelimit`, it is not part of a stock build):
+
+```
+route /exapps/mcp_connector/* {
+	rate_limit {
+		zone mcp_connector {
+			match {
+				header Authorization *
+			}
+			key {remote_host}
+			events 120
+			window 1m
+		}
+	}
+	reverse_proxy appapi-harp:8780
+}
+```
+
+nginx, with the HaRP upstream named `harp`, the same spelling
+[spike-discovery.md](./spike-discovery.md) uses for its rules:
+
+```
+limit_req_zone $binary_remote_addr zone=mcp_connector:10m rate=2r/s;
+
+location ^~ /exapps/mcp_connector/ {
+    limit_req zone=mcp_connector burst=60 nodelay;
+    limit_req_status 429;
+    proxy_pass http://harp:8780;
+    proxy_read_timeout 1800s;
+}
+```
+
+The long read timeout is not optional in the nginx rule: MCP answers stream, and the default
+60 seconds cuts a long tool call.
+
+**Watch the counter and clear it.** Both commands are the ones
+[client-setup.md](./client-setup.md) points a user at when a wrong app password locked an
+address out:
+
+```
+docker compose -f compose.exapp.yml exec -T --user www-data nextcloud php occ security:bruteforce:attempts <ip>
+docker compose -f compose.exapp.yml exec -T --user www-data nextcloud php occ security:bruteforce:reset <ip>
+```
+
+The address to ask about is the one Nextcloud sees, so on a HaRP topology start with the
+address of the HaRP container rather than the address of whoever you suspect. Do not switch the
+brute force protection off on a production instance; the throwaway topology of this document
+does that on purpose because nobody can reach it.
 
 ## Nextcloud AIO
 
