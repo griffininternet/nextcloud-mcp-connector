@@ -90,7 +90,9 @@ SWITCH_OFF = "off"
 logger = logging.getLogger("mcp_connector.exapp.config_values")
 
 
-async def read_values(*, env: Mapping[str, str] | None = None) -> dict[str, str]:
+async def read_values(
+    *, env: Mapping[str, str] | None = None, client: httpx.AsyncClient | None = None
+) -> dict[str, str]:
     """Return the stored admin values as raw strings, or an empty result.
 
     One attempt and no retry loop, like every other outgoing call of this project (D-37).
@@ -104,6 +106,14 @@ async def read_values(*, env: Mapping[str, str] | None = None) -> dict[str, str]
     environment. An answer this module cannot read is nevertheless never counted as "no
     value": it is a failure with a log line, and the deploy environment stays in force
     (fail closed, T-05-02).
+
+    ``client`` exists for one caller and one reason (plan 05-04): ``entry_exapp.main`` reads
+    these values before it serves anything, in an event loop that is closed again as soon as
+    the read returns. :func:`~mcp_connector.nextcloud.http.shared_client` binds its connection
+    pool to the loop it is first used in, so a pool created there would be unusable in the
+    loop uvicorn opens afterwards and its sockets would never be closed. Without the argument
+    nothing changes: every other caller of this module runs inside the server loop and uses the
+    shared client, exactly as it did before.
     """
     try:
         settings = config.exapp_settings(env)
@@ -117,7 +127,8 @@ async def read_values(*, env: Mapping[str, str] | None = None) -> dict[str, str]
         return {}
 
     url = f"{settings.base_url}{EXAPP_CONFIG_PATH}{CONFIG_READ_SUFFIX}"
-    client = shared_client()
+    if client is None:
+        client = shared_client()
     try:
         response = await client.post(
             url,
@@ -151,7 +162,9 @@ async def read_values(*, env: Mapping[str, str] | None = None) -> dict[str, str]
     return values
 
 
-async def admin_overlay(*, env: Mapping[str, str] | None = None) -> dict[str, str]:
+async def admin_overlay(
+    *, env: Mapping[str, str] | None = None, client: httpx.AsyncClient | None = None
+) -> dict[str, str]:
     """Return the usable admin values, keyed by the variable name they stand for.
 
     Only keys with a value that survives validation appear. A blank value counts as unset,
@@ -159,8 +172,11 @@ async def admin_overlay(*, env: Mapping[str, str] | None = None) -> dict[str, st
     administrator left a field empty.
 
     Validation is per key, so a typo in one field is never an outage of the other three.
+
+    ``client`` is passed straight through to :func:`read_values`, where the one reason it
+    exists is written down.
     """
-    values = await read_values(env=env)
+    values = await read_values(env=env, client=client)
 
     overlay: dict[str, str] = {}
     for key in CONFIG_KEYS:

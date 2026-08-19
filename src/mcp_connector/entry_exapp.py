@@ -14,10 +14,12 @@ credential channel in the environment is not a convenience but the silent fallba
 forbids: ``main`` refuses to start when one is configured.
 """
 
+import asyncio
 import logging
 import os
 from collections.abc import Mapping
 
+import httpx
 import uvicorn
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
@@ -25,9 +27,11 @@ from starlette.routing import Route
 
 from . import config
 from .errors import ToolError
+from .exapp import config_values
 from .exapp.lifecycle import lifecycle_routes
 from .exapp.middleware import RequireAppApi
-from .nextcloud.http import configure_logging
+from .exapp.ui import strings
+from .nextcloud.http import USER_AGENT, NoCookieJar, configure_logging
 from .oauth import throttle
 from .oauth.connect import connect_routes
 from .oauth.connections import connections_routes
@@ -192,6 +196,68 @@ def _warn_when_the_host_check_is_a_trap(env: Mapping[str, str] | None = None) ->
     )
 
 
+def _startup_client() -> httpx.AsyncClient:
+    """A client for the one call this process makes before it serves anything.
+
+    Deliberately not :func:`~mcp_connector.nextcloud.http.shared_client`: that one binds its
+    connection pool to the event loop it is first used in, and the loop of the start time read
+    is closed again as soon as :func:`asyncio.run` returns. A pool left behind in a dead loop
+    is unusable in the loop uvicorn opens afterwards, and its sockets would never be closed
+    either. The properties are the ones of the shared client, and a check in
+    ``tests/unit/test_exapp_entry.py`` holds them equal so the two cannot drift apart: no
+    redirects, the same timeouts, no cookie jar and our user agent.
+    """
+    return httpx.AsyncClient(
+        timeout=httpx.Timeout(10.0, connect=5.0, read=30.0),
+        follow_redirects=False,
+        headers={"User-Agent": USER_AGENT},
+        cookies=NoCookieJar(),
+    )
+
+
+async def _admin_values(env: Mapping[str, str]) -> dict[str, str]:
+    """The admin values of this installation, over a client that dies with this loop."""
+    async with _startup_client() as client:
+        return await config_values.admin_overlay(env=env, client=client)
+
+
+def _resolved_env() -> dict[str, str]:
+    """The deploy environment with the values an administrator set in Nextcloud on top.
+
+    Resolved exactly once, here, and handed to every factory as a plain mapping. The
+    alternative would be a read per request, and it is refused for three reasons.
+    ``config.public_url`` is synchronous and pure, and every one of its callers
+    (``metadata.py``, ``consent.py``, ``settings_form.py``, ``admin_settings.py`` and every
+    form action of every page) would have to change signature to await something. A process
+    wide cache with an expiry would be mutable module state, which D-20 forbids with exactly
+    two named exceptions. And a read per request would be a second Nextcloud round trip on
+    every request, which is the property SC 5 of phase 3 measured.
+
+    The price is one step for the administrator: a changed value takes effect after the app is
+    disabled and enabled again. That price is named in the description of the form field
+    (plan 05-01), in the setup state of the connections page and in ``docs/oauth-setup.md``,
+    and it is not hidden anywhere.
+
+    Nothing is read outside the ExApp mode: without the AppAPI variables there is no channel
+    to read over. A failure of the read is an empty overlay, so the deploy environment of an
+    existing installation keeps working exactly as it did (T-05-20).
+    """
+    env = dict(os.environ)
+    if not config.exapp_configured(env):
+        return env
+
+    overlay = asyncio.run(_admin_values(env))
+    if overlay:
+        # The names of the keys, never their values: they arrived over HTTP and one of them is
+        # a list of client addresses (T-05-21). An administrator needs to see which source won.
+        logger.info(
+            "these values come from the administration settings of this app and win over the "
+            "deploy environment: %s",
+            ", ".join(sorted(overlay)),
+        )
+    return {**env, **overlay}
+
+
 def main() -> None:
     """Validate the deploy environment, then serve until the container stops."""
     configure_logging()
@@ -206,52 +272,72 @@ def main() -> None:
             )
             raise SystemExit(2)
 
+    # Everything below reads this mapping and never os.environ again: the values an
+    # administrator set in Nextcloud are part of the environment of this process from here on
+    # (plan 05-04). The read happens after the refusal above, so a misconfigured process never
+    # opens a socket, and before every check, so the checks judge the values that will be used.
+    env = _resolved_env()
+
     try:
-        config.exapp_settings()
+        config.exapp_settings(env)
         # The place the OAuth store writes to, checked before the first request and not on
         # the first authorization: a missing or read only volume answers every question
         # correctly until the container restarts and then has lost every connection
         # (pitfall 12, T-03-15). The data key is not fetched here; that needs a running
         # event loop and a reachable Nextcloud, and the store asks for it when it opens.
-        config.persistent_storage()
-        # The one value an installation has to set, and the one whose absence was invisible
-        # (WR-09). It becomes the issuer, the audience of every token, the resource_metadata
-        # pointer, the prefix of every form action and the target of the consent redirect.
-        # Missing, the container came up green, answered every document, and sent every
-        # browser to the loopback default, which is a working installation for nobody. It is
-        # checked here rather than earlier so the two neighbours keep their order in the log:
-        # an operator fixes the deploy environment top down.
-        if config.exapp_configured() and not (os.environ.get(config.ENV_PUBLIC_URL) or "").strip():
+        config.persistent_storage(env)
+        # The one value an installation has to set (WR-09). It becomes the issuer, the audience
+        # of every token, the resource_metadata pointer, the prefix of every form action and
+        # the target of the consent redirect.
+        #
+        # Until plan 05-04 this was SystemExit(2), and that exit was the deadlock of a one
+        # click installation: a store install in NC 34 sets no variable at all (05-RESEARCH,
+        # pitfall 2), the process died on start, the app therefore never became `enabled`, the
+        # enabled=1 hook never registered the admin form, and the administrator had no place to
+        # enter the missing address. So the promise "no silent misconfiguration" is not kept by
+        # refusing to run any more. It is kept by this error line and by the visible setup state
+        # on the connections page, while the process stays alive long enough to be configured.
+        #
+        # No address is derived from NEXTCLOUD_URL here, deliberately (assumption A2): AppAPI
+        # sets that variable with https replaced by http and it may be an internal address. A
+        # derived value would be a silent default with broken discovery, which looks exactly
+        # like a configured installation and is the failure this plan removes.
+        if config.exapp_configured(env) and not (env.get(config.ENV_PUBLIC_URL) or "").strip():
+            app_id = (env.get(config.ENV_APP_ID) or "").strip()
             logger.error(
-                "%s is not set. The authorization server calls itself by it: without it "
-                "every discovery document, the audience of every token and the consent "
-                "redirect name %s, and no client can connect. Declare it in the deploy "
-                "environment (appinfo/info.xml, docs/oauth-setup.md).",
+                "%s is not set and no public address is stored in Nextcloud either. Until one "
+                "is, every discovery document, the audience of every token and the consent "
+                'redirect name %s, and no client can connect. Set it in "%s", then disable '
+                "and enable this app again (occ app_api:app:disable %s, "
+                "occ app_api:app:enable %s). This process keeps serving on purpose, so that "
+                "form exists at all; the connections page says the same thing.",
                 config.ENV_PUBLIC_URL,
                 config.DEFAULT_PUBLIC_URL,
+                strings.ADMIN_SETTINGS_PLACE,
+                app_id,
+                app_id,
             )
-            raise SystemExit(2)
         # The public URL is what the authorization server calls itself, and the SDK refuses
         # an issuer that is not https unless it is loopback. Building the application here
         # turns that refusal into the same named exit as a missing volume, instead of into
         # a traceback in a container log.
-        app = build_exapp_app()
+        app = build_exapp_app(env)
     except ToolError as exc:
         logger.error("%s %s", exc.message, exc.hint)
         raise SystemExit(2) from None
 
-    if (os.environ.get(config.ENV_HP_SHARED_KEY) or "").strip():
+    if (env.get(config.ENV_HP_SHARED_KEY) or "").strip():
         # HaRP with the FRP tunnel: the unix socket is the transport, frpc runs beside us.
-        socket_path = os.environ.get(config.ENV_HP_EXAPP_SOCK) or DEFAULT_EXAPP_SOCK
+        socket_path = env.get(config.ENV_HP_EXAPP_SOCK) or DEFAULT_EXAPP_SOCK
         logger.info("MCP Connector is serving as an ExApp on %s", socket_path)
         uvicorn.run(app, uds=socket_path)
         return
 
-    _warn_when_the_host_check_is_a_trap()
+    _warn_when_the_host_check_is_a_trap(env)
 
-    host = os.environ.get(config.ENV_APP_HOST) or "127.0.0.1"
+    host = env.get(config.ENV_APP_HOST) or "127.0.0.1"
     try:
-        port = int(os.environ[config.ENV_APP_PORT])
+        port = int(env[config.ENV_APP_PORT])
     except (KeyError, ValueError):
         logger.error(
             "%s is not set to a port number. The AppAPI deploy daemon sets it when it "
