@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: "Phase 4 komplett: 04-04 fertig, EXAPP-02 abgehakt, fünf Live-Beweise in 04-04-MEASUREMENTS.md protokolliert (Settings-Wegweiser, Schalter-Kette live, SC 5 unverändert, /connections von außen, prepare_context 0,84 s kurz und 0,99 s voll). Nächstes: Phase-4-Verifikation"
-last_updated: "2026-08-19T15:13:36.748Z"
-last_activity: 2026-08-19 -- Phase 5 planning complete
+last_updated: "2026-08-19T15:17:15.964Z"
+last_activity: 2026-08-19 -- Phase 05 execution started
 progress:
   total_phases: 5
   completed_phases: 4
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-14)
 
 **Core value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Current focus:** Phase 4, Per-User-Verwaltung und prepare_context
+**Current focus:** Phase 05 — hardening-und-store-einreichung
 
 ## Current Position
 
-Phase: 4
-Plan: 4 of 4
-Status: Ready to execute
-Last activity: 2026-08-19 -- Phase 5 planning complete
+Phase: 05 (hardening-und-store-einreichung) — EXECUTING
+Plan: 1 of 10
+Status: Executing Phase 05
+Last activity: 2026-08-19 -- Phase 05 execution started
 
 Progress: [██████████] 100%
 
