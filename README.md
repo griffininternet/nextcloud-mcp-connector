@@ -24,8 +24,8 @@ License: AGPL-3.0-or-later. App id, package names and repository name are frozen
 
 ## Status
 
-Version 0.1.0, listed in the Nextcloud App Store and installable as a Nextcloud ExApp through
-AppAPI. What is in place today, and where each of these claims is written down:
+Version 0.1.1. The app is listed in the Nextcloud App Store and installable as a Nextcloud ExApp
+through AppAPI. What is in place today, and where each of these claims is written down:
 
 - All 16 tools of the v1 set are implemented, and the tool table below is no longer maintained
   by hand: a contract test reads the live tool registry and fails if a name or a permission

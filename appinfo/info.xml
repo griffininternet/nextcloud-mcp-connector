@@ -56,7 +56,7 @@ Le connecteur lui-même n'envoie aucune télémétrie et n'appelle aucun tiers. 
 
 D'autres réponses, notamment sur la façon dont un administrateur supprime l'application et ses données : [questions fréquentes](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/faq.md) et [confidentialité et flux de données](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/privacy.md), les deux en anglais.
 	]]></description>
-	<version>0.1.0</version>
+	<version>0.1.1</version>
 	<licence>agpl</licence>
 	<author mail="k.cherif@outlook.de">street1983nk</author>
 	<namespace>McpConnector</namespace>
@@ -75,13 +75,25 @@ D'autres réponses, notamment sur la façon dont un administrateur supprime l'ap
 	<external-app>
 		<docker-install>
 			<!--
-			  - The image is not published before phase 5 (D-25: the CI builds it, nothing
-			  - pushes it). Until then the local test registers the app with the json-info
-			  - option of occ app_api:app:register, see plan 02-04.
+			  - The image is published. It lies on ghcr.io, it is pullable anonymously, and it
+			  - is a real multi arch index with linux/amd64 and linux/arm64: measured against
+			  - the registry API for 0.1.0 on 2026-08-19 and again for every release by the
+			  - runbook in docs/store-submission.md.
+			  -
+			  - The tag follows the version, and that is not a convention: AppAPI pulls exactly
+			  - the tag named here, so the version element above, this tag and the git tag
+			  - have to be the same string. The release workflow refuses a tag push whose tag
+			  - disagrees with the version element, and tests/unit/test_exapp_env_setup.py
+			  - refuses a manifest whose image tag disagrees with it.
+			  -
+			  - Do not write the name of the version element with its angle brackets into a
+			  - comment here: scripts/build_store_release.sh and .github/workflows/release.yml
+			  - both read the version with a grep for that opening tag, and a comment that
+			  - repeats it makes both of them read the comment instead.
 			-->
 			<registry>ghcr.io</registry>
 			<image>street1983nk/mcp_connector</image>
-			<image-tag>0.1.0</image-tag>
+			<image-tag>0.1.1</image-tag>
 		</docker-install>
 		<!--
 		  - Exactly thirteen routes, and they are the whole external attack surface of this app.

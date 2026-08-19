@@ -27,8 +27,9 @@ Licence : AGPL-3.0-or-later. L'app id, les noms de paquets et le nom du dépôt 
 
 ## Statut
 
-Version 0.1.0, référencée dans l'App Store de Nextcloud et installable comme ExApp Nextcloud via
-AppAPI. Ce qui est en place aujourd'hui, et où chacune de ces affirmations est consignée :
+Version 0.1.1. L'application est référencée dans l'App Store de Nextcloud et installable comme
+ExApp Nextcloud via AppAPI. Ce qui est en place aujourd'hui, et où chacune de ces affirmations est
+consignée :
 
 - Les 16 outils de l'ensemble v1 sont implémentés, et le tableau des outils ci-dessous n'est plus
   maintenu à la main : un test de contrat lit le registre d'outils en direct et échoue si un nom
