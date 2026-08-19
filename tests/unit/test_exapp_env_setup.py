@@ -22,6 +22,7 @@ import ipaddress
 import re
 import shutil
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -53,6 +54,17 @@ CONTAINER_FILES = (DOCKERFILE, ENTRYPOINT, START, HEALTHCHECK)
 #: reference to the other compose file could take down an instance somebody is using
 #: (T-02-34).
 TOPOLOGY_FILES = (COMPOSE_EXAPP, CADDYFILE, BOOTSTRAP)
+
+#: What the read-only share fixture of plan 05-03 hands to the permission parity test
+#: through the connection file. All four are paths or markers, no secret among them: the
+#: asymmetry of that test lives in these objects, and a name that never reaches the file
+#: turns the test into a silent skip rather than a failure.
+SHARE_ENV_NAMES = (
+    "NC_MCP_TEST_SHARED_DIR",
+    "NC_MCP_TEST_SHARED_FILE",
+    "NC_MCP_TEST_PRIVATE_FILE",
+    "NC_MCP_TEST_SHARED_MARKER",
+)
 
 #: Names that must never be baked into a layer: they are secrets, or they are the second
 #: credential channel the ExApp mode refuses to have (T-02-23, D-27).
@@ -333,6 +345,83 @@ def shell_function(name: str, path: Path | None = None) -> str:
     start = text.index(opening)
     end = text.index("\n}\n", start)
     return text[start + 1 : end + 3]
+
+
+def function_body(text: str, name: str) -> str:
+    """The body of one shell function, cut out of a script text instead of a file.
+
+    ``shell_function`` above reads the checked in script; this one works on a string, which
+    is what the counter probe of the share gate needs: it manipulates the text in memory and
+    the gate has to fire on the manipulated copy without a temporary file anywhere.
+    """
+    opening = f"\n{name}() {{\n"
+    if opening not in text:
+        return ""
+    start = text.index(opening)
+    end = text.index("\n}\n", start)
+    return text[start : end + 3]
+
+
+def env_heredoc(text: str) -> str:
+    """The block the bootstrap writes into the connection file, without the rest of it."""
+    opening = 'cat >"${ENV_FILE}" <<EOF\n'
+    if opening not in text:
+        return ""
+    start = text.index(opening)
+    return text[start : text.index("\nEOF\n", start)]
+
+
+def share_fixture_problems(text: str) -> list[str]:
+    """Every reason the read-only share fixture would not prove what plan 05-03 claims.
+
+    Written as one function over the script text, the same shape ``manifest_problems`` uses,
+    so the counter probe below can feed it a deliberately broken copy and show that the gate
+    actually fires. Each problem names what is wrong, because a gate that only says "False"
+    costs the next reader the whole script.
+    """
+    problems: list[str] = []
+    body = function_body(text, "ensure_readonly_share")
+    if not body:
+        problems.append("the bootstrap does not define ensure_readonly_share")
+
+    call = text.find("\nensure_readonly_share alice")
+    passwords = text.find('ALICE_APP_PASSWORD="$(app_password')
+    if call < 0:
+        problems.append("ensure_readonly_share is never called in the main part")
+    elif passwords < 0:
+        problems.append("the app password block moved, so the call order cannot be checked")
+    elif call > passwords:
+        problems.append("ensure_readonly_share runs after the app password block")
+
+    permissions = re.findall(r'-d "permissions=(\d+)"', text)
+    if not permissions:
+        problems.append("the share is created without a permissions value")
+    for value in permissions:
+        if value != "1":
+            problems.append(f"the share is created with permissions={value}, which is not read")
+    if '-d "shareType=0"' not in text:
+        problems.append("the share is not created as a user share (shareType=0)")
+    if '-d "shareWith=' not in text:
+        problems.append("the share names no recipient (shareWith)")
+    for header in ('"OCS-APIRequest: true"', '"Accept: application/json"'):
+        if header not in text:
+            problems.append(f"the share call does not send {header}")
+    if "shareapi_auto_accept_share --value=yes" not in text:
+        problems.append("the share is not auto accepted, so it waits in the recipient's inbox")
+
+    if body:
+        if "share_is_readonly_for" not in body:
+            problems.append("the fixture never reads the share back, so it assumes instead")
+        if "PROPFIND" not in body or "207" not in body:
+            problems.append("the fixture never proves that the recipient's home carries it")
+
+    heredoc = env_heredoc(text)
+    if not heredoc:
+        problems.append("the connection file is not written from a heredoc any more")
+    for name in SHARE_ENV_NAMES:
+        if f"\n{name}=" not in heredoc:
+            problems.append(f"{name} is not written into the connection file")
+    return problems
 
 
 def find_bash() -> str | None:
@@ -1159,6 +1248,138 @@ def test_the_bootstrap_calls_both_registration_validators() -> None:
         'require_registry_shape "${REGISTRY}"',
     ):
         assert call in text, f"the bootstrap never runs {call!r}"
+
+
+# --- the third data layer of the permission parity proof (plan 05-03) --------------
+
+
+def test_the_bootstrap_builds_the_read_only_share_with_proof() -> None:
+    """SC 3 of this phase needs an asymmetry Nextcloud enforces, not one we assert.
+
+    alice and bob alone only carry a leak test. The folder alice shares with bob read-only
+    and the file she never shares are what make four non tautological statements measurable
+    at all (05-RESEARCH.md, pitfall 6), and permissions=1 is what makes the refused upload a
+    statement about Nextcloud's ACLs instead of a statement about our own tool.
+    """
+    assert share_fixture_problems(BOOTSTRAP.read_text(encoding="utf-8")) == []
+
+
+@pytest.mark.parametrize(
+    ("break_it", "expected"),
+    [
+        (
+            lambda text: text.replace("\nensure_readonly_share() {\n", "\nensure_nothing() {\n"),
+            "does not define ensure_readonly_share",
+        ),
+        (
+            lambda text: text.replace("\nensure_readonly_share alice", "\n# no share here"),
+            "never called in the main part",
+        ),
+        (
+            lambda text: text.replace('-d "permissions=1"', '-d "permissions=31"'),
+            "permissions=31",
+        ),
+        (
+            lambda text: text.replace('-d "shareType=0"', '-d "shareType=3"'),
+            "not created as a user share",
+        ),
+        (
+            lambda text: text.replace(
+                "shareapi_auto_accept_share --value=yes",
+                "shareapi_auto_accept_share --value=no",
+            ),
+            "waits in the recipient's inbox",
+        ),
+        (
+            lambda text: text.replace('share_is_readonly_for "$owner" "$owner_password"', "true"),
+            "assumes instead",
+        ),
+        (
+            lambda text: text.replace("PROPFIND \\\n", "GET \\\n"),
+            "never proves that the recipient's home carries it",
+        ),
+        (
+            lambda text: text.replace("NC_MCP_TEST_SHARED_FILE=", "SHARED_FILE_UNUSED="),
+            "NC_MCP_TEST_SHARED_FILE is not written",
+        ),
+        (
+            lambda text: text.replace('cat >"${ENV_FILE}" <<EOF\n', 'echo "no file" # '),
+            "not written from a heredoc",
+        ),
+    ],
+    ids=[
+        "no fixture function",
+        "a fixture nobody calls",
+        "a share that may be written to",
+        "a share that is not a user share",
+        "a share the recipient has to accept first",
+        "a share that is assumed instead of read back",
+        "a recipient whose home is never looked at",
+        "a path the test never learns about",
+        "a connection file that is not written",
+    ],
+)
+def test_the_share_gate_fires_on_a_manipulated_script(
+    break_it: Callable[[str], str], expected: str
+) -> None:
+    """The counter probe: without it the gate above could be green because it checks nothing.
+
+    Each manipulation is one way the fixture would stop proving something while still looking
+    complete, and the most dangerous one is the third: a share with write permission turns the
+    refused upload into a green result that says nothing at all.
+    """
+    manipulated = break_it(BOOTSTRAP.read_text(encoding="utf-8"))
+    assert manipulated != BOOTSTRAP.read_text(encoding="utf-8"), (
+        "the manipulation changed nothing, so the script no longer has the shape it edits"
+    )
+
+    problems = share_fixture_problems(manipulated)
+
+    assert any(expected in problem for problem in problems), problems
+
+
+def test_the_share_fixture_pins_its_names_across_runs() -> None:
+    """A fresh suffix per run would leave a second folder and a second share behind, and the
+    test would then measure whichever of them the current connection file happens to name.
+    Same reasoning as APP_SECRET, and the same shape: read the existing value, validate it,
+    generate only when there is none."""
+    body = shell_function("share_suffix")
+    assert "NC_MCP_TEST_SHARED_DIR=" in body, "the suffix is not read back from the env file"
+    assert "openssl rand -hex 5" in body, "there is no fresh suffix for a first run"
+    assert "[0-9a-f]{10}" in body, "a hand written suffix would be adopted unchecked"
+
+
+@needs_bash
+@pytest.mark.parametrize(
+    ("stored", "expected"),
+    [
+        ("NC_MCP_TEST_SHARED_DIR=/mcp-share-0123456789\n", "0123456789"),
+        ("NC_MCP_TEST_SHARED_DIR=/mcp-share-not-hex\n", ""),
+        ("NC_MCP_TEST_SHARED_DIR=\n", ""),
+        ("", ""),
+    ],
+    ids=["a pinned suffix", "a broken suffix", "an empty value", "no connection file yet"],
+)
+def test_the_pinned_suffix_is_reused_and_a_broken_one_is_replaced(
+    tmp_path: Path, stored: str, expected: str
+) -> None:
+    env_file = tmp_path / ".env.exapp"
+    if stored:
+        env_file.write_text(stored, encoding="utf-8", newline="\n")
+    script = (
+        "set -euo pipefail\n"
+        f'ENV_FILE="{env_file.as_posix()}"\n'
+        f"{shell_function('share_suffix')}\n"
+        "share_suffix\n"
+    )
+
+    result = run_bash(script)
+
+    assert result.returncode == 0, result.stderr
+    if expected:
+        assert result.stdout.strip() == expected
+    else:
+        assert re.fullmatch(r"[0-9a-f]{10}", result.stdout.strip()), result.stdout
 
 
 @pytest.mark.parametrize(

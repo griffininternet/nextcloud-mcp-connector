@@ -333,6 +333,167 @@ ensure_files_home() {
   fi
 }
 
+# --- the third data layer: a read-only share (plan 05-03) ---------------------------
+#
+# alice and bob alone can only prove a leak: bob does not see what alice has. Success
+# criterion 3 of this phase also asks what bob DOES see, and where Nextcloud stops him
+# anyway, and both need an asymmetry that lives in the data rather than in the comparison
+# (05-RESEARCH.md, pitfall 6):
+#
+#   * a folder of alice, shared with bob read-only, with one marked file in it, and
+#   * a second marked file of alice that is never shared with anybody.
+#
+# Then five statements are measurable and none of them is a tautology: bob finds the shared
+# file, he does not find the private one, he reads the shared one, he cannot write into the
+# read-only folder although our upload tool is create-only, and a second upload on a path
+# that exists is refused. The fourth is where permission parity and the create-only promise
+# meet at a boundary Nextcloud draws and we do not.
+#
+# Everything below is created over WebDAV and OCS with alice's own account password, never
+# by writing into the data directory the way ensure_files_home has to: a file placed there
+# carries no file id until the next files:scan, and a folder without a file id cannot be
+# shared at all.
+
+# The unique suffix every name of the fixture carries, pinned across runs exactly like
+# APP_SECRET and for a comparable reason: a fresh suffix on a second run would leave the
+# instance with a second folder and a second share, and the test would then measure whichever
+# of them the current .env.exapp happens to name. Ten hex characters, so a marker can never
+# collide with the neutral skeleton file ensure_files_home leaves behind.
+share_suffix() {
+  local existing=""
+  if [ -f "${ENV_FILE}" ]; then
+    existing="$(sed -n 's|^NC_MCP_TEST_SHARED_DIR=/mcp-share-||p' "${ENV_FILE}" |
+      head -n1 | tr -d '\r')"
+  fi
+  if printf '%s' "$existing" | grep -Eq '^[0-9a-f]{10}$'; then
+    printf '%s' "$existing"
+    return 0
+  fi
+  openssl rand -hex 5
+}
+
+dav_url() {
+  printf '%s/remote.php/dav/files/%s%s' "${BASE_URL}" "$1" "$2"
+}
+
+# One authenticated request, with the HTTP status as its only output. The password travels
+# through a curl config file on stdin (WR-06): `-u user:password` would sit in the world
+# readable argv of curl for the whole duration of every request, and a temporary file would
+# have to be cleaned up on every exit path. A failed connection prints 000 and never stops
+# the caller, because every caller here decides on the status code itself.
+nc_status() {
+  local user="$1" password="$2" method="$3" url="$4"
+  shift 4
+  printf 'user = "%s:%s"\n' "$user" "$password" |
+    curl -sS --config - -o /dev/null -w '%{http_code}' -X "$method" "$@" "$url" || true
+}
+
+# Same request, but the body instead of the status: the share proof reads the answer.
+nc_body() {
+  local user="$1" password="$2" method="$3" url="$4"
+  shift 4
+  printf 'user = "%s:%s"\n' "$user" "$password" |
+    curl -sS --config - -X "$method" "$@" "$url" || true
+}
+
+# Create-only, deliberately: a second run must not overwrite the file whose content the
+# parity test asserts, and 412 is Nextcloud saying the file is already exactly where it
+# belongs. The marker is written into the content as well as into the name, so a read that
+# returns an empty body cannot pass for a successful read.
+put_marked_file() {
+  local user="$1" password="$2" path="$3" marker="$4" status
+  status="$(nc_status "$user" "$password" PUT "$(dav_url "$user" "$path")" \
+    -H "If-None-Match: *" -H "Content-Type: text/markdown" \
+    --data-binary "# ${marker} (fixture of scripts/bootstrap_exapp.sh, plan 05-03)")"
+  case "$status" in
+    201 | 204)
+      echo "file ${user}${path}: created"
+      ;;
+    412)
+      echo "file ${user}${path}: already there"
+      ;;
+    *)
+      echo "ERROR: PUT ${path} as ${user} answered ${status}." >&2
+      return 1
+      ;;
+  esac
+}
+
+# permissions=1 is exactly read (1 read, 2 update, 4 create, 8 delete, 16 reshare). Any
+# higher value would take the meaning out of the upload refusal the parity test measures,
+# which is why the unit gate in tests/unit/test_exapp_env_setup.py pins this literal.
+create_readonly_share() {
+  local owner="$1" password="$2" recipient="$3"
+  nc_body "$owner" "$password" POST \
+    "${BASE_URL}/ocs/v2.php/apps/files_sharing/api/v1/shares" \
+    -H "OCS-APIRequest: true" -H "Accept: application/json" \
+    -d "path=${SHARED_DIR}" \
+    -d "shareType=0" \
+    -d "shareWith=${recipient}" \
+    -d "permissions=1" >/dev/null
+}
+
+# Proof instead of assumption, the same rule ensure_calendar follows: the share counts as
+# present only when the API lists exactly one share of that folder, it names the recipient,
+# and its permission value is 1. A create that failed transiently must never pass as
+# "already there", and a share that silently carries write permission must never pass at all.
+share_is_readonly_for() {
+  local owner="$1" password="$2" recipient="$3" body recipients permissions
+  body="$(nc_body "$owner" "$password" GET \
+    "${BASE_URL}/ocs/v2.php/apps/files_sharing/api/v1/shares?path=${SHARED_DIR}" \
+    -H "OCS-APIRequest: true" -H "Accept: application/json")"
+  recipients="$(printf '%s' "$body" | grep -o '"share_with":"[^"]*"' | sort -u || true)"
+  permissions="$(printf '%s' "$body" | grep -o '"permissions":[0-9]*' | sort -u || true)"
+  [ "$recipients" = "\"share_with\":\"${recipient}\"" ] &&
+    [ "$permissions" = '"permissions":1' ]
+}
+
+ensure_readonly_share() {
+  local owner="$1" owner_password="$2" recipient="$3" recipient_password="$4"
+  local status attempt propfind
+  status="$(nc_status "$owner" "$owner_password" MKCOL "$(dav_url "$owner" "${SHARED_DIR}")")"
+  case "$status" in
+    201)
+      echo "share folder ${SHARED_DIR}: created"
+      ;;
+    405)
+      echo "share folder ${SHARED_DIR}: already there"
+      ;;
+    *)
+      echo "ERROR: MKCOL ${SHARED_DIR} as ${owner} answered ${status}." >&2
+      echo "Is the topology up and reachable under ${BASE_URL}?" >&2
+      return 1
+      ;;
+  esac
+  put_marked_file "$owner" "$owner_password" "${SHARED_FILE}" "${SHARED_MARKER}" || return 1
+  put_marked_file "$owner" "$owner_password" "${PRIVATE_FILE}" "${PRIVATE_MARKER}" || return 1
+
+  # Without this the share waits in bob's "pending shares" and his home does not carry the
+  # folder at all, so every statement about it would measure the missing acceptance step
+  # instead of the permission boundary.
+  occ config:app:set core shareapi_auto_accept_share --value=yes >/dev/null
+  echo "share auto accept: on (test instance)"
+
+  # Same shape as ensure_calendar: retry the create until both proofs stand, with a hard
+  # timeout instead of a single look.
+  for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+    if share_is_readonly_for "$owner" "$owner_password" "$recipient"; then
+      propfind="$(nc_status "$recipient" "$recipient_password" PROPFIND \
+        "$(dav_url "$recipient" "${SHARED_DIR}")" -H "Depth: 0")"
+      if [ "$propfind" = "207" ]; then
+        echo "read-only share ${SHARED_DIR} to ${recipient}: present (attempt ${attempt})"
+        return 0
+      fi
+    else
+      create_readonly_share "$owner" "$owner_password" "$recipient" || true
+    fi
+    sleep 5
+  done
+  echo "ERROR: ${owner} could not share ${SHARED_DIR} read-only with ${recipient} in 60s." >&2
+  echo "Check the shares of that folder: ${BASE_URL}/apps/files" >&2
+  return 1
+}
+
 app_password() {
   local uid="$1" password="$2" raw token
   raw="$(occ_pw "$password" user:auth-tokens:add "$uid" --password-from-env --name "$TOKEN_NAME")"
@@ -658,6 +819,16 @@ ensure_calendar bob personal
 ensure_files_home alice
 ensure_files_home bob
 
+# The third data layer of success criterion 3 (see the block above ensure_readonly_share).
+# All names carry the same pinned suffix, so a second run works on the same objects.
+SHARE_SUFFIX="$(share_suffix)"
+SHARED_DIR="/mcp-share-${SHARE_SUFFIX}"
+SHARED_MARKER="mcp-shared-file-${SHARE_SUFFIX}"
+SHARED_FILE="${SHARED_DIR}/${SHARED_MARKER}.md"
+PRIVATE_MARKER="mcp-private-${SHARE_SUFFIX}"
+PRIVATE_FILE="/${PRIVATE_MARKER}.md"
+ensure_readonly_share alice "${ALICE_PASSWORD}" bob "${BOB_PASSWORD}"
+
 # Nextcloud counts failed logins per source IP, and a remote MCP server is one IP for many
 # users. The negative tests produce 401s on purpose, so the guard would throttle the whole
 # run and hand us random 429s (research pitfall 8). Test instance only, never a
@@ -703,6 +874,14 @@ NC_MCP_TEST_USER=alice
 NC_MCP_TEST_APP_PASSWORD=${ALICE_APP_PASSWORD}
 NC_MCP_TEST_USER2=bob
 NC_MCP_TEST_APP_PASSWORD2=${BOB_APP_PASSWORD}
+# The read-only share of plan 05-03, as paths relative to the root of each user: alice owns
+# both, bob sees the folder and the file in it and never the private one. The marker is in
+# the name and in the content of the shared file, so a search hit and a read can be asserted
+# on the same string. tests/integration/test_permission_parity_share.py skips without them.
+NC_MCP_TEST_SHARED_DIR=${SHARED_DIR}
+NC_MCP_TEST_SHARED_FILE=${SHARED_FILE}
+NC_MCP_TEST_PRIVATE_FILE=${PRIVATE_FILE}
+NC_MCP_TEST_SHARED_MARKER=${SHARED_MARKER}
 # The account passwords of the two throwaway users. The OAuth flow check of plan 03-08
 # needs them because it walks the Nextcloud sign in of the Login Flow v2 without a
 # browser; nothing in src/ ever reads a user password, and this file is git-ignored.
