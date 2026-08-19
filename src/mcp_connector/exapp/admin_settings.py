@@ -1,0 +1,163 @@
+"""The administration form of BL-06: four values a store installation needs.
+
+Built like :mod:`mcp_connector.exapp.settings_form`, which is the one to one model for the
+transport, the app context and the error model. Four things differ, and they are the whole
+content of this module: a second form id, ``section_type: "admin"``, a filled ``fields`` and
+the fact that the values of this form do reach the ExApp.
+
+That last point is the reason this form exists at all. AppAPI's ``SetValueListener`` stores
+the value of an *admin* field with
+``ExAppConfigService::setAppConfigValue($app, $fieldId, $value)``, so the field id is the
+configuration key, without a prefix, and :mod:`mcp_connector.exapp.config_values` reads it
+back over the very channel the data key already travels. The field ids are therefore taken
+from ``config_values.CONFIG_KEYS`` instead of being written a second time, and a test holds
+that equality: a form whose ids drift from the read path is a form whose values nobody reads.
+
+**Two traps, both verified in the source of the components we do not own.**
+
+* ``sensitive: true`` at a field makes the ``SetValueListener`` encrypt the value with
+  ``ICrypto`` before storing it, using the server secret. The ExApp then reads back a blob it
+  cannot open, so a value it needs at runtime would be lost behind a flag that looks like
+  hardening (T-05-05). None of the four fields carries it, in any spelling.
+* Declarative Settings have no button type. The complete list is ``text``, ``password``,
+  ``email``, ``tel``, ``url``, ``number``, ``checkbox``, ``multi-checkbox``, ``radio``,
+  ``select`` and ``multi-select`` (nextcloud/server stable34,
+  ``lib/public/Settings/DeclarativeSettingsTypes.php``). This is why the destructive action of
+  this phase is an occ command in plan 05-06 and not a knob in this form.
+
+The security hint of BL-06 lives in the description of the ``oauth_dcr`` field itself, not
+only in ``docs/oauth-setup.md``: an administrator reading a switch is the one person who can
+act on it (security domain V14, T-05-06).
+"""
+
+import logging
+from collections.abc import Mapping
+from typing import Any
+
+import httpx
+
+from .. import config
+from ..errors import ToolError
+from ..nextcloud.clients.ocs import OCS_HEADERS
+from ..nextcloud.credentials import appapi_auth_headers
+from ..nextcloud.http import shared_client
+from .config_values import CONFIG_KEYS
+from .settings_form import SETTINGS_PATH
+from .ui import strings
+from .ui.connections import CONNECTIONS_PATH
+
+__all__ = ["ADMIN_FORM_ID", "form_scheme", "register_admin_form"]
+
+#: The second form id of this app. ``insertOrUpdate`` keys on (appid, formid), so this one
+#: never collides with the personal signpost and re-enabling updates it in place.
+ADMIN_FORM_ID = "mcp_connector_admin"
+
+#: What makes this an administration form, and what makes AppAPI store its values in the
+#: ExApp configuration rather than in the preferences of one user.
+ADMIN_SECTION_TYPE = "admin"
+
+#: Where the entry sits. ``security`` is where an administrator already manages the sign in
+#: and the app passwords of the instance, which is the same subject as these four values.
+ADMIN_SECTION_ID = "security"
+
+ADMIN_FORM_PRIORITY = 10
+
+logger = logging.getLogger("mcp_connector.exapp.admin_settings")
+
+
+def form_scheme(env: Mapping[str, str] | None = None) -> dict[str, Any]:
+    """Build the administration form against one environment.
+
+    A function and not a module level constant, for the reason ``settings_form`` gives: the
+    documentation address in it comes from the public URL of this deployment, which is
+    configuration and not a compile time fact.
+
+    The four fields are built from :data:`CONFIG_KEYS`, in that order, so the form and the
+    read path cannot drift apart. Every field carries a ``default``, which is what the shape
+    documented for Declarative Settings looks like; the two switches show the state this app
+    ships with, so an administrator sees what is in force before touching anything.
+    """
+    connections_url = f"{config.public_url(env)}{CONNECTIONS_PATH}"
+    public_url_field, dcr_field, allowlist_field, allowed_field = CONFIG_KEYS
+    return {
+        "id": ADMIN_FORM_ID,
+        "priority": ADMIN_FORM_PRIORITY,
+        "section_type": ADMIN_SECTION_TYPE,
+        "section_id": ADMIN_SECTION_ID,
+        "title": strings.ADMIN_SETTINGS_TITLE,
+        "description": strings.ADMIN_SETTINGS_DESCRIPTION,
+        "doc_url": connections_url,
+        "fields": [
+            {
+                "id": public_url_field,
+                "title": strings.ADMIN_FIELD_PUBLIC_URL_LABEL,
+                "description": strings.ADMIN_FIELD_PUBLIC_URL_DESCRIPTION,
+                "type": "url",
+                "placeholder": strings.ADMIN_PUBLIC_URL_EXAMPLE,
+                "default": "",
+            },
+            {
+                "id": dcr_field,
+                "title": strings.ADMIN_FIELD_DCR_LABEL,
+                "description": strings.ADMIN_FIELD_DCR_DESCRIPTION,
+                "type": "checkbox",
+                # The state this app ships with (D-35): success criteria 1 and 2 are about
+                # connecting a hosted assistant without an administrator in the loop.
+                "default": True,
+            },
+            {
+                "id": allowlist_field,
+                "title": strings.ADMIN_FIELD_ALLOWLIST_LABEL,
+                "description": strings.ADMIN_FIELD_ALLOWLIST_DESCRIPTION,
+                "type": "checkbox",
+                "default": False,
+            },
+            {
+                "id": allowed_field,
+                "title": strings.ADMIN_FIELD_ALLOWED_CLIENTS_LABEL,
+                "description": strings.ADMIN_FIELD_ALLOWED_CLIENTS_DESCRIPTION,
+                "type": "text",
+                "default": "",
+            },
+        ],
+    }
+
+
+async def register_admin_form(*, env: Mapping[str, str] | None = None) -> None:
+    """Put the administration form into Nextcloud's settings. Never raises, for any reason.
+
+    One attempt, no retry, one log line on failure: the same error model as the personal
+    signpost and the init progress push. The call runs in the app context, so the user id in
+    the outgoing token is empty, because this is the ExApp registering something about
+    itself and not a request on behalf of a person.
+    """
+    try:
+        settings = config.exapp_settings(env)
+    except ToolError:
+        # A missing deploy variable is a startup problem and is reported there. Raising here
+        # would travel into the enable handler, which must answer with an empty error field.
+        logger.error("the admin form was not registered: the deploy environment is incomplete")
+        return
+
+    url = f"{settings.base_url}{SETTINGS_PATH}"
+    headers = dict(OCS_HEADERS)
+    headers.update(
+        appapi_auth_headers(
+            "",
+            app_id=settings.app_id,
+            app_version=settings.app_version,
+            aa_version=settings.aa_version,
+            app_secret=settings.app_secret,
+        )
+    )
+
+    client = shared_client()
+    try:
+        response = await client.post(url, json={"formScheme": form_scheme(env)}, headers=headers)
+    except httpx.HTTPError:
+        # No value from the request is repeated here: the headers carry the app secret.
+        logger.error("the admin form registration to %s did not reach Nextcloud", url)
+        return
+
+    if response.status_code // 100 != 2:
+        logger.error("the admin form registration to %s answered %s", url, response.status_code)

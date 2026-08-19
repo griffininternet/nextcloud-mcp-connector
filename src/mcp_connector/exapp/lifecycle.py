@@ -29,7 +29,7 @@ from starlette.responses import Response
 from starlette.routing import Route
 
 from ..errors import ToolError
-from . import settings_form, status
+from . import admin_settings, settings_form, status
 from .auth import AppApiRejected, require_appapi
 from .responses import NO_STORE, json_response
 
@@ -90,6 +90,16 @@ def lifecycle_routes(env: Mapping[str, str] | None = None) -> list[Route]:
                 # AppAPI disable the app again at once, while a missing signpost costs
                 # discoverability and this one line (pitfall 11).
                 logger.error("the settings form registration failed, the signpost is missing")
+            try:
+                await admin_settings.register_admin_form(env=env)
+            except Exception:
+                # Its own try block, and not a second statement in the one above: the two
+                # forms are independent, so a failure of one may not cost the other. The
+                # reason for tolerating either failure is pitfall 11 again, and it weighs
+                # more here: without the admin form an administrator cannot enter the
+                # public address at all, and an app AppAPI disabled again cannot be
+                # configured either.
+                logger.error("the admin form registration failed, the admin settings are missing")
         # enabled=0 registers nothing and unregisters nothing: AppAPI hands out the forms of
         # enabled apps only, so a disabled app disappears from the settings page by itself,
         # and an uninstall is cleaned up on AppAPI's side (measured, 04-RESEARCH.md).

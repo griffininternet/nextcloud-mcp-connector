@@ -225,9 +225,10 @@ async def test_the_registration_runs_in_the_app_context() -> None:
     await admin_settings.register_admin_form(env=ENV)
 
     sent = route.calls.last.request
-    assert sent.headers["AUTHORIZATION-APP-API"] == base64.b64encode(
-        f":{APP_SECRET}".encode()
-    ).decode()
+    assert (
+        sent.headers["AUTHORIZATION-APP-API"]
+        == base64.b64encode(f":{APP_SECRET}".encode()).decode()
+    )
     assert sent.headers["EX-APP-ID"] == APP_ID
     assert sent.headers["EX-APP-VERSION"] == APP_VERSION
     assert sent.headers["AA-VERSION"] == "34.0.3"
@@ -429,6 +430,8 @@ def test_the_setup_copy_names_the_place_and_the_restart_step() -> None:
 def test_no_new_sentence_carries_an_em_dash_or_an_emoji(name: str) -> None:
     """The copy rules of this project, held by a test rather than by a review."""
     text: str = getattr(strings, name)
-    assert "—" not in text
-    assert "–" not in text
+    # Escaped rather than written out: the dashes this project forbids are exactly the two
+    # characters a linter would flag as ambiguous in a source file (RUF001).
+    assert chr(0x2014) not in text, "em dash"
+    assert chr(0x2013) not in text, "en dash"
     assert text.isascii(), "English copy only, and nothing that renders as an icon"

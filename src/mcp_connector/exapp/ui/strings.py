@@ -33,6 +33,18 @@ __all__ = [
     "ACTION_CANCEL_SIGN_IN",
     "ACTION_CHECK_NOW",
     "ACTION_START_OVER",
+    "ADMIN_FIELD_ALLOWED_CLIENTS_DESCRIPTION",
+    "ADMIN_FIELD_ALLOWED_CLIENTS_LABEL",
+    "ADMIN_FIELD_ALLOWLIST_DESCRIPTION",
+    "ADMIN_FIELD_ALLOWLIST_LABEL",
+    "ADMIN_FIELD_DCR_DESCRIPTION",
+    "ADMIN_FIELD_DCR_LABEL",
+    "ADMIN_FIELD_PUBLIC_URL_DESCRIPTION",
+    "ADMIN_FIELD_PUBLIC_URL_LABEL",
+    "ADMIN_PUBLIC_URL_EXAMPLE",
+    "ADMIN_SETTINGS_DESCRIPTION",
+    "ADMIN_SETTINGS_PLACE",
+    "ADMIN_SETTINGS_TITLE",
     "CLIENT_NAME_FALLBACK",
     "CONNECTIONS_DETAIL_CONNECTED",
     "CONNECTIONS_EMPTY_BODY",
@@ -108,6 +120,9 @@ __all__ = [
     "SETTINGS_DESCRIPTION",
     "SETTINGS_PLACE",
     "SETTINGS_TITLE",
+    "SETUP_PUBLIC_URL_BODY",
+    "SETUP_PUBLIC_URL_HINT",
+    "SETUP_PUBLIC_URL_TITLE",
     "SIGNIN_BODY",
     "SIGNIN_CTA",
     "SIGNIN_TITLE",
@@ -471,6 +486,89 @@ SETTINGS_DESCRIPTION = (
 #: and only once (04-UI-SPEC.md): if the settings section has to move, one edit moves every
 #: sentence that points at it.
 SETTINGS_PLACE = "Settings, Security, MCP Connector"
+
+# --- The form Nextcloud renders in the administration settings (BL-06, EXAPP-04) ---------
+#
+# The counterpart of the personal entry above, and the opposite decision about ``fields``.
+# A value of an *admin* form does reach this app: AppAPI stores it in the ExApp configuration
+# with the field id as the key, and ``exapp/config_values.py`` reads it back over the same
+# channel the data key already uses. That is what makes a one click installation from the app
+# store work without a single environment variable (05-RESEARCH.md, pattern 1 and pitfall 2).
+#
+# Two rules the copy below follows for reasons that are not editorial. No field is marked
+# sensitive, so no sentence here promises that a value is hidden. And no sentence promises an
+# immediate effect: the values are read when the app starts and when it is enabled, so a
+# change takes effect after the app has been disabled and enabled again.
+
+ADMIN_SETTINGS_TITLE = "MCP Connector"
+
+ADMIN_SETTINGS_DESCRIPTION = (
+    "Settings an installation from the app store needs. A field left empty keeps whatever the "
+    "deploy environment of the container sets, and a value set here wins over it. Changes take "
+    "effect after you disable and enable this app again."
+)
+
+#: Where the administration form of this app sits, named once so a move is one edit. The
+#: counterpart of ``SETTINGS_PLACE`` for the personal entry.
+ADMIN_SETTINGS_PLACE = "Administration settings, Security, MCP Connector"
+
+#: The example address, in the shape a HaRP deployment actually serves: the public address of
+#: the Nextcloud plus the ExApp path. Used in the field description and as its placeholder,
+#: because an administrator who has never seen this path cannot guess it.
+ADMIN_PUBLIC_URL_EXAMPLE = "https://cloud.example.com/exapps/mcp_connector"
+
+ADMIN_FIELD_PUBLIC_URL_LABEL = "Public address of this connector"
+
+ADMIN_FIELD_PUBLIC_URL_DESCRIPTION = (
+    "The address assistant apps reach this connector at, including the app path, for example "
+    f"{ADMIN_PUBLIC_URL_EXAMPLE}. Clients cannot complete a connection without it. Use the "
+    "address of this Nextcloud as it is reachable from the internet, with https, and no "
+    "trailing slash. A change takes effect after you disable and enable this app again."
+)
+
+ADMIN_FIELD_DCR_LABEL = "Let assistant apps register themselves"
+
+ADMIN_FIELD_DCR_DESCRIPTION = (
+    "Hosted assistants such as Claude or ChatGPT register themselves when a user connects "
+    "them, which is what makes a connection work without an administrator. On a public "
+    "instance, either switch the allow list below on or switch this off, so that only apps "
+    "you named can connect."
+)
+
+ADMIN_FIELD_ALLOWLIST_LABEL = "Allow only the apps listed below"
+
+ADMIN_FIELD_ALLOWLIST_DESCRIPTION = (
+    "With this on, an app may connect only if it is in the list below. An empty list "
+    "therefore allows nothing, which is deliberate: a list nobody filled in is not a "
+    "permission to connect."
+)
+
+ADMIN_FIELD_ALLOWED_CLIENTS_LABEL = "Allowed apps"
+
+ADMIN_FIELD_ALLOWED_CLIENTS_DESCRIPTION = (
+    "One entry per app, separated by commas. An entry is either the client ID of a "
+    "registration or the address an app is sent back to after a connection, which is the "
+    "value you can write down before an app has ever connected."
+)
+
+# --- The setup state a missing public address produces (consumed by plan 05-04) -----------
+#
+# Not an error: a store installation has no public address yet, and this is the one thing an
+# administrator has to do before any client can connect. The copy therefore names the place
+# and the step, and it never blames the reader.
+
+SETUP_PUBLIC_URL_TITLE = "This connector needs its public address"
+
+SETUP_PUBLIC_URL_BODY = (
+    "An administrator has to enter the address assistant apps reach this connector at. It is "
+    f"the first field in {ADMIN_SETTINGS_PLACE}. After saving it, disable and enable this app "
+    "again, then open this page once more."
+)
+
+SETUP_PUBLIC_URL_HINT = (
+    f"The address looks like {ADMIN_PUBLIC_URL_EXAMPLE}: the address of this Nextcloud as it "
+    "is reachable from the internet, followed by the path of this app."
+)
 
 #: The ``error_description`` of R1. A constant with no placeholder on purpose (T-03-66): it
 #: names the rule and the place and never a value out of the request, so no account name,
