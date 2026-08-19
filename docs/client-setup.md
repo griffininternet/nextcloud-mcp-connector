@@ -361,7 +361,8 @@ the entry.
 Measured on 2026-08-19 against Open WebUI 0.11.0
 (`ghcr.io/open-webui/open-webui:main`, digest
 `sha256:6a773e5c3a246b65cbe74ce942b294292c0e5f81c138f703d111bc162f7d7c3d`) and this connector
-installed as an ExApp.
+installed as an ExApp. Both halves were run: the requests server side, and the two screens in a
+browser, with two accounts.
 
 Open WebUI speaks the MCP authorization specification since 0.6.31, and that changes what this
 section has to say about it: it is not a proxy case any more. It registers itself, so there is
@@ -408,16 +409,27 @@ app password is involved.
    WebUI takes from `scopes_supported` of the protected resource document rather than from the
    larger catalogue of the authorization server. This server records the registration with
    `nextcloud offline_access`, and that added scope is what later produces a refresh token.
-6. The connector now appears in the tool list as one entry named after the connection. Each
-   user opens it once and starts the sign in (**Authenticate**). What happens then is the flow
-   described at the start of this chapter: Nextcloud's own sign in page, then this connector's
-   consent page naming `Open WebUI`, then back to Open WebUI.
-7. **Check that it worked.** After the approval, this server's log shows
+6. **Set the access of the connection.** A new connection is **Private** by default, which
+   means only the administrator who created it sees it. Set it to **Public**, or grant the
+   groups that may use it. This is stumbling block 7 below and it is the one that makes a
+   working connection look like a missing one for everybody else.
+7. The connector now appears in the tool list as one entry named after the connection. Each
+   user opens it once and starts the sign in (**Authenticate**). What happens then, measured in
+   a browser: a short page of this connector ("Sign in to continue"), then Nextcloud's own sign
+   in page, then Nextcloud's own "Grant access" page which names the account it is about, then
+   this connector's consent page. That page shows "You are signed in as \<account\>", the app
+   name `Open WebUI`, the address it sends you back to, an "Unverified client" note, and what
+   the connection may do. After **Approve access** the browser returns to Open WebUI without an
+   error, the tool dialog says the server is connected, and the composer shows one available
+   tool.
+8. **Check that it worked.** After the approval, this server's log shows
    `POST /token 200 OK`, and a tool call from Open WebUI appears as `POST /mcp 200 OK`. In the
-   measured run Open WebUI listed all 16 tools and `files_search` answered with files of the
-   account that had signed in.
+   measured run Open WebUI listed all 16 tools, and with two accounts connected at once each of
+   them saw exactly its own Nextcloud: the account that had signed in as the owner of a private
+   file found it, the account that had signed in as somebody the file was never shared with did
+   not, while both found the folder that had been shared read only between them.
 
-**Six things that go wrong, and what each one looks like**
+**Eight things that go wrong, and what each one looks like**
 
 1. **The connection type is OpenAPI instead of MCP.** Then Open WebUI asks for an
    `openapi.json` and reports a broken tool server, although the address is right. The type is
@@ -473,6 +485,21 @@ app password is involved.
    this server. That is the intended behaviour, not a missing bulk setting. It is also the
    reason the permission promise of this connector survives a shared Open WebUI: every request
    carries the identity of the person who signed in.
+7. **The connection is Private, so nobody else sees it.** This is the most likely reason a
+   correctly configured server is invisible. The access of a tool server connection defaults to
+   **Private**, and a user then finds no entry to authenticate against at all, which reads like
+   the server was never added. Open the connection, set **Access** to **Public** or name the
+   groups, and the entry appears for those accounts. Measured: with the default, an account of
+   role `user` saw nothing; after the change, the same account saw the entry and completed its
+   own sign in.
+8. **A Nextcloud session already open in the same browser silently decides the account.** The
+   sign in is Nextcloud's own, so a browser that is already signed in to Nextcloud skips the
+   password page and goes straight to the "Grant access" page of that session's account. The
+   consent page then honestly says which account it is, and it is easy to press past. If you
+   want to connect a different account than the one the browser is signed in to, sign out of
+   Nextcloud first, or use a private window. This is not specific to Open WebUI, it applies to
+   every client whose sign in runs in a browser you are already using; it is worth knowing here
+   because an administrator testing the setup is usually signed in as the administrator.
 
 ### Cursor and other clients with a `cursor://` style callback
 

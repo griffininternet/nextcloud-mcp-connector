@@ -215,38 +215,91 @@ lookup for any other account:           none
 Ein Konto ohne Sitzung bekommt keinen `Authorization`-Header
 (`build_tool_server_headers`), und ein `/mcp` ohne Bearer ist bei uns 401 (im selben Lauf
 gemessen, Abschnitt 1, erste Zeile). Die Gegenprobe mit einem **zweiten echten**
-Open-WebUI-Konto im Browser gehoert zu Task 2: `POST /api/v1/auths/signup` antwortet nach dem
-ersten Konto mit 403, weil Open WebUI die Registrierung dann selbst schliesst.
+Open-WebUI-Konto lief danach im Browserteil, siehe Abschnitte 7 und 8. Nebenbefund dieses
+Laufs: `POST /api/v1/auths/signup` antwortet nach dem ersten Konto mit 403, weil Open WebUI die
+Selbstregistrierung dann selbst schliesst; fuer die Gegenprobe wurde sie wieder freigeschaltet
+(`ui.enable_signup`, `ui.default_user_role`).
 
-## 7. Was dieser Lauf NICHT belegt
+## 7. Browserteil (Task 2, bestaetigt 2026-08-19)
 
-* Den gerenderten Bildschirm von Open WebUI. Die Schritte 1 bis 5 der Anleitung liefen ueber
-  Open WebUIs eigene Admin-API (`/api/v1/configs/oauth/clients/register`,
-  `/api/v1/configs/tool_servers`, `/oauth/clients/{id}/authorize`,
-  `/oauth/clients/{id}/callback`), also ueber genau die Endpunkte, die seine Oberflaeche
-  aufruft, aber nicht ueber die Oberflaeche. Die Feldnamen der Anleitung sind die im Image
-  ausgelieferten Beschriftungen (`Tool Servers`, `Add Connection`, `Connection Type`,
-  `Streamable HTTP`, `OAuth 2.1`, `OAuth 2.1 (Static)`, `Bearer`, `Authenticate`,
-  `Verify Connection`).
-* Die Zustimmung im Browser und die Trennung zweier echter Open-WebUI-Konten im Browser. Beides
-  ist Task 2 und offen.
+Vom Orchestrator per Playwright in einem echten Browser durchgefuehrt, nicht von diesem Lauf.
+Bestaetigt sind die Punkte 1, 2, 3 und 5 des Checkpoints; Punkt 4 (Werkzeugaufruf im Chat) ist
+im Browser nicht durchfuehrbar, weil im Wegwerf-Container kein Modell hinterlegt ist. Der
+Werkzeugaufruf selbst ist serverseitig in Abschnitt 4 belegt.
 
-## Zustand der Umgebung nach diesem Lauf
+Die gesehene Kette: Toggle im Chat unter Integrationen, Werkzeuge, `Nextcloud MCP Connector`
+startet den Flow; Zwischenseite des Connectors "Sign in to continue"; Nextclouds eigene
+Login-Flow-v2-Seite; Grant-Seite mit "Aktuell angemeldet als alice"; Consent-Seite des
+Connectors mit "You are signed in as alice", App-Name `Open WebUI`, Rueckadresse
+`http://localhost:3030/oauth/clients/mcp:nextcloud/callback`, Unverified-client-Warnung und der
+Liste, was die Verbindung darf; nach "Approve access" Rueckkehr ohne Fehlermeldung, Status
+"Verbunden" und "Available Tools 1" im Eingabefeld.
 
-Absichtlich **nicht** abgeraeumt, weil Task 2 sie braucht:
+Zwei Befunde aus dem Browser, die aus dem Quellcode nicht sichtbar waren und beide in die Doku
+gewandert sind:
 
-* ExApp-Topologie laeuft (`docker compose -f compose.exapp.yml ps`).
-* `nc-mcp-owui-probe` laeuft, Open WebUI unter `http://localhost:3030`, Admin
-  `admin@probe.invalid` / `owui-probe-pw-01`, MCP-Server-Eintrag `Nextcloud MCP Connector`
-  bereits angelegt und fuer dieses Konto autorisiert.
-* Nextcloud-Testkonten: `alice` und `bob`, Passwoerter in `.env.exapp`.
-* Der Weiterleiter im Open-WebUI-Container laeuft als Hintergrundprozess
-  (`/tmp/loopback_forward.py`); ein Neustart des Containers muss ihn neu starten.
+* **Der Zugriff einer Verbindung ist per Default "Privat".** Ein zweites Konto mit der Rolle
+  `user` sah den Tool-Server ueberhaupt nicht. Erst nachdem der Admin in der
+  Verbindungskonfiguration unter "Zugriff" auf "Oeffentlich" gestellt hatte (Gruppen waeren die
+  Alternative), erschien der Eintrag und das Konto konnte sich selbst anmelden. Das ist der
+  wahrscheinlichste Grund, warum eine korrekt konfigurierte Verbindung fuer alle anderen
+  unsichtbar aussieht. Steht als Stolperstelle 7 in der Doku.
+* **Eine im selben Browser offene Nextcloud-Sitzung entscheidet still ueber das Konto.** Der
+  Playwright-Browser war noch als `admin` bei Nextcloud angemeldet, und der Login Flow sprang
+  deshalb direkt auf die Grant-Seite fuer `admin`. Erst nach dem Abmelden kam die echte
+  Anmeldeseite. Die Consent-Seite nennt das Konto ehrlich, aber man kann daran vorbeidruecken.
+  Steht als Stolperstelle 8 in der Doku.
 
-Aufraeumen nach Task 2:
+## 8. Gegenprobe: zwei Open-WebUI-Konten, zwei Nextcloud-Identitaeten
+
+Nach dem Browserteil existierten zwei Open-WebUI-Konten mit je einer eigenen Autorisierung
+(`admin@probe.invalid` als `alice`, `bob@probe.invalid` als `bob`). Gemessen 18:50:20 UTC, je
+mit dem gespeicherten Token des Kontos, Open WebUIs eigenem MCP-Client und dem Header aus
+`bearer_auth_header`:
+
+```
+stored sessions for mcp:nextcloud: 2
+--- open webui account admin@probe.invalid (alice) ---
+  shared marker  mcp-shared-file-04d2eb7d6d: 1 hit  ['/mcp-share-04d2eb7d6d/mcp-shared-file-04d2eb7d6d.md']
+  private marker mcp-private-04d2eb7d6d:     1 hit  ['/mcp-private-04d2eb7d6d.md']
+--- open webui account bob@probe.invalid (bob) ---
+  shared marker  mcp-shared-file-04d2eb7d6d: 1 hit  ['/mcp-share-04d2eb7d6d/mcp-shared-file-04d2eb7d6d.md']
+  private marker mcp-private-04d2eb7d6d:     0 hits []
+```
+
+Beide Richtungen stehen damit in einem Lauf: die Positivkontrolle (bob findet, was alice mit ihm
+read-only geteilt hat) und der Negativbeweis (bob findet alices ungeteilte Datei nicht), obwohl
+beide durch dieselbe Open-WebUI-Instanz und denselben Connector gehen. Das Berechtigungs-
+versprechen haelt also nicht nur in unserer Schicht, sondern ueber einen fremden Mehrbenutzer-
+Client hinweg. Die volle Kette ist zusaetzlich in
+`tests/integration/test_permission_parity_share.py` (5/5 live, Plan 05-03) belegt.
+
+## 9. Was dieser Lauf NICHT belegt
+
+* Einen Werkzeugaufruf aus dem **Chatfenster** von Open WebUI. Dieser Wegwerf-Container hat kein
+  Modell hinterlegt, und ohne Modell entscheidet niemand, ein Werkzeug zu rufen. Belegt ist der
+  Aufruf ueber Open WebUIs eigenen MCP-Client mit dem gespeicherten Token des Kontos
+  (Abschnitte 4 und 8), also alles ausser der Modellentscheidung. Fuer die Anleitung genuegt
+  das: was ein Modell mit einem verbundenen Werkzeug tut, ist keine Eigenschaft dieses Servers.
+* Feldnamen, die dieser Lauf nicht gesehen hat, stehen nicht in der Anleitung. Die verwendeten
+  sind entweder im Browser gesehen (Integrationen, Werkzeuge, Zugriff, Privat, Oeffentlich,
+  Verbunden, Approve access) oder als ausgelieferte Beschriftung im Image belegt
+  (`Tool Servers`, `Add Connection`, `Connection Type`, `Streamable HTTP`, `OAuth 2.1`,
+  `OAuth 2.1 (Static)`, `Bearer`, `Authenticate`, `Verify Connection`).
+* Andere Open-WebUI-Versionen als 0.11.0. Der Abschnitt nennt die gemessene Version und ihren
+  Digest, damit ein spaeterer Leser weiss, wogegen er vergleicht.
+
+## Zustand der Umgebung
+
+Waehrend Task 2 absichtlich stehen gelassen, danach abgeraeumt. Wegwerf-Zustand zum Zeitpunkt
+des Abraeumens: zwei Open-WebUI-Konten (`admin@probe.invalid` als `alice`, `bob@probe.invalid`
+als `bob`) und zwei Autorisierungen im Connector-Store.
 
 ```bash
 docker rm -f nc-mcp-owui-probe
 docker rmi ghcr.io/open-webui/open-webui:main     # 7,16 GB, optional
 docker compose -f compose.exapp.yml down          # Volumes behalten
 ```
+
+Die Volumes bleiben, weil sie die Fixture von 05-03 tragen. Die Prozedur zum Wiederanfahren
+steht in STATE.md unter "ExApp-Topologie (Prozedur)".
