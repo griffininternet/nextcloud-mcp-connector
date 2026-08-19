@@ -52,7 +52,7 @@ Le connecteur lui-même n'envoie aucune télémétrie et n'appelle aucun tiers. 
 			  - option of occ app_api:app:register, see plan 02-04.
 			-->
 			<registry>ghcr.io</registry>
-			<image>street1983nk/nextcloud-mcp-connector</image>
+			<image>street1983nk/mcp_connector</image>
 			<image-tag>0.1.0</image-tag>
 		</docker-install>
 		<!--
@@ -287,27 +287,19 @@ Le connecteur lui-même n'envoie aucune télémétrie et n'appelle aucun tiers. 
 			<variable>
 				<name>NC_MCP_PUBLIC_URL</name>
 				<display-name>Public URL of this app</display-name>
-				<description>The address this app is reachable under from the internet, without a trailing slash, for example https://cloud.example.com/exapps/mcp_connector. Required for OAuth.</description>
-				<default></default>
-			</variable>
+				<description>The address this app is reachable under from the internet, without a trailing slash, for example https://cloud.example.com/exapps/mcp_connector. Required for OAuth.</description>			</variable>
 			<variable>
 				<name>NC_MCP_OAUTH_DCR</name>
 				<display-name>Allow clients to register themselves</display-name>
-				<description>Dynamic client registration (RFC 7591). On unless set to off. Claude.ai and ChatGPT need it to connect without an administrator.</description>
-				<default></default>
-			</variable>
+				<description>Dynamic client registration (RFC 7591). On unless set to off. Claude.ai and ChatGPT need it to connect without an administrator.</description>			</variable>
 			<variable>
 				<name>NC_MCP_OAUTH_ALLOWLIST_ONLY</name>
 				<display-name>Only allow listed clients</display-name>
-				<description>Off unless set to on. With it on, only the clients named below may authorize, and an empty list closes the door for everyone.</description>
-				<default></default>
-			</variable>
+				<description>Off unless set to on. With it on, only the clients named below may authorize, and an empty list closes the door for everyone.</description>			</variable>
 			<variable>
 				<name>NC_MCP_OAUTH_ALLOWED_CLIENTS</name>
 				<display-name>Allowed clients</display-name>
-				<description>Comma separated client ids or redirect URIs. Only read when the allowlist above is on.</description>
-				<default></default>
-			</variable>
+				<description>Comma separated client ids or redirect URIs. Only read when the allowlist above is on.</description>			</variable>
 		</environment-variables>
 	</external-app>
 </info>
