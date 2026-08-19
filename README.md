@@ -1,3 +1,5 @@
+**English** | [Deutsch](README.de.md) | [Français](README.fr.md)
+
 # MCP Connector for Nextcloud
 
 A curated MCP server that connects your Nextcloud (files, calendar, notes, deck, contacts) to AI
