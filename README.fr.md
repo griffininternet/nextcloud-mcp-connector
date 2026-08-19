@@ -18,7 +18,7 @@ Deux autres propriétés découlent de la même idée :
 
 - **L'assistant ne voit jamais plus que vous.** Chaque requête s'exécute avec vos propres
   identifiants Nextcloud, si bien que les permissions Nextcloud s'appliquent sans changement.
-- **Un ensemble d'outils délibérément restreint.** Les 15 outils sont sélectionnés de façon que ce
+- **Un ensemble d'outils délibérément restreint.** Les 16 outils sont sélectionnés de façon que ce
   serveur cohabite avec vos autres serveurs MCP, même dans des clients avec une limite stricte du
   nombre d'outils.
 
@@ -27,10 +27,21 @@ Licence : AGPL-3.0-or-later. L'app id, les noms de paquets et le nom du dépôt 
 
 ## Statut
 
-Version 0.1.0, phase 1 (cœur du serveur). Les 15 outils de l'ensemble v1 sont implémentés, et le
-tableau des outils ci-dessous n'est plus maintenu à la main : un test de contrat lit le registre
-d'outils en direct et échoue si un nom ou un niveau de permission du tableau est en désaccord avec
-lui.
+Version 0.1.0, référencée dans l'App Store de Nextcloud et installable comme ExApp Nextcloud via
+AppAPI. Ce qui est en place aujourd'hui, et où chacune de ces affirmations est consignée :
+
+- Les 16 outils de l'ensemble v1 sont implémentés, et le tableau des outils ci-dessous n'est plus
+  maintenu à la main : un test de contrat lit le registre d'outils en direct et échoue si un nom
+  ou un niveau de permission du tableau est en désaccord avec lui.
+- La connexion OAuth 2.1 est vérifiée de bout en bout face aux deux connecteurs hébergés pour
+  lesquels elle a été construite, Claude.ai et ChatGPT, avec l'enregistrement dynamique de client
+  et la rotation des refresh tokens. Le parcours et les mesures figurent dans
+  [docs/oauth-setup.md](docs/oauth-setup.md).
+- Gestion par compte : chaque compte met en pause ou reprend son propre accès MCP et déconnecte
+  individuellement chaque assistant connecté sur la page des connexions de cette application, que
+  Nextcloud référence sous Paramètres, Sécurité, MCP Connector.
+- `prepare_context` regroupe une recherche et la semaine à venir en un seul appel, de sorte
+  qu'une question coûte un aller-retour au lieu de plusieurs.
 
 Installation pas à pas pour Claude Desktop, Claude Code et les clients HTTP distants, y compris les
 trois erreurs qui surviennent réellement : **[docs/client-setup.md](docs/client-setup.md)**.
@@ -47,6 +58,20 @@ close.
 
 Ce qu'un administrateur doit régler, ce qu'un utilisateur saisit, et les mesures qui étayent les
 deux : **[docs/oauth-setup.md](docs/oauth-setup.md)**.
+
+## FAQ
+
+**Mon administrateur a installé cette application. Puis-je la désactiver pour moi ?**
+
+Oui, et vous n'avez pas besoin de votre administrateur pour cela. Rien ne tourne en arrière-plan :
+le connecteur n'agit qu'à la demande d'un assistant que vous avez connecté vous-même, il n'y a ni
+tâche planifiée, ni indexation, ni télémétrie. Votre propre compte dispose d'un interrupteur sur
+la page des connexions de cette application, que Nextcloud référence sous Paramètres, Sécurité,
+MCP Connector, et chaque assistant connecté peut être déconnecté séparément, ce qui rend son mot
+de passe d'application Nextcloud à Nextcloud.
+
+La réponse complète, avec la frontière entre ce que cette application contrôle et ce que décide le
+fournisseur de votre assistant : **[docs/faq.md](docs/faq.md)** (en anglais).
 
 ## Démarrage rapide (stdio)
 

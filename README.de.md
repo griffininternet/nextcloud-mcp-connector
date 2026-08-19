@@ -18,7 +18,7 @@ Zwei weitere Eigenschaften folgen aus derselben Idee:
 
 - **Der Assistent sieht nie mehr als Sie.** Jede Anfrage läuft mit Ihren eigenen Nextcloud-Zugangsdaten,
   sodass die Nextcloud-Berechtigungen unverändert gelten.
-- **Ein bewusst kleiner Tool-Satz.** Die 15 Tools sind so kuratiert, dass dieser Server neben Ihre
+- **Ein bewusst kleiner Tool-Satz.** Die 16 Tools sind so kuratiert, dass dieser Server neben Ihre
   anderen MCP server passt, selbst in Clients mit einer harten Tool-Obergrenze.
 
 Lizenz: AGPL-3.0-or-later. App-ID, Paketnamen und Repository-Name sind eingefroren, siehe
@@ -26,10 +26,21 @@ Lizenz: AGPL-3.0-or-later. App-ID, Paketnamen und Repository-Name sind eingefror
 
 ## Status
 
-Version 0.1.0, Phase 1 (Server-Kern). Alle 15 Tools des v1-Satzes sind implementiert, und die
-Tool-Tabelle weiter unten wird nicht mehr von Hand gepflegt: ein Contract-Test liest die
-aktive Tool-Registry und schlägt fehl, wenn ein Name oder eine Berechtigungsstufe in der Tabelle
-davon abweicht.
+Version 0.1.0, im Nextcloud App Store gelistet und als Nextcloud-ExApp über AppAPI
+installierbar. Was heute vorliegt und wo jede dieser Aussagen festgehalten ist:
+
+- Alle 16 Tools des v1-Satzes sind implementiert, und die Tool-Tabelle weiter unten wird nicht
+  mehr von Hand gepflegt: ein Contract-Test liest die aktive Tool-Registry und schlägt fehl,
+  wenn ein Name oder eine Berechtigungsstufe in der Tabelle davon abweicht.
+- Die OAuth-2.1-Anmeldung ist Ende zu Ende gegen die zwei gehosteten Konnektoren belegt, für
+  die sie gebaut wurde, Claude.ai und ChatGPT, samt dynamischer Client-Registrierung und
+  Refresh-Rotation. Der Ablauf und die Messungen stehen in
+  [docs/oauth-setup.md](docs/oauth-setup.md).
+- Verwaltung pro Konto: jedes Konto pausiert oder setzt seinen eigenen MCP-Zugriff fort und
+  trennt jede einzelne verbundene Assistenz auf der Verbindungsseite dieser App, die Nextcloud
+  unter Einstellungen, Sicherheit, MCP Connector verlinkt.
+- `prepare_context` bündelt eine Suche und die kommende Woche an Terminen in einem Aufruf, eine
+  Frage kostet damit einen Rundlauf statt mehrerer.
 
 Schritt-für-Schritt-Einrichtung für Claude Desktop, Claude Code und Remote-HTTP-Clients, inklusive der
 drei Fehler, die tatsächlich auftreten: **[docs/client-setup.md](docs/client-setup.md)**.
@@ -45,6 +56,20 @@ Einstellungen, Sicherheit, Geräte und Sitzungen und kann dort beendet werden.
 
 Was eine Administratorin einstellen muss, was ein Nutzer eingibt und die Messungen hinter beidem:
 **[docs/oauth-setup.md](docs/oauth-setup.md)**.
+
+## FAQ
+
+**Mein Administrator hat diese App installiert. Kann ich sie für mich abschalten?**
+
+Ja, und Sie brauchen Ihren Administrator dafür nicht. Im Hintergrund läuft nichts: der
+Connector handelt ausschließlich auf Anfrage einer Assistenz, die Sie selbst verbunden haben, es
+gibt keinen Cron, keine Indizierung und keine Telemetrie. Ihr eigenes Konto hat einen Schalter
+auf der Verbindungsseite dieser App, die Nextcloud unter Einstellungen, Sicherheit, MCP
+Connector verlinkt, und jede verbundene Assistenz lässt sich einzeln trennen, wobei der
+Connector ihr Nextcloud-App-Passwort an Nextcloud zurückgibt.
+
+Die vollständige Antwort samt der Grenze zwischen dem, was diese App steuert, und dem, was der
+Anbieter Ihrer Assistenz entscheidet: **[docs/faq.md](docs/faq.md)** (englisch).
 
 ## Schnellstart (stdio)
 

@@ -16,7 +16,7 @@ Two more properties follow from the same idea:
 
 - **The assistant never sees more than you do.** Every request runs with your own Nextcloud
   credentials, so Nextcloud permissions apply unchanged.
-- **A deliberately small tool set.** The 15 tools are curated so that this server fits next to
+- **A deliberately small tool set.** The 16 tools are curated so that this server fits next to
   your other MCP servers, even in clients with a hard tool limit.
 
 License: AGPL-3.0-or-later. App id, package names and repository name are frozen, see
@@ -24,9 +24,20 @@ License: AGPL-3.0-or-later. App id, package names and repository name are frozen
 
 ## Status
 
-Version 0.1.0, phase 1 (server core). All 15 tools of the v1 set are implemented, and the tool
-table below is no longer maintained by hand: a contract test reads the live tool registry and
-fails if a name or a permission level in the table disagrees with it.
+Version 0.1.0, listed in the Nextcloud App Store and installable as a Nextcloud ExApp through
+AppAPI. What is in place today, and where each of these claims is written down:
+
+- All 16 tools of the v1 set are implemented, and the tool table below is no longer maintained
+  by hand: a contract test reads the live tool registry and fails if a name or a permission
+  level in the table disagrees with it.
+- OAuth 2.1 sign in is verified end to end against the two hosted connectors it was built for,
+  Claude.ai and ChatGPT, including dynamic client registration and refresh rotation. The walk
+  and the measurements are in [docs/oauth-setup.md](docs/oauth-setup.md).
+- Per user management: every account pauses or resumes its own MCP access and disconnects any
+  single connected assistant on this app's own connections page, which Nextcloud links under
+  Settings, Security, MCP Connector.
+- `prepare_context` bundles a search and the coming week of events into one call, so one
+  question costs one round trip instead of several.
 
 Step by step setup for Claude Desktop, Claude Code and remote HTTP clients, including the three
 errors that actually happen: **[docs/client-setup.md](docs/client-setup.md)**.
@@ -42,6 +53,20 @@ and sessions and can be ended there.
 
 What an administrator has to set, what a user enters, and the measurements behind both:
 **[docs/oauth-setup.md](docs/oauth-setup.md)**.
+
+## FAQ
+
+**My administrator installed this app. Can I switch it off for myself?**
+
+Yes, and you do not need your administrator for it. Nothing runs in the background: the
+connector only ever acts on a request from an assistant you connected yourself, and there is no
+cron, no indexing and no telemetry. Your own account has a switch on this app's connections
+page, which Nextcloud links under Settings, Security, MCP Connector, and every connected
+assistant can be disconnected on its own, which hands its Nextcloud app password back to
+Nextcloud.
+
+The full answer, including the boundary between what this app controls and what the provider of
+your assistant decides: **[docs/faq.md](docs/faq.md)**.
 
 ## Quickstart (stdio)
 
