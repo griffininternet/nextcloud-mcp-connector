@@ -372,6 +372,121 @@ def test_the_result_page_says_how_to_use_it_and_how_to_revoke_it(client: TestCli
     assert strings.CONNECT_RESULT_ONCE in text
 
 
+# --- BL-10: a paused account never reads a credential out of this page ---------------------
+#
+# One comment per statement of BL-10:
+#
+# * Until this plan the switch hung on ``MCP_PATH`` alone, so this whole route ran for a
+#   paused account and handed it a working app password.
+# * The credential exists at Nextcloud from the 200 of the poll, so the refusal owes the
+#   revocation: the set of valid app passwords may not grow while the brake is pulled.
+# * The check sits after the poll on purpose. Before it, ``_start`` knows no account at all.
+# * A store that cannot answer is never a "no" (fail closed, like the boundary of phase 4).
+
+REVOKE_URL = f"{BASE_URL}{loginflow.APP_PASSWORD_PATH}"
+
+
+def pause(store: OAuthStore, user: str = LOGIN_NAME) -> None:
+    """The switch of one account, pulled the way ``/connections`` pulls it."""
+    asyncio.run(store.set_access(user, disabled=True))
+
+
+def break_switch(store: OAuthStore) -> None:
+    """Make the one local read of the switch fail, and nothing else of the store."""
+
+    async def refuse(_nc_user: str) -> bool:
+        raise sqlite3.OperationalError("the switch could not be read")
+
+    store.access_disabled = refuse  # type: ignore[method-assign]
+
+
+@respx.mock
+def test_a_paused_account_is_never_shown_its_app_password(
+    client: TestClient, store: OAuthStore
+) -> None:
+    """Enforcement point 2: after the poll and after the identity check, before the result."""
+    flow_id = start_a_flow(client)
+    pause(store)
+    respx.post(POLL_URL).mock(return_value=httpx.Response(200, json=poll_body()))
+    revoke = respx.delete(REVOKE_URL).mock(return_value=httpx.Response(200, json={}))
+
+    response = result_of(client, flow_id)
+
+    assert response.status_code == 403
+    assert APP_PASSWORD not in response.text, "the credential is never rendered while paused"
+    assert strings.CONNECTIONS_PAUSED_TITLE in response.text
+    assert strings.SWITCH_OFF_STATE in response.text
+    assert strings.SETTINGS_PLACE in response.text
+    assert revoke.call_count == 1, "one attempt, and the app password is handed back"
+    assert flow_ids(store) == [], "the spent flow is gone, so the poll is not repeated"
+
+
+@respx.mock
+def test_an_account_that_is_not_paused_still_reads_its_credential(
+    client: TestClient, store: OAuthStore
+) -> None:
+    """The positive control of point 2: the check refuses one case and not the route."""
+    flow_id = start_a_flow(client)
+    respx.post(POLL_URL).mock(return_value=httpx.Response(200, json=poll_body()))
+    revoke = respx.delete(REVOKE_URL).mock(return_value=httpx.Response(200, json={}))
+
+    response = result_of(client, flow_id)
+
+    assert response.status_code == 200
+    assert APP_PASSWORD in response.text
+    assert revoke.call_count == 0
+    assert flow_ids(store) == []
+
+
+@respx.mock
+def test_a_switch_that_cannot_be_read_shows_no_credential(
+    client: TestClient, store: OAuthStore
+) -> None:
+    """Fail closed (D-37): an unreadable switch is a page, never a rendered credential."""
+    flow_id = start_a_flow(client)
+    respx.post(POLL_URL).mock(return_value=httpx.Response(200, json=poll_body()))
+    revoke = respx.delete(REVOKE_URL).mock(return_value=httpx.Response(200, json={}))
+    break_switch(store)
+
+    response = result_of(client, flow_id)
+
+    assert response.status_code == 500
+    assert strings.ERROR_GENERIC_TITLE in response.text
+    assert APP_PASSWORD not in response.text
+    assert revoke.call_count == 1, "the credential nobody will use goes back either way"
+
+
+@respx.mock
+def test_no_refusal_of_a_paused_account_writes_a_value_into_the_log(
+    client: TestClient, store: OAuthStore, caplog: pytest.LogCaptureFixture
+) -> None:
+    """T-05-11: the new branch logs the rule, never the account, the credential or the flow."""
+    flow_id = start_a_flow(client)
+    pause(store)
+    respx.post(POLL_URL).mock(return_value=httpx.Response(200, json=poll_body()))
+    respx.delete(REVOKE_URL).mock(return_value=httpx.Response(200, json={}))
+
+    with caplog.at_level(logging.DEBUG, logger="mcp_connector"):
+        result_of(client, flow_id)
+
+    assert LOGIN_NAME not in caplog.text
+    assert APP_PASSWORD not in caplog.text
+    assert POLL_TOKEN not in caplog.text
+    assert flow_id not in caplog.text
+
+
+def test_the_start_says_why_it_does_not_check_the_switch() -> None:
+    """SC 4 of the plan: the reason stands in the code and not only in the backlog.
+
+    ``_start`` opens a sign in for whoever asks, and at that moment there is no account to
+    look up. A reader who finds no check there has to find the reason there too, or the gap
+    looks like an oversight.
+    """
+    source = Path(connect.__file__).read_text(encoding="utf-8")
+    marker = source.index("async def _start(")
+    assert "not known" in source[marker : marker + 900]
+
+
 # --- WR-06: a ciphertext that cannot be read is a page, never a 500 -----------------------
 
 

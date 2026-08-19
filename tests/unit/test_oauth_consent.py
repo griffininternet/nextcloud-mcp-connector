@@ -1183,6 +1183,211 @@ def test_no_decision_writes_a_credential_into_the_log(
     assert query_of(response)["code"][0] not in caplog.text
 
 
+# --- BL-10: the switch is enforced where an authorization is created ------------------------
+#
+# One comment per statement of BL-10, because each of them is a criterion of its own:
+#
+# * The gate used to hang on ``MCP_PATH`` alone, so a paused account ran the whole login flow
+#   and only the later tool call met R1.
+# * Nextcloud creates a real app password on the way, so every refusal here owes the
+#   revocation: the set of valid app passwords may not grow while the brake is pulled.
+# * The check may only happen where the account is known at all, which is after the poll, so
+#   ``/authorize`` and ``connect._start`` stay unchecked on purpose.
+# * A store that cannot answer is never a "no": fail closed, exactly like the transport
+#   boundary of phase 4.
+
+
+def paused(store: OAuthStore, user: str = LOGIN_NAME) -> None:
+    """The switch of one account, pulled the way ``/connections`` pulls it."""
+    asyncio.run(store.set_access(user, disabled=True))
+
+
+def broken_switch(store: OAuthStore) -> None:
+    """Make the one local read of the switch fail, and nothing else of the store."""
+
+    async def refuse(_nc_user: str) -> bool:
+        raise sqlite3.OperationalError("the switch could not be read")
+
+    store.access_disabled = refuse  # type: ignore[method-assign]
+
+
+def test_a_paused_account_never_reaches_the_consent_screen(store: OAuthStore) -> None:
+    """Enforcement point 1: after the poll, before ``create_authorization``."""
+    provider = make(store)
+    register(provider)
+    client, flow_id, _target = opened(provider)
+    paused(store)
+
+    with respx.mock:
+        respx.post(POLL_URL).mock(return_value=httpx.Response(200, json=poll_body()))
+        revoke = respx.delete(REVOKE_URL).mock(return_value=httpx.Response(200, json={}))
+        response = client.get(consent_url(flow_id, step=ui_consent.STEP_WAIT))
+
+    assert response.status_code == 403
+    assert strings.CONNECTIONS_PAUSED_TITLE in response.text
+    assert strings.SWITCH_OFF_STATE in response.text
+    assert strings.SETTINGS_PLACE in response.text
+    assert strings.CONSENT_APPROVE not in response.text, "nothing to approve while paused"
+    assert revoke.call_count == 1, "one attempt, and the app password is handed back"
+    assert rows(store, "authorizations") == [], "no authorization is created for a paused account"
+    assert asyncio.run(store.load_flow(flow_id, now=0)) is None, "the spent flow is gone"
+    assert APP_PASSWORD not in response.text
+
+
+def test_an_account_that_is_not_paused_reaches_the_consent_screen(store: OAuthStore) -> None:
+    """The positive control of point 1: the check refuses one case and not the surface."""
+    provider = make(store)
+    register(provider)
+    client, flow_id, _target = opened(provider)
+
+    with respx.mock:
+        respx.post(POLL_URL).mock(return_value=httpx.Response(200, json=poll_body()))
+        revoke = respx.delete(REVOKE_URL).mock(return_value=httpx.Response(200, json={}))
+        response = client.get(consent_url(flow_id, step=ui_consent.STEP_WAIT))
+
+    assert response.status_code == 200
+    assert strings.CONSENT_TITLE.format(client=CLIENT_NAME) in response.text
+    assert revoke.call_count == 0, "nothing is handed back on the way that works"
+    assert len(rows(store, "authorizations")) == 1
+
+
+def test_a_switch_that_cannot_be_read_creates_no_authorization(store: OAuthStore) -> None:
+    """Fail closed (D-37): an unreadable switch is a page, never a pass through."""
+    provider = make(store)
+    register(provider)
+    client, flow_id, _target = opened(provider)
+    broken_switch(store)
+
+    with respx.mock:
+        respx.post(POLL_URL).mock(return_value=httpx.Response(200, json=poll_body()))
+        revoke = respx.delete(REVOKE_URL).mock(return_value=httpx.Response(200, json={}))
+        response = client.get(consent_url(flow_id, step=ui_consent.STEP_WAIT))
+
+    assert response.status_code == 500
+    assert strings.ERROR_GENERIC_TITLE in response.text
+    assert rows(store, "authorizations") == []
+    assert revoke.call_count == 1, "the credential nobody will use goes back either way"
+    assert APP_PASSWORD not in response.text
+
+
+def test_an_account_paused_while_the_screen_was_open_gets_no_code(store: OAuthStore) -> None:
+    """Enforcement point 3: the decision itself, read before it can become a grant."""
+    provider = make(store)
+    register(provider)
+    client, flow_id, _page = signed_in(provider)
+    paused(store)
+
+    with respx.mock:
+        revoke = respx.delete(REVOKE_URL).mock(return_value=httpx.Response(200, json={}))
+        response = decide(client, flow_id, ui_consent.DECISION_APPROVE, store=store)
+
+    assert response.status_code == 403
+    assert strings.CONNECTIONS_PAUSED_TITLE in response.text
+    assert rows(store, "auth_codes") == [], "no authorization code exists for a paused account"
+    assert rows(store, "authorizations") == []
+    assert revoke.call_count == 1
+    assert asyncio.run(store.load_flow(flow_id, now=0)) is None
+
+
+def test_the_refusal_of_a_paused_account_is_not_reported_as_a_user_decision(
+    store: OAuthStore,
+) -> None:
+    """T-05-09: the reason is a setting of the account, so the client gets no
+    ``access_denied`` and the browser is not sent back at all."""
+    provider = make(store)
+    register(provider)
+    client, flow_id, _page = signed_in(provider)
+    paused(store)
+
+    with respx.mock:
+        respx.delete(REVOKE_URL).mock(return_value=httpx.Response(200, json={}))
+        response = decide(client, flow_id, ui_consent.DECISION_APPROVE, store=store)
+
+    assert "location" not in response.headers
+    assert "access_denied" not in response.text
+    assert REDIRECT not in response.text
+
+
+def test_a_decision_of_an_account_that_is_not_paused_still_returns_a_code(
+    store: OAuthStore,
+) -> None:
+    """The positive control of point 3."""
+    provider = make(store)
+    register(provider)
+    client, flow_id, _page = signed_in(provider)
+
+    with respx.mock:
+        revoke = respx.delete(REVOKE_URL).mock(return_value=httpx.Response(200, json={}))
+        response = decide(client, flow_id, ui_consent.DECISION_APPROVE, store=store)
+
+    assert response.status_code == 200
+    assert len(query_of(response)["code"]) == 1
+    assert revoke.call_count == 0
+
+
+def test_a_switch_that_cannot_be_read_at_the_decision_grants_nothing(store: OAuthStore) -> None:
+    provider = make(store)
+    register(provider)
+    client, flow_id, _page = signed_in(provider)
+    broken_switch(store)
+
+    response = decide(client, flow_id, ui_consent.DECISION_APPROVE, store=store)
+
+    assert response.status_code == 500
+    assert strings.ERROR_GENERIC_TITLE in response.text
+    assert rows(store, "auth_codes") == []
+
+
+def test_a_revocation_that_fails_does_not_hold_up_the_refusal(store: OAuthStore) -> None:
+    """D-34, D-37: the connection goes even when the cleanup step at Nextcloud does not."""
+    provider = make(store)
+    register(provider)
+    client, flow_id, _page = signed_in(provider)
+    paused(store)
+
+    with respx.mock:
+        revoke = respx.delete(REVOKE_URL).mock(return_value=httpx.Response(500, json={}))
+        response = decide(client, flow_id, ui_consent.DECISION_APPROVE, store=store)
+
+    assert response.status_code == 403
+    assert strings.CONNECTIONS_PAUSED_TITLE in response.text
+    assert revoke.call_count == 1, "one attempt, no retry"
+    assert rows(store, "authorizations") == []
+    assert rows(store, "auth_codes") == []
+
+
+def test_no_refusal_of_a_paused_account_writes_a_value_into_the_log(
+    store: OAuthStore, caplog: pytest.LogCaptureFixture
+) -> None:
+    """T-05-11: the new branches log the rule, never the account, the credential or the flow."""
+    provider = make(store)
+    register(provider)
+    client, flow_id, _target = opened(provider)
+    paused(store)
+
+    with respx.mock, caplog.at_level(logging.DEBUG, logger="mcp_connector"):
+        respx.post(POLL_URL).mock(return_value=httpx.Response(200, json=poll_body()))
+        respx.delete(REVOKE_URL).mock(return_value=httpx.Response(200, json={}))
+        client.get(consent_url(flow_id, step=ui_consent.STEP_WAIT))
+
+    assert LOGIN_NAME not in caplog.text
+    assert APP_PASSWORD not in caplog.text
+    assert POLL_TOKEN not in caplog.text
+    assert flow_id not in caplog.text
+
+
+def test_the_unchecked_places_say_why_they_are_unchecked() -> None:
+    """SC 4 of the plan: the reason stands in the code and not only in the backlog.
+
+    ``/authorize`` and ``connect._start`` cannot check the switch, because at that moment no
+    account is known: the sign in has not happened yet. A reader who finds no check there has
+    to find the reason there too, or the gap looks like an oversight.
+    """
+    source = Path(consent.__file__).read_text(encoding="utf-8")
+    marker = source.index("async def authorize(")
+    assert "not known" in source[marker : marker + 900]
+
+
 # --- the properties of every page of this route -------------------------------------------
 
 
