@@ -65,7 +65,9 @@ def stored(values: dict[str, Any], *, camel: bool = False) -> dict[str, object]:
 
 def answer(values: dict[str, Any], *, camel: bool = False) -> respx.Route:
     """Mock the one read route with these stored values."""
-    return respx.post(READ_URL).mock(return_value=httpx.Response(200, json=stored(values, camel=camel)))
+    return respx.post(READ_URL).mock(
+        return_value=httpx.Response(200, json=stored(values, camel=camel))
+    )
 
 
 # --- the contract of the four keys -------------------------------------------------
@@ -94,8 +96,8 @@ def test_every_key_maps_to_the_variable_the_existing_code_already_reads() -> Non
 
 def test_the_switch_spellings_are_the_ones_the_registry_understands() -> None:
     """Both sources have to speak one language, or a value works in Env and not in the form."""
-    assert config_values.TRUE_VALUES == registry._TRUE_VALUES  # noqa: SLF001
-    assert config_values.FALSE_VALUES == registry._FALSE_VALUES  # noqa: SLF001
+    assert config_values.TRUE_VALUES == registry._TRUE_VALUES
+    assert config_values.FALSE_VALUES == registry._FALSE_VALUES
 
 
 def test_only_one_place_in_this_module_reaches_the_network() -> None:
@@ -139,7 +141,10 @@ async def test_the_read_runs_in_the_app_context() -> None:
     await config_values.read_values(env=ENV)
 
     sent = route.calls.last.request
-    assert sent.headers["AUTHORIZATION-APP-API"] == base64.b64encode(f":{APP_SECRET}".encode()).decode()
+    assert (
+        sent.headers["AUTHORIZATION-APP-API"]
+        == base64.b64encode(f":{APP_SECRET}".encode()).decode()
+    )
     assert sent.headers["EX-APP-ID"] == APP_ID
     assert sent.headers["EX-APP-VERSION"] == APP_VERSION
     assert sent.headers["OCS-APIRequest"] == "true"
@@ -208,7 +213,15 @@ async def test_a_json_boolean_is_read_as_a_switch_value() -> None:
 @respx.mock
 @pytest.mark.parametrize(
     "outcome",
-    ["unreachable", "timeout", "status_500", "status_401", "not_json", "no_envelope", "wrong_types"],
+    [
+        "unreachable",
+        "timeout",
+        "status_500",
+        "status_401",
+        "not_json",
+        "no_envelope",
+        "wrong_types",
+    ],
 )
 async def test_a_failed_read_is_an_empty_result_and_never_an_exception(
     caplog: pytest.LogCaptureFixture, outcome: str
@@ -267,7 +280,9 @@ async def test_no_request_or_response_value_reaches_a_log_record(
         route.mock(
             return_value=httpx.Response(
                 200,
-                json=stored({"public_url": ADMIN_URL, "oauth_allowed_clients": "https://secret.test/cb"}),
+                json=stored(
+                    {"public_url": ADMIN_URL, "oauth_allowed_clients": "https://secret.test/cb"}
+                ),
             )
         )
 

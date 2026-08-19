@@ -1,0 +1,319 @@
+"""The four admin values of BL-06, read out of the ExApp configuration of Nextcloud.
+
+Three facts carry this module, and each of them is measured rather than assumed:
+
+* **The read channel is the one this repository already runs.** ``oauth/crypto.py`` fetches
+  the data key of this installation with a ``POST`` on
+  ``/ocs/v2.php/apps/app_api/api/v1/ex-app/config/get-values`` and a JSON body
+  ``{"configKeys": [...]}``. There is no ``GET`` on that resource; the shape was measured
+  against a running AppAPI 34.0.0 in plan 03-08. The path and the field name are imported
+  from that module here instead of being spelled a second time.
+* **The config key IS the field id of the Declarative Settings form.** AppAPI's
+  ``SetValueListener`` stores an admin value with
+  ``ExAppConfigService::setAppConfigValue($app, $fieldId, $value)``, without a prefix, so
+  the four ids of ``exapp/admin_settings.py`` are exactly :data:`CONFIG_KEYS`
+  (nextcloud/app_api v34.0.3, ``lib/Listener/DeclarativeSettings/SetValueListener.php``).
+* **AppAPI 34 answers in lower case.** The entries carry ``configkey`` and ``configvalue``,
+  the column names of ``ex_apps_config`` serialised straight out of the entity. The camel
+  case spelling is what the write side takes and what a later version may answer with, so
+  both are accepted.
+
+**Why this module fails soft while the data key path fails hard.** An invented data key
+looks like it works and silently makes every stored authorization unreadable, so
+``crypto._read_key`` raises on every failure. A missing admin value means one thing only:
+the administrator has not set anything. Falling back to the deploy environment is then the
+correct answer, and stopping an installation over an unreachable OCS call would be the
+wrong one. Every failure below is therefore an empty result plus exactly one log line.
+
+The precedence rule this implements, together with plan 05-04 which applies it: admin value,
+then the ``NC_MCP_*`` variable of the deploy environment, then the default in code. That is
+why :func:`admin_overlay` returns the spelling of those variables and not a settings object:
+no signature in the existing code has to change for an admin value to take effect.
+"""
+
+import logging
+from collections.abc import Mapping
+from typing import Any
+from urllib.parse import urlsplit
+
+import httpx
+
+from .. import config
+from ..errors import ToolError
+from ..nextcloud.clients.ocs import OCS_HEADERS
+from ..nextcloud.credentials import appapi_auth_headers
+from ..nextcloud.http import shared_client
+from ..oauth import registry
+from ..oauth.crypto import CONFIG_READ_FIELD, CONFIG_READ_SUFFIX, EXAPP_CONFIG_PATH
+
+__all__ = [
+    "CONFIG_KEYS",
+    "FALSE_VALUES",
+    "KEY_TO_ENV",
+    "SWITCH_OFF",
+    "SWITCH_ON",
+    "TRUE_VALUES",
+    "admin_overlay",
+    "read_values",
+]
+
+#: The four keys, in the order the form declares its fields. They are the field ids of the
+#: admin form and the configuration keys at the same time (see the module docstring).
+CONFIG_KEYS: tuple[str, ...] = (
+    "public_url",
+    "oauth_dcr",
+    "oauth_allowlist_only",
+    "oauth_allowed_clients",
+)
+
+#: The variable each key stands for. The overlay speaks the language of the deploy
+#: environment, because that is the language every reader of these values already reads.
+KEY_TO_ENV: Mapping[str, str] = {
+    "public_url": config.ENV_PUBLIC_URL,
+    "oauth_dcr": registry.ENV_DCR,
+    "oauth_allowlist_only": registry.ENV_ALLOWLIST_ONLY,
+    "oauth_allowed_clients": registry.ENV_ALLOWED_CLIENTS,
+}
+
+#: The spellings a switch may arrive in. Aligned with the two sets of ``oauth/registry.py``
+#: on purpose and held equal by a test: a value that arms a switch in the environment has to
+#: arm the same switch when it comes out of the admin form, or an administrator debugs a
+#: difference nobody wrote down. A checkbox that arrives as a JSON boolean is turned into
+#: ``"true"`` or ``"false"`` while the answer is parsed, so it lands in these sets as well.
+TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
+FALSE_VALUES = frozenset({"0", "false", "no", "off"})
+
+#: What the two switches become. One spelling leaves this module, whatever came in.
+SWITCH_ON = "on"
+SWITCH_OFF = "off"
+
+logger = logging.getLogger("mcp_connector.exapp.config_values")
+
+
+async def read_values(*, env: Mapping[str, str] | None = None) -> dict[str, str]:
+    """Return the stored admin values as raw strings, or an empty result.
+
+    One attempt and no retry loop, like every other outgoing call of this project (D-37).
+    The keys that carry no value are simply absent, and every failure is an empty dictionary
+    plus one log line rather than an exception.
+
+    The difference to the data key read path, spelled out because it is the whole reason
+    this function exists next to ``crypto._read_key``: an invented data key makes every
+    authorization unreadable, so that path fails hard, while a missing admin value only
+    means that the administrator has not set anything, so this path falls back to the
+    environment. An answer this module cannot read is nevertheless never counted as "no
+    value": it is a failure with a log line, and the deploy environment stays in force
+    (fail closed, T-05-02).
+    """
+    try:
+        settings = config.exapp_settings(env)
+    except ToolError:
+        # Not a raise: the caller of this module is the enable hook and the start, and
+        # neither may fall over because a variable of the deploy environment is missing.
+        logger.error(
+            "the admin values were not read: the AppAPI deploy environment is incomplete, "
+            "so the deploy environment of this container stays in force"
+        )
+        return {}
+
+    url = f"{settings.base_url}{EXAPP_CONFIG_PATH}{CONFIG_READ_SUFFIX}"
+    client = shared_client()
+    try:
+        response = await client.post(
+            url,
+            json={CONFIG_READ_FIELD: list(CONFIG_KEYS)},
+            headers=_headers(settings),
+        )
+    except httpx.HTTPError:
+        # No value of the request is repeated here: the headers carry the app secret.
+        logger.error("the ExApp configuration at %s could not be read, the environment stays", url)
+        return {}
+
+    if response.status_code // 100 != 2:
+        logger.error(
+            "Nextcloud answered %s when the admin values were read, the environment stays",
+            response.status_code,
+        )
+        return {}
+
+    try:
+        payload = response.json()
+    except ValueError:
+        logger.error("the answer to the admin value read was not JSON, the environment stays")
+        return {}
+
+    values = _config_values(payload)
+    if values is None:
+        # An unreadable envelope is never an empty one: a silent empty result would look
+        # exactly like an administrator who configured nothing (T-05-02).
+        logger.error("the admin value answer could not be read, so it is not treated as empty")
+        return {}
+    return values
+
+
+async def admin_overlay(*, env: Mapping[str, str] | None = None) -> dict[str, str]:
+    """Return the usable admin values, keyed by the variable name they stand for.
+
+    Only keys with a value that survives validation appear. A blank value counts as unset,
+    which is what makes the precedence rule work: the deploy environment wins whenever the
+    administrator left a field empty.
+
+    Validation is per key, so a typo in one field is never an outage of the other three.
+    """
+    values = await read_values(env=env)
+
+    overlay: dict[str, str] = {}
+    for key in CONFIG_KEYS:
+        raw = values.get(key)
+        if raw is None or not raw.strip():
+            continue
+        usable = _usable_value(key, raw)
+        if usable is None:
+            continue
+        overlay[KEY_TO_ENV[key]] = usable
+    return overlay
+
+
+def _usable_value(key: str, raw: str) -> str | None:
+    """The validated form of one admin value, or ``None`` when it is not usable."""
+    if key == "public_url":
+        return _public_url(raw)
+    if key in ("oauth_dcr", "oauth_allowlist_only"):
+        return _switch(key, raw)
+    # oauth_allowed_clients travels unchanged: registry._entries splits, strips and
+    # deduplicates it already, and a second implementation of that would be a second
+    # answer to the same question.
+    return raw.strip()
+
+
+def _public_url(raw: str) -> str | None:
+    """The public base URL, or ``None`` plus a warning that never quotes the value.
+
+    This is the most dangerous of the four values and the reason the rule here is harder
+    than :func:`config.normalize_base_url` alone: it becomes the ``issuer`` of the
+    authorization server metadata and the ``resource`` of the protected resource metadata
+    (security domain V5, T-05-01). The extra conditions are the ones
+    ``registry.redirect_uri_allowed`` names for a return address, for the same reasons: a
+    fragment is where a token hides from a server log, credentials in a URL render as a
+    host in more than one client, and an address this library cannot take apart is not one
+    a browser and this server would agree about.
+    """
+    candidate = raw.strip().rstrip("/")
+    try:
+        candidate = config.normalize_base_url(candidate)
+    except ToolError:
+        return _rejected("public_url", "is not a usable base URL")
+
+    parts = urlsplit(candidate)
+    if parts.fragment:
+        return _rejected("public_url", "carries a fragment")
+    try:
+        host = parts.hostname
+        port = parts.port
+    except ValueError:
+        return _rejected("public_url", "has a host or a port this server cannot read")
+    if not host or parts.username or parts.password:
+        return _rejected("public_url", "has no host or carries credentials")
+    if port is not None and not 0 < port <= 65535:
+        return _rejected("public_url", "has a port outside the range 1 to 65535")
+    return candidate
+
+
+def _switch(key: str, raw: str) -> str | None:
+    """One checkbox value, normalised to ``"on"`` or ``"off"``, or refused.
+
+    No silent default, for the reason ``registry._switch`` gives: a value nobody
+    understands is a typo, and a typo is not a security switch. The difference to that
+    function is that a refused value here leaves the key out of the overlay entirely, so
+    the environment and then the default in code decide, exactly as before.
+    """
+    value = raw.strip().lower()
+    if value in TRUE_VALUES:
+        return SWITCH_ON
+    if value in FALSE_VALUES:
+        return SWITCH_OFF
+    return _rejected(
+        key,
+        "is neither on nor off (understood are "
+        f"{', '.join(sorted(TRUE_VALUES))} and {', '.join(sorted(FALSE_VALUES))})",
+    )
+
+
+def _rejected(key: str, why: str) -> None:
+    """Name the field and the reason, never the value: it came in over HTTP (T-05-03)."""
+    logger.warning(
+        "the admin value for %s %s, so it is ignored and the deploy environment stays in "
+        "force for it. Correct it in the Nextcloud administration settings of this app.",
+        key,
+        why,
+    )
+
+
+def _headers(settings: config.ExAppSettings) -> dict[str, str]:
+    """The OCS headers plus the AppAPI identity, in the app context (empty user id)."""
+    headers = dict(OCS_HEADERS)
+    headers.update(
+        appapi_auth_headers(
+            "",
+            app_id=settings.app_id,
+            app_version=settings.app_version,
+            aa_version=settings.aa_version,
+            app_secret=settings.app_secret,
+        )
+    )
+    return headers
+
+
+def _config_values(payload: Any) -> dict[str, str] | None:
+    """Pull our four values out of the OCS envelope, or refuse to guess.
+
+    ``None`` means the answer could not be read and is therefore not an empty one. The three
+    accepted shapes are the ones ``crypto._config_value`` accepts: a list of entries with
+    lower case field names, the same list in camel case, and a mapping of key to value.
+    """
+    if not isinstance(payload, dict):
+        return None
+    ocs = payload.get("ocs")
+    if not isinstance(ocs, dict) or "data" not in ocs:
+        return None
+
+    data = ocs["data"]
+    found: dict[str, str] = {}
+    if isinstance(data, list):
+        for entry in data:
+            if not isinstance(entry, dict):
+                return None
+            name = entry.get("configkey", entry.get("configKey"))
+            if not isinstance(name, str):
+                return None
+            if name not in CONFIG_KEYS:
+                continue
+            text = _as_text(entry.get("configvalue", entry.get("configValue")))
+            if text is None:
+                return None
+            found[name] = text
+        return found
+    if isinstance(data, dict):
+        for name in CONFIG_KEYS:
+            if name not in data:
+                continue
+            text = _as_text(data[name])
+            if text is None:
+                return None
+            found[name] = text
+        return found
+    return None
+
+
+def _as_text(raw: Any) -> str | None:
+    """A stored value as a string, or ``None`` when it is a shape we do not read.
+
+    A checkbox may arrive as a JSON boolean rather than as ``"1"`` or ``"0"``, depending on
+    what Nextcloud stored for the field, and ``True`` is a perfectly readable answer. It is
+    turned into the lower case spelling here so the switch reader has one language.
+    """
+    if isinstance(raw, bool):
+        return "true" if raw else "false"
+    if isinstance(raw, str):
+        return raw
+    return None
