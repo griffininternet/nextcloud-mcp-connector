@@ -41,7 +41,7 @@
 - [x] **EXAPP-02**: Nutzer kann in den Nextcloud-Settings den MCP-Zugriff aktivieren/deaktivieren, verbundene Clients einsehen und Tokens widerrufen (Per-User-Verwaltung, Declarative Settings)
 - [x] **EXAPP-03**: App-ID ist in Woche 1 eingefroren (ohne "nextcloud" im Namen, Store-Regel; Zertifikat hängt an der ID)
 - [ ] **EXAPP-04**: App ist im Nextcloud App Store eingereicht (Zertifikat via CSR-PR, Signatur, info.xml-Validierung, Datenweitergabe-Disclosure) vor der Nextcloud Conference September 2026
-- [ ] **EXAPP-05**: Setup-Doku pro Client (Claude.ai/Desktop, ChatGPT, Cursor, Open WebUI, MUCGPT) mit den bekannten Stolperstellen
+- [x] **EXAPP-05**: Setup-Doku pro Client (Claude.ai/Desktop, ChatGPT, Cursor, Open WebUI, MUCGPT) mit den bekannten Stolperstellen
 
 ### Flanke Nextcloud-Ökosystem (CONTRIB)
 
@@ -107,7 +107,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EXAPP-02 | Phase 4 | Complete |
 | TOOL-08 | Phase 4 | Complete |
 | EXAPP-04 | Phase 5 | Pending |
-| EXAPP-05 | Phase 5 | Pending |
+| EXAPP-05 | Phase 5 | Complete |
 
 **Coverage:**
 - v1 requirements: 26 total

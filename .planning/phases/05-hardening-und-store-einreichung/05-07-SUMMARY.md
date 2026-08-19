@@ -196,6 +196,15 @@ Zwei Owner-Schritte entstehen daraus, beide nicht blockierend:
 - Die Wegwerf-Umgebung ist abgeraeumt: `nc-mcp-owui-probe` entfernt, ExApp-Topologie heruntergefahren, Volumes mit der 05-03-Fixture behalten. Die Wiederanfahr-Prozedur in `STATE.md` gilt wieder unveraendert.
 - Kein neuer Blocker. Die offenen Punkte der Phase sind unveraendert Assumption A5 (Live-Lauf des occ-Kommandos, Plan 05-08) und der Nextcloud-AIO-Smoke.
 
+## Self-Check: PASSED
+
+- Alle vier genannten Dateien existieren.
+- Alle sechs genannten Commits existieren: `631dbfb`, `34f71f8`, `397e3a4`, `9ba9842`, `85303ab`, `aa17a54`.
+- Volle Verifikation des Plans gruen: `uv run --no-sync pytest -q` (alle Tests), `ruff check .` ("All checks passed!"), `ruff format --check .` ("164 files already formatted").
+- Die Akzeptanz-Greps des Plans: `follows in a later phase` = 0, `Open WebUI, step by step` = 1, `invalid_redirect_uri` = 2, `forward_auth_override` = 4, `not verified against a running` = 1, `transport: streamable_http` = 1, Em-Dashes = 0, Tabellenzeilen im MUCGPT-Abschnitt = 0, Testbestand-Passwoerter in der Doku = 0.
+- Aufraeumen verifiziert: `nc-mcp-owui-probe` und `nc_app_mcp_connector` entfernt, ExApp-Topologie herunter, Netz `nc-mcp-exapp-net` weg, die drei Volumes behalten, `nc-mcp-test` und `findling-nextcloud` unberuehrt mit 4 Tagen Laufzeit.
+- Nicht entfernt und absichtlich: das Image `ghcr.io/open-webui/open-webui:main` (7,16 GB). Ein erneuter Pull dauert Minuten, und `05-10` koennte es fuer eine Nachpruefung brauchen. Entfernen mit `docker rmi ghcr.io/open-webui/open-webui:main`.
+
 ---
 *Phase: 05-hardening-und-store-einreichung*
 *Completed: 2026-08-19*

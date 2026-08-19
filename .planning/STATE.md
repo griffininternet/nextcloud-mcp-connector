@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Plan 05-07 Task 1 fertig (Open-WebUI-Abschnitt in docs/client-setup.md plus 05-07-MEASUREMENTS.md, Commits 631dbfb und 34f71f8). CHECKPOINT OFFEN: Task 2 ist der Browserteil des Open-WebUI-Rundlaufs und braucht den Owner; die Umgebung laeuft absichtlich weiter (Open WebUI http://localhost:3030, Admin admin@probe.invalid). Danach Task 3 (MUCGPT plus veraltete Aussagen der Datei) und erst dann SUMMARY."
-last_updated: "2026-08-19T18:28:34.138Z"
+stopped_at: "Plan 05-07 fertig: docs/client-setup.md deckt jetzt alle sieben Zielclients ab. Open WebUI 0.11.0 Ende zu Ende verprobt (Discovery, DCR mit genau einer Redirect-URI, resource nach RFC 8707, Refresh-Token, 16 Werkzeuge, Consent im Browser, Zwei-Konten-Leak-Check), MUCGPT mit den zwei Konfigurationsschluesseln und benannter Luecke (kein Instanzzugang, Assumption A4). EXAPP-05 abgehakt. Offen: Assumption A5 (Live-Lauf des occ-Kommandos) in Plan 05-08. Naechstes: Plan 05-08"
+last_updated: "2026-08-19T19:10:32.909Z"
 last_activity: 2026-08-19
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 44
-  completed_plans: 40
+  completed_plans: 41
   percent: 80
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 05 (hardening-und-store-einreichung) — EXECUTING
-Plan: 7 of 10
+Plan: 8 of 10
 Status: Ready to execute
 Last activity: 2026-08-19
 
-Progress: [█████████░] 91%
+Progress: [█████████░] 93%
 
 ## Performance Metrics
 
@@ -93,6 +93,7 @@ Progress: [█████████░] 91%
 | Phase 05 P04 | 18 min | 2 tasks | 7 files |
 | Phase 05 P05 | 25 min | 2 tasks | 3 files |
 | Phase 05 P06 | 25 min | 2 tasks tasks | 12 files files |
+| Phase 05 P07 | 75 min | 3 tasks tasks | 4 files files |
 
 ## Accumulated Context
 
@@ -306,8 +307,7 @@ Recent decisions affecting current work:
 - **Nextcloud-AIO-Smoke (Phase 5, D-31):** Der zweite Smoke-Schritt aus Success Criterion 1 ist an Phase 5 uebergeben. Er scheitert auf diesem Rechner an AIOs Domain-Validierung (oeffentliche Domain plus gueltiges TLS). Die fehlenden Schritte stehen in docs/exapp-install.md, Abschnitt Nextcloud AIO: Host mit oeffentlicher Domain und Zertifikat, AIO-Mastercontainer starten, optionalen HaRP-Container aktivieren (Annahme A6 unverifiziert), App als ExApp installieren, den Permission-Fidelity-Smoke wiederholen und occ app_api:app:list festhalten.
 - **WR-12 Linux-socat-Loop (Phase 5):** Die Linux-Variante des --manual-Entwicklungsloops (socat auf das Compose-Gateway) ist dokumentiert, aber auf diesem Windows-Host nicht durchgespielt; Entwicklungs-Komfort, nicht der ausgelieferte Pfad.
 - **Browser-Blick auf /settings/user/security (Assumption A1, Phase-4-Verifikation):** Gemessen ist, dass Nextcloud die Link-only-Form ausliefert (forms-Endpoint, Initial-State der Seite, Mount-Punkt `<div id="mcp_connector_mcp_connector_settings">`). Der gerenderte Pixel ist nicht gemessen, im Live-Lauf war kein Browser beteiligt. Schadensfall waere ein fehlender Wegweiser, keine Funktionsstoerung. Details in 04-04-MEASUREMENTS.md, Beweis 1.
-- **ExApp-Topologie LAEUFT GERADE (05-07, Checkpoint offen):** Seit 2026-08-19 18:0x UTC wieder angefahren und absichtlich NICHT abgeraeumt, weil Task 2 von Plan 05-07 (Browserteil des Open-WebUI-Rundlaufs) sie braucht. Zusaetzlich laeuft der Wegwerf-Container `nc-mcp-owui-probe` (Open WebUI 0.11.0) auf `http://localhost:3030`, angehaengt an `nc-mcp-exapp-net`, mit einem Weiterleiter `/tmp/loopback_forward.py` im Container (127.0.0.1:8081 auf caddy:80). Adressen, Konten und Aufraeumkommandos stehen in `05-07-MEASUREMENTS.md`, Abschnitt "Zustand der Umgebung nach diesem Lauf". Nach Task 2: `docker rm -f nc-mcp-owui-probe`, dann `docker compose -f compose.exapp.yml down` (Volumes behalten). Die Prozedur unten gilt ab dann wieder.
-- **ExApp-Topologie (Prozedur):** Nach 05-05 wieder heruntergefahren (`down` mit erhaltenen Volumes, danach `docker stop`/`docker rm nc_app_mcp_connector` und `docker network rm nc-mcp-exapp-net`). Die Volumes tragen die Fixture von 05-03 (read-only geteilter Ordner plus ungeteilte Datei); die zugehoerigen vier Werte stehen in `.env.exapp` und werden beim naechsten Bootstrap wiederverwendet, nicht neu erzeugt. `auth.bruteforce.protection.enabled` steht auf `false` und alle Bruteforce-Zaehler auf 0, also im Zustand, den der Bootstrap herstellt (05-05). Wieder anfahren: `export HP_SHARED_KEY=$(openssl rand -hex 32)` und in DERSELBEN Zeile weiterarbeiten (die Shell-Env ueberlebt einen Aufruf nicht, und jedes `docker compose` gegen diese Datei braucht die Variable), `up -d --wait`, `occ app_api:app:unregister mcp_connector --silent --force`, `occ app_api:daemon:unregister harp_proxy_docker`, dann `bash scripts/bootstrap_exapp.sh` (baut das Image neu und setzt NC_MCP_PUBLIC_URL). Ohne das Neubauen laeuft ein veraltetes Image. **Ab dem zweiten Aufruf gegen bereits laufende Container den Schluessel zurueckLESEN statt neu erzeugen** (gemessen in 05-05): `export HP_SHARED_KEY=$(docker inspect nc-mcp-exapp-harp --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^HP_SHARED_KEY=' | cut -d= -f2)`. Fehlt die Variable, scheitert JEDER compose-Aufruf an der Interpolation, und im Bootstrap sieht das wegen `2>/dev/null` in der Warteschleife wie "Nextcloud is still not installed" aus, obwohl `occ status` `installed: true` meldet.
+- **ExApp-Topologie:** Nach 05-07 wieder heruntergefahren (`down` mit erhaltenen Volumes, danach `docker stop`/`docker rm nc_app_mcp_connector` und `docker network rm nc-mcp-exapp-net`); der Wegwerf-Container `nc-mcp-owui-probe` ist entfernt, das Image `ghcr.io/open-webui/open-webui:main` (7,16 GB) liegt absichtlich noch da. Zuvor nach 05-05 ebenso heruntergefahren (`down` mit erhaltenen Volumes, danach `docker stop`/`docker rm nc_app_mcp_connector` und `docker network rm nc-mcp-exapp-net`). Die Volumes tragen die Fixture von 05-03 (read-only geteilter Ordner plus ungeteilte Datei); die zugehoerigen vier Werte stehen in `.env.exapp` und werden beim naechsten Bootstrap wiederverwendet, nicht neu erzeugt. `auth.bruteforce.protection.enabled` steht auf `false` und alle Bruteforce-Zaehler auf 0, also im Zustand, den der Bootstrap herstellt (05-05). Wieder anfahren: `export HP_SHARED_KEY=$(openssl rand -hex 32)` und in DERSELBEN Zeile weiterarbeiten (die Shell-Env ueberlebt einen Aufruf nicht, und jedes `docker compose` gegen diese Datei braucht die Variable), `up -d --wait`, `occ app_api:app:unregister mcp_connector --silent --force`, `occ app_api:daemon:unregister harp_proxy_docker`, dann `bash scripts/bootstrap_exapp.sh` (baut das Image neu und setzt NC_MCP_PUBLIC_URL). Ohne das Neubauen laeuft ein veraltetes Image. **Ab dem zweiten Aufruf gegen bereits laufende Container den Schluessel zurueckLESEN statt neu erzeugen** (gemessen in 05-05): `export HP_SHARED_KEY=$(docker inspect nc-mcp-exapp-harp --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^HP_SHARED_KEY=' | cut -d= -f2)`. Fehlt die Variable, scheitert JEDER compose-Aufruf an der Interpolation, und im Bootstrap sieht das wegen `2>/dev/null` in der Warteschleife wie "Nextcloud is still not installed" aus, obwohl `occ status` `installed: true` meldet.
 - **Aufraeumen (optional):** Die Docker-Testinstanz traegt jetzt zusaetzlich die Calendar-App 6.5.3 und die Abnahme-Artefakte. Fuer einen sauberen Stand: `docker compose -f compose.test.yml down -v` und danach `bash scripts/bootstrap_test_nc.sh`.
 
 ### Blockers/Concerns
@@ -326,6 +326,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-19T18:28:34.111Z
-Stopped at: Plan 05-07 Task 1 fertig (Open-WebUI-Abschnitt in docs/client-setup.md plus 05-07-MEASUREMENTS.md, Commits 631dbfb und 34f71f8). CHECKPOINT OFFEN: Task 2 ist der Browserteil des Open-WebUI-Rundlaufs und braucht den Owner; die Umgebung laeuft absichtlich weiter (Open WebUI http://localhost:3030, Admin admin@probe.invalid). Danach Task 3 (MUCGPT plus veraltete Aussagen der Datei) und erst dann SUMMARY.
+Last session: 2026-08-19T19:10:32.890Z
+Stopped at: Plan 05-07 fertig: docs/client-setup.md deckt jetzt alle sieben Zielclients ab. Open WebUI 0.11.0 Ende zu Ende verprobt (Discovery, DCR mit genau einer Redirect-URI, resource nach RFC 8707, Refresh-Token, 16 Werkzeuge, Consent im Browser, Zwei-Konten-Leak-Check), MUCGPT mit den zwei Konfigurationsschluesseln und benannter Luecke (kein Instanzzugang, Assumption A4). EXAPP-05 abgehakt. Offen: Assumption A5 (Live-Lauf des occ-Kommandos) in Plan 05-08. Naechstes: Plan 05-08
 Resume file: None
