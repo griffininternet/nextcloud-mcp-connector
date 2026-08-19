@@ -1569,3 +1569,284 @@ def test_the_reverse_proxy_routes_the_exapps_prefix() -> None:
     text = CADDYFILE.read_text(encoding="utf-8")
     assert "/exapps/*" in text
     assert "appapi-harp:8780" in text
+
+
+# --------------------------------------------------------------------------------------
+# The public text of the manifest (plan 05-09)
+#
+# Two gates, both written as a function over the parsed root for the reason the module
+# docstring gives: a gate nobody has seen fail is not a gate, so each one has a counter
+# probe below that feeds it a manipulated manifest.
+# --------------------------------------------------------------------------------------
+
+#: The three language variants that exist today. ``None`` is the element without a ``lang``
+#: attribute, which is the English original the store falls back to.
+MANIFEST_LANGS = (None, "de", "fr")
+
+#: XSD ``l10n-string`` for ``summary``, ``maxLength`` 128. ``description`` is ``l10n-text``
+#: and has no upper bound, which is why only the summary is measured here.
+SUMMARY_MAX_LENGTH = 128
+
+#: Project vocabulary rule: this word must not appear in a public artefact of this repo,
+#: and the manifest is the most public one there is. Matched case insensitively, and only
+#: against element text, so the explanatory comments of the manifest cannot trip it.
+FORBIDDEN_VOCABULARY = "archiv"
+
+#: A line that renders as a table row or a table separator in either pipeline.
+TABLE_LINE = re.compile(r"\|")
+
+#: A markdown or HTML image.
+IMAGE_MARKUP = re.compile(r"!\[[^\]]*\]\(|<\s*img", re.IGNORECASE)
+
+#: A thematic break: three or more of -, * or _ alone on a line.
+HORIZONTAL_RULE = re.compile(r"^[ \t]{0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$", re.MULTILINE)
+
+#: Any HTML element, opening or closing.
+HTML_ELEMENT = re.compile(r"<\s*/?\s*[a-zA-Z]")
+
+
+def _lang_label(lang: str | None) -> str:
+    return lang or "en"
+
+
+def _localised(root: etree._Element, tag: str, lang: str | None) -> str | None:
+    """The text of ``tag`` for one language, or ``None`` when that variant is missing."""
+    for element in root.findall(tag):
+        if element.get("lang") == lang:
+            return element.text or ""
+    return None
+
+
+def element_text_without_comments(root: etree._Element) -> str:
+    """Every piece of element text in the manifest, with comments left out.
+
+    The manifest carries long explanatory comments, several of which quote the words a
+    gate looks for. A grep over the file would therefore fail on its own documentation,
+    so the vocabulary check reads the parsed tree and skips comment and processing
+    instruction nodes.
+    """
+    parts: list[str] = []
+    for node in root.iter():
+        if isinstance(node, etree._Comment | etree._ProcessingInstruction):
+            continue
+        if node.text:
+            parts.append(node.text)
+    return "\n".join(parts)
+
+
+def description_problems(root: etree._Element) -> list[str]:
+    """Return every reason this manifest's public text must not be shipped.
+
+    The store description is the only text a user reads without visiting the repository,
+    and it is rendered by two different pipelines. On apps.nextcloud.com it is Python
+    ``markdown`` plus ``bleach`` with ``MARKDOWN_ALLOWED_TAGS``, which allows tables,
+    ``code`` and ``pre``. In the app detail view of the instance it is ``marked`` with
+    ``gfm: false, breaks: false``, followed by ``dompurify.sanitize`` with an allow list of
+    ``h1..h6, strong, p, a, ul, ol, li, em, del, blockquote`` and nothing else: no ``code``,
+    no ``pre``, no ``table``, no ``br``, no ``img``, no ``hr``. Whatever is written with
+    backticks or in a table is not degraded there, it disappears, and ``breaks: false``
+    means a single newline produces no break at all, so a text with single line breaks
+    arrives as one clump (pitfall 4 of 05-RESEARCH.md).
+
+    So the rule is the smaller common denominator: headings, bold, italic, links, lists,
+    blockquote, and paragraphs separated by a blank line.
+    """
+    problems: list[str] = []
+
+    for lang in MANIFEST_LANGS:
+        label = _lang_label(lang)
+
+        summary = _localised(root, "summary", lang)
+        if summary is None:
+            problems.append(f"the {label} summary is missing")
+        elif len(summary.strip()) > SUMMARY_MAX_LENGTH:
+            problems.append(
+                f"the {label} summary is {len(summary.strip())} characters, "
+                f"the schema allows {SUMMARY_MAX_LENGTH}"
+            )
+
+        description = _localised(root, "description", lang)
+        if description is None:
+            problems.append(f"the {label} description is missing")
+            continue
+
+        if "`" in description:
+            problems.append(f"the {label} description carries a backtick")
+        if TABLE_LINE.search(description):
+            problems.append(f"the {label} description carries a table")
+        if IMAGE_MARKUP.search(description):
+            problems.append(f"the {label} description carries an image")
+        if HORIZONTAL_RULE.search(description):
+            problems.append(f"the {label} description carries a horizontal rule")
+        if HTML_ELEMENT.search(description):
+            problems.append(f"the {label} description carries an HTML element")
+
+        paragraphs = [
+            block for block in re.split(r"\n[ \t]*\n", description.strip()) if block.strip()
+        ]
+        if len(paragraphs) < 2:
+            problems.append(
+                f"the {label} description has {len(paragraphs)} paragraph(s); "
+                "single line breaks disappear in the instance view, so paragraphs need a "
+                "blank line between them"
+            )
+
+    text = element_text_without_comments(root)
+    if FORBIDDEN_VOCABULARY in text.casefold():
+        problems.append(f"the manifest text carries the forbidden word {FORBIDDEN_VOCABULARY!r}")
+
+    return problems
+
+
+def variable_problems(root: etree._Element) -> list[str]:
+    """Return every reason the declared environment variables must not be shipped.
+
+    One rule, and it is not cosmetic. AppAPI 34.0.3 filters a declared default against the
+    empty string only, not against "not a scalar", and ``simplexml``/``json`` turns an empty
+    XML element into an empty array. So ``<default></default>`` reaches the container as the
+    literal value ``Array``: ``NC_MCP_OAUTH_DCR=Array``, which is neither on nor off. AppAPI
+    main fixed this in ``ExAppEnvVarsHelper::toString()``; that file does not exist on
+    34.0.3. The store answers the same mistake with a 500 on the release upload (fix
+    b0ac128), so an empty element costs either a broken deploy environment or a rejected
+    upload (pitfall 3 of 05-RESEARCH.md).
+
+    Either fill a default or leave the element out. Our four variables carry none today,
+    and that is the safe state.
+    """
+    problems: list[str] = []
+
+    for variable in root.findall(".//variable"):
+        name = (variable.findtext("name") or "?").strip()
+        for default in variable.findall("default"):
+            if not (default.text or "").strip():
+                problems.append(
+                    f"variable {name!r} declares an empty <default>; AppAPI 34.0.3 exports "
+                    "it as the string 'Array' and the store answers with a 500"
+                )
+
+    return problems
+
+
+def test_the_manifest_text_passes_its_own_gate(manifest_root: etree._Element) -> None:
+    """Every language variant survives the narrower of the two rendering pipelines."""
+    assert description_problems(manifest_root) == []
+
+
+def test_every_description_carries_the_answer_of_the_faq(manifest_root: etree._Element) -> None:
+    """The store text is the only place a user reads without visiting the repository, so
+    the answer has to stand there and not only be linked (05-RESEARCH open question 2).
+
+    One marker per fact, in the language of the variant: nothing runs on its own, there is
+    a switch per account, and a connection can be ended on its own.
+    """
+    markers = {
+        None: ("background", "switch", "disconnect"),
+        "de": ("Hintergrund", "Schalter", "trenn"),
+        "fr": ("arrière-plan", "interrupteur", "déconnect"),
+    }
+
+    for lang, expected in markers.items():
+        description = _localised(manifest_root, "description", lang)
+        assert description is not None
+        for marker in expected:
+            assert marker in description, f"the {_lang_label(lang)} description misses {marker!r}"
+
+
+def test_the_text_gate_rejects_a_backtick_and_a_table(manifest_root: etree._Element) -> None:
+    """The counter probe: without it, the green run above proves nothing about the gate.
+
+    Exactly the shape pitfall 4 warns about first, a fenced snippet and a table, written
+    into the German variant.
+    """
+    for element in manifest_root.findall("description"):
+        if element.get("lang") == "de":
+            element.text = (
+                "Setzen Sie `NC_MCP_PUBLIC_URL`.\n\n"
+                "| Variable | Zweck |\n| --- | --- |\n| NC_MCP_PUBLIC_URL | Adresse |\n"
+            )
+
+    problems = description_problems(manifest_root)
+
+    assert any("de description carries a backtick" in problem for problem in problems)
+    assert any("de description carries a table" in problem for problem in problems)
+
+
+def test_the_text_gate_rejects_single_line_breaks(manifest_root: etree._Element) -> None:
+    """``breaks: false`` in the instance view: four sentences on four lines are one clump,
+    which is what the shipped text looked like before this plan."""
+    for element in manifest_root.findall("description"):
+        if element.get("lang") is None:
+            element.text = "One sentence.\nA second one.\nA third one.\n"
+
+    problems = description_problems(manifest_root)
+
+    assert any("en description has 1 paragraph(s)" in problem for problem in problems)
+
+
+def test_the_text_gate_rejects_html_an_image_and_a_rule(manifest_root: etree._Element) -> None:
+    """``dompurify`` drops all three, so each of them is content that vanishes."""
+    for element in manifest_root.findall("description"):
+        if element.get("lang") == "fr":
+            element.text = (
+                "Premier paragraphe.\n\n"
+                "---\n\n"
+                "<b>Deuxième</b> paragraphe.\n\n"
+                "![capture](https://example.org/a.png)\n"
+            )
+
+    problems = description_problems(manifest_root)
+
+    assert any("fr description carries an HTML element" in problem for problem in problems)
+    assert any("fr description carries an image" in problem for problem in problems)
+    assert any("fr description carries a horizontal rule" in problem for problem in problems)
+
+
+def test_the_text_gate_rejects_a_summary_over_the_schema_limit(
+    manifest_root: etree._Element,
+) -> None:
+    """``l10n-string`` has ``maxLength`` 128; the store rejects a longer one on upload."""
+    for element in manifest_root.findall("summary"):
+        if element.get("lang") is None:
+            element.text = "x" * (SUMMARY_MAX_LENGTH + 1)
+
+    problems = description_problems(manifest_root)
+
+    assert any("en summary is 129 characters" in problem for problem in problems)
+
+
+def test_the_text_gate_rejects_the_forbidden_vocabulary(manifest_root: etree._Element) -> None:
+    """The project vocabulary rule, on the most public artefact of the repository."""
+    for element in manifest_root.findall("description"):
+        if element.get("lang") is None:
+            element.text = "First paragraph.\n\nThe Archive of your data stays untouched.\n"
+
+    problems = description_problems(manifest_root)
+
+    assert any("forbidden word" in problem for problem in problems)
+
+
+def test_no_declared_variable_carries_an_empty_default(manifest_root: etree._Element) -> None:
+    """The shipped state: four variables, not one default among them."""
+    assert variable_problems(manifest_root) == []
+
+
+def test_the_variable_gate_rejects_an_empty_default(manifest_root: etree._Element) -> None:
+    """The counter probe for the second gate, with the exact element somebody adds for
+    documentation purposes and which then arrives in the container as ``Array``."""
+    variable = manifest_root.find(".//variable")
+    assert variable is not None
+    etree.SubElement(variable, "default")
+
+    problems = variable_problems(manifest_root)
+
+    assert any("empty <default>" in problem for problem in problems)
+
+
+def test_the_variable_gate_accepts_a_filled_default(manifest_root: etree._Element) -> None:
+    """The other half of the rule: a default with content is allowed, only an empty
+    element is the trap, so the gate must not simply forbid the element."""
+    variable = manifest_root.find(".//variable")
+    assert variable is not None
+    etree.SubElement(variable, "default").text = "off"
+
+    assert variable_problems(manifest_root) == []
