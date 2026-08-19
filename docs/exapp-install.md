@@ -426,7 +426,17 @@ Success Criterion 1 of phase 2 names two smoke targets: the `docker compose` HaR
 above, and Nextcloud All-in-One. This section records the decision on the second one, because
 D-31 requires it to be handed over with a reason rather than dropped in silence.
 
-**Decision: not run on this development host. Handed to phase 5 as a named open item.**
+**Decision, phase 5, 2026-08-19: deliberately descoped, not run, and not silently dropped.**
+The smoke stays unexecuted because its precondition cannot be produced here, and it goes into
+the phase verification as a descoped line rather than as a finished one. What is missing is
+named in one sentence: a publicly resolvable domain with a valid public TLS certificate and
+inbound reachability on ports 80 and 443, which the AIO mastercontainer validates before it
+starts any container an ExApp could be installed into. The six steps that would follow are
+listed at the end of this section, unchanged, and step 3 still rests on the unverified
+research assumption A6. Nothing on this page and nothing in the phase claims AIO coverage,
+and no measurement of this project was taken on AIO.
+
+**Decision of phase 2, for the record: not run on this development host.**
 
 **Where it stops.** The AIO mastercontainer refuses to start the Nextcloud stack until its
 setup step validates a domain: it wants a publicly resolvable domain name with a valid, public
@@ -458,9 +468,58 @@ requirement.
    `tests/integration/test_permission_fidelity_exapp.py` runs against the compose topology.
 6. Record `occ app_api:app:list` from the AIO instance as the evidence for case A.
 
-**Handoff.** This is an open item for phase 5 (store submission), not a closed one. It is also
-reported in the plan summary as an owner and phase 5 item so it is tracked in the project state
-rather than remembered only here.
+**Handoff.** This stayed an open item through phase 5 and is now a descoped one with a named
+precondition, which is a different thing from a forgotten one: the work is described, the
+blocker is a host property and not a code property, and nothing in the project claims the
+result. It is recorded in the plan summary of 05-08 and in the project state, not only here.
+
+## Nextcloud 34 has no interface for installing or removing an ExApp
+
+Measured on **2026-08-19** against Nextcloud 34.0.2 with AppAPI 34.0.0, while looking for the
+Install button of this app:
+
+**No ExApp appears in the app list at all.** Not this app, and not `context_agent`,
+`visionatrix` or `stt_whisper2` either. `OCS /apps/appstore/api/v1/apps` answers with 694 apps
+and `exappCount=0`, while the AppAPI backend is healthy and answers
+`GET /index.php/apps/app_api/apps/list` with `{"id": "mcp_connector", "version": "0.1.0",
+"canInstall": true}`, and the app store cache in the instance contains the entry with
+`platform >=32.0.0 <35.0.0`.
+
+The break is in the frontend of the new `appstore` app 1.0.0:
+
+```
+apps/appstore/lib/Controller/ApiController.php:383   $apps = $this->appFetcher->get();
+apps/appstore/lib/Controller/ApiController.php:459   'app_api' => false,
+```
+
+The bundle ships an external apps store with an `initialize` function, and that word occurs
+exactly once in the whole bundle, in its own definition. A network trace of the page shows
+`/apps/app_api/apps/list` is never requested. The older ExApp page of AppAPI is not a fallback:
+its route is still declared while the method is gone, so `/index.php/apps/app_api/apps`
+answers `500 Method ExAppsPageController::viewApps() does not exist`. An installed ExApp is
+invisible to the list as well, because the core app manager never learns about it
+(`occ app:list | grep -c mcp_connector` is `0` while the app is enabled and healthy).
+
+**What that means for an administrator on 34:** install with `occ` as described above, and
+remove with `occ` as described in [uninstall.md](./uninstall.md). Both are the documented
+paths of AppAPI and work on 32, 33 and 34 alike; the interface is the part that is missing,
+not the mechanism.
+
+**And one thing to know before trying the store path anyway.** The wire call the Install
+button would make was run by hand for the measurement:
+
+```
+POST /index.php/apps/app_api/apps/enable/mcp_connector/harp_proxy_docker  {"deployOptions": {}}
+HTTP 500 after 106.5 s   {"data":{"message":"Failed to start ExApp installation"}}
+```
+
+No dialog and no question about environment variables, exactly as expected with a single
+configured Docker daemon, which is also why nothing sets `NC_MCP_PUBLIC_URL` on that path.
+The container was created and then restarted in a loop with exit code 2, because release
+`0.1.0` refuses to start without that variable. The current code does not: it logs the
+problem and shows a setup state on its own pages instead of exiting, which is what makes a
+one click install viable at all. Until a release carries that change, a store install ends in
+a crash loop, and the remedy is the `occ` registration this page describes.
 
 ## Related
 

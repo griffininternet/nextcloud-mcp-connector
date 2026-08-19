@@ -409,12 +409,203 @@ Datenschluessel, ein laufender Container, eine Registrierung.
 
 ---
 
-## 9. Linie A: was der Remove-Knopf zurueckbehaelt
+## 9. Der Klick, den es nicht gibt (20:00Z bis 20:12Z, Browser)
 
-Offen. Der Install- und der Remove-Klick sind die zwei Schritte dieses Plans, die eine
-Weboberflaeche brauchen (Task 2, Checkpoint).
+Der Checkpoint-Lauf im Browser (Playwright, Konto `admin`) hat die zwei Klicks nicht
+gefunden, und diese Abweichung ist selbst die Messung.
 
-## 10. Linie B: der occ-Weg, gegen die Zaehlbasis
+### 9.1 Kein ExApp erscheint in der Store-Oberflaeche von Nextcloud 34.0.2
 
-Offen bis Linie A gemessen ist. Der Ablauf ist in 6.3 und 6.4 schon einmal gefahren und
-belegt; die Zahlen des Beweislaufs gehoeren hierher.
+Suche nach "MCP Connector" auf der Apps-Seite: null Treffer. Suche nach "mcp": nur eine
+regulaere App. Kategorie "Einbindung" (174 Zeilen): kein `mcp_connector`. Und der Befund ist
+nicht auf diese App beschraenkt: **kein einziges ExApp** erscheint, `context_agent`,
+`visionatrix` und `stt_whisper2` fehlen genauso. `OCS /apps/appstore/api/v1/apps` liefert
+694 Apps mit `exappCount=0`.
+
+Die Kette, jeder Punkt geprueft:
+
+1. **Der Cache ist in Ordnung.** `appapi_apps.json` in der Instanz enthaelt `mcp_connector`
+   0.1.0 mit `platform >=32.0.0 <35.0.0`, insgesamt 24 ExApps.
+2. **Das Backend ist in Ordnung.** `GET /index.php/apps/app_api/apps/list` liefert
+   `{id: mcp_connector, version: 0.1.0, canInstall: true}`, die Initial-States melden
+   `appApiEnabled=true` und `defaultDaemonConfigAccessible=true`.
+3. **Das Frontend fragt nie.** Die neue App `appstore` 1.0.0 fuellt ihre Liste allein aus dem
+   Core-AppFetcher und setzt das Merkmal hart auf false:
+
+   ```
+   $ grep -n 'AppFetcher\|app_api' apps/appstore/lib/Controller/ApiController.php
+   14: use OC\App\AppStore\Fetcher\AppFetcher;
+   52:   private readonly AppFetcher $appFetcher,
+   383:  $apps = $this->appFetcher->get();
+   459:  'app_api' => false,
+   ```
+
+   Im ausgelieferten Bundle exportiert der External-Apps-Store zwar ein `initialize`, aber
+   das Wort kommt im ganzen Bundle genau einmal vor, naemlich in der Definition. Es wird nie
+   aufgerufen, und das Netzwerk-Log bestaetigt es: `/apps/app_api/apps/list` wurde von der
+   Oberflaeche nie geholt, nur vom manuellen Abruf der Messung.
+4. **Die alte ExApps-Seite von AppAPI ist tot.** Die Route steht noch, die Methode ist weg:
+
+   ```
+   $ curl /index.php/apps/app_api/apps
+   HTTP 500  "Method ExAppsPageController::viewApps() does not exist"
+   $ grep -n viewApps apps/app_api/appinfo/routes.php
+   45: ['name' => 'ExAppsPage#viewApps', 'url' => '/apps/{category}', ...]
+   ```
+
+**Und eine installierte ExApp erscheint genauso nicht.** Gegenprobe mit der laufenden,
+aktivierten App:
+
+```
+$ occ app:list | grep -c mcp_connector
+0
+```
+
+Der Core-App-Manager kennt eine ExApp nicht, und die Liste der Oberflaeche kommt aus ihm.
+Damit gibt es auf dieser Version weder einen Install- noch einen Remove-Knopf fuer diese
+Klasse von Apps. Kein passendes Upstream-Issue gefunden; Kandidat fuer einen eigenen
+Bericht.
+
+### 9.2 Linie 0: der Install-Aufruf des Knopfes, von Hand gefahren
+
+Statt des Knopfes derselbe Aufruf, den das Bundle machen wuerde:
+
+```
+$ POST /index.php/apps/app_api/apps/enable/mcp_connector/harp_proxy_docker
+  body: {"deployOptions": {}}
+HTTP 500 nach 106,5 s
+{"data":{"message":"Fehler beim Starten der Installation von ExApp"}}
+```
+
+Kein Dialog, keine Frage nach Umgebungsvariablen, wie die Recherche es fuer genau einen
+konfigurierten Docker-Daemon vorhergesagt hat. Der Container wurde deployt und starb dann in
+einer Schleife:
+
+```
+$ docker ps -a --filter name=nc_app_mcp_connector
+nc_app_mcp_connector | Restarting (2) 47 seconds ago | ghcr.io/street1983nk/mcp_connector:0.1.0
+$ docker inspect nc_app_mcp_connector
+RestartCount=12 ExitCode=2 Restarting=true
+NC_MCP_PUBLIC_URL rows in the container environment: 0
+$ docker logs nc_app_mcp_connector | tail -1
+ERROR mcp_connector.entry_exapp: NC_MCP_PUBLIC_URL is not set. The authorization server
+calls itself by it: without it every discovery document, the audience of every token and the
+consent redirect name http://127.0.0.1:8765, and no client can connect.
+$ occ app_api:app:list
+ExApps:
+$ (oc_ex_apps)
+no row in oc_ex_apps
+```
+
+Das ist Pitfall 2 der Recherche in einer Zeile: die Ein-Klick-Installation liefert keine
+`NC_MCP_PUBLIC_URL`, und die veroeffentlichte Version 0.1.0 beendet sich in diesem Fall mit
+Exit 2. Die Plaene 05-01 und 05-04 haben genau das behoben (Fehlerzeile plus sichtbarer
+Setup-Zustand statt Abbruch), und der getaggte Release traegt den Fix nicht. Das ist das
+staerkste Argument fuer 0.1.1 in Plan 05-10.
+
+Die Zaehlbasis im Volume hat den Fehl-Deploy unberuehrt ueberlebt (`authorizations: 2`,
+beide App-Passwoerter 200). Aufgeraeumt mit `docker rm -f nc_app_mcp_connector`, weil nie
+eine Registrierung entstanden war, danach der heutige Stand per Bootstrap installiert.
+
+---
+
+## 10. Linie A: was der Remove-Weg zurueckbehaelt (20:14:16Z)
+
+Weil kein Knopf existiert, wurde der Weg gefahren, den der Knopf laut Recherche nimmt, und
+die Gleichheit ist aus dem Quelltext der Instanz belegt:
+
+```
+$ grep -n 'apps/disable' apps/app_api/appinfo/routes.php
+42: ['name' => 'ExAppsPage#disableApp', 'url' => '/apps/disable/{appId}', 'verb' => 'GET']
+$ apps/app_api/lib/Controller/ExAppsPageController.php:383
+      if (!$this->service->disableExApp($exApp)) {
+$ apps/app_api/lib/Command/ExApp/Disable.php:46
+      if ($this->service->disableExApp($exApp)) {
+```
+
+Route und occ-Kommando rufen dieselbe Methode desselben Dienstes. Gemessen wurde also
+`occ app_api:app:disable mcp_connector`, und das Ergebnis gilt fuer den Knopf genauso, weil
+dazwischen kein Code liegt.
+
+```
+$ occ app_api:app:disable mcp_connector
+ExApp mcp_connector successfully disabled.
+```
+
+| Nr | Pruefung | Ergebnis |
+|----|----------|----------|
+| A.1 | `docker volume ls \| grep '^nc_app_mcp_connector_data$'` | `nc_app_mcp_connector_data`, das Volume liegt da |
+| A.2 | Zeilen je Tabelle | `access_tokens 2, auth_codes 2, authorizations 2, clients 2, flows 0, refresh_tokens 2, user_access 0`, unveraendert gegen die Zaehlbasis |
+| A.3 | `occ app_api:app:list` | `mcp_connector (MCP Connector): 0.1.0 [disabled]`, weiter registriert; `oc_ex_apps` traegt `enabled=0` |
+| A.4 | `docker ps -a` | `nc_app_mcp_connector \| Exited (0) 3 seconds ago`, der Container existiert weiter |
+| A.5 | ExApp-Konfiguration | `oauth_data_key \| value length 324 \| sensitive=1`, der Datenschluessel steht noch da |
+| A.6 | jedes vor dem Entfernen angelegte App-Passwort gegen `/ocs/v2.php/cloud/user` | `HTTP 200, OCS 200, identity 'alice'` und `HTTP 200, OCS 200, identity 'bob'` |
+| A.7 | `occ user:auth-tokens:list` | `MCP Connector: Count base one` (Id 18) und `... two` (Id 20) weiter in den Geraetelisten |
+| A.8 | `occ list \| grep -c mcp_connector` | **0** |
+
+A.6 ist der harte Teil und der Kern von T-05-36: die App ist entfernt, ihr Container ist aus,
+und zwei Nextcloud-Konten sind ueber Credentials erreichbar, die diese App angelegt hat.
+
+A.8 ist der Befund, den kein Plan vorhergesehen hat: **mit dem Deaktivieren verschwindet das
+Kommando, das aufraeumen koennte.** Wer erst entfernt und dann aufraeumen will, muss die App
+zuerst wieder aktivieren. Das gehoert als Schritt 0 ins Runbook.
+
+---
+
+## 11. Linie B: der occ-Weg, gegen dieselbe Zaehlbasis (20:14:43Z bis 20:15:33Z)
+
+### Schritt 0, aus A.8 gelernt
+
+```
+$ occ app_api:app:enable mcp_connector
+ExApp mcp_connector successfully enabled.
+$ occ app_api:app:list
+mcp_connector (MCP Connector): 0.1.0 [enabled]
+$ occ list | grep -c mcp_connector:purge
+1
+$ docker ps | grep nc_app_mcp_connector
+nc_app_mcp_connector | Up 11 seconds (healthy)
+```
+
+Zaehlbasis vor dem Purge: sieben Tabellen wie oben, beide App-Passwoerter 200.
+
+### Schritt 1: der Purge
+
+```
+$ occ mcp_connector:purge --force
+{"purged":true,"connections":2,"revoked":2,"revoke_failures":0,"tables_cleared":true,"key_deleted":true}
+```
+
+| Nr | Gegenprobe | Ergebnis |
+|----|------------|----------|
+| B.1 | jedes vorher gueltige App-Passwort gegen `/ocs/v2.php/cloud/user` | `HTTP 401, OCS 997` fuer beide, keine Identitaet mehr |
+| B.2 | alle sieben Tabellen | je `0` |
+| B.3 | ExApp-Konfiguration | `no config row of mcp_connector left` |
+| B.4 | Geraetelisten | `alice: 0`, `bob: 0` Eintraege mit dem Praefix |
+
+### Schritt 2: das Entfernen mit den Daten
+
+```
+$ occ app_api:app:unregister mcp_connector --rm-data
+ExApp mcp_connector successfully disabled.
+ExApp mcp_connector successfully removed
+ExApp mcp_connector successfully unregistered.
+```
+
+| Nr | Gegenprobe | Ergebnis |
+|----|------------|----------|
+| B.5 | `docker volume ls \| grep '^nc_app_mcp_connector_data$'` | keine Zeile |
+| B.6 | `occ app_api:app:list \| grep mcp_connector` | keine Zeile |
+| B.7 | `docker ps -a \| grep '^nc_app_mcp_connector$'` | keine Zeile |
+| B.8 | `oc_appconfig_ex` und `oc_ex_apps` | keine Zeile fuer diese App, keine Zeile in `oc_ex_apps` |
+| B.9 | `occ user:setting alice`, beide Geraetelisten | keine Zeile mit dem Praefix |
+| B.10 | `occ list \| grep -c mcp_connector` | 0 |
+| B.11 | `docker images \| grep mcp_connector` | `127.0.0.1:5000/mcp_connector:0.1.0 330MB` und `ghcr.io/street1983nk/mcp_connector:0.1.0 330MB` bleiben liegen |
+
+B.11 ist die einzige Zeile, die nach dem occ-Weg noch von dieser App erzaehlt: das gezogene
+Image im Image-Store des Docker-Daemons. Es enthaelt keine Instanzdaten und ist ein Thema
+von Plattenplatz, nicht von Datenschutz. Das Runbook nennt es trotzdem.
+
+**Damit ist Erfolgskriterium 2 in beiden Richtungen belegt:** der UI-Weg behaelt Volume,
+Zeilen, Datenschluessel, Container, Registrierung und jedes App-Passwort; der occ-Weg
+behaelt nichts davon.

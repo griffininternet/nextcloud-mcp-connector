@@ -89,12 +89,13 @@ but an operator has to account for this flow:
   Devices and sessions in Nextcloud.
 - A user can revoke access from the Nextcloud side at any time, under Settings,
   Security, Devices and sessions.
-- Removing the app in the Nextcloud interface is not a deletion of its data. On
-  Nextcloud 34 the Remove button disables the app and stops its container: the data
-  volume stays, and so do the Nextcloud app passwords the app created for each
-  connection, because no uninstall path of the server touches them. Emptying the
-  instance is an explicit act of the administrator, and the order of the two
-  commands is part of it:
+- Removing the app in the Nextcloud interface is not a deletion of its data, and on
+  Nextcloud 34 that interface does not offer the app at all: measured on 34.0.2, no
+  external app appears in the app list. The removal path that list used for an
+  external app only disables it, so the container stops while the data volume stays,
+  and so do the Nextcloud app passwords the app created for each connection, because
+  no uninstall path of the server touches them. Emptying the instance is an explicit
+  act of the administrator, and the order of the two commands is part of it:
 
   1. `occ mcp_connector:purge --force` hands every Nextcloud app password of this
      app back to Nextcloud, empties every table of its database and deletes its
