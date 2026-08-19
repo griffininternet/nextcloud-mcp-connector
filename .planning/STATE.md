@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Phase 4 komplett: 04-04 fertig, EXAPP-02 abgehakt, fünf Live-Beweise in 04-04-MEASUREMENTS.md protokolliert (Settings-Wegweiser, Schalter-Kette live, SC 5 unverändert, /connections von außen, prepare_context 0,84 s kurz und 0,99 s voll). Nächstes: Phase-4-Verifikation"
-last_updated: "2026-08-19T15:17:15.964Z"
-last_activity: 2026-08-19 -- Phase 05 execution started
+stopped_at: "Plan 05-01 fertig: Admin-Form mit vier Feldern registriert und config_values liest die Werte als NC_MCP_-Overlay (fail soft). Naechstes: Plan 05-02"
+last_updated: "2026-08-19T15:37:47.955Z"
+last_activity: 2026-08-19
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 44
-  completed_plans: 34
-  percent: 77
+  completed_plans: 35
+  percent: 80
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 05 (hardening-und-store-einreichung) — EXECUTING
-Plan: 1 of 10
-Status: Executing Phase 05
-Last activity: 2026-08-19 -- Phase 05 execution started
+Plan: 2 of 10
+Status: Ready to execute
+Last activity: 2026-08-19
 
-Progress: [██████████] 100%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
@@ -87,6 +87,7 @@ Progress: [██████████] 100%
 | Phase 04 P02 | 25 min | 3 tasks | 5 files |
 | Phase 04 P03 | 70 | 3 tasks | 11 files |
 | Phase 4 P04 | 90 min | 2 tasks | 6 files |
+| Phase 05 P01 | 14 min | 2 tasks tasks | 6 files files |
 
 ## Accumulated Context
 
@@ -260,6 +261,10 @@ Recent decisions affecting current work:
 - [Phase 04]: Route 13 ist PUBLIC mit Identitaetspruefung in der App, aus dem gemessenen CR-01-Grund: eine USER-Route fuettert die HaRP-Blacklist mit genau den Abweisungen, die diese Seite als normalen Verkehr erzeugt
 - [Phase 04]: Der Settings-Eintrag ist ein Wegweiser mit leerem fields, weil AppAPI eine Wertaenderung nie an die ExApp meldet; der Schalter lebt auf /connections. Gemessener AppAPI-Kontrakt (04-RESEARCH Frage 1): eine Checkbox waere ein Schalter, den die Transportgrenze nicht durchsetzt (D-47, D-48)
 - [Phase 04]: Die Registrierung der Settings-Form laeuft fire-and-forget bei enabled=1. Ein 500 aus /enabled deaktiviert die App sofort wieder, ein fehlgeschlagener Wegweiser kostet nur eine Logzeile (Pitfall 11)
+- [Phase 05]: Der Admin-Lesepfad faellt weich aus: jeder Fehler ist ein leeres Dict plus eine Logzeile; ein fehlender Admin-Wert bedeutet nur 'nichts gesetzt', waehrend crypto._read_key hart scheitert, weil ein erfundener Data Key jede Autorisierung unlesbar macht
+- [Phase 05]: Die Vorrangregel Admin-Wert vor NC_MCP_-Env vor Code-Default entsteht durch Auslassen: admin_overlay traegt nur brauchbare Werte, ein leerer oder ungueltiger Wert fehlt einfach
+- [Phase 05]: Die vier Feld-Ids der Admin-Form kommen aus config_values.CONFIG_KEYS, kein Feld traegt sensitive (ICrypto-Blob) und keines ist ein Button (Declarative Settings kennen keinen)
+- [Phase 05]: Die zweite Formular-Registrierung liegt im enabled=1-Zweig in einem eigenen try-Block: ein Fehlschlag der einen Form darf die andere nicht kosten, und /enabled antwortet immer mit leerem error-Feld (Pitfall 11 der Phase 2)
 
 ### Pending Todos
 
@@ -289,6 +294,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-17T14:30:12.600Z
-Stopped at: Phase 4 komplett: 04-04 fertig, EXAPP-02 abgehakt, fünf Live-Beweise in 04-04-MEASUREMENTS.md protokolliert (Settings-Wegweiser, Schalter-Kette live, SC 5 unverändert, /connections von außen, prepare_context 0,84 s kurz und 0,99 s voll). Nächstes: Phase-4-Verifikation
+Last session: 2026-08-19T15:37:47.938Z
+Stopped at: Plan 05-01 fertig: Admin-Form mit vier Feldern registriert und config_values liest die Werte als NC_MCP_-Overlay (fail soft). Naechstes: Plan 05-02
 Resume file: None
