@@ -273,3 +273,5 @@ grep -c "twelve routes" docs/exapp-install.md    -> 0
 grep -c "thirteen routes" docs/exapp-install.md  -> 1
 grep -c "—\|–" docs/exapp-install.md             -> 0
 ```
+
+## Self-Check: PASSED
