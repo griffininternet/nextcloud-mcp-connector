@@ -21,10 +21,11 @@ import base64
 import calendar
 import re
 import sqlite3
-from collections.abc import Coroutine
+from collections.abc import Coroutine, Mapping
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import pytest
 from mcp.shared.auth import OAuthClientInformationFull
@@ -50,6 +51,15 @@ HOST = "cloud.example.com"
 PREFIX = "/exapps/mcp_connector"
 
 ENV = {config.ENV_PUBLIC_URL: PUBLIC_URL}
+
+#: An installation whose administrator has not entered a public address yet. A store install
+#: in NC 34 passes no variable into the container at all, so an empty environment is what a
+#: fresh one click installation actually looks like (05-RESEARCH, pitfall 2).
+NO_PUBLIC_URL: dict[str, str] = {}
+
+#: What the identity line and the bar of such an installation show: the netloc of the
+#: documented default, because the page never takes a host out of a request (T-03-02).
+DEFAULT_HOST = urlsplit(config.DEFAULT_PUBLIC_URL).netloc
 
 APP_ID = "mcp_connector"
 APP_SECRET = "app-secret-test"
@@ -159,6 +169,7 @@ def listing(
     paused: bool = False,
     result: str = "",
     result_client: str = "",
+    env: Mapping[str, str] | None = None,
 ) -> Response:
     return ui.connections_page(
         [connection()] if rows is None else rows,
@@ -167,7 +178,7 @@ def listing(
         switch_token=SWITCH_TOKEN,
         result=result,
         result_client=result_client,
-        env=ENV,
+        env=ENV if env is None else env,
     )
 
 
@@ -280,6 +291,113 @@ def test_the_paused_body_no_longer_points_at_the_nextcloud_settings() -> None:
     """Amended 2026-08-17: the switch sits on this page, so the pointer sentence is gone."""
     assert strings.SETTINGS_PLACE not in strings.CONNECTIONS_PAUSED_BODY
     assert strings.SETTINGS_PLACE in strings.ACCESS_DISABLED_DESCRIPTION
+
+
+# --- the setup state of an installation without a public address (05-04) ------------
+
+
+def setup_copy() -> str:
+    """The three sentences of the setup notice, as one text to ask questions about."""
+    return " ".join(
+        (
+            strings.SETUP_PUBLIC_URL_TITLE,
+            strings.SETUP_PUBLIC_URL_BODY,
+            strings.SETUP_PUBLIC_URL_HINT,
+        )
+    )
+
+
+def test_the_setup_notice_stands_above_everything_else_of_the_list() -> None:
+    """05-RESEARCH pitfall 2, stage 3: the page a user opens first says what is missing.
+
+    A store installation in NC 34 sets no variable, so ``config.public_url`` answers the
+    documented loopback default and no client can ever connect. Without this notice the first
+    symptom is an assistant app that fails at discovery, which looks like a client problem.
+    """
+    response = listing(env=NO_PUBLIC_URL)
+    document = parse(response)
+    notice, identity, section = order_of(
+        body(response),
+        strings.SETUP_PUBLIC_URL_TITLE,
+        strings.CONSENT_IDENTITY.format(user=NC_USER, host=DEFAULT_HOST),
+        SECTION_HEADING,
+    )
+
+    assert strings.SETUP_PUBLIC_URL_TITLE in document.text
+    assert strings.SETUP_PUBLIC_URL_BODY in document.text
+    assert strings.SETUP_PUBLIC_URL_HINT in document.text
+    assert icons.WARNING in body(response)
+    assert notice < identity < section, "the cause of the state stands above the state"
+
+
+def test_the_setup_notice_is_there_in_the_empty_state_as_well() -> None:
+    """The cause is not the list, so it is not a state of the list (S6)."""
+    document = parse(listing(rows=[], env=NO_PUBLIC_URL))
+
+    assert strings.SETUP_PUBLIC_URL_TITLE in document.text
+    assert strings.CONNECTIONS_EMPTY_TITLE in document.text
+
+
+def test_the_setup_notice_is_there_while_the_account_is_paused() -> None:
+    """Both callouts at once, and the setup one first: it is why nothing works at all."""
+    response = listing(paused=True, env=NO_PUBLIC_URL)
+    setup, paused = order_of(
+        body(response), strings.SETUP_PUBLIC_URL_TITLE, strings.CONNECTIONS_PAUSED_TITLE
+    )
+
+    assert setup < paused
+    assert strings.CONNECTIONS_PAUSED_TITLE in parse(response).text
+
+
+def test_a_configured_address_renders_no_setup_notice() -> None:
+    """A configured installation is character for character the page it was before."""
+    response = listing()
+    text = body(response)
+
+    for sentence in (
+        strings.SETUP_PUBLIC_URL_TITLE,
+        strings.SETUP_PUBLIC_URL_BODY,
+        strings.SETUP_PUBLIC_URL_HINT,
+    ):
+        assert sentence not in text
+    assert icons.WARNING not in text, "an access-on page without a pause has no callout at all"
+    assert text.count('class="callout') == 0
+    assert body(listing(env=NO_PUBLIC_URL)).count('class="callout callout-warning"') == 1, (
+        "the notice is exactly one callout and adds no second surface"
+    )
+
+
+def test_the_setup_state_keeps_the_status_code_and_the_headers_of_the_page() -> None:
+    """A page that explains itself is not an error, and it stays uncacheable (T-04-32)."""
+    for response in (
+        listing(env=NO_PUBLIC_URL),
+        listing(rows=[], env=NO_PUBLIC_URL),
+        listing(paused=True, env=NO_PUBLIC_URL),
+    ):
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "no-store"
+
+
+def test_the_setup_copy_names_the_place_and_the_step_and_never_a_value() -> None:
+    """T-05-21: the notice names where the value goes, never a value and never a host.
+
+    The loopback default is the value this state is caused by, and repeating it would put an
+    internal address in front of every user of the instance for no gain: nobody can act on
+    ``127.0.0.1:8765``, and the only useful sentence is where the real address is entered.
+    """
+    text = setup_copy()
+
+    assert strings.ADMIN_SETTINGS_PLACE in text
+    assert "disable and enable" in text
+    assert config.DEFAULT_PUBLIC_URL not in text
+    assert "127.0.0.1" not in text
+    assert strings.ADMIN_PUBLIC_URL_EXAMPLE in text, "the shape of the address, as an example"
+
+
+def test_the_condition_of_the_notice_is_the_documented_default() -> None:
+    """One comparison, in one helper, so all three states of the page share it."""
+    assert config.public_url(NO_PUBLIC_URL) == config.DEFAULT_PUBLIC_URL
+    assert config.public_url(ENV) != config.DEFAULT_PUBLIC_URL
 
 
 # --- S6, the empty state -----------------------------------------------------------
