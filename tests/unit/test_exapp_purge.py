@@ -303,6 +303,9 @@ def test_without_force_the_purge_does_nothing(live: Deployment) -> None:
         {"options": ["dry-run"]},
         "not an object at all",
         [1, 2, 3],
+        {"occ": {"arguments": None, "options": {"force": False}}},
+        {"occ": {"arguments": None, "options": None}},
+        {"occ": "not an object either"},
     ],
     ids=[
         "an empty body",
@@ -313,6 +316,9 @@ def test_without_force_the_purge_does_nothing(live: Deployment) -> None:
         "another option",
         "a string",
         "a list",
+        "the measured envelope with the flag unset",
+        "the measured envelope of a call without options",
+        "an envelope that is not an object",
     ],
 )
 def test_a_body_without_the_force_flag_changes_nothing(live: Deployment, body: object) -> None:
@@ -336,6 +342,8 @@ def test_a_body_without_the_force_flag_changes_nothing(live: Deployment, body: o
         {"options": ["force"]},
         {"options": ["--force"]},
         {"force": True},
+        {"occ": {"arguments": None, "options": {"force": True}}},
+        {"occ": {"options": {"force": True}}},
     ],
     ids=[
         "the flag as true",
@@ -344,6 +352,8 @@ def test_a_body_without_the_force_flag_changes_nothing(live: Deployment, body: o
         "a list of option names",
         "a list with the dashes",
         "at the top level",
+        "the measured shape of AppAPI 34.0.0",
+        "the same envelope without arguments",
     ],
 )
 def test_every_shape_of_the_flag_appapi_may_send_is_accepted(

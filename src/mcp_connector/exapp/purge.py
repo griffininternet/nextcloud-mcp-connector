@@ -65,6 +65,16 @@ PURGE_PATH = "/purge"
 #: does not run because a declaration somewhere else says a flag is required.
 FORCE_OPTION = "force"
 
+#: The envelope AppAPI wraps an occ invocation in, and the answer to assumption A5, point 2.
+#: Measured against a running AppAPI 34.0.0 on 2026-08-19 (plan 05-08): the command object
+#: built by ``ExAppOccService::buildCommand`` calls ``PublicFunctions::exAppRequest`` with
+#: ``params: ['occ' => ['arguments' => ..., 'options' => ...]]``, and
+#: ``AppAPIService::prepareRequestToExApp`` turns ``params`` into the JSON body of a POST.
+#: So the body of a real invocation is ``{"occ": {"arguments": null, "options": {"force":
+#: true}}}`` and the flag is one level below the top. Without this key the live command
+#: answered ``purged: false`` with ``--force`` on the command line.
+OCC_ENVELOPE = "occ"
+
 #: Set on the proxy path, never by HaRP and never on the internal AppAPI path. The same
 #: header ``exapp/lifecycle.py`` refuses, spelled a second time rather than imported: that
 #: module imports ``exapp/occ.py``, which imports this one, so an import back would close a
@@ -218,13 +228,14 @@ def _guard(request: Request, env: Mapping[str, str] | None) -> str | Response:
 async def _forced(request: Request) -> bool:
     """Whether this invocation carries the ``force`` flag, in any shape AppAPI may send it.
 
-    The exact wire shape of an occ option is assumption A5: the interface is verified from
-    the source of app_api 34.0.3, but no run against HaRP has confirmed it yet. So the check
-    accepts every plausible spelling instead of one guessed one, and refuses everything else.
-    Both directions matter. A purge that silently does nothing because the flag arrived as a
-    list rather than a mapping would send an administrator into an uninstall believing the
-    credentials are gone, and a purge that runs without the flag is an instance wide deletion
-    nobody asked for.
+    The wire shape of an occ option was assumption A5 until plan 05-08 measured it against a
+    running AppAPI 34.0.0: the body is the envelope named in :data:`OCC_ENVELOPE`, and the
+    flag sits inside it. The measurement is the reason this function still accepts the other
+    spellings rather than only that one. Both directions matter, and the first one is what
+    the measurement found: without the envelope, ``occ mcp_connector:purge --force`` answered
+    ``purged: false`` on a live instance, so an administrator would have removed the app
+    believing the credentials were gone. A purge that runs without the flag is the other
+    failure, an instance wide deletion nobody asked for.
     """
     params = request.query_params
     if FORCE_OPTION in params and _is_set(params[FORCE_OPTION]):
@@ -232,20 +243,27 @@ async def _forced(request: Request) -> bool:
     return _forced_in(await _payload(request))
 
 
-def _forced_in(payload: Any) -> bool:
-    """The flag in a JSON body: at the top level, in a mapping of options, or in a list."""
+def _forced_in(payload: Any, *, inside_envelope: bool = False) -> bool:
+    """The flag in a JSON body: in the occ envelope, at the top level, or in a list.
+
+    ``inside_envelope`` keeps the descent one level deep. The envelope AppAPI builds carries
+    no second one, and a body that nests them is not an occ invocation.
+    """
     if not isinstance(payload, dict):
         return False
-    if FORCE_OPTION in payload:
-        return _is_set(payload[FORCE_OPTION])
+    if FORCE_OPTION in payload and _is_set(payload[FORCE_OPTION]):
+        return True
 
     options = payload.get("options")
-    if isinstance(options, dict):
-        return FORCE_OPTION in options and _is_set(options[FORCE_OPTION])
-    if isinstance(options, list | tuple):
-        return any(
-            isinstance(item, str) and item.strip().lstrip("-") == FORCE_OPTION for item in options
-        )
+    if isinstance(options, dict) and FORCE_OPTION in options and _is_set(options[FORCE_OPTION]):
+        return True
+    if isinstance(options, list | tuple) and any(
+        isinstance(item, str) and item.strip().lstrip("-") == FORCE_OPTION for item in options
+    ):
+        return True
+
+    if not inside_envelope:
+        return _forced_in(payload.get(OCC_ENVELOPE), inside_envelope=True)
     return False
 
 
