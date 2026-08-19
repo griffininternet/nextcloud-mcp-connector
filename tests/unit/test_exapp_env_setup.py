@@ -421,6 +421,12 @@ def share_fixture_problems(text: str) -> list[str]:
     for name in SHARE_ENV_NAMES:
         if f"\n{name}=" not in heredoc:
             problems.append(f"{name} is not written into the connection file")
+        elif f"\n{name}=/" in heredoc:
+            # Git Bash rewrites an exported value that starts with a slash into a Windows
+            # path when it starts a native process, so pytest received the MSYS installation
+            # directory in front of every path (measured, plan 05-03). Relative to the user's
+            # root is the same string everywhere, and the test puts the slash back.
+            problems.append(f"{name} is written as an absolute path, which Git Bash rewrites")
     return problems
 
 
@@ -1303,6 +1309,12 @@ def test_the_bootstrap_builds_the_read_only_share_with_proof() -> None:
             "NC_MCP_TEST_SHARED_FILE is not written",
         ),
         (
+            lambda text: text.replace(
+                "NC_MCP_TEST_SHARED_DIR=${SHARED_DIR#/}", "NC_MCP_TEST_SHARED_DIR=/${SHARED_DIR}"
+            ),
+            "written as an absolute path",
+        ),
+        (
             lambda text: text.replace('cat >"${ENV_FILE}" <<EOF\n', 'echo "no file" # '),
             "not written from a heredoc",
         ),
@@ -1316,6 +1328,7 @@ def test_the_bootstrap_builds_the_read_only_share_with_proof() -> None:
         "a share that is assumed instead of read back",
         "a recipient whose home is never looked at",
         "a path the test never learns about",
+        "a path Git Bash rewrites before pytest sees it",
         "a connection file that is not written",
     ],
 )
@@ -1353,12 +1366,19 @@ def test_the_share_fixture_pins_its_names_across_runs() -> None:
 @pytest.mark.parametrize(
     ("stored", "expected"),
     [
+        ("NC_MCP_TEST_SHARED_DIR=mcp-share-0123456789\n", "0123456789"),
         ("NC_MCP_TEST_SHARED_DIR=/mcp-share-0123456789\n", "0123456789"),
-        ("NC_MCP_TEST_SHARED_DIR=/mcp-share-not-hex\n", ""),
+        ("NC_MCP_TEST_SHARED_DIR=mcp-share-not-hex\n", ""),
         ("NC_MCP_TEST_SHARED_DIR=\n", ""),
         ("", ""),
     ],
-    ids=["a pinned suffix", "a broken suffix", "an empty value", "no connection file yet"],
+    ids=[
+        "a pinned suffix",
+        "a pinned suffix from an older run",
+        "a broken suffix",
+        "an empty value",
+        "no connection file yet",
+    ],
 )
 def test_the_pinned_suffix_is_reused_and_a_broken_one_is_replaced(
     tmp_path: Path, stored: str, expected: str

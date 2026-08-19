@@ -362,7 +362,10 @@ ensure_files_home() {
 share_suffix() {
   local existing=""
   if [ -f "${ENV_FILE}" ]; then
-    existing="$(sed -n 's|^NC_MCP_TEST_SHARED_DIR=/mcp-share-||p' "${ENV_FILE}" |
+    # With or without the leading slash: the connection file writes the relative spelling
+    # (see the heredoc at the end of this script), and a file left behind by an earlier run
+    # still carries the absolute one. Accepting both keeps that run's objects in use.
+    existing="$(sed -n 's|^NC_MCP_TEST_SHARED_DIR=/\{0,1\}mcp-share-||p' "${ENV_FILE}" |
       head -n1 | tr -d '\r')"
   fi
   if printf '%s' "$existing" | grep -Eq '^[0-9a-f]{10}$'; then
@@ -381,11 +384,19 @@ dav_url() {
 # readable argv of curl for the whole duration of every request, and a temporary file would
 # have to be cleaned up on every exit path. A failed connection prints 000 and never stops
 # the caller, because every caller here decides on the status code itself.
+#
+# The body is read and dropped instead of being sent to `-o /dev/null`: this script exports
+# MSYS_NO_PATHCONV=1 for the route regexes, and with it Git Bash hands curl the literal path
+# /dev/null, which does not exist on Windows. curl then fails every such request with
+# "curl: (23) client returned ERROR on write" although the answer arrived intact. Measured on
+# this host; a status appended to the body works the same way on both platforms.
 nc_status() {
-  local user="$1" password="$2" method="$3" url="$4"
+  local user="$1" password="$2" method="$3" url="$4" answer status
   shift 4
-  printf 'user = "%s:%s"\n' "$user" "$password" |
-    curl -sS --config - -o /dev/null -w '%{http_code}' -X "$method" "$@" "$url" || true
+  answer="$(printf 'user = "%s:%s"\n' "$user" "$password" |
+    curl -sS --config - -w '\n%{http_code}' -X "$method" "$@" "$url" || true)"
+  status="$(printf '%s' "$answer" | tail -n1 | tr -d '[:space:]')"
+  printf '%s' "${status:-000}"
 }
 
 # Same request, but the body instead of the status: the share proof reads the answer.
@@ -422,15 +433,22 @@ put_marked_file() {
 # permissions=1 is exactly read (1 read, 2 update, 4 create, 8 delete, 16 reshare). Any
 # higher value would take the meaning out of the upload refusal the parity test measures,
 # which is why the unit gate in tests/unit/test_exapp_env_setup.py pins this literal.
+#
+# The status is printed instead of the answer body: OCS v2 maps its own status code onto the
+# HTTP one, so 200 is a created share and anything else is worth reading in the log. Letting
+# curl discard the body with -o also keeps it from writing into a redirected stdout, which is
+# where the first run of this fixture produced a "curl: (23)" line next to a share that had
+# in fact been created.
 create_readonly_share() {
-  local owner="$1" password="$2" recipient="$3"
-  nc_body "$owner" "$password" POST \
+  local owner="$1" password="$2" recipient="$3" status
+  status="$(nc_status "$owner" "$password" POST \
     "${BASE_URL}/ocs/v2.php/apps/files_sharing/api/v1/shares" \
     -H "OCS-APIRequest: true" -H "Accept: application/json" \
     -d "path=${SHARED_DIR}" \
     -d "shareType=0" \
     -d "shareWith=${recipient}" \
-    -d "permissions=1" >/dev/null
+    -d "permissions=1")"
+  echo "share ${SHARED_DIR} to ${recipient}: create answered ${status}"
 }
 
 # Proof instead of assumption, the same rule ensure_calendar follows: the share counts as
@@ -878,9 +896,16 @@ NC_MCP_TEST_APP_PASSWORD2=${BOB_APP_PASSWORD}
 # both, bob sees the folder and the file in it and never the private one. The marker is in
 # the name and in the content of the shared file, so a search hit and a read can be asserted
 # on the same string. tests/integration/test_permission_parity_share.py skips without them.
-NC_MCP_TEST_SHARED_DIR=${SHARED_DIR}
-NC_MCP_TEST_SHARED_FILE=${SHARED_FILE}
-NC_MCP_TEST_PRIVATE_FILE=${PRIVATE_FILE}
+#
+# Without the leading slash, and that is not cosmetic: Git Bash rewrites an environment value
+# that looks like an absolute POSIX path when it starts a native process, so an exported
+# /mcp-share-x/f.md reaches pytest as C:/Program Files/Git/mcp-share-x/f.md and every path
+# assertion measures the MSYS installation directory (measured on this host, 19.08.2026). A
+# value relative to the user's root is the same string on every platform, and the test puts
+# the slash back where the tools want it.
+NC_MCP_TEST_SHARED_DIR=${SHARED_DIR#/}
+NC_MCP_TEST_SHARED_FILE=${SHARED_FILE#/}
+NC_MCP_TEST_PRIVATE_FILE=${PRIVATE_FILE#/}
 NC_MCP_TEST_SHARED_MARKER=${SHARED_MARKER}
 # The account passwords of the two throwaway users. The OAuth flow check of plan 03-08
 # needs them because it walks the Nextcloud sign in of the Login Flow v2 without a
