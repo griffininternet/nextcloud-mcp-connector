@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
  (completed 2026-08-15)
 - [x] **Phase 3: OAuth 2.1** - Spec-konformes OAuth mit E2E-Beweis gegen Claude.ai und ChatGPT, Login Flow v2 als Fallback (completed 2026-08-16)
 - [x] **Phase 4: Per-User-Verwaltung und prepare_context** - Settings-UI mit Token-Kontrolle plus Bündel-Tool (completed 2026-08-17)
-- [ ] **Phase 5: Hardening und Store-Einreichung** - Sicherheits-Tests, Signatur, Listing, Client-Doku vor der Conference
+- [x] **Phase 5: Hardening und Store-Einreichung** - Sicherheits-Tests, Signatur, Listing, Client-Doku vor der Conference (completed 2026-08-19)
 
 ## Phase Details
 
@@ -230,7 +230,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 05-10-PLAN.md - Release 0.1.1 und Store-Pflege mit Live-Nachweis (EXAPP-04) (Wave 5)
+- [x] 05-10-PLAN.md - Release 0.1.1 und Store-Pflege mit Live-Nachweis (EXAPP-04) (Wave 5)
 
 ## Progress
 
@@ -243,7 +243,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. ExApp-Shell | 7/7 | Complete    | 2026-08-15 |
 | 3. OAuth 2.1 | 8/9 | In Progress|  |
 | 4. Per-User-Verwaltung und prepare_context | 4/4 | Complete   | 2026-08-17 |
-| 5. Hardening und Store-Einreichung | 9/10 | In Progress|  |
+| 5. Hardening und Store-Einreichung | 10/10 | Complete   | 2026-08-19 |
 
 ## Coverage
 

@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: "Plan 05-08 fertig: SC 2 ist in beiden Richtungen belegt. docs/uninstall.md traegt das Runbook mit erzwungener Reihenfolge, Versionstabelle 32/33/34, acht Pruefungen fuer Linie A und elf fuer Linie B. Linie A: nach dem Remove-Pfad antworten beide App-Passwoerter weiter mit 200 und der richtigen Identitaet, Volume, Zeilen, Datenschluessel, Container und Registrierung liegen unveraendert da, und das Purge-Kommando verschwindet mit dem Deaktivieren (neuer Befund, jetzt Schritt 0 des Runbooks). Linie B: purge --force mit 2/2/0/true/true, danach 401 je Passwort, sieben leere Tabellen, kein Schluessel, kein Geraeteeintrag; nach --rm-data kein Volume, keine Registrierung, kein Container. Assumption A5 geschlossen und dabei zwei fail-closed Fehler gefixt (occ-Huelle um die force-Option, configKeys als Liste beim Loeschen des Datenschluessels). Nextcloud 34.0.2 hat gar keine ExApp-Oberflaeche, und die gelistete 0.1.0 crasht bei einer Ein-Klick-Installation mit Exit 2. AIO-Smoke (D-31) descoped mit genannter Voraussetzung. Offen fuer 05-10: Release 0.1.1 und CHANGELOG. Naechstes: Plan 05-10"
-last_updated: "2026-08-19T20:25:18.983Z"
+status: verifying
+stopped_at: "Plan 05-10 fertig: Release 0.1.1 ist live im Store (HTTP 201, Workflow-Lauf 32299836095 gruen). Vier Live-Nachweise geprueft: Store fuehrt 0.1.1 mit >=32.0.0 <35.0.0, Asset 200 mit 29491 Bytes, Manifest anonym als OCI-Index mit amd64 und arm64, Tagliste [0.1.0, 0.1.1]. Ein-Klick-Installation ohne jede Variable kommt mit 0 restarts hoch und nennt ihren Setup-Zustand (0.1.0 crash-loopte hier mit Exit 2). Update-Nachweis: ein Zugriffstoken aus 0.1.0 bediente nach dem Update auf 0.1.1 weiter 16 Werkzeuge und einen echten files_list-Aufruf. Store-Cache nur durch Ueberschreiben verwerfen, nie loeschen (GenericFileException). EXAPP-04 Complete. Phase 05 bereit zur Verifikation."
+last_updated: "2026-08-19T20:59:41.074Z"
 last_activity: 2026-08-19
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 44
-  completed_plans: 43
-  percent: 80
+  completed_plans: 44
+  percent: 100
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 
 Phase: 05 (hardening-und-store-einreichung) — EXECUTING
 Plan: 10 of 10
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-19
 
-Progress: [██████████] 98%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -96,6 +96,7 @@ Progress: [██████████] 98%
 | Phase 05 P07 | 75 min | 3 tasks tasks | 4 files files |
 | Phase 05 P09 | 15 min | 2 tasks tasks | 6 files files |
 | Phase 05 P08 | 60 min | 3 tasks tasks | 9 files files |
+| Phase 05 P10 | 30 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -309,6 +310,10 @@ Recent decisions affecting current work:
 - [Phase 05]: Nextcloud 34.0.2 zeigt kein ExApp in der Verwaltungsoberflaeche (appstore 1.0.0 fuellt nur aus dem Core-AppFetcher, ruft initialize des External-Apps-Stores nie, alte AppAPI-Route antwortet 500), also gibt es weder Install- noch Remove-Knopf; Linie A wurde ueber occ app_api:app:disable gemessen und die Gleichheit mit der Route des Knopfes aus dem Quelltext belegt
 - [Phase 05]: Die gelistete Version 0.1.0 ist per Klick nicht installierbar (Exit 2, RestartCount 12, NC_MCP_PUBLIC_URL wird auf dem Store-Pfad nie gesetzt); der Fix liegt seit 05-01/05-04 im Code und ist das Argument fuer Release 0.1.1 in 05-10
 - [Phase 05]: Der Purge ist der letzte Schritt vor dem Entfernen, weil er den Datenschluessel loescht, waehrend der laufende Prozess seine beim Start gelesene Kopie weiterbenutzt: danach entstandene Verbindungen sind beim naechsten Neustart unlesbar
+- [Phase 05]: Release 0.1.1 ist im Store und behebt die Ein-Klick-Luecke: die Store-Installation ohne jede Umgebungsvariable kommt mit 0 restarts hoch und nennt ihren Setup-Zustand, wo 0.1.0 mit Exit 2 crash-loopte
+- [Phase 05]: Ein Update behaelt die Verbindungen, gemessen an einem Zugriffstoken der Vorversion, das nach dem Update 16 Werkzeuge und einen echten Tool-Aufruf bediente
+- [Phase 05]: Der AppAPI-Store-Cache wird durch Ueberschreiben mit timestamp 0 verworfen, nie durch Loeschen der Datei: sonst endet jedes folgende AppAPI-Kommando mit GenericFileException
+- [Phase 05]: Ein Kommentar in appinfo/info.xml darf das Versionselement nicht in spitzen Klammern wiederholen, weil build_store_release.sh und release.yml die Version per grep auf dieses Tag lesen
 
 ### Pending Todos
 
@@ -339,6 +344,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-19T20:25:18.966Z
-Stopped at: Plan 05-08 fertig: SC 2 ist in beiden Richtungen belegt. docs/uninstall.md traegt das Runbook mit erzwungener Reihenfolge, Versionstabelle 32/33/34, acht Pruefungen fuer Linie A und elf fuer Linie B. Linie A: nach dem Remove-Pfad antworten beide App-Passwoerter weiter mit 200 und der richtigen Identitaet, Volume, Zeilen, Datenschluessel, Container und Registrierung liegen unveraendert da, und das Purge-Kommando verschwindet mit dem Deaktivieren (neuer Befund, jetzt Schritt 0 des Runbooks). Linie B: purge --force mit 2/2/0/true/true, danach 401 je Passwort, sieben leere Tabellen, kein Schluessel, kein Geraeteeintrag; nach --rm-data kein Volume, keine Registrierung, kein Container. Assumption A5 geschlossen und dabei zwei fail-closed Fehler gefixt (occ-Huelle um die force-Option, configKeys als Liste beim Loeschen des Datenschluessels). Nextcloud 34.0.2 hat gar keine ExApp-Oberflaeche, und die gelistete 0.1.0 crasht bei einer Ein-Klick-Installation mit Exit 2. AIO-Smoke (D-31) descoped mit genannter Voraussetzung. Offen fuer 05-10: Release 0.1.1 und CHANGELOG. Naechstes: Plan 05-10
+Last session: 2026-08-19T20:59:41.055Z
+Stopped at: Plan 05-10 fertig: Release 0.1.1 ist live im Store (HTTP 201, Workflow-Lauf 32299836095 gruen). Vier Live-Nachweise geprueft: Store fuehrt 0.1.1 mit >=32.0.0 <35.0.0, Asset 200 mit 29491 Bytes, Manifest anonym als OCI-Index mit amd64 und arm64, Tagliste [0.1.0, 0.1.1]. Ein-Klick-Installation ohne jede Variable kommt mit 0 restarts hoch und nennt ihren Setup-Zustand (0.1.0 crash-loopte hier mit Exit 2). Update-Nachweis: ein Zugriffstoken aus 0.1.0 bediente nach dem Update auf 0.1.1 weiter 16 Werkzeuge und einen echten files_list-Aufruf. Store-Cache nur durch Ueberschreiben verwerfen, nie loeschen (GenericFileException). EXAPP-04 Complete. Phase 05 bereit zur Verifikation.
 Resume file: None
