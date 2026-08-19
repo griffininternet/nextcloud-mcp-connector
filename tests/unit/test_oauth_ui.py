@@ -27,10 +27,14 @@ from starlette.routing import Route
 from starlette.testclient import TestClient
 
 from mcp_connector import config
-from mcp_connector.exapp.ui import errors, icons, layout, strings
+from mcp_connector.exapp.ui import connections, errors, icons, layout, strings
 
 ENV = {config.ENV_PUBLIC_URL: "https://cloud.example.com/exapps/mcp_connector"}
 HOST = "cloud.example.com"
+
+#: The path the configured public URL carries, which is the prefix HaRP strips before this
+#: application sees a request and therefore the prefix every link of a page has to spell.
+PREFIX = "/exapps/mcp_connector"
 
 #: A client name as a registration could send it: markup, quotes, a line break and a
 #: control character. Nothing of it may reach the document as anything but text.
@@ -449,6 +453,10 @@ ERROR_PAGES = [
     # generic page, which stays the last row because it is also the fallback of an unknown
     # code (04-UI-SPEC.md, E8).
     ("E8", 403, strings.ERROR_SIGN_IN_TITLE, "Sign in at"),
+    # E9 joined in phase 5 (BL-10) and stands next to E8 for the same reason: both are a
+    # refusal of an account rather than of a request, and both answer 403 without a
+    # challenge. It is the page every enforcement point of the switch answers with.
+    ("E9", 403, strings.CONNECTIONS_PAUSED_TITLE, strings.ACTION_OPEN_CONNECTIONS),
     ("E7", 500, strings.ERROR_GENERIC_TITLE, "Try again"),
 ]
 
@@ -517,7 +525,7 @@ def test_no_error_page_tells_the_attacker_which_check_fired(
         assert needle not in readable, f"{code} breaks a copy rule with {needle!r}"
 
 
-def test_the_table_has_exactly_the_eight_pages_of_the_contract() -> None:
+def test_the_table_has_exactly_the_nine_pages_of_the_contract() -> None:
     expected = tuple(code for code, _, _, _ in ERROR_PAGES)
     assert expected == errors.CODES
 
@@ -545,6 +553,53 @@ def test_the_timeout_page_offers_the_way_back() -> None:
         assert "://" not in target
 
 
+# --- E9, the page of an account that paused its own access (BL-10) ------------------------
+#
+# The answer of the three enforcement points of plan 05-02. It is a page and not a wire
+# answer, because all three of them are reached by a browser in the middle of a sign in, and
+# what the reader needs is the one sentence that says why plus the way to the switch.
+
+
+def test_the_paused_page_refuses_with_403_and_never_challenges_the_browser() -> None:
+    """The same choice as R1 at the transport boundary, and for the same reason: a 401 with
+    a challenge sends an OAuth client into the full rediscovery loop, and a 401 on a page a
+    browser opened invites the browser's own password prompt."""
+    response, _ = errors.error_page("E9", env=ENV)
+
+    assert response.status_code == 403
+    assert "www-authenticate" not in response.headers
+    assert response.headers["cache-control"] == "no-store"
+
+
+def test_the_paused_page_names_the_state_and_where_the_switch_is() -> None:
+    document = parse(errors.error_page("E9", env=ENV)[0])
+
+    assert strings.CONNECTIONS_PAUSED_TITLE in document.text
+    assert strings.SWITCH_OFF_STATE in document.text
+    assert strings.SETTINGS_PLACE in document.text
+
+
+def test_the_paused_page_offers_exactly_one_link_and_it_is_the_connections_page() -> None:
+    """The prefix comes from the configured public URL: HaRP strips ``/exapps/<app>`` before
+    this application sees a request, so a path without it points at the Nextcloud root."""
+    document = parse(errors.error_page("E9", env=ENV)[0])
+
+    assert document.tags.count("a") == 1
+    target = document.values_of("href")[0]
+    assert target.startswith(PREFIX), target
+    assert target.endswith(connections.CONNECTIONS_PATH), target
+    assert "://" not in target, "a local path, never an origin of its own"
+
+
+def test_the_paused_page_names_no_account_and_no_client() -> None:
+    """The refusal is about a setting of an account, so it names neither (T-03-24)."""
+    rendered = body(errors.error_page("E9", env=ENV, client=HOSTILE_NAME)[0])
+
+    assert "Bad Client" not in rendered
+    assert strings.CLIENT_NAME_FALLBACK not in rendered
+    assert HOSTILE_NAME not in rendered
+
+
 def test_the_throttled_page_carries_retry_after_with_the_number_of_its_own_text() -> None:
     response, _ = errors.error_page("E6", env=ENV, seconds=42)
     assert response.status_code == 429
@@ -568,7 +623,7 @@ def test_two_generic_pages_carry_two_different_references() -> None:
     assert second in parse(second_response).text
 
 
-@pytest.mark.parametrize("code", ["E1", "E2", "E3", "E4", "E5", "E6"])
+@pytest.mark.parametrize("code", ["E1", "E2", "E3", "E4", "E5", "E6", "E8", "E9"])
 def test_only_the_generic_page_carries_a_reference(code: str) -> None:
     _, reference = errors.error_page(code, env=ENV, seconds=30)
     assert reference == ""
