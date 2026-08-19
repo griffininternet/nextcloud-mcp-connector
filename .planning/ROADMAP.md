@@ -204,7 +204,33 @@ Plans:
   3. Der Permission-Parity-Test besteht: Ein eingeschränkter Nutzer sieht via MCP nichts, was die Weboberfläche ihm nicht zeigt; Create-only-Write-Tests und Negative-Credential-Loadtest sind grün
   4. Für Claude.ai/Desktop, ChatGPT, Cursor, Open WebUI und MUCGPT existiert je eine Setup-Doku mit den bekannten Stolperstellen, jeweils gegen den echten Client verprobt
 
-**Plans**: TBD
+**Plans**: 10 plans in 5 waves
+
+Plans:
+**Wave 1**
+
+- [ ] 05-01-PLAN.md - Admin-Werte lesen und Admin-Settings-Form registrieren (BL-06, Teil 1) (Wave 1)
+- [ ] 05-03-PLAN.md - Permission-Parity mit Read-only-Share plus Create-only ueber die Kette (SC 3) (Wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 05-02-PLAN.md - Schalter-Durchsetzung dort, wo eine Autorisierung entsteht (BL-10) (Wave 2)
+- [ ] 05-04-PLAN.md - Admin-Werte wirken, Setup-Zustand statt Startabbruch (BL-06, Teil 2) (Wave 2)
+- [ ] 05-05-PLAN.md - Negativ-Credential-Lasttest und Admin-Sicherheitsdoku (SC 3) (Wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 05-06-PLAN.md - Purge-Kommando, Store-Wipe, Data-Key-Loeschung, privacy.md-Korrektur (SC 2) (Wave 3)
+- [ ] 05-07-PLAN.md - Client-Doku Open WebUI und MUCGPT (EXAPP-05, SC 4) (Wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 05-08-PLAN.md - Install- und Deinstallations-Beweis auf frischer Instanz plus Runbook (SC 2) (Wave 4)
+- [ ] 05-09-PLAN.md - FAQ dreisprachig, Store-Beschreibung, README-Status, Manifest-Textgates (Wave 4)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 05-10-PLAN.md - Release 0.1.1 und Store-Pflege mit Live-Nachweis (EXAPP-04) (Wave 5)
 
 ## Progress
 
@@ -217,7 +243,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. ExApp-Shell | 7/7 | Complete    | 2026-08-15 |
 | 3. OAuth 2.1 | 8/9 | In Progress|  |
 | 4. Per-User-Verwaltung und prepare_context | 4/4 | Complete   | 2026-08-17 |
-| 5. Hardening und Store-Einreichung | 0/TBD | Not started | - |
+| 5. Hardening und Store-Einreichung | 0/10 | Not started | - |
 
 ## Coverage
 
