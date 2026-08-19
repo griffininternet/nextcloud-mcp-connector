@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Plan 05-04 fertig: BL-06 geschlossen (Admin-Werte wirken beim Start, Setup-Zustand statt Exit 2 auf /connections). Naechstes: Plan 05-05"
-last_updated: "2026-08-19T16:57:01.966Z"
+stopped_at: "Plan 05-05 fertig: Credential-Flood gemessen (Quotient 1,00 Nextcloud-Runden pro Angreifer-Request, Bruteforce nur bei Basic und auf der HaRP-Adresse), Admin-Empfehlung im Installations-Runbook. Naechstes: Plan 05-06"
+last_updated: "2026-08-19T17:23:28.774Z"
 last_activity: 2026-08-19
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 44
-  completed_plans: 38
-  percent: 80
+  completed_plans: 39
+  percent: 89
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 05 (hardening-und-store-einreichung) — EXECUTING
-Plan: 5 of 10
+Plan: 6 of 10
 Status: Ready to execute
 Last activity: 2026-08-19
 
-Progress: [█████████░] 86%
+Progress: [█████████░] 89%
 
 ## Performance Metrics
 
@@ -91,6 +91,7 @@ Progress: [█████████░] 86%
 | Phase 05 P03 | 25 min | 2 tasks | 5 files |
 | Phase 05 P02 | 20 min | 2 tasks tasks | 8 files files |
 | Phase 05 P04 | 18 min | 2 tasks | 7 files |
+| Phase 05 P05 | 25 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -281,6 +282,13 @@ Recent decisions affecting current work:
 - [Phase 05]: Eine fehlende oeffentliche Adresse beendet den Prozess nicht mehr mit Exit 2: mit Abbruch wird die App nie enabled, das Admin-Formular wird nie registriert und der Admin hat keinen Ort fuer den Wert; 'keine stille Fehlkonfiguration' halten jetzt die Fehlerzeile und der sichtbare Setup-Zustand auf /connections
 - [Phase 05]: Keine Herleitung der oeffentlichen Adresse aus NEXTCLOUD_URL (Assumption A2): AppAPI setzt sie mit herabgesetztem Schema und moeglicherweise intern, ein hergeleiteter Wert waere ein stiller Default mit kaputter Discovery
 - [Phase 05]: Der Startzeit-Lesevorgang bringt seinen eigenen kurzlebigen httpx-Client mit (read_values und admin_overlay nehmen ihn als Parameter): shared_client bindet seinen Pool an den Event-Loop des ersten Aufrufs, und dieser Loop ist geschlossen, bevor uvicorn seinen eigenen oeffnet
+- [Phase 05]: Ein Credential-Flood wird in Nextcloud-PHP-Runden pro Angreifer-Request gemessen, nicht in Millisekunden: gemessener Quotient 1,00 in beiden Laeufen (200 von 200 Requests erzeugen eine harp/user-info-Anfrage), waehrend 20 Requests ohne Authorization-Header null Nextcloud-Requests kosten
+- [Phase 05]: Die Bruteforce-Eintraege eines Basic-Floods landen auf der Adresse von HaRP und nicht auf der des Angreifers (27 bis 28 je 200 Requests auf 172.29.42.131, null auf Gateway, Caddy und ExApp-Container), weil Nextcloud nur den Caddy-Container als Proxy vertraut; damit teilen alle Nutzer aller ExApps hinter diesem Proxy einen Zaehler, und die Formulierung 'pro Quell-IP' aus dem Research ist zu schwach
+- [Phase 05]: 200 abgelehnte Basic-Logins erzeugen nur 27 bis 28 Zaehler-Eintraege und Lauf B ist schneller als Lauf A: ab der Maximalverzoegerung lehnt Nextcloud ohne Anmeldepruefung ab, die PHP-Runde pro Request bleibt aber; der Bearer-Flood ist damit der teurere Angriff, weil er nie einen Zaehler fuellt, der ihn bremst
+- [Phase 05]: Die Bremse gegen einen Credential-Flood steht im Reverse Proxy des Admins (Rate-Limit-Regel auf /exapps/mcp_connector/ mit Beispiel fuer Caddy und nginx), nicht auf /mcp: nur dort kann ein Request abgewiesen werden, bevor HaRP Nextcloud fragt, und D-37 plus T-02-21 bleiben unveraendert
+- [Phase 05]: Ein Test, der Instanzzustand aendert, liest den Vorzustand und stellt ihn im finally zurueck: der Lasttest schaltet den vom Bootstrap deaktivierten Bruteforce-Waechter fuer die Messung ein, weil ein leerer Zaehler sonst ein Artefakt der Fixture waere, und setzt danach alle Zaehler mit Nachweis zurueck (T-05-24)
+- [Phase 05]: Der Lasttest spricht mit docker exec und den festen Containernamen statt mit docker compose exec: jeder compose-Aufruf gegen compose.exapp.yml verlangt HP_SHARED_KEY in der Umgebung (WR-11), und der messende Prozess hat mit diesem Schluessel nichts zu tun; genau daran scheiterte der erste Bootstrap-Lauf still ("Nextcloud is still not installed", obwohl occ status installed: true meldete)
+- [Phase 05]: Alle dreizehn Routen des Manifests sind seit CR-01 PUBLIC; das Installations-Runbook fuehrte /authorize/decide noch als user-Route und kannte /connections nicht, und die Zugriffsklasse in dem Dokument, mit dem ein Admin installiert, ist mehr als eine veraltete Zahl
 
 ### Pending Todos
 
@@ -291,7 +299,7 @@ Recent decisions affecting current work:
 - **Nextcloud-AIO-Smoke (Phase 5, D-31):** Der zweite Smoke-Schritt aus Success Criterion 1 ist an Phase 5 uebergeben. Er scheitert auf diesem Rechner an AIOs Domain-Validierung (oeffentliche Domain plus gueltiges TLS). Die fehlenden Schritte stehen in docs/exapp-install.md, Abschnitt Nextcloud AIO: Host mit oeffentlicher Domain und Zertifikat, AIO-Mastercontainer starten, optionalen HaRP-Container aktivieren (Annahme A6 unverifiziert), App als ExApp installieren, den Permission-Fidelity-Smoke wiederholen und occ app_api:app:list festhalten.
 - **WR-12 Linux-socat-Loop (Phase 5):** Die Linux-Variante des --manual-Entwicklungsloops (socat auf das Compose-Gateway) ist dokumentiert, aber auf diesem Windows-Host nicht durchgespielt; Entwicklungs-Komfort, nicht der ausgelieferte Pfad.
 - **Browser-Blick auf /settings/user/security (Assumption A1, Phase-4-Verifikation):** Gemessen ist, dass Nextcloud die Link-only-Form ausliefert (forms-Endpoint, Initial-State der Seite, Mount-Punkt `<div id="mcp_connector_mcp_connector_settings">`). Der gerenderte Pixel ist nicht gemessen, im Live-Lauf war kein Browser beteiligt. Schadensfall waere ein fehlender Wegweiser, keine Funktionsstoerung. Details in 04-04-MEASUREMENTS.md, Beweis 1.
-- **ExApp-Topologie:** Nach 05-03 wieder heruntergefahren (`down` mit erhaltenen Volumes, danach `docker stop`/`docker rm nc_app_mcp_connector` und `docker network rm nc-mcp-exapp-net`). Die Volumes tragen jetzt zusaetzlich die Fixture von 05-03 (read-only geteilter Ordner plus ungeteilte Datei); die zugehoerigen vier Werte stehen in `.env.exapp` und werden beim naechsten Bootstrap wiederverwendet, nicht neu erzeugt. Wieder anfahren: `export HP_SHARED_KEY=$(openssl rand -hex 32)` und in DERSELBEN Zeile weiterarbeiten (die Shell-Env ueberlebt einen Aufruf nicht, und jedes `docker compose` gegen diese Datei braucht die Variable), `up -d --wait`, `occ app_api:app:unregister mcp_connector --silent --force`, `occ app_api:daemon:unregister harp_proxy_docker`, dann `bash scripts/bootstrap_exapp.sh` (baut das Image neu und setzt NC_MCP_PUBLIC_URL). Ohne das Neubauen laeuft ein veraltetes Image.
+- **ExApp-Topologie:** Nach 05-05 wieder heruntergefahren (`down` mit erhaltenen Volumes, danach `docker stop`/`docker rm nc_app_mcp_connector` und `docker network rm nc-mcp-exapp-net`). Die Volumes tragen die Fixture von 05-03 (read-only geteilter Ordner plus ungeteilte Datei); die zugehoerigen vier Werte stehen in `.env.exapp` und werden beim naechsten Bootstrap wiederverwendet, nicht neu erzeugt. `auth.bruteforce.protection.enabled` steht auf `false` und alle Bruteforce-Zaehler auf 0, also im Zustand, den der Bootstrap herstellt (05-05). Wieder anfahren: `export HP_SHARED_KEY=$(openssl rand -hex 32)` und in DERSELBEN Zeile weiterarbeiten (die Shell-Env ueberlebt einen Aufruf nicht, und jedes `docker compose` gegen diese Datei braucht die Variable), `up -d --wait`, `occ app_api:app:unregister mcp_connector --silent --force`, `occ app_api:daemon:unregister harp_proxy_docker`, dann `bash scripts/bootstrap_exapp.sh` (baut das Image neu und setzt NC_MCP_PUBLIC_URL). Ohne das Neubauen laeuft ein veraltetes Image. **Ab dem zweiten Aufruf gegen bereits laufende Container den Schluessel zurueckLESEN statt neu erzeugen** (gemessen in 05-05): `export HP_SHARED_KEY=$(docker inspect nc-mcp-exapp-harp --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^HP_SHARED_KEY=' | cut -d= -f2)`. Fehlt die Variable, scheitert JEDER compose-Aufruf an der Interpolation, und im Bootstrap sieht das wegen `2>/dev/null` in der Warteschleife wie "Nextcloud is still not installed" aus, obwohl `occ status` `installed: true` meldet.
 - **Aufraeumen (optional):** Die Docker-Testinstanz traegt jetzt zusaetzlich die Calendar-App 6.5.3 und die Abnahme-Artefakte. Fuer einen sauberen Stand: `docker compose -f compose.test.yml down -v` und danach `bash scripts/bootstrap_test_nc.sh`.
 
 ### Blockers/Concerns
@@ -310,6 +318,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-19T16:57:01.951Z
-Stopped at: Plan 05-04 fertig: BL-06 geschlossen (Admin-Werte wirken beim Start, Setup-Zustand statt Exit 2 auf /connections). Naechstes: Plan 05-05
+Last session: 2026-08-19T17:23:28.759Z
+Stopped at: Plan 05-05 fertig: Credential-Flood gemessen (Quotient 1,00 Nextcloud-Runden pro Angreifer-Request, Bruteforce nur bei Basic und auf der HaRP-Adresse), Admin-Empfehlung im Installations-Runbook. Naechstes: Plan 05-06
 Resume file: None
