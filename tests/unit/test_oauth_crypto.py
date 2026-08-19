@@ -9,6 +9,7 @@ is what lets every check below run without an environment and without Nextcloud,
 one outgoing OCS call is answered by respx.
 """
 
+import base64
 import inspect
 import json
 import logging
@@ -459,6 +460,94 @@ async def test_a_failure_log_line_repeats_no_value_of_the_request(
         await crypto.data_key(ENV)
 
     assert APP_SECRET not in caplog.text
+
+
+# --- deleting the key, the last step of the purge (plan 05-06) ---------------------
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_delete_key_sends_one_delete_that_names_the_config_key() -> None:
+    """The third verb of this resource, on the same path the write uses."""
+    route = respx.delete(CONFIG_URL).mock(return_value=httpx.Response(200, json=ocs_body([])))
+
+    assert await crypto.delete_key(ENV) is True
+
+    assert route.call_count == 1, "one attempt, no retry"
+    sent = route.calls.last.request
+    assert sent.method == "DELETE"
+    assert str(sent.url) == CONFIG_URL, "the write path, not the read path with its suffix"
+    assert json.loads(sent.content) == {"configKey": crypto.CONFIG_KEY}
+    assert sent.headers["OCS-APIRequest"] == "true"
+    assert sent.headers["EX-APP-ID"] == APP_ID
+    assert sent.headers["EX-APP-VERSION"] == APP_VERSION
+    assert sent.headers["AUTHORIZATION-APP-API"], "the app context token of an ExApp"
+
+
+@pytest.mark.anyio
+@respx.mock
+@pytest.mark.parametrize("status_code", [400, 401, 404, 500])
+async def test_a_refused_deletion_is_false_and_one_log_line(
+    caplog: pytest.LogCaptureFixture, status_code: int
+) -> None:
+    """A failure the caller reports as a number: the purge itself may not be stopped by it."""
+    respx.delete(CONFIG_URL).mock(return_value=httpx.Response(status_code, json={}))
+
+    with caplog.at_level(logging.DEBUG):
+        assert await crypto.delete_key(ENV) is False
+
+    assert [record for record in caplog.records if record.levelno >= logging.ERROR]
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_deletion_that_does_not_reach_nextcloud_is_false_and_never_raises(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    respx.delete(CONFIG_URL).mock(side_effect=httpx.ConnectError("no route to nextcloud"))
+
+    with caplog.at_level(logging.DEBUG):
+        assert await crypto.delete_key(ENV) is False
+
+    assert [record for record in caplog.records if record.levelno >= logging.ERROR]
+
+
+@pytest.mark.anyio
+async def test_a_deletion_without_a_deploy_environment_is_false_and_touches_nothing(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """An incomplete deploy environment is a startup problem, not an exception here.
+
+    No respx route at all in this check, which is the assertion: a missing variable is
+    refused before anything opens a socket.
+    """
+    with caplog.at_level(logging.DEBUG):
+        assert await crypto.delete_key({}) is False
+
+    assert [record for record in caplog.records if record.levelno >= logging.ERROR]
+
+
+@pytest.mark.anyio
+@respx.mock
+@pytest.mark.parametrize("outcome", ["ok", "refused", "unreachable"])
+async def test_no_deletion_log_line_carries_key_material_or_the_app_secret(
+    caplog: pytest.LogCaptureFixture, outcome: str
+) -> None:
+    """T-03-16 and security domain V7: the headers carry the secret, the value is a key."""
+    route = respx.delete(CONFIG_URL)
+    if outcome == "unreachable":
+        route.mock(side_effect=httpx.ConnectError("no route to nextcloud"))
+    else:
+        route.mock(return_value=httpx.Response(200 if outcome == "ok" else 500, json={}))
+
+    with caplog.at_level(logging.DEBUG):
+        await crypto.delete_key(ENV)
+
+    logged = "\n".join(record.getMessage() for record in caplog.records)
+    assert APP_SECRET not in logged
+    assert base64.b64encode(f":{APP_SECRET}".encode()).decode() not in logged
+    assert STORED_KEY_HEX not in logged
+    assert STORED_KEY_HEX[:16] not in logged
 
 
 # --- source gates ------------------------------------------------------------------

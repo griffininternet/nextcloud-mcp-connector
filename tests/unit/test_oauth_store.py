@@ -80,6 +80,54 @@ async def with_three_connections(subject: store.OAuthStore) -> None:
         )
 
 
+#: Every table of the schema, in the order the wipe of plan 05-06 empties them: children
+#: before parents, and ``user_access`` last because it hangs on no cascade.
+SCHEMA_TABLES = (
+    "access_tokens",
+    "refresh_tokens",
+    "auth_codes",
+    "flows",
+    "authorizations",
+    "clients",
+    "user_access",
+)
+
+
+async def with_every_table_filled(subject: store.OAuthStore) -> None:
+    """One row in each of the seven tables, which is what the purge has to leave empty."""
+    await with_authorization(subject)
+    await subject.create_flow(
+        "flow-0001",
+        client_id=CLIENT_ID,
+        redirect_uri=REDIRECT_URI,
+        redirect_uri_explicit=True,
+        code_challenge=CHALLENGE,
+        state=None,
+        scopes=SCOPES,
+        resource=RESOURCE,
+        poll_token=POLL_TOKEN,
+    )
+    await subject.create_auth_code(
+        AUTH_CODE,
+        auth_id=AUTH_ID,
+        redirect_uri=REDIRECT_URI,
+        code_challenge=CHALLENGE,
+        resource=RESOURCE,
+    )
+    await subject.create_refresh_token(REFRESH_TOKEN, auth_id=AUTH_ID, family_id=FAMILY)
+    await subject.create_access_token(
+        ACCESS_TOKEN, auth_id=AUTH_ID, family_id=FAMILY, scopes=SCOPES, resource=RESOURCE
+    )
+    await subject.set_access(NC_USER, disabled=True)
+
+
+def counts(tmp_path: Path) -> dict[str, int]:
+    """The row count of every table, read out of the file itself."""
+    return {
+        table: query(tmp_path, f"SELECT COUNT(*) FROM {table}")[0][0] for table in SCHEMA_TABLES
+    }
+
+
 def all_bytes(tmp_path: Path) -> bytes:
     """Every byte the store wrote, including the write ahead log beside the database."""
     return b"".join(path.read_bytes() for path in sorted(tmp_path.iterdir()) if path.is_file())
@@ -923,6 +971,113 @@ async def test_a_write_that_returns_commits_every_statement_of_its_body(
     assert row is not None
     assert row.allowed is False
     assert row.last_used_at == 4711
+
+
+# --- what the purge of plan 05-06 reads and empties ----------------------------------
+
+
+@pytest.mark.anyio
+async def test_all_authorizations_returns_every_row_oldest_first(tmp_path: Path) -> None:
+    """No account, no client, no limit: the purge of an instance sees the whole table."""
+    subject = open_store(tmp_path)
+    await with_three_connections(subject)
+
+    rows = await subject.all_authorizations()
+
+    assert [row.auth_id for row in rows] == ["auth-older", "auth-newer", "auth-of-bob"]
+    assert {row.nc_user for row in rows} == {NC_USER, OTHER_USER}
+
+
+@pytest.mark.anyio
+async def test_all_authorizations_carries_a_revoked_connection_too(tmp_path: Path) -> None:
+    """The question of the purge is not "which connection lives".
+
+    It is "which Nextcloud app password of this instance may still exist", and a revoked
+    row answers yes to it: revoking marks our own record, while the credential itself only
+    goes when Nextcloud is asked to delete it. ``authorizations_of_user`` filters exactly
+    that row out, which is why it is the wrong model here, and the second half of this
+    check is that counter proof.
+    """
+    subject = open_store(tmp_path)
+    await with_three_connections(subject)
+    await subject.revoke_authorization("auth-older", now=4_000)
+
+    rows = await subject.all_authorizations()
+
+    assert [row.auth_id for row in rows] == ["auth-older", "auth-newer", "auth-of-bob"]
+    assert [row.auth_id for row in rows if row.revoked_at is not None] == ["auth-older"]
+    live = {row.auth_id for row in await subject.authorizations_of_user(NC_USER)}
+    assert "auth-older" not in live, "the filtered read would leave that credential behind"
+
+
+@pytest.mark.anyio
+async def test_all_authorizations_of_an_empty_store_is_an_empty_list(tmp_path: Path) -> None:
+    assert await open_store(tmp_path).all_authorizations() == []
+
+
+@pytest.mark.anyio
+async def test_wipe_all_empties_every_table_of_the_schema(tmp_path: Path) -> None:
+    """All seven, counted in the file and not through a reader of the store."""
+    subject = open_store(tmp_path)
+    await with_every_table_filled(subject)
+    assert all(count > 0 for count in counts(tmp_path).values()), counts(tmp_path)
+
+    await subject.wipe_all()
+
+    assert counts(tmp_path) == dict.fromkeys(SCHEMA_TABLES, 0)
+
+
+@pytest.mark.anyio
+async def test_wipe_all_takes_the_access_switch_with_it(tmp_path: Path) -> None:
+    """``user_access`` hangs on no cascade at all, so it needs a statement of its own.
+
+    The middle step is the reason: deleting the client takes every authorization with it
+    through the cascade and leaves the switch of that account exactly where it was.
+    """
+    subject = open_store(tmp_path)
+    await with_authorization(subject)
+    await subject.set_access(NC_USER, disabled=True)
+
+    await subject.delete_client(CLIENT_ID)
+    assert await subject.access_disabled(NC_USER) is True, "the cascade does not reach it"
+
+    await subject.wipe_all()
+    assert await subject.access_disabled(NC_USER) is False
+
+
+@pytest.mark.anyio
+async def test_the_store_keeps_working_on_the_same_file_after_a_wipe(tmp_path: Path) -> None:
+    """Not a replacement for ``--rm-data``: the file and the schema stay usable.
+
+    A running process has to write its next row without creating the file again, because
+    the purge happens inside that process and answers a request afterwards.
+    """
+    subject = open_store(tmp_path)
+    await with_every_table_filled(subject)
+
+    await subject.wipe_all()
+    await with_authorization(subject)
+
+    row = await subject.load_authorization(AUTH_ID)
+    assert row is not None
+    assert await subject.app_password(AUTH_ID) == APP_PASSWORD
+    tables = {
+        name[0] for name in query(tmp_path, "SELECT name FROM sqlite_master WHERE type='table'")
+    }
+    assert tables >= set(SCHEMA_TABLES), "the schema survived the wipe"
+
+
+def test_the_wipe_is_one_write_and_names_every_table() -> None:
+    """One transaction, and one statement per table rather than a table name in an f-string.
+
+    The gate of ``tests/contract/test_no_destructive_calls.py`` matches ``DELETE FROM``
+    literally, so a loop over a tuple of names would move these statements out of sight of
+    the exemption that covers them.
+    """
+    source = inspect.getsource(store.OAuthStore.wipe_all)
+    assert "self._write" in source
+    for table in SCHEMA_TABLES:
+        assert f"DELETE FROM {table}" in source, f"{table} is not emptied by name"
 
 
 # --- source gates --------------------------------------------------------------------
