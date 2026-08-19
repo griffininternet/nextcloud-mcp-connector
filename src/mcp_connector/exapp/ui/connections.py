@@ -27,11 +27,12 @@ Three properties are worth naming here, because the rest of the file is their me
   credential, so it travels in a hidden field and nowhere else; the client id is public by
   design and is shown in full, because it is the only thing that tells two rows called
   "Claude" apart (T-04-31).
-* **The order of the blocks is fixed** (04-UI-SPEC.md, "Callout stacking"): identity, the
-  result of what the user just did, the switch, the standing pause warning, and only then
-  the list. The result answers the action, the warning describes a condition, and the
-  switch stands directly above the warning so the way back is one line above the sentence
-  that says access is off.
+* **The order of the blocks is fixed** (04-UI-SPEC.md, "Callout stacking"): the setup notice
+  of an unconfigured installation, identity, the result of what the user just did, the
+  switch, the standing pause warning, and only then the list. The result answers the action,
+  the warning describes a condition, and the switch stands directly above the warning so the
+  way back is one line above the sentence that says access is off. The setup notice comes
+  before all of it because it is the reason nothing on the page can work yet (plan 05-04).
 
 The path and the field names are declared here, next to the forms that write them into the
 document, and :mod:`mcp_connector.oauth.connections` imports them for its route
@@ -133,6 +134,7 @@ def connections_page(
     error page.
     """
     blocks = [
+        *_setup(env),
         layout.paragraph(strings.CONSENT_IDENTITY.format(user=user, host=_host(env))),
         *_result(result, result_client),
         *_switch(paused, switch_token, env),
@@ -233,6 +235,33 @@ def _row(
         ),
     ]
     return name, lines, action
+
+
+def _setup(env: Mapping[str, str] | None) -> list[str]:
+    """What an installation that has never been configured says, above everything else.
+
+    A store installation in Nextcloud 34 passes no variable into the container: with a single
+    Docker daemon ``exApps.enableApp`` enables the app without deploy options, and AppAPI drops
+    every declared variable whose final value is empty (05-RESEARCH, pitfall 2). So
+    :func:`mcp_connector.config.public_url` answers the documented loopback default, every
+    discovery document names it, and the first symptom used to be an assistant app failing at
+    discovery, which reads like a client problem and is not one.
+
+    The comparison lives here and only here, so the list, the empty list and the paused state
+    share one condition: the cause is none of those three states, which is why the notice is
+    the first block of all of them rather than a fourth state of this page.
+
+    The copy names the place of the setting and the reactivation step, never the value and
+    never a host (T-05-21): nobody can act on ``127.0.0.1:8765``, and the address the
+    administrator has to type is the only useful sentence here. The step exists because the
+    values are resolved once at the start of the process (plan 05-04, D-20).
+    """
+    if config.public_url(env) != config.DEFAULT_PUBLIC_URL:
+        return []
+    return [
+        layout.callout("warning", strings.SETUP_PUBLIC_URL_TITLE, strings.SETUP_PUBLIC_URL_BODY),
+        layout.paragraph(strings.SETUP_PUBLIC_URL_HINT, muted=True),
+    ]
 
 
 def _switch(paused: bool, token: str, env: Mapping[str, str] | None) -> list[str]:

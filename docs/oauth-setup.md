@@ -78,6 +78,10 @@ occ app_api:app:register mcp_connector \
 For the local topology of `scripts/bootstrap_exapp.sh` the value is set automatically and
 can be overridden with `NC_EXAPP_PUBLIC_URL`.
 
+An installation from the app store has no way to pass a variable, which is what section 3
+below is for: the same address can be entered in Nextcloud itself, and what is entered there
+wins over this variable.
+
 ### 2. The three switches of AUTH-07
 
 All three are optional, and the shipped state is the plug and play one:
@@ -91,7 +95,64 @@ All three are optional, and the shipped state is the plug and play one:
 A value that is neither on nor off keeps the default and says so in the log, instead of
 guessing.
 
-### 3. The two reverse proxy rules for the canonical root paths
+### 3. Administrator settings in Nextcloud
+
+Since version 0.1.1 the four values above can also be set inside Nextcloud, without any
+deploy variable. A store installation needs this: with a single Docker daemon, Nextcloud 34
+enables an ExApp without asking for deploy options, so `--env` never happens and every
+declared variable arrives empty.
+
+The form sits in **Administration settings, Security, MCP Connector** and carries four
+fields:
+
+| Field | Config key | What it sets |
+|-------|------------|--------------|
+| Public address of this connector | `public_url` | `NC_MCP_PUBLIC_URL` |
+| Allow apps to register themselves | `oauth_dcr` | `NC_MCP_OAUTH_DCR` |
+| Only allow the clients listed below | `oauth_allowlist_only` | `NC_MCP_OAUTH_ALLOWLIST_ONLY` |
+| Allowed clients | `oauth_allowed_clients` | `NC_MCP_OAUTH_ALLOWED_CLIENTS` |
+
+The config key of a field is the id of the field itself, without a prefix: AppAPI stores a
+declarative settings value under that id, and the app reads the same four keys back over the
+ExApp configuration channel.
+
+**Precedence: the value stored in Nextcloud wins, then the `NC_MCP_*` variable of the deploy
+environment, then the default in code.** A field left empty, or filled with something this
+app cannot use, is not a value at all: the variable and then the default keep working, and
+the reason is written into the container log without repeating what was entered. An address
+with a fragment, with credentials in it, without a scheme or with an impossible port is
+refused for that reason, because it would become the `issuer` of the metadata document.
+
+**A change takes effect after the app is disabled and enabled again:**
+
+```
+occ app_api:app:disable mcp_connector
+occ app_api:app:enable mcp_connector
+```
+
+The values are read exactly once, when the container starts. That is deliberate: reading
+them per request would cost a Nextcloud round trip on every single request, and caching them
+in the process would be state that outlives a request. The reactivation is the price, and it
+is the only step of this form that is not obvious.
+
+One consequence worth knowing on an installation that has always used `--env`: as soon as
+the form is saved for the first time, Nextcloud stores a concrete value for both checkboxes,
+and from then on those two beat the variables. Clear the fields if the deploy environment
+should stay in charge.
+
+**On a public instance, decide about self registration before the first client connects.**
+The shipped state allows any app to register itself, which is what lets Claude.ai and
+ChatGPT connect without an administrator. Either switch "Only allow the clients listed
+below" on and name the clients, or switch self registration off. Both switches are in the
+same form, and the sentence stands at the field as well.
+
+**An installation without a public address keeps running on purpose.** It does not stop with
+an error at startup any more, because a container that stops never becomes `enabled`, so the
+form above would never be registered and there would be no place to enter the address. The
+container writes one error line naming this form, and the connections page of every user
+says the same thing until the address is set.
+
+### 4. The two reverse proxy rules for the canonical root paths
 
 These are **optional**, and that is measured, not assumed: with both rules switched off,
 Claude.ai still connects, because it falls back to path 3 of the discovery table (see "Are
@@ -133,7 +194,7 @@ Both use an exact match, `route /path` in Caddy and `location =` in nginx, so th
 these two strings and nothing else. No Nextcloud path outside them changes behaviour, and
 both rules have to stand before the general `/exapps/*` rule, because the first match wins.
 
-### 4. What the user enters
+### 5. What the user enters
 
 The URL of the connector, exactly, with `/mcp` and without a trailing slash:
 
@@ -145,7 +206,7 @@ That string has to match the `resource` of the protected resource document chara
 character. A trailing slash is a different resource and the connection fails before the
 first tool call.
 
-### 5. What the hosted connectors actually send
+### 6. What the hosted connectors actually send
 
 Measured against the staging instance on **2026-08-16**, one live connection per client,
 read out of the access log and out of the authorization request. This table replaces the
