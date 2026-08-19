@@ -252,7 +252,7 @@ occ user:setting alice                                                       # k
 | `purged` | ob der Purge ueberhaupt gelaufen ist | `false` heisst: `--force` fehlte, oder die Daten dieser App waren nicht lesbar. Dann steht im Feld `hint`, was zu tun ist, und Schritt 2 darf **nicht** folgen. |
 | `connections` | Anzahl der gefundenen Autorisierungen, widerrufene eingeschlossen | die Zahl der Nextcloud-App-Passwoerter, um die es geht |
 | `revoked` | Anzahl der zurueckgegebenen App-Passwoerter | gleich `connections` ist der gute Fall |
-| `revoke_failures` | Anzahl der Passwoerter, die nicht zurueckgegeben werden konnten | grösser als 0 heisst: so viele App-Passwoerter koennen in Nextcloud noch gueltig sein. Das Runbook muss hier den Weg ueber Einstellungen, Sicherheit, Geraete und Sitzungen nennen, pro betroffenem Konto. |
+| `revoke_failures` | Anzahl der Passwoerter, die nicht zurueckgegeben werden konnten | größer als 0 heißt: so viele App-Passwoerter koennen in Nextcloud noch gueltig sein. Das Runbook muss hier den Weg ueber Einstellungen, Sicherheit, Geraete und Sitzungen nennen, pro betroffenem Konto. |
 | `tables_cleared` | ob alle sieben Tabellen geleert wurden | `false` heisst: `--rm-data` in Schritt 2 nimmt die Datei trotzdem mit, aber der Befund gehoert ins Protokoll |
 | `key_deleted` | ob der Datenschluessel aus der ExApp-Konfiguration entfernt wurde | `false` heisst: ein Wert bleibt in `oc_appconfig` stehen. Er ist ohne das Volume nutzlos, aber er ist da, und das Runbook nennt `occ config:app:delete mcp_connector oauth_data_key` als Handgriff. |
 
