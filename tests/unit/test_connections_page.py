@@ -447,8 +447,15 @@ def test_e8_is_a_403_that_names_the_host_and_offers_no_link() -> None:
 
 
 def test_e8_is_a_row_of_the_existing_table_and_not_a_new_mechanism() -> None:
+    """Compared against the generic page and no longer against a position (05-02).
+
+    The check used to read ``len(CODES) - 2``, which said "second to last" while it meant
+    "before the generic page". E9 joined the table between the two in plan 05-02 and the
+    check failed without anything being wrong, which is what a positional assertion buys.
+    """
     assert "E8" in errors.CODES
-    assert errors.CODES.index("E8") == len(errors.CODES) - 2, "E8 stands before the generic page"
+    assert errors.CODES.index("E8") < errors.CODES.index(errors.GENERIC)
+    assert errors.CODES[-1] == errors.GENERIC, "the generic page stays the fallback row"
 
 
 # --- the stylesheet and the icons --------------------------------------------------

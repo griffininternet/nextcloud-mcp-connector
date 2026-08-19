@@ -195,7 +195,15 @@ def connect_routes(
 
 
 async def _start(store: StoreProvider, env: Mapping[str, str] | None) -> Response:
-    """Open a sign in at Nextcloud and remember it long enough to ask about it."""
+    """Open a sign in at Nextcloud and remember it long enough to ask about it.
+
+    The per account switch of EXAPP-02 is deliberately *not* checked here, and the absence is
+    not an oversight (BL-10): at this point the account is not known. This page is reached
+    before any sign in, by whoever opened it, so there is nothing to look up. The switch is
+    enforced in :func:`_wait`, at the first line where an account exists, and the price of
+    that placement is the app password that exists by then. That is why the refusal there
+    hands it back.
+    """
     opened = await _store_or_page(store, env)
     if isinstance(opened, Response):
         return opened
@@ -297,6 +305,28 @@ async def _wait(request: Request, store: StoreProvider, env: Mapping[str, str] |
         await opened.delete_flow(flow_id)
         return _page(errors.error_page("E3", env=env))
 
+    # Enforcement point 2 of BL-10, and the earliest one this route has: the account is known
+    # from the poll on and not one line earlier, so this is where the switch of EXAPP-02 can
+    # be read at all. It is read locally, out of the file this container already owns (D-47),
+    # and never from a process cache, so pulling the brake takes effect on the very next
+    # request (D-48). It stands after the identity check above and before the result, because
+    # the credential of a paused account may not be rendered, and because both refusals owe
+    # the same thing: the app password exists at Nextcloud from the 200 of the poll, and this
+    # refusal is the reason nobody will ever use it (pitfall 13, D-34).
+    disabled = await _access_disabled(opened, credentials.login_name)
+    if disabled is not False:
+        # ``None`` is the store that could not answer, and that is never a "no" (fail closed,
+        # D-37, the same choice the transport boundary of phase 4 makes).
+        if disabled is True:
+            logger.info("a finished sign in was refused because the account has paused MCP access")
+        await loginflow.revoke_app_password(
+            credentials.login_name, credentials.app_password, env=env
+        )
+        await _forget_flow(opened, flow_id)
+        if disabled is True:
+            return _page(errors.error_page(errors.PAUSED, env=env))
+        return _generic("the access switch could not be read", env)
+
     try:
         # Deleted before the credential is rendered, not after: the 200 of a poll arrives
         # exactly once, so a record that survives the answer would leave the next load
@@ -312,6 +342,35 @@ async def _wait(request: Request, store: StoreProvider, env: Mapping[str, str] |
         return _generic("the finished flow record could not be removed", env)
 
     return result_page(credentials.login_name, credentials.app_password, env=env)
+
+
+async def _access_disabled(store: OAuthStore, nc_user: str) -> bool | None:
+    """Whether this account paused its MCP access, or ``None`` when the store cannot say.
+
+    Three states and not two on purpose: the caller has to be able to tell "not paused" from
+    "no answer", because only the first one may continue. A single ``bool`` would have to pick
+    a default for the failure, and both defaults are wrong: ``True`` refuses every connection
+    of a healthy deployment whose file is momentarily locked, ``False`` is the pass through
+    BL-10 exists against.
+    """
+    try:
+        return await store.access_disabled(nc_user)
+    except Exception:
+        logger.exception("the per account access switch could not be read")
+        return None
+
+
+async def _forget_flow(store: OAuthStore, flow_id: str) -> None:
+    """Drop the record of a sign in that ends here, and never raise doing it.
+
+    The 200 of a poll arrives exactly once, so a record that survived a refusal would leave a
+    flow behind that can never finish and one more page to try it on. The guard exists because
+    one of the callers runs precisely because the store just failed.
+    """
+    try:
+        await store.delete_flow(flow_id)
+    except Exception:
+        logger.exception("the flow record of a refused sign in could not be removed")
 
 
 async def _store_or_page(

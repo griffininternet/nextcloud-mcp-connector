@@ -144,7 +144,16 @@ def consent_routes(
     handler = AuthorizationHandler(provider)
 
     async def authorize(request: Request) -> Response:
-        """The front door: refuse readably, or let the SDK do its work."""
+        """The front door: refuse readably, or let the SDK do its work.
+
+        The per account switch of EXAPP-02 is deliberately *not* checked here, and the
+        absence is not an oversight (BL-10): at this point the account is not known. The
+        request carries a client id and a return address, the sign in has not happened yet,
+        and the browser may belong to anybody. The earliest place the switch can be enforced
+        is therefore the one where the sign in produced an account, which is :func:`_screen`
+        after the poll, and the price of that placement is the app password that already
+        exists by then. That is why every refusal there hands it back.
+        """
         if request.method == "GET":
             params: Mapping[str, str] | FormData = request.query_params
         else:
@@ -309,6 +318,22 @@ async def _screen(
         return _generic("the login flow poll failed", env)
 
     credentials = result.credentials
+
+    # Enforcement point 1 of BL-10, and the earliest one there is: the account is known from
+    # this line on and not one line earlier, because it is the poll that names it. The switch
+    # is read locally, from the file this container already owns (D-47), and never from a
+    # process cache, so pulling the brake takes effect on the very next request (D-48).
+    #
+    # The price of the placement is the app password: it exists at Nextcloud from the 200 of
+    # the poll, and this refusal is the reason nobody will ever use it. So it goes back, word
+    # for word like the write failure branch below and the ``is_user`` branch of
+    # ``connect._wait`` (pitfall 13, D-34).
+    disabled = await _access_disabled(store, credentials.login_name)
+    if disabled is not False:
+        # ``None`` is the store that could not answer, and that is never a "no" (fail closed,
+        # D-37, the same choice the transport boundary of phase 4 makes).
+        return await _refuse_paused(store, flow_id, credentials, env, readable=disabled is True)
+
     try:
         # Written under the id of its own flow, which is what connects the two without a
         # column for it. It has to happen now: the 200 of a poll arrives exactly once.
@@ -373,6 +398,11 @@ async def _decide(
     finished, and finally a browser that is not the account that signed in. Only after all
     six does the decision itself get read.
 
+    The seventh check is the one exception to "without touching a row" and it is the last one
+    before the decision: an account that paused its own MCP access while this screen stood
+    open (BL-10). It cannot end the request untouched, because by then a sign in has happened
+    and an app password exists, so it runs the denial path and answers a page of its own.
+
     **Why the last check is the one that matters (CR-01).** Until it existed, the flow id
     was the whole authorisation of this request, and the flow id belongs to whoever started
     the flow, which in the OAuth path is the client and not the user. That made the classic
@@ -435,6 +465,24 @@ async def _decide(
         # of the two halves they were missing (T-03-47).
         logger.warning("a decision arrived from a browser that is not the account that signed in")
         return _page(errors.error_page("E3", env=env))
+
+    # Enforcement point 3 of BL-10, and the last one: an account can pause its access while
+    # this screen stands open, and the press of a button on a page that was rendered before
+    # that must not become a grant. Read here rather than only in :func:`_screen`, because
+    # between the two lies however long the person took to read.
+    disabled = await _access_disabled(store, authorization.nc_user)
+    if disabled is None:
+        return _generic("the access switch could not be read", env)
+    if disabled:
+        # The existing denial path runs: the app password goes back, the authorization and the
+        # flow go, and nothing is granted. What differs is the answer. The client gets no
+        # ``access_denied`` redirect, because that error means "the user said no", and this
+        # user said nothing: the reason is a setting of their account (T-05-09). So the answer
+        # is the page that names the setting and the way back to it, and the client learns
+        # only that no code arrived.
+        logger.info("a decision was refused because the account has paused its MCP access")
+        await _withdraw(store, row, authorization.nc_user, env)
+        return _page(errors.error_page(errors.PAUSED, env=env))
 
     decision = str(form.get(DECISION_PARAM) or "")
     if decision == DECISION_APPROVE:
@@ -509,11 +557,7 @@ async def _deny(
     and the row goes even when that attempt fails, because a connection the user refused
     must not survive a cleanup step that did not work (D-34, D-37).
     """
-    password = await _app_password(store, row.flow_id)
-    if password:
-        await loginflow.revoke_app_password(user, password, env=env)
-    await store.delete_authorization(row.flow_id)
-    await store.delete_flow(row.flow_id)
+    await _withdraw(store, row, user, env)
 
     if not row.redirect_uri:
         return denied_page(_name(client), env=env)
@@ -525,6 +569,73 @@ async def _deny(
         row.redirect_uri, error="access_denied", state=row.state, iss=config.public_url(env)
     )
     return denied_page(_name(client), target=target, env=env)
+
+
+async def _withdraw(
+    store: OAuthStore, row: FlowRow, user: str, env: Mapping[str, str] | None
+) -> None:
+    """Take back what the sign in already handed out, and forget the flow that produced it.
+
+    Split out of :func:`_deny` so the refusal of a paused account can run the very same three
+    steps and answer a different page (BL-10). One attempt at the revocation and no retry,
+    and the rows go even when that attempt fails: a connection that must not exist may not
+    survive because a cleanup step at Nextcloud did not work (D-34, D-37).
+    """
+    password = await _app_password(store, row.flow_id)
+    if password:
+        await loginflow.revoke_app_password(user, password, env=env)
+    await store.delete_authorization(row.flow_id)
+    await store.delete_flow(row.flow_id)
+
+
+async def _refuse_paused(
+    store: OAuthStore,
+    flow_id: str,
+    credentials: loginflow.AppCredentials,
+    env: Mapping[str, str] | None,
+    *,
+    readable: bool,
+) -> Response:
+    """End a finished sign in that may not become an authorization (BL-10).
+
+    No authorization row exists yet at this point, so there is nothing to delete: what has to
+    happen is that the app password of the poll goes back and the flow record goes with it,
+    because the 200 of a poll arrives exactly once and a record that survived would leave a
+    page to try the same sign in on again.
+
+    ``readable`` tells the two cases apart that end here. A switch that says "paused" is the
+    page that names the setting and the way to it. A switch that could not be read at all is
+    the generic page: the reader can do nothing about it, and an administrator needs the
+    reference in the log. Both refuse, which is the point (fail closed, D-37).
+    """
+    if readable:
+        logger.info("a finished sign in was refused because the account has paused MCP access")
+    await loginflow.revoke_app_password(credentials.login_name, credentials.app_password, env=env)
+    try:
+        await store.delete_flow(flow_id)
+    except Exception:
+        # The store is the reason this branch runs in the unreadable case, so its second
+        # failure is expected and may not turn the refusal into a traceback.
+        logger.exception("the flow record of a refused sign in could not be removed")
+    if readable:
+        return _page(errors.error_page(errors.PAUSED, env=env))
+    return _generic("the access switch could not be read", env)
+
+
+async def _access_disabled(store: OAuthStore, nc_user: str) -> bool | None:
+    """Whether this account paused its MCP access, or ``None`` when the store cannot say.
+
+    Three states and not two on purpose: the caller has to be able to tell "not paused" from
+    "no answer", because only the first one may continue. A single ``bool`` would have to pick
+    a default for the failure, and both defaults are wrong: ``True`` refuses every connection
+    of a healthy deployment whose file is momentarily locked, ``False`` is the pass through
+    this whole plan exists against.
+    """
+    try:
+        return await store.access_disabled(nc_user)
+    except Exception:
+        logger.exception("the per account access switch could not be read")
+        return None
 
 
 async def _app_password(store: OAuthStore, auth_id: str) -> str:

@@ -45,7 +45,14 @@ from starlette.responses import Response
 from ... import config
 from . import connections, icons, layout, strings
 
-__all__ = ["CODES", "REFERENCE_ALPHABET", "REFERENCE_LENGTH", "error_page", "new_reference"]
+__all__ = [
+    "CODES",
+    "PAUSED",
+    "REFERENCE_ALPHABET",
+    "REFERENCE_LENGTH",
+    "error_page",
+    "new_reference",
+]
 
 #: Where "Start over" leads on the timeout page. The authorization route answers a request
 #: without a running flow with the empty state, which is the honest landing point after a
@@ -64,6 +71,11 @@ MINIMUM_RETRY_SECONDS: Final = 1
 
 #: The generic page, used for anything the caller did not name and for every unknown code.
 GENERIC = "E7"
+
+#: The page of an account that paused its own MCP access, named rather than spelled at the
+#: three call sites that answer with it (``oauth/consent.py``, ``oauth/connect.py``): a code
+#: that travels between modules as a bare string is a code a rename cannot follow.
+PAUSED: Final = "E9"
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,7 +105,7 @@ _PAGES: dict[str, _ErrorPage] = {
     "E5": _ErrorPage(400, strings.ERROR_REDIRECT_TITLE, strings.ERROR_REDIRECT_BODY),
     "E6": _ErrorPage(429, strings.ERROR_THROTTLED_TITLE, strings.ERROR_THROTTLED_BODY),
     "E8": _ErrorPage(403, strings.ERROR_SIGN_IN_TITLE, strings.ERROR_SIGN_IN_BODY),
-    "E9": _ErrorPage(
+    PAUSED: _ErrorPage(
         403,
         strings.CONNECTIONS_PAUSED_TITLE,
         strings.ERROR_PAUSED_BODY,
