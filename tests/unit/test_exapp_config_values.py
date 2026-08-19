@@ -1,0 +1,454 @@
+"""The four admin values of BL-06, read out of the ExApp configuration (EXAPP-04).
+
+Nothing here opens a socket: the one outgoing OCS call is answered by respx, exactly as in
+``test_oauth_crypto.py``, whose read path this module reuses.
+
+What is asserted below is the difference to that read path and not the path itself. Reading
+the data key fails hard, because a key nobody stored makes every authorization unreadable.
+Reading an admin value fails soft, because a missing value means "the administrator has not
+set anything" and the deploy environment is the answer then. Every failure of this module is
+therefore an empty result plus one log line, and the tests hold both halves: the empty
+result and the absence of any request or response value in the log.
+
+Threats covered: T-05-01 (the public URL becomes issuer and resource, so an unusable one is
+dropped instead of adopted), T-05-02 (an unreadable answer is never read as "no value") and
+T-05-03 (neither the app secret nor a read value reaches a log record).
+"""
+
+import base64
+import inspect
+import json
+import logging
+from typing import Any
+
+import httpx
+import pytest
+import respx
+
+from mcp_connector import config
+from mcp_connector.exapp import config_values
+from mcp_connector.oauth import crypto, registry
+
+APP_ID = "mcp_connector"
+APP_SECRET = "app-secret-test"
+APP_VERSION = "0.1.0"
+BASE_URL = "http://nc.test"
+PUBLIC_URL = "https://cloud.example.test/exapps/mcp_connector"
+
+ENV = {
+    config.ENV_APP_ID: APP_ID,
+    config.ENV_APP_SECRET: APP_SECRET,
+    config.ENV_APP_VERSION: APP_VERSION,
+    config.ENV_AA_VERSION: "34.0.3",
+    config.ENV_NEXTCLOUD_URL: BASE_URL,
+    config.ENV_PUBLIC_URL: PUBLIC_URL,
+}
+
+#: The read is a POST on its own route (measured against AppAPI 34.0.0 in plan 03-08), and
+#: the constants come from ``crypto`` instead of being spelled a second time here.
+READ_URL = f"{BASE_URL}{crypto.EXAPP_CONFIG_PATH}{crypto.CONFIG_READ_SUFFIX}"
+
+ADMIN_URL = "https://cloud.example.test/exapps/mcp_connector"
+
+
+def ocs_body(data: object) -> dict[str, object]:
+    """The OCS v2 envelope AppAPI answers with."""
+    return {"ocs": {"meta": {"status": "ok", "statuscode": 200, "message": "OK"}, "data": data}}
+
+
+def stored(values: dict[str, Any], *, camel: bool = False) -> dict[str, object]:
+    """The list of entries AppAPI answers with, lower case by default (AppAPI 34.0.0)."""
+    key_field = "configKey" if camel else "configkey"
+    value_field = "configValue" if camel else "configvalue"
+    return ocs_body([{key_field: key, value_field: value} for key, value in values.items()])
+
+
+def answer(values: dict[str, Any], *, camel: bool = False) -> respx.Route:
+    """Mock the one read route with these stored values."""
+    return respx.post(READ_URL).mock(return_value=httpx.Response(200, json=stored(values, camel=camel)))
+
+
+# --- the contract of the four keys -------------------------------------------------
+
+
+def test_the_four_keys_are_the_field_ids_of_the_admin_form() -> None:
+    """Pattern 1 of the research: the config key IS the field id, without a prefix."""
+    assert config_values.CONFIG_KEYS == (
+        "public_url",
+        "oauth_dcr",
+        "oauth_allowlist_only",
+        "oauth_allowed_clients",
+    )
+
+
+def test_every_key_maps_to_the_variable_the_existing_code_already_reads() -> None:
+    """The overlay speaks the spelling of the deploy environment, so no signature changes."""
+    assert config_values.KEY_TO_ENV == {
+        "public_url": config.ENV_PUBLIC_URL,
+        "oauth_dcr": registry.ENV_DCR,
+        "oauth_allowlist_only": registry.ENV_ALLOWLIST_ONLY,
+        "oauth_allowed_clients": registry.ENV_ALLOWED_CLIENTS,
+    }
+    assert set(config_values.KEY_TO_ENV) == set(config_values.CONFIG_KEYS)
+
+
+def test_the_switch_spellings_are_the_ones_the_registry_understands() -> None:
+    """Both sources have to speak one language, or a value works in Env and not in the form."""
+    assert config_values.TRUE_VALUES == registry._TRUE_VALUES  # noqa: SLF001
+    assert config_values.FALSE_VALUES == registry._FALSE_VALUES  # noqa: SLF001
+
+
+def test_only_one_place_in_this_module_reaches_the_network() -> None:
+    """Shared pattern 6: one call site, one attempt, and ``env`` is always a parameter."""
+    source = inspect.getsource(config_values)
+    assert source.count("await client.post") == 1
+    assert source.count("shared_client()") == 1
+
+
+# --- the read itself ---------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_one_request_asks_for_all_four_keys() -> None:
+    """Four values, one round trip: the read takes a list and there is nothing to loop."""
+    route = answer({"public_url": ADMIN_URL})
+
+    values = await config_values.read_values(env=ENV)
+
+    assert route.call_count == 1
+    sent = route.calls.last.request
+    assert sent.url.path.endswith("/ex-app/config/get-values")
+    assert json.loads(sent.content) == {
+        crypto.CONFIG_READ_FIELD: [
+            "public_url",
+            "oauth_dcr",
+            "oauth_allowlist_only",
+            "oauth_allowed_clients",
+        ]
+    }
+    assert values == {"public_url": ADMIN_URL}
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_the_read_runs_in_the_app_context() -> None:
+    """The empty user id is the point: the app asks about itself, not for a person."""
+    route = answer({"public_url": ADMIN_URL})
+
+    await config_values.read_values(env=ENV)
+
+    sent = route.calls.last.request
+    assert sent.headers["AUTHORIZATION-APP-API"] == base64.b64encode(f":{APP_SECRET}".encode()).decode()
+    assert sent.headers["EX-APP-ID"] == APP_ID
+    assert sent.headers["EX-APP-VERSION"] == APP_VERSION
+    assert sent.headers["OCS-APIRequest"] == "true"
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_the_lower_case_field_names_of_appapi_34_are_read() -> None:
+    """The measured shape: the column names of ``ex_apps_config``, serialised as they are."""
+    answer({"public_url": ADMIN_URL, "oauth_dcr": "0"})
+
+    assert await config_values.read_values(env=ENV) == {
+        "public_url": ADMIN_URL,
+        "oauth_dcr": "0",
+    }
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_the_camel_case_field_names_are_read_as_well() -> None:
+    """The spelling of the write path, and what a later AppAPI may answer with."""
+    answer({"public_url": ADMIN_URL}, camel=True)
+
+    assert await config_values.read_values(env=ENV) == {"public_url": ADMIN_URL}
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_mapping_envelope_is_read_too() -> None:
+    """The third accepted shape, same as in ``crypto._config_value``."""
+    respx.post(READ_URL).mock(
+        return_value=httpx.Response(200, json=ocs_body({"public_url": ADMIN_URL, "oauth_dcr": "1"}))
+    )
+
+    assert await config_values.read_values(env=ENV) == {
+        "public_url": ADMIN_URL,
+        "oauth_dcr": "1",
+    }
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_key_nobody_stored_is_simply_absent() -> None:
+    """An empty list is a readable answer and means exactly one thing: nothing is set."""
+    respx.post(READ_URL).mock(return_value=httpx.Response(200, json=ocs_body([])))
+
+    assert await config_values.read_values(env=ENV) == {}
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_json_boolean_is_read_as_a_switch_value() -> None:
+    """A checkbox may arrive as a JSON boolean, and ``True`` is not a broken answer."""
+    answer({"oauth_dcr": True, "oauth_allowlist_only": False})
+
+    assert await config_values.read_values(env=ENV) == {
+        "oauth_dcr": "true",
+        "oauth_allowlist_only": "false",
+    }
+
+
+# --- every failure is an empty result plus one log line ----------------------------
+
+
+@pytest.mark.anyio
+@respx.mock
+@pytest.mark.parametrize(
+    "outcome",
+    ["unreachable", "timeout", "status_500", "status_401", "not_json", "no_envelope", "wrong_types"],
+)
+async def test_a_failed_read_is_an_empty_result_and_never_an_exception(
+    caplog: pytest.LogCaptureFixture, outcome: str
+) -> None:
+    """The whole difference to ``crypto._read_key``: this path must not stop an install."""
+    route = respx.post(READ_URL)
+    if outcome == "unreachable":
+        route.mock(side_effect=httpx.ConnectError("no route to nextcloud"))
+    elif outcome == "timeout":
+        route.mock(side_effect=httpx.ReadTimeout("nextcloud is slow"))
+    elif outcome == "status_500":
+        route.mock(return_value=httpx.Response(500, json={}))
+    elif outcome == "status_401":
+        route.mock(return_value=httpx.Response(401, json={}))
+    elif outcome == "not_json":
+        route.mock(return_value=httpx.Response(200, content=b"<html>login</html>"))
+    elif outcome == "no_envelope":
+        route.mock(return_value=httpx.Response(200, json={"unexpected": "shape"}))
+    else:
+        route.mock(return_value=httpx.Response(200, json=ocs_body([{"configkey": 7}])))
+
+    with caplog.at_level(logging.DEBUG):
+        assert await config_values.read_values(env=ENV) == {}
+
+    assert [record for record in caplog.records if record.levelno >= logging.ERROR], (
+        "a silent empty result would look like an administrator who set nothing"
+    )
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_broken_deploy_environment_is_an_empty_result(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """``exapp_settings`` raises when a variable is missing (IN-02). Not here it does not."""
+    broken = {key: value for key, value in ENV.items() if key != config.ENV_APP_SECRET}
+
+    with caplog.at_level(logging.DEBUG):
+        assert await config_values.read_values(env=broken) == {}
+        assert await config_values.admin_overlay(env=broken) == {}
+
+
+@pytest.mark.anyio
+@respx.mock
+@pytest.mark.parametrize("outcome", ["ok", "refused", "unreachable"])
+async def test_no_request_or_response_value_reaches_a_log_record(
+    caplog: pytest.LogCaptureFixture, outcome: str
+) -> None:
+    """T-05-03: the headers carry the app secret and the answer carries admin values."""
+    route = respx.post(READ_URL)
+    if outcome == "unreachable":
+        route.mock(side_effect=httpx.ConnectError("no route to nextcloud"))
+    elif outcome == "refused":
+        route.mock(return_value=httpx.Response(500, json={}))
+    else:
+        route.mock(
+            return_value=httpx.Response(
+                200,
+                json=stored({"public_url": ADMIN_URL, "oauth_allowed_clients": "https://secret.test/cb"}),
+            )
+        )
+
+    with caplog.at_level(logging.DEBUG):
+        await config_values.admin_overlay(env=ENV)
+
+    logged = "\n".join(record.getMessage() for record in caplog.records)
+    assert APP_SECRET not in logged
+    assert base64.b64encode(f":{APP_SECRET}".encode()).decode() not in logged
+    assert ADMIN_URL not in logged
+    assert "https://secret.test/cb" not in logged
+
+
+# --- the overlay: the public URL ---------------------------------------------------
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_usable_public_url_becomes_the_env_spelling() -> None:
+    """The contract for plan 05-04: the key is the variable name, the value is a string."""
+    answer({"public_url": ADMIN_URL})
+
+    assert await config_values.admin_overlay(env=ENV) == {config.ENV_PUBLIC_URL: ADMIN_URL}
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_whitespace_and_a_trailing_slash_are_removed() -> None:
+    """Same normalisation as ``config.public_url``, so both sources produce one issuer."""
+    answer({"public_url": f"  {ADMIN_URL}/  "})
+
+    assert await config_values.admin_overlay(env=ENV) == {config.ENV_PUBLIC_URL: ADMIN_URL}
+
+
+@pytest.mark.anyio
+@respx.mock
+@pytest.mark.parametrize(
+    ("value", "why"),
+    [
+        ("https://cloud.example.test/exapps/mcp_connector#frag", "a fragment"),
+        ("https://user:pass@cloud.example.test/exapps/mcp_connector", "credentials in the URL"),
+        ("cloud.example.test/exapps/mcp_connector", "no scheme"),
+        ("ftp://cloud.example.test", "a scheme that is not http"),
+        ("https://", "no host"),
+        ("https://cloud.example.test:0/x", "a port outside the range"),
+        ("https://cloud.example.test:99999/x", "a port outside the range"),
+        ("javascript:alert(1)", "not a URL at all"),
+    ],
+)
+async def test_an_unusable_public_url_is_dropped_and_named_without_its_value(
+    caplog: pytest.LogCaptureFixture, value: str, why: str
+) -> None:
+    """T-05-01: this value becomes the issuer of the AS metadata and the resource of the PRM."""
+    answer({"public_url": value})
+
+    with caplog.at_level(logging.DEBUG):
+        overlay = await config_values.admin_overlay(env=ENV)
+
+    assert overlay == {}, f"rejected because of {why}"
+    logged = "\n".join(record.getMessage() for record in caplog.records)
+    assert "public_url" in logged, "the field is named so an administrator can find it"
+    assert value not in logged
+
+
+# --- the overlay: the two switches ------------------------------------------------
+
+
+@pytest.mark.anyio
+@respx.mock
+@pytest.mark.parametrize(
+    ("raw", "normalised"),
+    [
+        (True, "on"),
+        (False, "off"),
+        ("true", "on"),
+        ("false", "off"),
+        ("True", "on"),
+        ("False", "off"),
+        ("1", "on"),
+        ("0", "off"),
+        ("on", "on"),
+        ("off", "off"),
+        ("yes", "on"),
+        ("no", "off"),
+        ("  ON  ", "on"),
+    ],
+)
+async def test_every_understood_switch_spelling_becomes_on_or_off(
+    raw: object, normalised: str
+) -> None:
+    """One spelling reaches the reader, whatever Nextcloud stored for the checkbox."""
+    answer({"oauth_dcr": raw, "oauth_allowlist_only": raw})
+
+    assert await config_values.admin_overlay(env=ENV) == {
+        registry.ENV_DCR: normalised,
+        registry.ENV_ALLOWLIST_ONLY: normalised,
+    }
+
+
+@pytest.mark.anyio
+@respx.mock
+@pytest.mark.parametrize("raw", ["maybe", "enabled", "-1", "2", "onoff"])
+async def test_an_unknown_switch_value_is_dropped_and_logged(
+    caplog: pytest.LogCaptureFixture, raw: str
+) -> None:
+    """No silent default: the same reason ``registry._switch`` logs instead of guessing."""
+    answer({"oauth_dcr": raw})
+
+    with caplog.at_level(logging.DEBUG):
+        overlay = await config_values.admin_overlay(env=ENV)
+
+    assert overlay == {}
+    assert "oauth_dcr" in "\n".join(record.getMessage() for record in caplog.records)
+
+
+# --- the overlay: blanks and the client list --------------------------------------
+
+
+@pytest.mark.anyio
+@respx.mock
+@pytest.mark.parametrize("blank", ["", "   ", "\t\n"])
+async def test_a_blank_value_is_not_set_and_lets_the_env_win(blank: str) -> None:
+    """The precedence rule needs this: admin value, then ``NC_MCP_*``, then the default."""
+    answer({"public_url": blank, "oauth_dcr": blank, "oauth_allowed_clients": blank})
+
+    assert await config_values.admin_overlay(env=ENV) == {}
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_the_client_list_passes_through_unchanged() -> None:
+    """``registry._entries`` splits, strips and deduplicates. Doing it twice would differ."""
+    raw = "claude-desktop, https://claude.ai/api/mcp/auth_callback ,claude-desktop"
+    answer({"oauth_allowed_clients": raw})
+
+    assert await config_values.admin_overlay(env=ENV) == {registry.ENV_ALLOWED_CLIENTS: raw.strip()}
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_all_four_values_travel_together() -> None:
+    """The whole overlay of a fully configured instance, in the spelling of the env."""
+    answer(
+        {
+            "public_url": ADMIN_URL,
+            "oauth_dcr": "false",
+            "oauth_allowlist_only": "true",
+            "oauth_allowed_clients": "claude-desktop",
+        }
+    )
+
+    assert await config_values.admin_overlay(env=ENV) == {
+        config.ENV_PUBLIC_URL: ADMIN_URL,
+        registry.ENV_DCR: "off",
+        registry.ENV_ALLOWLIST_ONLY: "on",
+        registry.ENV_ALLOWED_CLIENTS: "claude-desktop",
+    }
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_one_unusable_value_never_drops_the_others() -> None:
+    """Per key validation: a typo in one field is not an outage of the other three."""
+    answer(
+        {
+            "public_url": "https://cloud.example.test/x#frag",
+            "oauth_dcr": "off",
+            "oauth_allowed_clients": "claude-desktop",
+        }
+    )
+
+    assert await config_values.admin_overlay(env=ENV) == {
+        registry.ENV_DCR: "off",
+        registry.ENV_ALLOWED_CLIENTS: "claude-desktop",
+    }
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_an_unreachable_nextcloud_is_an_empty_overlay() -> None:
+    """The deploy environment stays in force, and the installation keeps running."""
+    respx.post(READ_URL).mock(side_effect=httpx.ConnectError("no route to nextcloud"))
+
+    assert await config_values.admin_overlay(env=ENV) == {}
