@@ -60,6 +60,22 @@ FILES_WITH_OWN_APP_PASSWORD = frozenset({"oauth/loginflow.py"})
 #: meant. A DELETE written inline, against any target, does not match and stays a finding.
 APP_PASSWORD_DELETE_FORM = '"DELETE",'
 
+# The third file where DELETE is not a tool deleting user data: the purge of plan 05-06
+# removes the data key of this app from Nextcloud's own ExApp configuration
+# (``oauth/crypto.py::delete_key``, DELETE on the resource whose write and read halves
+# already live in that module). What goes is a value this app wrote about itself, and its
+# removal is what makes an uninstall honest: a key left behind still opens the ciphertexts
+# in a copied volume. Nothing of any user is touched, and no promise of TOOL-09 is about
+# it. The exemption is one exact call form in one file, exactly like the one above, so a
+# DELETE written against any other target in the same module is still reported, and
+# ``.delete(`` is never exempt anywhere.
+FILES_WITH_OWN_CONFIG = frozenset({"oauth/crypto.py"})
+
+#: The same shape as :data:`APP_PASSWORD_DELETE_FORM` and written out a second time rather
+#: than shared: the two exemptions are independent, and one of them widening must not widen
+#: the other.
+CONFIG_DELETE_FORM = '"DELETE",'
+
 # Module level mutable state is forbidden as a rule, because a dictionary that outlives a
 # request is one refactor away from being a session store, and a session store is what
 # breaks the restart proof (D-20). These two are the documented exceptions: both are pure
@@ -129,6 +145,8 @@ def test_the_production_code_contains_no_destructive_request() -> None:
                     continue
                 if needle == "DELETE" and _is_own_app_password(relative, text):
                     continue
+                if needle == "DELETE" and _is_own_config_value(relative, text):
+                    continue
                 findings.append(f"{relative}:{number}: {needle!r} ({why}): {text.strip()}")
 
     assert findings == [], "destructive call found:\n" + "\n".join(findings)
@@ -142,6 +160,11 @@ def _is_own_sql(relative: str, text: str) -> bool:
 def _is_own_app_password(relative: str, text: str) -> bool:
     """True for the one call that revokes the app password of this server's own connection."""
     return relative in FILES_WITH_OWN_APP_PASSWORD and text.strip() == APP_PASSWORD_DELETE_FORM
+
+
+def _is_own_config_value(relative: str, text: str) -> bool:
+    """True for the one call that removes this app's own value from the ExApp config."""
+    return relative in FILES_WITH_OWN_CONFIG and text.strip() == CONFIG_DELETE_FORM
 
 
 def test_the_gate_would_notice_a_destructive_call_in_real_code() -> None:
@@ -174,7 +197,7 @@ def test_the_sql_exemption_covers_sql_and_nothing_else() -> None:
     assert not _is_own_sql(store, 'await client.request("DELETE", url)')
     assert not _is_own_sql("tools/files.py", 'conn.execute("DELETE FROM flows")')
 
-    for relative in FILES_WITH_OWN_SQL | FILES_WITH_OWN_APP_PASSWORD:
+    for relative in FILES_WITH_OWN_SQL | FILES_WITH_OWN_APP_PASSWORD | FILES_WITH_OWN_CONFIG:
         assert (SRC / relative).is_file(), f"{relative} is exempt but does not exist"
 
 
@@ -191,6 +214,22 @@ def test_the_app_password_exemption_covers_one_call_form_and_nothing_else() -> N
     assert not _is_own_app_password(flow, 'await client.request("DELETE", files_url)')
     assert not _is_own_app_password(flow, '            "DELETE", files_url,')
     assert not _is_own_app_password("tools/files.py", '            "DELETE",')
+
+
+def test_the_config_exemption_covers_one_call_form_and_nothing_else() -> None:
+    """Counter proof for the third exemption: only the deletion of our own config value.
+
+    The purge removes the data key this app stored about itself (plan 05-06). Written as
+    "ignore DELETE in that file", the exemption would also hide a request that deletes a
+    file of the user from the same module, so it matches the verb on a line of its own and
+    nothing else, and it does not reach any other file.
+    """
+    crypto = "oauth/crypto.py"
+    assert _is_own_config_value(crypto, '            "DELETE",')
+    assert not _is_own_config_value(crypto, 'await client.request("DELETE", files_url)')
+    assert not _is_own_config_value(crypto, '            "DELETE", files_url,')
+    assert not _is_own_config_value("tools/files.py", '            "DELETE",')
+    assert not _is_own_config_value(crypto, 'conn.execute("DELETE FROM flows")')
 
 
 def test_no_module_level_mutable_state_outside_the_two_documented_caches() -> None:

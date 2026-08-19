@@ -705,6 +705,39 @@ class OAuthStore:
 
         return await self._read(work)
 
+    async def all_authorizations(self) -> list[AuthorizationRow]:
+        """Every connection this deployment ever wrote, oldest first, unfiltered (05-06).
+
+        The read the instance wide purge starts from, and the only read of this store
+        without a ``WHERE`` clause. It has to be that, and the two obvious models are both
+        the wrong one: :meth:`authorizations_of_user` and :meth:`abandoned_authorizations`
+        filter ``revoked_at IS NULL``, because they answer questions about connections that
+        are still live.
+
+        The purge asks a different question. Not "which connection exists" but "which
+        Nextcloud app password of this instance may still be valid", and a revoked row
+        answers yes to that. Revoking marks our own record; the credential in Nextcloud
+        only goes when Nextcloud is asked to delete it, and every path that could not ask
+        leaves a note in ``cleanup_at`` instead (pitfall 13, D-37). A purge built on a
+        filtered read would therefore leave exactly those credentials behind: valid, and
+        with no record left that they exist.
+
+        No upper bound, spelled as SQLite's own ``LIMIT -1`` like
+        :meth:`authorizations_of_client`, so the statement stays one constant string with
+        one placeholder. A cap here would not bound the work, it would bound how many
+        credentials are handed back before the rest is destroyed.
+        """
+
+        def work(conn: sqlite3.Connection) -> list[AuthorizationRow]:
+            rows = conn.execute(
+                "SELECT auth_id, client_id, nc_user, scopes, resource, created_at, "
+                "revoked_at, cleanup_at FROM authorizations ORDER BY created_at LIMIT ?",
+                (_NO_LIMIT,),
+            ).fetchall()
+            return [_authorization_row(row) for row in rows]
+
+        return await self._read(work)
+
     # --- the per account access switch (EXAPP-02) -----------------------------------
 
     async def set_access(self, nc_user: str, *, disabled: bool, now: int | None = None) -> None:
@@ -1150,6 +1183,42 @@ class OAuthStore:
                 "WHERE a.client_id = clients.client_id)",
                 (moment - IDLE_CLIENT_TTL,),
             )
+
+        await self._write(work)
+
+    async def wipe_all(self) -> None:
+        """Empty every table of the schema in one transaction. The file stays (05-06).
+
+        What this is: the local half of ``occ mcp_connector:purge``, run after every
+        Nextcloud app password of this instance has been handed back and before the data
+        key is deleted. What it is not: a replacement for
+        ``occ app_api:app:unregister mcp_connector --rm-data``. It is the precondition of
+        that command, because ``--rm-data`` removes the volume and takes with it the only
+        record of which credential belonged to which connection. Whoever runs it first can
+        never revoke those app passwords again (pattern 4 of 05-RESEARCH.md).
+
+        The file and the schema stay usable on purpose: the purge runs inside a live
+        process that has to answer the request it arrived in, and every request after it,
+        without creating its store again.
+
+        One statement per table rather than a loop over a tuple of names, and children
+        before parents even though the cascades would do it anyway. The explicit order
+        keeps working if a foreign key is ever dropped, and the literal ``DELETE FROM``
+        keeps these statements inside the narrow, counter proved exemption the destructive
+        gate grants this one file (``tests/contract/test_no_destructive_calls.py``).
+        """
+
+        def work(conn: sqlite3.Connection) -> None:
+            conn.execute("DELETE FROM access_tokens")
+            conn.execute("DELETE FROM refresh_tokens")
+            conn.execute("DELETE FROM auth_codes")
+            conn.execute("DELETE FROM flows")
+            conn.execute("DELETE FROM authorizations")
+            conn.execute("DELETE FROM clients")
+            # Its own statement because it hangs on no cascade: the per account switch of
+            # EXAPP-02 has no foreign key, so emptying every authorization leaves every
+            # paused account paused (D-50).
+            conn.execute("DELETE FROM user_access")
 
         await self._write(work)
 

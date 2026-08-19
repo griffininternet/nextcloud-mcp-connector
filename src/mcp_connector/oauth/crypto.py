@@ -52,6 +52,7 @@ __all__ = [
     "DecryptionRejected",
     "data_key",
     "decrypt",
+    "delete_key",
     "encrypt",
     "form_token",
 ]
@@ -293,6 +294,55 @@ async def _write_key(settings: config.ExAppSettings, value: str) -> None:
             message=f"Nextcloud answered {response.status_code} when the data key was stored.",
             hint=_KEY_HINT,
         )
+
+
+async def delete_key(env: Mapping[str, str] | None = None) -> bool:
+    """Remove the data key of this installation from Nextcloud. One attempt, no retry.
+
+    The last step of ``occ mcp_connector:purge`` (plan 05-06), and last for a reason that
+    is not stylistic: the key lives in Nextcloud and the ciphertexts live in the volume, so
+    whoever deletes the key first can decrypt nothing afterwards and can revoke no
+    Nextcloud app password any more. The order is therefore enforced by the caller, and
+    this function is the step that must not run early.
+
+    The third verb of the same resource the rest of this module already talks to
+    (``POST`` writes, ``POST /get-values`` reads, ``DELETE`` removes; see
+    :data:`EXAPP_CONFIG_PATH`). The body names the key with the same field the write side
+    uses, so both halves of this resource stay one shape.
+
+    Unlike every other call here it returns instead of raising, and that asymmetry is the
+    point. :func:`data_key` raises because a missing key would tempt a caller into running
+    with a fresh one, which silently invalidates every stored authorization. A failed
+    deletion invalidates nothing: it leaves a value behind that an administrator has to be
+    told about, so it is one log line, a ``False``, and a number in the answer of the purge.
+    """
+    try:
+        settings = config.exapp_settings(env)
+    except ToolError:
+        # A missing deploy variable is a startup problem and is reported there. Raising
+        # into the purge would turn a reportable number into a failed request.
+        logger.error("the data key was not deleted: the deploy environment is incomplete")
+        return False
+
+    url = f"{settings.base_url}{EXAPP_CONFIG_PATH}"
+    client = shared_client()
+    try:
+        response = await client.request(
+            "DELETE",
+            url,
+            json={"configKey": CONFIG_KEY},
+            headers=_headers(settings),
+        )
+    except httpx.HTTPError:
+        # Neither the key nor a header value appears in this line: the headers carry the
+        # app secret and the value is key material (T-03-16).
+        logger.error("the ExApp configuration at %s could not be deleted", url)
+        return False
+
+    if response.status_code // 100 != 2:
+        logger.error("the deletion of the data key at %s answered %s", url, response.status_code)
+        return False
+    return True
 
 
 def _headers(settings: config.ExAppSettings) -> dict[str, str]:

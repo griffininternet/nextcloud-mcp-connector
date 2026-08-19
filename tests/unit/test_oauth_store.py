@@ -124,7 +124,8 @@ async def with_every_table_filled(subject: store.OAuthStore) -> None:
 def counts(tmp_path: Path) -> dict[str, int]:
     """The row count of every table, read out of the file itself."""
     return {
-        table: query(tmp_path, f"SELECT COUNT(*) FROM {table}")[0][0] for table in SCHEMA_TABLES
+        table: query(tmp_path, f"SELECT COUNT(*) FROM {table}")[0][0]  # noqa: S608 - literal names
+        for table in SCHEMA_TABLES
     }
 
 
@@ -1077,7 +1078,7 @@ def test_the_wipe_is_one_write_and_names_every_table() -> None:
     source = inspect.getsource(store.OAuthStore.wipe_all)
     assert "self._write" in source
     for table in SCHEMA_TABLES:
-        assert f"DELETE FROM {table}" in source, f"{table} is not emptied by name"
+        assert f"DELETE FROM {table}" in source, f"{table} not by name"  # noqa: S608 - a substring
 
 
 # --- source gates --------------------------------------------------------------------
