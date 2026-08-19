@@ -29,7 +29,7 @@ from starlette.responses import Response
 from starlette.routing import Route
 
 from ..errors import ToolError
-from . import admin_settings, settings_form, status
+from . import admin_settings, occ, settings_form, status
 from .auth import AppApiRejected, require_appapi
 from .responses import NO_STORE, json_response
 
@@ -100,9 +100,23 @@ def lifecycle_routes(env: Mapping[str, str] | None = None) -> list[Route]:
                 # public address at all, and an app AppAPI disabled again cannot be
                 # configured either.
                 logger.error("the admin form registration failed, the admin settings are missing")
-        # enabled=0 registers nothing and unregisters nothing: AppAPI hands out the forms of
-        # enabled apps only, so a disabled app disappears from the settings page by itself,
-        # and an uninstall is cleaned up on AppAPI's side (measured, 04-RESEARCH.md).
+            try:
+                await occ.register_occ_commands(env=env)
+            except Exception:
+                # The third independent registration, in its own try for the same reason the
+                # second one has one. The tolerance is pitfall 11 again: without the command
+                # an administrator has to fall back to the runbook, while an app AppAPI
+                # disabled again cannot be purged at all.
+                logger.error("the occ command registration failed, the purge command is missing")
+        # enabled=0 registers nothing, unregisters nothing and above all destroys nothing.
+        # AppAPI hands out the forms of enabled apps only, so a disabled app disappears from
+        # the settings page by itself, and an uninstall is cleaned up on AppAPI's side
+        # (measured, 04-RESEARCH.md). Cleaning up the data of this app here would look
+        # natural, because the Remove button of Nextcloud 34 fires exactly this branch, and
+        # it would be a catastrophe: the same branch runs on every update
+        # (lib/Command/ExApp/Update.php) and on every ordinary disable, so every connection
+        # of every user would be gone after an update. The instance wide purge is therefore
+        # an explicit administrative act (exapp/purge.py, plan 05-06, T-05-28).
         return json_response({"error": ""})
 
     return [

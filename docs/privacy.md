@@ -43,8 +43,10 @@ The app does not store the content of your files, calendar, notes, deck cards or
 contacts. It reads them per request, under the user's identity, and returns them in
 the tool answer. Nothing of that content is written to the database.
 
-The encryption key lives outside the database, in the app's environment, so a copy
-of the database file alone does not reveal any app password.
+The encryption key lives outside the database, in Nextcloud's own app configuration,
+where the server stores it encrypted with its secret. A copy of the database file
+alone therefore reveals no app password, and deleting the app data means deleting
+both: see [Deletion and user control](#deletion-and-user-control).
 
 ## What the app never does
 
@@ -87,8 +89,24 @@ but an operator has to account for this flow:
   Devices and sessions in Nextcloud.
 - A user can revoke access from the Nextcloud side at any time, under Settings,
   Security, Devices and sessions.
-- Uninstalling the app removes its container and its database, and with it every
-  token and encrypted app password it held.
+- Removing the app in the Nextcloud interface is not a deletion of its data. On
+  Nextcloud 34 the Remove button disables the app and stops its container: the data
+  volume stays, and so do the Nextcloud app passwords the app created for each
+  connection, because no uninstall path of the server touches them. Emptying the
+  instance is an explicit act of the administrator, and the order of the two
+  commands is part of it:
+
+  1. `occ mcp_connector:purge --force` hands every Nextcloud app password of this
+     app back to Nextcloud, empties every table of its database and deletes its
+     encryption key.
+  2. `occ app_api:app:unregister mcp_connector --rm-data` then removes the app
+     together with its data volume.
+
+  The second command must not run first. It deletes the volume, and with it the
+  only record of which app password belongs to which connection, so those
+  credentials would stay valid in Nextcloud with nothing left that knows about
+  them. The administration runbook `uninstall.md` in this directory spells out both
+  steps and how to verify that nothing is left.
 
 ## Retention
 

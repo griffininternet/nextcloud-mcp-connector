@@ -66,6 +66,19 @@ Le connecteur lui-même n'envoie aucune télémétrie et n'appelle aucun tiers. 
 		  - service button for anyone on the internet (T-02-20). HaRP blocks those paths, the
 		  - PHP proxy does not, so the narrow declaration is the control that has to hold.
 		  -
+		  - The fourth deliberately absent path is /purge, added in plan 05-06, and for it
+		  - this is not defense in depth but the control itself. It is the handler of the
+		  - occ command mcp_connector:purge, which ends every MCP connection of this
+		  - instance: it hands every Nextcloud app password this app created back, empties
+		  - its database and deletes its data key. AppAPI calls it over PublicFunctions,
+		  - the same internal path the three above arrive on, so it needs no declaration to
+		  - work. A declaration would make an irreversible, instance wide deletion callable
+		  - by anyone who can reach the PHP proxy, for exactly the reason stated above: that
+		  - proxy attaches valid AppAPI headers itself (T-05-26, pitfall 13 of
+		  - 05-RESEARCH.md). The handler carries the same double check as the three
+		  - lifecycle paths plus a mandatory force option, and a test asserts that this
+		  - path appears in no <url> below.
+		  -
 		  - Order matters: the first route that matches path and verb wins, and its access
 		  - level decides alone.
 		  -

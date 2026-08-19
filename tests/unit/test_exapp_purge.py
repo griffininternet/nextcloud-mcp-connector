@@ -29,16 +29,18 @@ import json
 import logging
 import sqlite3
 from pathlib import Path
-from xml.etree import ElementTree
+from typing import Any
 
 import httpx
 import pytest
 import respx
+from lxml import etree
 from starlette.applications import Starlette
 from starlette.testclient import TestClient
 
 from mcp_connector import config
 from mcp_connector.exapp import admin_settings, lifecycle, occ, purge, settings_form
+from mcp_connector.nextcloud.clients.xml import hardened_parser
 from mcp_connector.oauth import crypto, loginflow
 from mcp_connector.oauth.store import OAuthStore
 
@@ -160,8 +162,13 @@ def call(
     force: bool = True,
     body: object | None = None,
     headers: dict[str, str] | None = None,
-) -> httpx.Response:
-    """One occ invocation, as AppAPI delivers it: a POST with the options in the body."""
+) -> Any:
+    """One occ invocation, as AppAPI delivers it: a POST with the options in the body.
+
+    ``Any`` for the reason ``tests/unit/test_oauth_abuse.py`` gives: the test client of
+    Starlette answers with the response type of ``httpx2``, the fork the MCP SDK brings, and
+    the outgoing calls of this app use ``httpx``. Naming either type here is a false claim.
+    """
     payload = body if body is not None else {"options": {purge.FORCE_OPTION: True} if force else {}}
     sent = appapi_headers() if headers is None else headers
     return deployment.client.post(purge.PURGE_PATH, json=payload, headers=sent)
@@ -233,7 +240,8 @@ def test_the_handler_path_is_declared_in_no_route_of_the_manifest() -> None:
     The manifest still carries exactly the thirteen routes of this phase, and none of them
     matches the purge path in any spelling.
     """
-    urls = [element.text or "" for element in ElementTree.parse(MANIFEST).iter("url")]
+    root = etree.parse(str(MANIFEST), hardened_parser()).getroot()
+    urls = [(element.text or "").strip() for element in root.iter("url")]
 
     assert len(urls) == 13, urls
     bare = purge.PURGE_PATH.strip("/")
@@ -539,9 +547,10 @@ def test_no_log_record_names_an_account_a_client_or_a_credential(
 
 def test_the_command_and_the_route_cannot_drift_apart() -> None:
     """One derivation, so a rename of the path renames the handler of the command."""
-    assert occ.OCC_HANDLER == purge.PURGE_PATH.removeprefix("/")
+    assert purge.PURGE_PATH.removeprefix("/") == occ.OCC_HANDLER
     assert f"/{occ.OCC_HANDLER}" == purge.PURGE_PATH
     assert occ.command_scheme()["execute_handler"] == occ.OCC_HANDLER
+    assert occ.OCC_HANDLER, "an empty handler would register a command AppAPI cannot call"
 
 
 def test_the_command_is_the_one_the_runbook_calls() -> None:
@@ -570,9 +579,10 @@ async def test_the_registration_is_one_post_in_the_app_context() -> None:
     assert json.loads(sent.content) == occ.command_scheme()
     assert sent.headers["OCS-APIRequest"] == "true"
     assert sent.headers["EX-APP-ID"] == APP_ID
-    assert sent.headers["AUTHORIZATION-APP-API"] == base64.b64encode(
-        f":{APP_SECRET}".encode()
-    ).decode()
+    assert (
+        sent.headers["AUTHORIZATION-APP-API"]
+        == base64.b64encode(f":{APP_SECRET}".encode()).decode()
+    )
 
 
 @pytest.mark.anyio
@@ -662,7 +672,8 @@ def test_a_failing_command_registration_costs_neither_the_forms_nor_the_enable(
     assert response.status_code == 200
     assert response.json() == {"error": ""}
     assert response.headers["cache-control"] == "no-store"
-    assert hooks["settings"] == [ENV] and hooks["admin"] == [ENV]
+    assert hooks["settings"] == [ENV]
+    assert hooks["admin"] == [ENV]
 
 
 def test_disabling_the_app_registers_nothing_and_purges_nothing(

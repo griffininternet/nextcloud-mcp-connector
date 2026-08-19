@@ -30,6 +30,7 @@ from .errors import ToolError
 from .exapp import config_values
 from .exapp.lifecycle import lifecycle_routes
 from .exapp.middleware import RequireAppApi
+from .exapp.purge import purge_routes
 from .exapp.ui import strings
 from .nextcloud.http import USER_AGENT, NoCookieJar, configure_logging
 from .oauth import throttle
@@ -146,6 +147,12 @@ def build_exapp_app(env: Mapping[str, str] | None = None) -> Starlette:
     # that would attach these routes to the MCP application, where the standalone mode would
     # inherit them (03-RESEARCH.md, anti patterns).
     #
+    # The purge of plan 05-06 hangs here for the same rule a fourth time, and for it the
+    # rule is the security control itself: the route has no entry in appinfo/info.xml,
+    # because a declared one would make an instance wide deletion callable through the PHP
+    # proxy, which attaches valid AppAPI headers itself (T-02-20, T-05-26). It gets the one
+    # store of this application, because it empties exactly that file.
+    #
     # The policy read above is what the two places that answer to it read as well: the
     # discovery document stops advertising a registration endpoint when the switch is off,
     # and the routes stop containing one (AUTH-07, D-35). One store opener serves the
@@ -163,6 +170,7 @@ def build_exapp_app(env: Mapping[str, str] | None = None) -> Starlette:
         ),
         *auth_routes(env, provider=provider, throttle=counters),
         *consent_routes(env, provider=provider, throttle=counters),
+        *purge_routes(env, store_provider=store),
     ):
         app.router.routes.append(route)
     return app
