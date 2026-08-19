@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Plan 05-03 fertig: Permission-Parity und Create-only live ueber die volle Kette gemessen (5/5 gruen), ensure_readonly_share als Bootstrap-Fixture. Naechstes: Plan 05-04"
-last_updated: "2026-08-19T16:10:46.836Z"
+stopped_at: "Plan 05-02 fertig: BL-10 geschlossen, der Per-User-Schalter wirkt an allen drei Punkten, an denen eine Verbindung entsteht (Seite E9, App-Passwort-Widerruf je Ablehnung). Naechstes: Plan 05-04"
+last_updated: "2026-08-19T16:34:32.051Z"
 last_activity: 2026-08-19
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 44
-  completed_plans: 36
+  completed_plans: 37
   percent: 80
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 05 (hardening-und-store-einreichung) — EXECUTING
-Plan: 3 of 10
+Plan: 4 of 10
 Status: Ready to execute
 Last activity: 2026-08-19
 
-Progress: [████████░░] 82%
+Progress: [████████░░] 84%
 
 ## Performance Metrics
 
@@ -89,6 +89,7 @@ Progress: [████████░░] 82%
 | Phase 4 P04 | 90 min | 2 tasks | 6 files |
 | Phase 05 P01 | 14 min | 2 tasks tasks | 6 files files |
 | Phase 05 P03 | 25 min | 2 tasks | 5 files |
+| Phase 05 P02 | 20 min | 2 tasks tasks | 8 files files |
 
 ## Accumulated Context
 
@@ -270,6 +271,11 @@ Recent decisions affecting current work:
 - [Phase 05]: Die Fixture-Namen werden wie APP_SECRET aus .env.exapp zurueckgelesen und nur beim ersten Mal erzeugt: ein frischer Suffix pro Lauf haette die Instanz mit einer zweiten Freigabe hinterlassen, und der Test haette gemessen, welche die Verbindungsdatei gerade nennt
 - [Phase 05]: Die Fixture-Pfade stehen relativ zur Nutzerwurzel in .env.exapp und nc_status haengt den Statuscode an den Rumpf statt ihn nach /dev/null zu schreiben: Git Bash schreibt exportierte absolute POSIX-Pfade beim Prozessstart um, und mit dem exportierten MSYS_NO_PATHCONV=1 existiert /dev/null fuer curl.exe nicht (beides live gemessen, 05-03-MEASUREMENTS Schritte 4 und 6)
 - [Phase 05]: Die Fixture legt ihre Objekte ueber WebDAV und OCS an, nicht per docker exec ins Datenverzeichnis: eine dort abgelegte Datei hat bis zum naechsten files:scan keine File-Id, und ein Ordner ohne File-Id ist nicht teilbar
+- [Phase 05]: Der Per-User-Schalter wird am fruehesten Punkt durchgesetzt, an dem das Konto existiert (nach dem Login-Flow-v2-Poll): davor kennt kein Pfad das Subjekt, also waere eine frueher gesetzte Pruefung wirkungslos oder falsch adressiert
+- [Phase 05]: Jede Ablehnung eines pausierten Kontos gibt das gerade entstandene App-Passwort in einem Versuch zurueck, auch im Store-Ausfall-Zweig: ohne diesen Schritt entstuende keine Verbindung, das App-Passwort aber schon (T-05-08)
+- [Phase 05]: Ein Sicherheitsschalter wird mit drei Zustaenden gelesen (pausiert, nicht pausiert, keine Antwort): ein bool muesste fuer den Ausfall einen Default raten, und beide Defaults sind falsch (True sperrt eine gesunde Installation aus, False ist der Durchlass, gegen den BL-10 gebaut ist)
+- [Phase 05]: Die Ablehnung eines pausierten Kontos auf der Zustimmungsseite bekommt keine access_denied-Weiterleitung, sondern die Seite E9: dieser Fehlercode heisst 'die Nutzerin hat abgelehnt', und hier hat sie nichts abgelehnt (T-05-09)
+- [Phase 05]: /authorize und connect._start bleiben ungeprueft, und der Grund steht als Docstring-Absatz an genau diesen Stellen; zwei Quelltext-Tests halten ihn dort, damit die Luecke nicht fuer ein Versehen gehalten wird
 
 ### Pending Todos
 
@@ -299,6 +305,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-19T16:10:39.737Z
-Stopped at: Plan 05-03 fertig: Permission-Parity und Create-only live ueber die volle Kette gemessen (5/5 gruen), ensure_readonly_share als Bootstrap-Fixture. Naechstes: Plan 05-04
+Last session: 2026-08-19T16:34:32.034Z
+Stopped at: Plan 05-02 fertig: BL-10 geschlossen, der Per-User-Schalter wirkt an allen drei Punkten, an denen eine Verbindung entsteht (Seite E9, App-Passwort-Widerruf je Ablehnung). Naechstes: Plan 05-04
 Resume file: None
