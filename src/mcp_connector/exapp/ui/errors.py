@@ -1,4 +1,4 @@
-"""The eight error pages of the browser surface, from one table (E1 to E7, plus E8).
+"""The nine error pages of the browser surface, from one table (E1 to E7, plus E8 and E9).
 
 The rule that gives this file its value: the user learns what went wrong and what to do
 next, and the attacker learns nothing about which check fired (T-03-24). Those two are in
@@ -24,6 +24,14 @@ E8 joined the table in phase 4 and is the same shape as the rest: the connection
 without a Nextcloud account behind the browser. 403 and not 401, because a 401 from a page
 a browser opened invites the browser's own credential prompt, and this surface never puts a
 password prompt in front of a user (04-UI-SPEC.md, E8).
+
+E9 joined in phase 5 (BL-10) and is the neighbour of E8 in more than the table: it is a
+refusal of an account and not of a request. It answers the three points at which the per
+account switch is enforced while a connection is being made, and it is the only page of the
+table whose next step is a page of this app rather than an administrator or the assistant
+app: the switch belongs to the reader, so the way out is a link they can follow themselves.
+Also 403 without a challenge, the same choice R1 makes at the transport boundary for the
+same reason (D-51).
 """
 
 import secrets
@@ -35,7 +43,7 @@ from urllib.parse import urlsplit
 from starlette.responses import Response
 
 from ... import config
-from . import icons, layout, strings
+from . import connections, icons, layout, strings
 
 __all__ = ["CODES", "REFERENCE_ALPHABET", "REFERENCE_LENGTH", "error_page", "new_reference"]
 
@@ -85,15 +93,22 @@ _PAGES: dict[str, _ErrorPage] = {
     "E5": _ErrorPage(400, strings.ERROR_REDIRECT_TITLE, strings.ERROR_REDIRECT_BODY),
     "E6": _ErrorPage(429, strings.ERROR_THROTTLED_TITLE, strings.ERROR_THROTTLED_BODY),
     "E8": _ErrorPage(403, strings.ERROR_SIGN_IN_TITLE, strings.ERROR_SIGN_IN_BODY),
+    "E9": _ErrorPage(
+        403,
+        strings.CONNECTIONS_PAUSED_TITLE,
+        strings.ERROR_PAUSED_BODY,
+        action_label=strings.ACTION_OPEN_CONNECTIONS,
+        action_href=connections.CONNECTIONS_PATH,
+    ),
     GENERIC: _ErrorPage(500, strings.ERROR_GENERIC_TITLE, strings.ERROR_GENERIC_BODY),
 }
 
-#: The eight identifiers of the contract, in the order of the table above, which is not the
+#: The nine identifiers of the contract, in the order of the table above, which is not the
 #: order of their names (LO-05 of the phase 4 review): ``GENERIC`` is the
-#: last row because it is also the fallback of an unknown code, and E8 joined in front of it
-#: rather than behind it. Nothing depends on the order; the comment used to promise one it
-#: did not deliver, and a documentation or test that iterates over this would have believed
-#: it.
+#: last row because it is also the fallback of an unknown code, and E8 and E9 joined in front
+#: of it rather than behind it. Nothing depends on the order; the comment used to promise one
+#: it did not deliver, and a documentation or test that iterates over this would have
+#: believed it.
 CODES: Final = tuple(_PAGES)
 
 

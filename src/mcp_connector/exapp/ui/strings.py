@@ -32,6 +32,7 @@ __all__ = [
     "ACTION_CANCEL_CONNECTION",
     "ACTION_CANCEL_SIGN_IN",
     "ACTION_CHECK_NOW",
+    "ACTION_OPEN_CONNECTIONS",
     "ACTION_START_OVER",
     "ADMIN_FIELD_ALLOWED_CLIENTS_DESCRIPTION",
     "ADMIN_FIELD_ALLOWED_CLIENTS_LABEL",
@@ -100,6 +101,7 @@ __all__ = [
     "ERROR_EXPIRED_TITLE",
     "ERROR_GENERIC_BODY",
     "ERROR_GENERIC_TITLE",
+    "ERROR_PAUSED_BODY",
     "ERROR_REDIRECT_BODY",
     "ERROR_REDIRECT_TITLE",
     "ERROR_REGISTRATION_OFF_BODY",
@@ -394,7 +396,9 @@ SWITCH_TURN_OFF = "Pause access"
 
 SWITCH_TURN_ON = "Turn access back on"
 
-# --- E1 to E8, the eight error pages ------------------------------------------------------
+# --- E1 to E8, eight of the nine error pages ----------------------------------------------
+#
+# The ninth, E9, stands at the end of this file with the reason it stands there.
 #
 # The trigger of each page and its status code live in ``errors.py``. Here is only the copy,
 # so that a wording fix never touches a status code and a status code fix never touches the
@@ -578,3 +582,28 @@ ACCESS_DISABLED_DESCRIPTION = (
     "switch it back on on the connector's connections page, linked in Nextcloud under "
     f"{SETTINGS_PLACE}."
 )
+
+# --- E9, the page of an account that paused its own access (BL-10) ------------------------
+#
+# The page half of the same rule R1 answers on the wire, and the answer of the three points
+# at which plan 05-02 enforces the switch: the finished sign in of the OAuth flow, the
+# finished sign in of the browser onboarding, and the decision on the consent screen. All
+# three are reached by a browser in the middle of a sign in, so the answer is a page.
+#
+# The title is the one the connections page already carries for the same condition, because
+# it is the same condition and a second wording for it would be a second promise to keep.
+# The body is a second one, though: ``CONNECTIONS_PAUSED_BODY`` deliberately points nowhere,
+# because it is rendered one line under the switch itself, and this page is not.
+#
+# These two constants stand here and not in the block of E1 to E8 above for one mechanical
+# reason: the body names ``SETTINGS_PLACE``, which is defined below that block, and the place
+# is named in exactly one constant (04-UI-SPEC.md).
+
+ERROR_PAUSED_BODY = (
+    f"{SWITCH_OFF_STATE} The switch that turns it back on is on the connections page below, "
+    f"which Nextcloud also links under {SETTINGS_PLACE}."
+)
+
+#: The label of the one link of that page. It names the destination, like every other link
+#: of this surface, and never "click here".
+ACTION_OPEN_CONNECTIONS = "Open your connections"
