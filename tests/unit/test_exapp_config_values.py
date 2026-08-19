@@ -467,3 +467,58 @@ async def test_an_unreachable_nextcloud_is_an_empty_overlay() -> None:
     respx.post(READ_URL).mock(side_effect=httpx.ConnectError("no route to nextcloud"))
 
     assert await config_values.admin_overlay(env=ENV) == {}
+
+
+# --- the client of a caller that has no shared client to use (plan 05-04) ------------
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_handed_in_client_is_the_one_that_carries_the_read() -> None:
+    """Plan 05-04 reads these values before the server exists, in a loop of its own.
+
+    ``shared_client`` binds a connection pool to the event loop it is first used in, and the
+    loop of that read is closed again as soon as it returns, so the pool would be unusable in
+    the loop uvicorn opens afterwards. The parameter is what lets that caller bring a short
+    lived client instead, and the default stays the shared one for every other caller.
+    """
+    route = answer({"public_url": ADMIN_URL})
+
+    async with httpx.AsyncClient(follow_redirects=False) as client:
+        values = await config_values.read_values(env=ENV, client=client)
+        overlay = await config_values.admin_overlay(env=ENV, client=client)
+
+    assert values == {"public_url": ADMIN_URL}
+    assert overlay == {config.ENV_PUBLIC_URL: ADMIN_URL}
+    assert route.call_count == 2
+    assert all(call.request.url.path.endswith("/ex-app/config/get-values") for call in route.calls)
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_handed_in_client_is_used_instead_of_the_shared_one() -> None:
+    """The proof that the parameter is not decoration: the shared client is never asked."""
+    answer({"public_url": ADMIN_URL})
+    asked: list[str] = []
+
+    def refuse() -> httpx.AsyncClient:  # pragma: no cover - called means the check failed
+        asked.append("shared")
+        raise AssertionError("the shared client was used although one was handed in")
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(config_values, "shared_client", refuse)
+        async with httpx.AsyncClient(follow_redirects=False) as client:
+            overlay = await config_values.admin_overlay(env=ENV, client=client)
+
+    assert overlay == {config.ENV_PUBLIC_URL: ADMIN_URL}
+    assert asked == []
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_handed_in_client_fails_as_softly_as_the_shared_one() -> None:
+    """Every failure of this module is an empty result, whichever client carried it."""
+    respx.post(READ_URL).mock(side_effect=httpx.ConnectError("no route to nextcloud"))
+
+    async with httpx.AsyncClient(follow_redirects=False) as client:
+        assert await config_values.admin_overlay(env=ENV, client=client) == {}

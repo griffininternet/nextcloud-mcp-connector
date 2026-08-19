@@ -14,11 +14,14 @@ bearer check or leave with a 401 that points at the metadata (pitfall 6, T-03-01
 import asyncio
 import base64
 import json
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterator, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
+import respx
 from mcp.server.auth.provider import AccessToken
 from mcp.shared.auth import OAuthClientInformationFull
 from starlette.applications import Starlette
@@ -32,8 +35,14 @@ from mcp_connector.errors import ToolError
 from mcp_connector.exapp.middleware import RequireAppApi
 from mcp_connector.exapp.ui import connections as ui_connections
 from mcp_connector.exapp.ui import strings
-from mcp_connector.oauth import connections, crypto, store
-from mcp_connector.oauth.metadata import PRM_SUFFIX, RESOURCE_SUFFIX, TOOL_SCOPE
+from mcp_connector.nextcloud import http as nc_http
+from mcp_connector.oauth import connections, crypto, registry, store
+from mcp_connector.oauth.metadata import (
+    AS_METADATA_SUFFIX,
+    PRM_SUFFIX,
+    RESOURCE_SUFFIX,
+    TOOL_SCOPE,
+)
 from mcp_connector.oauth.verifier import OAUTH_STATE_ATTR, OAuthIdentity, StoreTokenVerifier
 
 APP_ID = "mcp_connector"
@@ -75,6 +84,60 @@ MCP_HEADERS = {
     "Content-Type": "application/json",
     "Accept": "application/json, text/event-stream",
 }
+
+#: The address an administrator typed into the Nextcloud form of plan 05-01. Deliberately not
+#: :data:`PUBLIC_URL`, so a check can tell which of the two sources won.
+ADMIN_URL = "https://admin.example.com/exapps/mcp_connector"
+
+#: The one outgoing call this file allows: the start time read of the four admin values, on
+#: the route plan 03-08 measured. The constants come from ``crypto`` rather than being spelled
+#: a second time here.
+READ_URL = (
+    f"{EXAPP_ENV[config.ENV_NEXTCLOUD_URL]}{crypto.EXAPP_CONFIG_PATH}{crypto.CONFIG_READ_SUFFIX}"
+)
+
+
+def ocs(values: Mapping[str, str]) -> dict[str, object]:
+    """The OCS envelope AppAPI 34 answers a config read with, in its lower case spelling."""
+    return {
+        "ocs": {
+            "meta": {"status": "ok", "statuscode": 200, "message": "OK"},
+            "data": [{"configkey": key, "configvalue": value} for key, value in values.items()],
+        }
+    }
+
+
+@dataclass(frozen=True, slots=True)
+class AdminConfig:
+    """What Nextcloud has stored for this app, plus the route that answers with it.
+
+    ``values`` is mutated by a check before it starts the process, because the read happens
+    inside :func:`entry_exapp.main` and there is no other way to hand values into it.
+    """
+
+    values: dict[str, str]
+    route: respx.Route
+
+    def breaks(self) -> None:
+        """Make the read fail the way an unreachable Nextcloud fails (T-05-20)."""
+        self.route.mock(side_effect=httpx.ConnectError("this Nextcloud is not reachable"))
+
+
+@pytest.fixture(autouse=True)
+def admin_config() -> Iterator[AdminConfig]:
+    """Answer the start time read locally, for every check of this file.
+
+    Autouse on purpose: since plan 05-04 ``main`` reads the four admin values once before it
+    serves, so every check that starts the process would otherwise open a socket against
+    ``nc.test``. An empty dictionary is an installation whose administrator has configured
+    nothing, which is the state every older check of this file was written under.
+    """
+    values: dict[str, str] = {}
+    with respx.mock(assert_all_called=False) as router:
+        route = router.post(READ_URL).mock(
+            side_effect=lambda request: httpx.Response(200, json=ocs(values))
+        )
+        yield AdminConfig(values, route)
 
 
 def paths(app: object) -> set[str]:
@@ -846,59 +909,271 @@ def test_a_missing_or_broken_port_stops_the_start(
     assert excinfo.value.code == 2
 
 
-def test_a_missing_public_url_stops_the_start(
+# --- the admin values of the start, and the setup state instead of exit 2 (05-04) --
+
+
+def start(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    env: Mapping[str, str] | None = None,
+) -> Starlette:
+    """Run ``main`` up to the point where it would serve, and return the built application.
+
+    ``uvicorn.run`` is the last statement of every branch of ``main``, so replacing it is what
+    turns the entry point into something a check can look at: whatever the resolution of the
+    environment produced is now visible in the documents of this application. The HaRP branch
+    is selected because it needs no port, and the data key is answered locally, because a unit
+    test has no Nextcloud to fetch it from.
+    """
+    deploy = {
+        **EXAPP_ENV,
+        config.ENV_APP_PERSISTENT_STORAGE: str(tmp_path),
+        config.ENV_HP_SHARED_KEY: "a" * 64,
+        config.ENV_DISABLE_DNS_REBINDING: "1",
+    }
+    for name, value in deploy.items():
+        monkeypatch.setenv(name, value)
+    for name in (
+        config.ENV_STATIC_BEARER,
+        config.ENV_APP_PASSWORD,
+        config.ENV_PUBLIC_URL,
+        registry.ENV_DCR,
+        registry.ENV_ALLOWLIST_ONLY,
+        registry.ENV_ALLOWED_CLIENTS,
+    ):
+        monkeypatch.delenv(name, raising=False)
+    for name, value in (env or {}).items():
+        monkeypatch.setenv(name, value)
+
+    async def fake_key(env: object = None) -> bytes:
+        del env
+        return bytes(range(32))
+
+    monkeypatch.setattr(store.crypto, "data_key", fake_key)
+
+    built: list[Starlette] = []
+
+    def fake_run(app: Starlette, **kwargs: object) -> None:
+        del kwargs
+        built.append(app)
+
+    monkeypatch.setattr(entry_exapp.uvicorn, "run", fake_run)
+    entry_exapp.main()
+
+    assert built, "main returned without ever reaching the server"
+    return built[0]
+
+
+def document_of(app: Starlette, path: str) -> dict[str, Any]:
+    """One discovery document of a built application, read in process."""
+    with TestClient(app) as client:
+        response = client.get(path)
+    assert response.status_code == 200
+    return dict(response.json())
+
+
+def test_an_admin_value_is_the_address_the_started_app_calls_itself(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, admin_config: AdminConfig
+) -> None:
+    """The whole point of plans 05-01 and 05-04: a store installation sets no variable.
+
+    With one Docker daemon, ``exApps.enableApp`` calls ``enableExApp`` without deploy options,
+    so no ``NC_MCP_*`` variable ever reaches the container (05-RESEARCH, pitfall 2). The value
+    the administrator typed into the Nextcloud form therefore has to become the ``resource`` of
+    the protected resource document, and with it the issuer, the audience of every token and
+    the prefix of every form action.
+    """
+    admin_config.values["public_url"] = ADMIN_URL
+
+    app = start(monkeypatch, tmp_path)
+
+    assert document_of(app, PRM_SUFFIX)["resource"] == f"{ADMIN_URL}{RESOURCE_SUFFIX}"
+
+
+def test_a_deploy_variable_stays_in_force_when_nothing_is_stored(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Every installation that exists today: the variable is set and no form was saved."""
+    app = start(monkeypatch, tmp_path, env={config.ENV_PUBLIC_URL: PUBLIC_URL})
+
+    assert document_of(app, PRM_SUFFIX)["resource"] == f"{PUBLIC_URL}{RESOURCE_SUFFIX}"
+
+
+def test_the_admin_value_wins_over_the_deploy_variable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, admin_config: AdminConfig
+) -> None:
+    """The precedence rule of 05-01, applied: admin value, then variable, then default."""
+    admin_config.values["public_url"] = ADMIN_URL
+
+    app = start(monkeypatch, tmp_path, env={config.ENV_PUBLIC_URL: PUBLIC_URL})
+
+    assert document_of(app, PRM_SUFFIX)["resource"] == f"{ADMIN_URL}{RESOURCE_SUFFIX}"
+
+
+@pytest.mark.parametrize(
+    "stored",
+    ["not-an-address", "https://cloud.example.com/x#fragment", "https://a:b@cloud.example.com/x"],
+    ids=["no scheme", "a fragment", "credentials in the address"],
+)
+def test_an_unusable_admin_value_changes_nothing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, admin_config: AdminConfig, stored: str
+) -> None:
+    """T-05-17: the validation sits in ``config_values`` and ``main`` never works around it.
+
+    An address that would become a broken ``issuer`` is not a value, so the deploy environment
+    of an existing installation keeps working exactly as it did before this plan.
+    """
+    admin_config.values["public_url"] = stored
+
+    app = start(monkeypatch, tmp_path, env={config.ENV_PUBLIC_URL: PUBLIC_URL})
+
+    assert document_of(app, PRM_SUFFIX)["resource"] == f"{PUBLIC_URL}{RESOURCE_SUFFIX}"
+
+
+def test_an_installation_without_any_public_address_serves_and_says_where_to_set_it(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """WR-09: the one value an installation has to set, and the one whose absence is silent.
+    """The deadlock this plan breaks (WR-09 revisited, 05-RESEARCH pitfall 2).
 
-    A missing volume loses connections on the next restart and an unusable issuer refuses to
-    build; both already stop the start. A missing public URL did neither: the container came
-    up, answered every discovery document, and named `http://127.0.0.1:8765` as the issuer,
-    the audience of every token and the target of the consent redirect. Every browser was
-    then sent to its own machine, and nothing in the log said why.
+    Until now this was ``SystemExit(2)``. With it the app never became ``enabled``, so the
+    ``enabled=1`` hook never registered the admin form, so there was no place an administrator
+    could enter the missing address: a one click installation died on start and could not be
+    finished. The promise "no silent misconfiguration" is now kept by this error line and by
+    the setup state on the connections page, not by refusing to run.
     """
-    for name, value in EXAPP_ENV.items():
-        monkeypatch.setenv(name, value)
-    monkeypatch.setenv(config.ENV_APP_PERSISTENT_STORAGE, str(tmp_path))
-    for name in (config.ENV_STATIC_BEARER, config.ENV_APP_PASSWORD, config.ENV_PUBLIC_URL):
+    with caplog.at_level("ERROR", logger="mcp_connector.entry_exapp"):
+        app = start(monkeypatch, tmp_path)
+
+    messages = " ".join(record.getMessage() for record in caplog.records)
+    assert config.ENV_PUBLIC_URL in messages
+    assert strings.ADMIN_SETTINGS_PLACE in messages, "the line names where the value is set"
+    assert "disable and enable" in messages.lower(), "and the step that makes it take effect"
+    default = f"{config.DEFAULT_PUBLIC_URL}{RESOURCE_SUFFIX}"
+    assert document_of(app, PRM_SUFFIX)["resource"] == default, "and it serves the documents"
+
+
+def test_a_blank_public_url_is_the_same_setup_state(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A quoted empty value in a compose file is a typo, not a decision to use the default."""
+    with caplog.at_level("ERROR", logger="mcp_connector.entry_exapp"):
+        start(monkeypatch, tmp_path, env={config.ENV_PUBLIC_URL: "   "})
+
+    messages = " ".join(record.getMessage() for record in caplog.records)
+    assert config.ENV_PUBLIC_URL in messages
+
+
+def test_an_unreachable_nextcloud_does_not_stop_the_start(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, admin_config: AdminConfig
+) -> None:
+    """T-05-20: the read costs one attempt and can never be the reason a container dies."""
+    admin_config.breaks()
+
+    app = start(monkeypatch, tmp_path, env={config.ENV_PUBLIC_URL: PUBLIC_URL})
+
+    assert document_of(app, PRM_SUFFIX)["resource"] == f"{PUBLIC_URL}{RESOURCE_SUFFIX}"
+
+
+def test_an_admin_switch_reaches_the_client_policy_of_the_started_app(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, admin_config: AdminConfig
+) -> None:
+    """The overlay is one environment for every reader, not only for the public address.
+
+    ``client_policy`` reads the three AUTH-07 switches out of the same resolved environment,
+    and the document is where that shows: with self registration off, the authorization server
+    stops advertising a registration endpoint (D-35).
+    """
+    admin_config.values.update({"public_url": ADMIN_URL, "oauth_dcr": "0"})
+
+    app = start(monkeypatch, tmp_path)
+
+    assert "registration_endpoint" not in document_of(app, AS_METADATA_SUFFIX)
+
+
+def test_the_shipped_state_still_advertises_the_registration_endpoint(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, admin_config: AdminConfig
+) -> None:
+    """The counter probe of the check above: without a stored switch nothing changes."""
+    admin_config.values["public_url"] = ADMIN_URL
+
+    app = start(monkeypatch, tmp_path)
+
+    assert "registration_endpoint" in document_of(app, AS_METADATA_SUFFIX)
+
+
+def test_the_admin_values_are_read_once_per_start_and_never_per_request(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, admin_config: AdminConfig
+) -> None:
+    """The decision of this plan, held by a check: resolved once, at the start (D-20).
+
+    A per request read would be a second Nextcloud round trip on every request (SC 5 of phase
+    3) or a mutable module cache, which D-20 forbids with two named exceptions. The price is
+    the reactivation step, and it is named in three places instead of hidden.
+    """
+    admin_config.values["public_url"] = ADMIN_URL
+
+    app = start(monkeypatch, tmp_path)
+    with TestClient(app) as client:
+        for _ in range(3):
+            assert client.get(PRM_SUFFIX).status_code == 200
+
+    assert admin_config.route.call_count == 1
+
+
+def test_nothing_is_read_outside_the_exapp_mode(
+    monkeypatch: pytest.MonkeyPatch, admin_config: AdminConfig
+) -> None:
+    """Without the AppAPI variables there is no channel to read the values over."""
+    for name in (*EXAPP_ENV, config.ENV_STATIC_BEARER, config.ENV_APP_PASSWORD):
         monkeypatch.delenv(name, raising=False)
 
-    with (
-        caplog.at_level("ERROR", logger="mcp_connector.entry_exapp"),
-        pytest.raises(SystemExit) as excinfo,
-    ):
+    with pytest.raises(SystemExit) as excinfo:
         entry_exapp.main()
 
     assert excinfo.value.code == 2
-    messages = [record.getMessage() for record in caplog.records]
-    assert any(config.ENV_PUBLIC_URL in message for message in messages), messages
-    assert any(config.DEFAULT_PUBLIC_URL in message for message in messages), messages
+    assert admin_config.route.call_count == 0
 
 
-def test_a_blank_public_url_counts_as_missing(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+def test_the_start_names_the_keys_it_took_from_nextcloud_and_never_their_values(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    admin_config: AdminConfig,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """A quoted empty value in a compose file is a typo, not a decision to use the default.
+    """T-05-21: an administrator has to see which source won, and a log is not a place for
+    an address, a client id or anything else that arrived over HTTP."""
+    admin_config.values.update(
+        {"public_url": ADMIN_URL, "oauth_allowed_clients": "https://claude.example/callback"}
+    )
 
-    The exit code alone would not prove anything here, because a later check refuses the
-    start as well; what is asserted is that this value is the one named in the log.
+    with caplog.at_level("INFO", logger="mcp_connector.entry_exapp"):
+        start(monkeypatch, tmp_path)
+
+    messages = " ".join(record.getMessage() for record in caplog.records)
+    assert config.ENV_PUBLIC_URL in messages
+    assert registry.ENV_ALLOWED_CLIENTS in messages
+    assert ADMIN_URL not in messages
+    assert "claude.example" not in messages
+
+
+@pytest.mark.anyio
+async def test_the_client_of_the_start_time_read_is_hardened_like_the_shared_one() -> None:
+    """Why a client of its own: the loop of this read is closed again right afterwards.
+
+    ``shared_client`` binds a connection pool to the event loop it was first used in, and the
+    loop ``asyncio.run`` opens for the start time read is gone before uvicorn opens its own.
+    A pool left behind there is unusable and its sockets are never closed. The four properties
+    stay the ones of the shared client, and this is what holds them equal.
     """
-    for name, value in EXAPP_ENV.items():
-        monkeypatch.setenv(name, value)
-    monkeypatch.setenv(config.ENV_APP_PERSISTENT_STORAGE, str(tmp_path))
-    monkeypatch.setenv(config.ENV_PUBLIC_URL, "   ")
-    for name in (config.ENV_STATIC_BEARER, config.ENV_APP_PASSWORD):
-        monkeypatch.delenv(name, raising=False)
+    startup = entry_exapp._startup_client()
+    shared = nc_http.shared_client()
 
-    with (
-        caplog.at_level("ERROR", logger="mcp_connector.entry_exapp"),
-        pytest.raises(SystemExit) as excinfo,
-    ):
-        entry_exapp.main()
-
-    assert excinfo.value.code == 2
-    messages = [record.getMessage() for record in caplog.records]
-    assert any(config.ENV_PUBLIC_URL in message for message in messages), messages
+    assert startup is not shared
+    assert startup.follow_redirects is False
+    assert startup.timeout == shared.timeout
+    assert isinstance(startup.cookies.jar, nc_http.NoCookieJar)
+    assert startup.headers["user-agent"] == shared.headers["user-agent"]
+    await startup.aclose()
 
 
 # --- the end to end guard of phase 4: the hand on the switch, and the refusal ------
