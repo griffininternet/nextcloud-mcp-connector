@@ -14,10 +14,15 @@ was checked with, and the store side facts are verified against the store source
 ## Where this stands
 
 The one time setup is done. The certificate is in place, the app is registered, and the
-first release is live: `mcp_connector` 0.1.0 has been listed in the App Store since
-2026-08-19 and is offered to ExApp installations. The CSR pull request is history, not a
-blocker, and a signature is only accepted against the certificate that pull request
-produced, so the live listing below is the proof that both exist.
+current release is live: `mcp_connector` has been listed in the App Store since
+2026-08-19, first as 0.1.0 and since the same day as 0.1.1, and it is offered to ExApp
+installations. The CSR pull request is history, not a blocker, and a signature is only
+accepted against the certificate that pull request produced, so the live listing below is
+the proof that both exist.
+
+0.1.1 is the version an administrator should get: 0.1.0 could be installed with one click
+but could not start afterwards, because the address it needs had no place to be set. The
+proof of the difference is the last row of the table below.
 
 What remains is maintenance: raise the version, write the changelog, tag, sign the
 release asset and hand its URL to the store. That is the runbook further down.
@@ -68,6 +73,44 @@ Every line was measured, not assumed. No fact without its check.
 | 2026-08-19 | The image is pullable anonymously and a real multi arch index (`linux/amd64` and `linux/arm64`, plus two attestation entries) | anonymous token from `https://ghcr.io/token?scope=repository:street1983nk/mcp_connector:pull&service=ghcr.io`, then `https://ghcr.io/v2/street1983nk/mcp_connector/manifests/0.1.0` returns `application/vnd.oci.image.index.v1+json` |
 | 2026-08-19 | Exactly one tag exists | `https://ghcr.io/v2/street1983nk/mcp_connector/tags/list` returns `["0.1.0"]` |
 | 2026-08-19 | The screenshot URL answers 200 with 39532 bytes | `curl -I https://raw.githubusercontent.com/street1983nk/nextcloud-mcp-connector/main/docs/screenshots/connections.png` |
+| 2026-08-19 20:45Z | Release 0.1.1 is listed, with the same platform span `>=32.0.0 <35.0.0`, and the store now serves 27 ExApps | `curl -sS https://apps.nextcloud.com/api/v1/appapi_apps.json`, releases of `mcp_connector`: `0.1.1` and `0.1.0` |
+| 2026-08-19 20:45Z | The download of 0.1.1 answers 200 with 29491 bytes, the size that was signed | `curl -sSIL https://github.com/street1983nk/nextcloud-mcp-connector/releases/download/v0.1.1/mcp_connector-0.1.1.tar.gz` gives 302 then 200 |
+| 2026-08-19 20:46Z | The image of 0.1.1 is pullable anonymously and a real multi arch index: `linux/amd64`, `linux/arm64`, plus the two attestation entries | anonymous token from `ghcr.io/token`, then `https://ghcr.io/v2/street1983nk/mcp_connector/manifests/0.1.1`, `application/vnd.oci.image.index.v1+json` |
+| 2026-08-19 20:46Z | Both tags exist, none was rewritten | `https://ghcr.io/v2/street1983nk/mcp_connector/tags/list` returns `["0.1.0","0.1.1"]` |
+| 2026-08-19 20:53Z | The published 0.1.1 installs over the store path with no environment variable at all and stays up: `0 restarts`, state running, healthy, and it names its setup state in the log. This is the release: 0.1.0 answered the same install with `Restarting (2)` and exit 2 | `occ app_api:app:register mcp_connector harp_proxy_docker --force-scopes --wait-finish`, then `docker inspect nc_app_mcp_connector --format '{{.RestartCount}} {{.State.Status}}'` and `docker logs nc_app_mcp_connector` |
+
+### The update keeps the connections
+
+Measured on 2026-08-19 on the HaRP topology of `compose.exapp.yml`, on the published
+artifacts and not on a local build.
+
+| Time | Step | Result |
+|------|------|--------|
+| 20:49Z | `occ app_api:app:register mcp_connector harp_proxy_docker --info-xml https://raw.githubusercontent.com/street1983nk/nextcloud-mcp-connector/v0.1.0/appinfo/info.xml --env NC_MCP_PUBLIC_URL=... --force-scopes --wait-finish` | `0.1.0 [enabled]`, container healthy on `ghcr.io/street1983nk/mcp_connector:0.1.0` |
+| 20:50Z | One real OAuth connection walked end to end (registration, sign in, consent, code exchange), then a tool listing with the token it produced | 16 tools for the account; rows in the volume: 1 client, 1 authorization, 1 access token, 1 refresh token |
+| 20:51Z | `occ app_api:app:update --all --showonly`, 57 minutes after the last store fetch | empty, the instance still knew only 0.1.0. This is the cache of pitfall 8, not a failed release |
+| 20:51Z | Cache discarded, then the same question again | `mcp_connector new version available: 0.1.1` |
+| 20:52Z | `occ app_api:app:update mcp_connector --wait-finish`, 20 seconds | `0.1.1 [enabled]`, container healthy on the 0.1.1 image, and every row count unchanged |
+| 20:52Z | The access token issued by 0.1.0, presented to 0.1.1 | 16 tools, and a real `files_list` call answered ok |
+
+The last line is the point. A token from before the update can only work afterwards if the
+volume, the rows in it and the data key that decrypts them all survived the redeploy, which
+is what `deployExApp` with `removeData: false` promises. The same holds across a
+`unregister` without `--rm-data` followed by a fresh install: the authorization and the
+client were still there, and `occ mcp_connector:purge --force` then ended them with
+`{"purged":true,"connections":1,"revoked":1,"revoke_failures":0,"tables_cleared":true,"key_deleted":true}`.
+
+**Discard the cache by overwriting it, never by deleting it.** The cache lives in
+`data/appdata_*/appstore/appapi_apps.json`. Removing the file leaves the entry in
+Nextcloud's own file cache, and every following AppAPI command dies with
+`OCP\Files\GenericFileException` and no explanation. Write an expired document into it
+instead, and let Nextcloud read its own directory again:
+
+```
+docker exec -u www-data <nc> sh -c 'for d in /var/www/html/data/appdata_*/appstore; do \
+  printf "%s" "{\"timestamp\":0,\"data\":[],\"ncversion\":\"0\"}" > "$d/appapi_apps.json"; done'
+docker exec -u www-data <nc> php occ files:scan-app-data
+```
 
 ## Release runbook for a follow up release
 
