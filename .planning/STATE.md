@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Plan 05-07 fertig: docs/client-setup.md deckt jetzt alle sieben Zielclients ab. Open WebUI 0.11.0 Ende zu Ende verprobt (Discovery, DCR mit genau einer Redirect-URI, resource nach RFC 8707, Refresh-Token, 16 Werkzeuge, Consent im Browser, Zwei-Konten-Leak-Check), MUCGPT mit den zwei Konfigurationsschluesseln und benannter Luecke (kein Instanzzugang, Assumption A4). EXAPP-05 abgehakt. Offen: Assumption A5 (Live-Lauf des occ-Kommandos) in Plan 05-08. Naechstes: Plan 05-08"
-last_updated: "2026-08-19T19:10:32.909Z"
+stopped_at: "Plan 05-09 fertig: docs/faq.md beantwortet kanonisch die Frage, ob ein Nutzer die App fuer sich abschalten kann (drei belegte Fakten plus die Grenze beim Anbieter der Assistenz). Kurzform als ## FAQ in allen drei READMEs, Status-Abschnitt sagt nicht mehr 'phase 1 (server core)', Werkzeugzahl auf 16 korrigiert (Nebenbefund aus 05-07 erledigt). Alle drei Store-Beschreibungen auf dem kleineren gemeinsamen Nenner der Instanz-Ansicht mit der FAQ-Antwort im Text; zwei neue Manifest-Gates mit sieben Gegenproben. Offen: docs/uninstall.md (05-08) als Linkziel, Release-Textstellen und CHANGELOG in 05-10. Naechstes: Plan 05-08"
+last_updated: "2026-08-19T19:25:12.639Z"
 last_activity: 2026-08-19
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 44
-  completed_plans: 41
+  completed_plans: 42
   percent: 80
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 05 (hardening-und-store-einreichung) — EXECUTING
-Plan: 8 of 10
+Plan: 9 of 10
 Status: Ready to execute
 Last activity: 2026-08-19
 
-Progress: [█████████░] 93%
+Progress: [██████████] 95%
 
 ## Performance Metrics
 
@@ -94,6 +94,7 @@ Progress: [█████████░] 93%
 | Phase 05 P05 | 25 min | 2 tasks | 3 files |
 | Phase 05 P06 | 25 min | 2 tasks tasks | 12 files files |
 | Phase 05 P07 | 75 min | 3 tasks tasks | 4 files files |
+| Phase 05 P09 | 15 min | 2 tasks tasks | 6 files files |
 
 ## Accumulated Context
 
@@ -297,6 +298,12 @@ Recent decisions affecting current work:
 - [Phase 05]: Der enabled=0-Zweig bleibt leer: derselbe Hook feuert bei jedem Update (lib/Command/ExApp/Update.php), ein Aufraeumen dort loeschte bei jedem Update jede Verbindung jeder Nutzerin (T-05-28)
 - [Phase 05]: Die force-Pruefung akzeptiert jede plausible Draht-Form der occ-Option, weil ihre genaue Form Assumption A5 ist und ein still nichts tuender Purge einen Admin mit falscher Sicherheit in die Deinstallation schickt
 - [Phase 05]: Das Destruktiv-Gate bekommt eine dritte enge, gegengeprobte Ausnahme fuer den einen HTTP-DELETE in oauth/crypto.py: geloescht wird ein Wert, den die App ueber sich selbst geschrieben hat, TOOL-09 ist ein Versprechen ueber Nutzerdaten in Nextcloud
+- [Phase 05-hardening-und-store-einreichung]: Die FAQ ist einsprachig kanonisch (docs/faq.md, Englisch) plus dreisprachige Kurzform mit Link; bei fuenf Fragen kostet jede Aenderung sonst sechs Textstellen (05-RESEARCH Open Question 2)
+- [Phase 05-hardening-und-store-einreichung]: Die Store-Beschreibung traegt die Antwort auf die Abschalt-Frage selbst und verlinkt nur zusaetzlich: sie ist der einzige Text, den ein Nutzer ohne Repository-Besuch sieht
+- [Phase 05-hardening-und-store-einreichung]: Alle drei Store-Beschreibungen stehen auf dem kleineren gemeinsamen Nenner der Instanz-Ansicht (Absaetze durch Leerzeilen, kein Backtick, keine Tabelle, kein Bild, keine Linie, kein HTML), weil dompurify dort alles andere entfernt statt es zu degradieren
+- [Phase 05-hardening-und-store-einreichung]: Das Text- und Vokabular-Gate liest den geparsten Manifest-Baum ohne Kommentarknoten statt die Rohdatei: das Manifest erklaert in Kommentaren genau die Faelle, die ein grep als Verstoss lesen wuerde
+- [Phase 05-hardening-und-store-einreichung]: Das Variablen-Gate verbietet nur das leere <default>, nicht das Element: ein befuellter Default bleibt erlaubt, und ein eigener Test haelt diese Haelfte fest (AppAPI 34.0.3 exportiert das leere Element als Zeichenkette Array, der Store antwortet mit 500)
+- [Phase 05-hardening-und-store-einreichung]: Der Status-Abschnitt der drei READMEs nennt Fakten mit Fundstelle statt einer Phasennummer; phase 1 (server core) stand nach vier Phasen noch in der ersten Zeile, die ein Besucher liest
 
 ### Pending Todos
 
@@ -326,6 +333,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-19T19:10:32.890Z
-Stopped at: Plan 05-07 fertig: docs/client-setup.md deckt jetzt alle sieben Zielclients ab. Open WebUI 0.11.0 Ende zu Ende verprobt (Discovery, DCR mit genau einer Redirect-URI, resource nach RFC 8707, Refresh-Token, 16 Werkzeuge, Consent im Browser, Zwei-Konten-Leak-Check), MUCGPT mit den zwei Konfigurationsschluesseln und benannter Luecke (kein Instanzzugang, Assumption A4). EXAPP-05 abgehakt. Offen: Assumption A5 (Live-Lauf des occ-Kommandos) in Plan 05-08. Naechstes: Plan 05-08
+Last session: 2026-08-19T19:25:12.624Z
+Stopped at: Plan 05-09 fertig: docs/faq.md beantwortet kanonisch die Frage, ob ein Nutzer die App fuer sich abschalten kann (drei belegte Fakten plus die Grenze beim Anbieter der Assistenz). Kurzform als ## FAQ in allen drei READMEs, Status-Abschnitt sagt nicht mehr 'phase 1 (server core)', Werkzeugzahl auf 16 korrigiert (Nebenbefund aus 05-07 erledigt). Alle drei Store-Beschreibungen auf dem kleineren gemeinsamen Nenner der Instanz-Ansicht mit der FAQ-Antwort im Text; zwei neue Manifest-Gates mit sieben Gegenproben. Offen: docs/uninstall.md (05-08) als Linkziel, Release-Textstellen und CHANGELOG in 05-10. Naechstes: Plan 05-08
 Resume file: None
