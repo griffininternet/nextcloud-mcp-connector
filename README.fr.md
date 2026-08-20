@@ -57,6 +57,12 @@ l'utilisateur sur les propres pages de Nextcloud et ne voit jamais de mot de pas
 password. La connexion apparaît sous Paramètres, Sécurité, Appareils et sessions et peut y être
 close.
 
+Pas dans la 0.1.2, et dans le dépôt depuis le 20 août 2026 : une application d'assistant peut
+aussi s'identifier par l'adresse d'un document de métadonnées qu'elle publie elle-même, au lieu
+de s'enregistrer ici d'abord. C'est la voie que la spécification MCP actuelle préfère, et celle
+par laquelle Claude Code se connecte. Les deux voies fonctionnent côte à côte, et un
+administrateur peut désactiver l'une ou l'autre.
+
 Ce qu'un administrateur doit régler, ce qu'un utilisateur saisit, et les mesures qui étayent les
 deux : **[docs/oauth-setup.md](docs/oauth-setup.md)**.
 
@@ -175,6 +181,7 @@ entrantes, pas de l'adresse d'écoute : `--host 0.0.0.0` n'ouvre à personne.
 | `NC_MCP_DISABLE_DNS_REBINDING_PROTECTION` | HTTP | non | À mettre à `true` uniquement derrière un proxy qui contrôle l'en-tête `Host` |
 | `NC_MCP_PUBLIC_URL` | static bearer, ExApp | oui pour OAuth | URL publique de ce serveur. En mode ExApp, c'est l'émetteur (issuer) du serveur d'autorisation et la ressource du document de ressource protégée, si bien qu'OAuth ne fonctionne pas sans elle |
 | `NC_MCP_OAUTH_DCR` | ExApp | non | Enregistrement dynamique de client, activé sauf s'il est désactivé |
+| `NC_MCP_OAUTH_CIMD` | ExApp | non | Un client peut s'identifier par l'adresse d'un document de métadonnées qu'il publie lui-même, activé sauf s'il est désactivé ; désactiver l'enregistrement automatique ferme cette voie avec lui |
 | `NC_MCP_OAUTH_ALLOWLIST_ONLY` | ExApp | non | Seuls les clients listés peuvent s'autoriser ; une liste vide ferme alors la porte à tout le monde |
 | `NC_MCP_OAUTH_ALLOWED_CLIENTS` | ExApp | non | Ids de client ou redirect URIs séparés par des virgules, lus uniquement quand l'allowlist est active |
 
@@ -397,7 +404,7 @@ résultat vide.
 | **Aucune session, donc aucun état de pagination côté serveur** | Une liste longue remet un handle `next` que vous passez de nouveau | Rien. Le handle survit à un redémarrage, ce qui est le but |
 | **Les agendas ont besoin d'une fenêtre de temps explicite avec un fuseau** | Un `start` ou `end` sans fuseau est refusé | Envoyer `2026-09-01T00:00:00+02:00` ou `...Z`. Un fuseau deviné est une réponse confidemment fausse |
 | **Une seule IP pour de nombreux utilisateurs déclenche la protection anti-force brute** | `429` après un mauvais App password, pour tout le monde derrière le même déploiement | Attendre et utiliser un App password correct ; voir la section dépannage dans l'installation du client |
-| **Le mode ExApp s'authentifie avec un App password, pas encore OAuth** | Le point de terminaison `/exapps/mcp_connector/mcp` accepte un App password Basic que HaRP résout vers votre utilisateur | Utiliser l'App password ; OAuth est la voie d'entrée de la phase 3, voir la section ExApp de [docs/client-setup.md](docs/client-setup.md) |
+| **Toutes les applications d'assistant ne peuvent pas terminer une connexion OAuth** | Une application qui demande à être renvoyée vers une adresse de son propre schéma, Cursor par exemple, est refusée à la connexion, et la page nomme la voie qui fonctionne | Utiliser un App password sur le même point de terminaison `/exapps/mcp_connector/mcp` ; le mode ExApp accepte les deux, voir [docs/client-setup.md](docs/client-setup.md) |
 
 La phase 2 a rendu le serveur installable comme ExApp Nextcloud via AppAPI, chaque requête
 s'exécutant sous la propre identité de l'utilisateur appelant. Trois documents en rendent compte,

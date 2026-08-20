@@ -54,6 +54,12 @@ Ein Client wie Claude.ai oder ChatGPT erhält eine URL, meldet den Nutzer auf de
 Nextcloud an und sieht niemals ein Passwort oder ein App password. Die Verbindung erscheint unter
 Einstellungen, Sicherheit, Geräte und Sitzungen und kann dort beendet werden.
 
+Nicht in 0.1.2, und seit dem 20. August 2026 im Repository: Eine Assistenz-App kann sich auch
+über die Adresse eines Metadaten-Dokuments ausweisen, das sie selbst veröffentlicht, statt sich
+hier zuerst zu registrieren. Das ist der Weg, den die aktuelle MCP-Spezifikation bevorzugt, und
+der Weg, über den Claude Code sich verbindet. Beide Wege laufen nebeneinander, und eine
+Administratorin kann jeden von beiden abschalten.
+
 Was eine Administratorin einstellen muss, was ein Nutzer eingibt und die Messungen hinter beidem:
 **[docs/oauth-setup.md](docs/oauth-setup.md)**.
 
@@ -172,6 +178,7 @@ Anfragen handelt, nicht um die Bind-Adresse: `--host 0.0.0.0` lässt niemanden h
 | `NC_MCP_DISABLE_DNS_REBINDING_PROTECTION` | HTTP | nein | Nur hinter einem Proxy auf `true` setzen, der den `Host`-Header kontrolliert |
 | `NC_MCP_PUBLIC_URL` | statisches Bearer, ExApp | ja für OAuth | Öffentliche URL dieses Servers. Im ExApp-Modus ist sie der Issuer des Autorisierungsservers und die Resource des Protected-Resource-Dokuments, sodass OAuth ohne sie nicht funktioniert |
 | `NC_MCP_OAUTH_DCR` | ExApp | nein | Dynamische Client-Registrierung, an, sofern nicht abgeschaltet |
+| `NC_MCP_OAUTH_CIMD` | ExApp | nein | Ein Client kann sich über die Adresse eines Metadaten-Dokuments ausweisen, das er selbst veröffentlicht, an, sofern nicht abgeschaltet; wird die Selbstregistrierung abgeschaltet, ist dieser Weg mit geschlossen |
 | `NC_MCP_OAUTH_ALLOWLIST_ONLY` | ExApp | nein | Nur gelistete Clients dürfen autorisieren; eine leere Liste verschließt dann die Tür für alle |
 | `NC_MCP_OAUTH_ALLOWED_CLIENTS` | ExApp | nein | Komma-getrennte Client-IDs oder Redirect-URIs, nur gelesen, wenn die Allowlist aktiv ist |
 
@@ -383,7 +390,7 @@ und jede ist in der Antwort sichtbar, die das Tool gibt, statt hinter einem leer
 | **Keine Sitzung, also kein serverseitiger Paging-Zustand** | Eine lange Liste gibt ein `next`-Handle zurück, das Sie erneut übergeben | Nichts. Das Handle übersteht einen Neustart, und genau das ist der Sinn |
 | **Kalender brauchen ein explizites Zeitfenster mit Zone** | Ein `start` oder `end` ohne Zone wird abgelehnt | Senden Sie `2026-09-01T00:00:00+02:00` oder `...Z`. Eine geratene Zone ist eine selbstsicher falsche Antwort |
 | **Eine IP für viele Nutzer löst den Brute-Force-Schutz aus** | `429` nach einem falschen App password, für alle hinter derselben Bereitstellung | Warten Sie und verwenden Sie ein korrektes App password; siehe den Troubleshooting-Abschnitt in der Client-Einrichtung |
-| **Der ExApp-Modus authentifiziert mit einem App password, noch nicht mit OAuth** | Der Endpunkt `/exapps/mcp_connector/mcp` akzeptiert ein Basic-App password, das HaRP zu Ihrem Nutzer auflöst | Verwenden Sie das App password; OAuth ist der Weg in Phase 3, siehe den ExApp-Abschnitt von [docs/client-setup.md](docs/client-setup.md) |
+| **Nicht jede Assistenz-App kann eine OAuth-Anmeldung abschließen** | Eine App, die auf eine Adresse ihres eigenen Schemas zurückgeschickt werden will, etwa Cursor, wird bei der Anmeldung abgelehnt, und die Seite nennt den Weg, der funktioniert | Verwenden Sie ein App password auf demselben Endpunkt `/exapps/mcp_connector/mcp`; der ExApp-Modus akzeptiert beides, siehe [docs/client-setup.md](docs/client-setup.md) |
 
 Phase 2 machte den Server als Nextcloud-ExApp über AppAPI installierbar, wobei jede Anfrage unter der
 eigenen Identität des aufrufenden Nutzers läuft. Drei Dokumente halten das fest sowie die beiden Spikes,

@@ -51,6 +51,11 @@ Claude.ai or ChatGPT is given one URL, signs the user in on Nextcloud's own page
 sees a password or an app password. The connection appears under Settings, Security, Devices
 and sessions and can be ended there.
 
+Not in 0.1.2, and in the repository since 2026-08-20: an assistant can also identify itself
+by the address of a metadata document it publishes itself, instead of registering here first.
+That is the way the current MCP specification prefers, and it is the way Claude Code connects.
+Both ways run next to each other, and an administrator can switch either of them off.
+
 What an administrator has to set, what a user enters, and the measurements behind both:
 **[docs/oauth-setup.md](docs/oauth-setup.md)**.
 
@@ -166,6 +171,7 @@ the bind address: `--host 0.0.0.0` allows nobody in.
 | `NC_MCP_DISABLE_DNS_REBINDING_PROTECTION` | HTTP | no | Set to `true` only behind a proxy that controls the `Host` header |
 | `NC_MCP_PUBLIC_URL` | static bearer, ExApp | yes for OAuth | Public URL of this server. In the ExApp mode it is the issuer of the authorization server and the resource of the protected resource document, so OAuth does not work without it |
 | `NC_MCP_OAUTH_DCR` | ExApp | no | Dynamic client registration, on unless switched off |
+| `NC_MCP_OAUTH_CIMD` | ExApp | no | A client may identify itself by the address of a metadata document it publishes itself, on unless switched off; switching self registration off closes this way with it |
 | `NC_MCP_OAUTH_ALLOWLIST_ONLY` | ExApp | no | Only listed clients may authorize; an empty list then closes the door for everyone |
 | `NC_MCP_OAUTH_ALLOWED_CLIENTS` | ExApp | no | Comma separated client ids or redirect URIs, read only when the allowlist is on |
 
@@ -372,7 +378,7 @@ each one is visible in the answer the tool gives rather than hidden behind an em
 | **No session, so no server side paging state** | A long list hands back a `next` handle you pass in again | Nothing. The handle survives a restart, which is the point |
 | **Calendars need an explicit time window with a zone** | A `start` or `end` without a zone is refused | Send `2026-09-01T00:00:00+02:00` or `...Z`. A guessed zone is a confidently wrong answer |
 | **One IP for many users triggers the brute force guard** | `429` after a wrong app password, for everyone behind the same deployment | Wait and use a correct app password; see the troubleshooting section in the client setup |
-| **The ExApp mode authenticates with an app password, not OAuth yet** | The `/exapps/mcp_connector/mcp` endpoint accepts a Basic app password that HaRP resolves to your user | Use the app password; OAuth is the phase 3 way in, see the ExApp section of [docs/client-setup.md](docs/client-setup.md) |
+| **Not every assistant app can finish an OAuth sign in** | An app that asks to be returned to an address of its own scheme, Cursor for example, is refused at the sign in, and the page names the way in that does work | Use an app password on the same `/exapps/mcp_connector/mcp` endpoint; the ExApp mode accepts either, see [docs/client-setup.md](docs/client-setup.md) |
 
 Phase 2 made the server installable as a Nextcloud ExApp through AppAPI, with every request
 running under the calling user's own identity. Three documents record it and the two spikes it
