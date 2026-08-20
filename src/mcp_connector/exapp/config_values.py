@@ -53,7 +53,7 @@ no signature in the existing code has to change for an admin value to take effec
 import logging
 from collections.abc import Mapping
 from typing import Any, NamedTuple
-from urllib.parse import urlsplit
+from urllib.parse import SplitResult, urlsplit, urlunsplit
 
 import httpx
 
@@ -315,6 +315,8 @@ def _public_url(raw: str) -> str | None:
     stood here that refusal only surfaced where it strikes, in ``provider.auth_routes``
     during the next start. Refusing the value here is the prevention half of CR-01; the
     rescue half lives in ``entry_exapp.main``.
+
+    What survives all of that leaves in one spelling, see :func:`_one_spelling` (IN-03).
     """
     candidate = raw.strip().rstrip("/")
     try:
@@ -340,7 +342,31 @@ def _public_url(raw: str) -> str | None:
             "is http on a host that is not loopback; the issuer of the authorization "
             "server has to be https (RFC 8414)",
         )
-    return candidate
+    return _one_spelling(parts, host=host, port=port)
+
+
+def _one_spelling(parts: SplitResult, *, host: str, port: int | None) -> str:
+    """The same address with a scheme and a host nobody has to spell twice (IN-03).
+
+    RFC 3986 makes the scheme (section 3.1) and the host (section 3.2.2) case insensitive
+    and everything after them case sensitive, so this levelling loses nothing and the path
+    and the query are left exactly as they arrived.
+
+    It matters because this value becomes the ``issuer`` of the authorization server
+    metadata and the prefix of ``resource``, and clients compare both character by
+    character; ``docs/client-setup.md`` and ``docs/oauth-setup.md`` say so about the
+    trailing slash for the same reason. Without this an administrator who typed one capital
+    letter, and then entered her address lower case in the client, failed a comparison that
+    no log line on either side explains.
+
+    ``urlsplit(...).hostname`` answers lower case and without the brackets of an IPv6
+    literal, so the brackets are put back here; the port travels as the number it was
+    already read as, so a leading zero or an empty ``:`` cannot survive either.
+    """
+    netloc = f"[{host}]" if ":" in host else host
+    if port is not None:
+        netloc = f"{netloc}:{port}"
+    return urlunsplit((parts.scheme.lower(), netloc, parts.path, parts.query, ""))
 
 
 def _switch(key: str, raw: str) -> str | None:
