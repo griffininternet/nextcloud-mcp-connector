@@ -342,3 +342,30 @@ $ Get-NetTCPConnection -LocalPort 8787
 (keine Zeile)
 ```
 
+## 5. Stand dieses Protokolls (Halt um 15:15Z)
+
+Abschnitte 1 bis 4 sind gemessen und abgeschlossen. Die Autorisierung und der
+Werkzeugaufruf fehlen, und sie fehlen aus einem benannten Grund und nicht, weil ein
+Schritt übersprungen wurde:
+
+* Cursor steht auf `needsAuth` und öffnet den Browser erst auf einen Klick in seiner
+  eigenen Oberfläche. Es gibt keinen Weg von außen dorthin, der gemessen und nicht
+  vorgetäuscht wäre: die Installation hat kein `cursor-agent`-Kommando
+  (`resources/app/bin` trägt `cursor`, `code-tunnel.exe` und `cursor-tunnel.exe`,
+  kein Agentenkommando), die laufende Sitzung hält keinen Debug-Port offen
+  (Gegenprobe in Abschnitt 4), und der Werkzeugaufruf verlangt ohnehin den Agenten
+  im Fenster.
+* Ein Neustart von Cursor mit `--remote-debugging-port` wäre der technische Ausweg
+  und wird hier **nicht** genommen: das Fenster gehört dem Owner und läuft seit dem
+  16.08. Fremde Software des Owners neu zu starten ist keine Entscheidung dieses
+  Plans (dasselbe Prinzip wie T-06-52).
+* Den Browser-Schenkel selbst mit Cursors gespeicherten Versuchsdaten zu fahren wäre
+  möglich, wäre aber **nicht** die Behauptung, die CLIENT-04 verlangt: dann hätte
+  der messende Prozess autorisiert und nicht Cursor.
+
+Was noch fehlt, steht damit als offene Behauptung fest und nicht als Lücke:
+welche der drei Adressen Cursor an `/authorize` mitschickt, ob der Tausch am
+Token-Endpunkt gelingt, und ob ein Werkzeugaufruf Inhalt zurückbringt.
+`~/.cursor/mcp.json` bleibt für den Rest des Laufs absichtlich liegen; ihre
+Entfernung ist der letzte Schritt und wird in Abschnitt 6 belegt.
+
