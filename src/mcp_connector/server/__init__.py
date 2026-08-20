@@ -28,7 +28,7 @@ import httpx
 from mcp.server import MCPServer
 from mcp.types import ToolAnnotations
 
-from .. import deps
+from .. import __version__, deps
 from ..errors import ToolError
 
 __all__ = ["CREATE_ONLY", "READ_ONLY", "compact", "graceful", "mcp"]
@@ -37,9 +37,11 @@ __all__ = ["CREATE_ONLY", "READ_ONLY", "compact", "graceful", "mcp"]
 # other with a ValueError in the constructor, so they are built as a pair.
 _token_verifier, _auth_settings = deps.build_auth()
 
+# The handshake version a client sees in serverInfo derives from the package version,
+# so the three-places release gate covers it transitively via __version__.
 mcp = MCPServer(
     "MCP Connector",
-    version="0.1.0",
+    version=__version__,
     instructions=(
         "Read and create content in the user's own Nextcloud. "
         "This server can never delete, overwrite or re-share anything."
