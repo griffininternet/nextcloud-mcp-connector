@@ -43,7 +43,14 @@ services:
     restart: unless-stopped
 
   nextcloud:
-    image: nextcloud:34-apache
+    # A patch version and not the floating tag 34-apache, because a floating tag makes
+    # every version claim about this instance unverifiable: on 2026-08-20 the local image
+    # under 34-apache was built on the 5th of August and carried 34.0.2.1, while the tag on
+    # Docker Hub had moved to 34.0.3 on the 17th, and Docker does not pull a moved tag
+    # without being asked. A measurement of a version specific behaviour (EXAPP-06, the
+    # store interface fixed upstream in 34.0.3) then reads the wrong instance and nobody
+    # notices. The version of record is `occ status`, never this line.
+    image: nextcloud:34.0.3-apache
     container_name: nc-mcp-exapp-nc
     # No published port on purpose: this instance is reachable through Caddy only, because
     # every request from AppAPI to the ExApp has to take the same way a browser takes.
