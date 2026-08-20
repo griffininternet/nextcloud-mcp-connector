@@ -12,6 +12,8 @@ on purpose: the frozen literal below refused it until then, which is exactly the
 this file (D-58).
 """
 
+import re
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +23,7 @@ from mcp import Client
 from mcp_connector.server import mcp
 
 README = Path(__file__).resolve().parents[2] / "README.md"
+DOCS = Path(__file__).resolve().parents[2] / "docs"
 
 # The curated set (D-03 to D-09). A set comparison, not a subset check: a sixteenth tool
 # fails this file just as loudly as a missing one. Counter proof for the reviewer: adding
@@ -486,3 +489,38 @@ async def test_the_readme_permission_table_matches_the_live_registry() -> None:
     for name, level in sorted(documented.items()):
         expected = "create-only" if name in CREATE_TOOLS else "read"
         assert level == expected, f"README calls {name} {level}, the registry says {expected}"
+
+
+def test_a_documented_tool_count_is_the_current_one_or_says_which_run_it_is_from() -> None:
+    """IN-04: a page may record a run with an old count, it may not leave it unexplained.
+
+    Two kinds of number live in ``docs/``. A statement about the product ("all 16 tools")
+    has to be the number this registry answers. A dated evidence line ("connected, 15 tools
+    listed") is a record of a run and stays as it was recorded, and a reader who counts both
+    holds one of them for wrong unless the page says which is which. So a page that names a
+    count other than the current one has to point at the file that holds the truth, and that
+    pointer is this one: the number lives in a test, never in a document.
+    """
+    holder = "tests/contract/test_tool_surface.py"
+    current = len(EXPECTED_TOOLS)
+    unexplained: list[str] = []
+
+    for page in [*sorted(DOCS.glob("*.md")), README]:
+        text = page.read_text(encoding="utf-8")
+        explained = holder in text
+        for number, line in _counted_tools(text):
+            if number != current and not explained:
+                unexplained.append(f"{page.name}: {line.strip()}")
+
+    assert unexplained == [], (
+        "a page naming a tool count other than "
+        f"{current} has to point at {holder}: " + "; ".join(unexplained)
+    )
+
+
+def _counted_tools(text: str) -> Iterator[tuple[int, str]]:
+    """Every place a page names a number of tools, with the line it stands in."""
+    counts = re.compile(r"tools=(\d+)|(\d+)\s+tools\b")
+    for line in text.splitlines():
+        for match in counts.finditer(line):
+            yield int(match.group(1) or match.group(2)), line

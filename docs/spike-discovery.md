@@ -194,6 +194,9 @@ Output:
 modern client: tools/list returned 15 tools
 ```
 
+That number is the one this run listed and is left as recorded; the set is 16 since
+`prepare_context` was added, and `tests/contract/test_tool_surface.py` is what holds it.
+
 Exit code 0. The `/mcp` answer is `content-type: text/event-stream` (see the matrix), so the
 Streamable HTTP transport streams through HaRP end to end, which confirms the maintainer
 statement in app_api#825 against a running instance.

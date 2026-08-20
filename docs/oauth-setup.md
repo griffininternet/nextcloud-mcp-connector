@@ -294,6 +294,10 @@ Nextcloud call at all, which is the reason.
 **Every line above is from one run against the current code** (2026-08-16, Nextcloud
 34.0.2, AppAPI HaRP `release`). Two of them are worth reading twice.
 
+`tools=15` is what that run listed, and it is left as it was recorded. The set is 16 today:
+`prepare_context` was added after this run, and the number a release has to list is held by
+`tests/contract/test_tool_surface.py`, never by this page.
+
 The decision is `POST /authorize/decide` and it appears **twice**, which is the CR-01 relay
 walked over the full chain. The first one is sent by the caller that started the flow: it
 holds the flow id and the anti forgery value derived from it, which used to be the entire
@@ -537,6 +541,10 @@ Instance: `https://nc-staging.infranode.dev`, a throwaway machine, Nextcloud 34.
 AppAPI 34.0.0, ExApp 0.1.0. All runs on **2026-08-16**. The user entered nothing but the
 resource URL; both OAuth fields of the client stayed empty and dynamic client registration
 did the rest.
+
+The tool counts in the tables below are the ones those runs listed against 0.1.0, which was
+15. The set is 16 since `prepare_context` arrived; the number is held by
+`tests/contract/test_tool_surface.py` and not by a recorded run.
 
 ### Claude.ai: connected
 
