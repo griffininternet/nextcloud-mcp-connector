@@ -1,8 +1,8 @@
-# Requirements: MCP Connector für Nextcloud — Milestone v1.1
+# Requirements: MCP Connector für Nextcloud, Milestone v1.1
 
 **Defined:** 2026-08-20
 **Core Value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Milestone:** v1.1 "Verwaltungs-Clients und Härtungs-Reste" — bewusst klein, Deadline Nextcloud Conference September 2026.
+**Milestone:** v1.1 "Verwaltungs-Clients und Härtungs-Reste", bewusst klein, Deadline Nextcloud Conference September 2026.
 
 ## v1.1 Requirements
 
@@ -11,7 +11,7 @@
 - [ ] **CLIENT-01**: MUCGPT verbindet sich live nach dem Protokoll in docs/client-setup.md (drei Checks in Ausfallreihenfolge plus Berechtigungs-Gegenprobe); die Messdatei ersetzt den Lücken-Absatz, BL-12 wird geschlossen. *Externer Blocker: it@M-Antwort (Mail gesendet 20.08.); die Identitätsfrage (Service-Konto vs. Per-User) wird beim Termin gestellt und entscheidet über einen künftigen Token-Exchange.*
 - [ ] **CLIENT-02**: F13 verbindet sich live gegen den Connector; Messdatei neben den anderen Client-Nachweisen, docs/client-setup.md erhält eine belegte F13-Sektion. *Laut Outreach-Dossier MCP-fähig; Zugang läuft über Owner-Kontakt.*
 - [ ] **CLIENT-03**: BaerGPT verbindet sich live gegen den Connector; Messdatei und belegte Doku-Sektion wie bei CLIENT-02. *Laut Outreach-Dossier MCP-fähig; Zugang läuft über Owner-Kontakt.*
-- [ ] **CLIENT-04**: Cursor verbindet sich live nach der Teilregistrierung (Commit a80af0a): DCR mit Cursors Drei-URI-Body wird 201, Autorisierung und Tool-Aufruf laufen durch (BL-04-Rest, F1 aus dem v1.0-Audit).
+- [x] **CLIENT-04**: Cursors Verhalten gegen den Connector ist gemessen statt vermutet: DCR mit Cursors Drei-URI-Body wird 201 mit den zwei zulässigen Adressen (Teilregistrierung, Commit a80af0a); die Anmeldung scheitert danach an Cursors eigener private-use-Adresse, und die Ursache ist clientseitig belegt (Cursor 3.2.16 liest die Registrierungsantwort nicht zurück, drei Gegenproben in 06-08-MEASUREMENTS.md); der funktionierende Ausweichweg (App-Passwort über stdio) ist in docs/client-setup.md dokumentiert und wird auf der Absageseite in Worten genannt (BL-04-Rest, F1 aus dem v1.0-Audit). *Wortlaut am 2026-08-20 mit Owner-Freigabe auf das Gemessene umformuliert, BL-14 Option "sichtbar machen plus Doku"; die ursprüngliche Fassung verlangte eine durchlaufende Autorisierung samt Werkzeugaufruf, was D-35 für eine private-use-Adresse konstruktionsbedingt ausschließt; D-35 unverändert.*
 - [x] **CLIENT-05**: Die Loopback-Portfrage ist beantwortet: gemessen, ob ein Client mit wechselndem 127.0.0.1-Port (Kandidat: Claude Code) am exakten Redirect-Matching scheitert; falls ja, Entscheid über die RFC-8252-7.3-Ausnahme (beliebiger Port auf Loopback) dokumentiert und umgesetzt oder als akzeptiertes Risiko festgehalten.
 
 ### Auth-Härtung (AUTH)
@@ -43,7 +43,7 @@ Vorgemerkt, nicht in v1.1:
 
 | Feature | Reasoning |
 |---------|-----------|
-| Private-use URI-Schemes als Redirect (cursor://...) | D-35 steht: ein Desktop-Scheme gehört niemandem exklusiv, jede andere App kann es abfangen; Cursor kommt über die Teilregistrierung herein |
+| Private-use URI-Schemes als Redirect (cursor://...) | D-35 steht: ein Desktop-Scheme gehört niemandem exklusiv, jede andere App kann es abfangen; Cursor registriert sich seit 0.1.2, kommt aber nicht durch die Anmeldung (gemessen 2026-08-20), und der Weg für Cursor ist das App-Passwort |
 | Tool-Breite (Talk/Tables/Mail) | v1.2; v1.1 bleibt bewusst klein wegen Conference-Deadline |
 | Destruktive Operationen | Unverändertes v1-Sicherheitsversprechen |
 | Eigener LLM/RAG-Index | Unverändert: das Modell sitzt beim Client |
@@ -56,7 +56,7 @@ Vorgemerkt, nicht in v1.1:
 | CLIENT-01 | Phase 7 | Pending |
 | CLIENT-02 | Phase 7 | Pending |
 | CLIENT-03 | Phase 7 | Pending |
-| CLIENT-04 | Phase 6 | Pending |
+| CLIENT-04 | Phase 6 | Complete |
 | CLIENT-05 | Phase 6 | Complete |
 | AUTH-08 | Phase 6 | Complete |
 | AUTH-09 | Phase 6 | Complete |
@@ -64,8 +64,8 @@ Vorgemerkt, nicht in v1.1:
 | CONF-01 | Phase 6 | Complete |
 | CONF-02 | Phase 6 | Complete |
 
-**Coverage:** 10/10 v1.1-Requirements auf genau eine Phase abgebildet, keine Waisen, keine Dubletten.
+**Coverage:** 10/10 v1.1-Requirements auf genau eine Phase abgebildet, keine Waisen, keine Dubletten. 7 abgehakt (alle Requirements der Phase 6), 3 offen in Phase 7 (extern getaktet).
 
 ---
 *Requirements defined: 2026-08-20*
-*Last updated: 2026-08-20 (Roadmap v1.1: Phasen 6-7 zugeordnet)*
+*Last updated: 2026-08-20 (CLIENT-04 mit Owner-Freigabe auf das Gemessene umformuliert und abgehakt, BL-14 geschlossen)*

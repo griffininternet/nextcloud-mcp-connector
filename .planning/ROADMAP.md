@@ -37,7 +37,7 @@ Audit: [milestones/v1.0-MILESTONE-AUDIT.md](milestones/v1.0-MILESTONE-AUDIT.md) 
 
   1. Ein Client, der sich per Client ID Metadata Document ausweist (Kandidat: Claude Code), verbindet sich und ruft ein Werkzeug auf; dabei greifen die DCR-Kontrollen unverändert: die Redirect-URI-Prüfung, der Allowlist-Modus aus AUTH-07 und ein abgeschaltetes DCR, das über CIMD nachweislich nicht umgehbar ist.
   2. Der CIMD-Dokumentabruf ist fail-closed und belegt: nur https, keine privaten oder link-lokalen Ziele, Größen- und Zeitlimit greifen, das Caching ist kontrolliert, und für jede dieser Grenzen existiert ein roter Negativtest, der ohne die Grenze durchgeht.
-  3. Die lokalen Clients sind gemessen statt vermutet: Cursor verbindet sich live nach der Teilregistrierung (DCR mit dem Drei-URI-Body wird 201, Autorisierung und Tool-Aufruf laufen durch), und die Loopback-Portfrage ist mit einem Client mit wechselndem 127.0.0.1-Port beantwortet, samt dokumentiertem Entscheid (RFC-8252-7.3-Ausnahme umgesetzt oder als benanntes Risiko akzeptiert).
+  3. Die lokalen Clients sind gemessen statt vermutet: Cursors Verhalten ist live gemessen statt vermutet (DCR mit dem Drei-URI-Body wird 201 mit den zwei zulässigen Adressen; die Anmeldung scheitert danach belegt an Cursors eigener private-use-Adresse, also auf der Client-Seite; der funktionierende Ausweichweg über das App-Passwort ist dokumentiert und wird auf der Absageseite in Worten genannt; mit Owner-Freigabe am 2026-08-20 auf das Gemessene umformuliert, D-35 unverändert), und die Loopback-Portfrage ist mit einem Client mit wechselndem 127.0.0.1-Port beantwortet, samt dokumentiertem Entscheid (RFC-8252-7.3-Ausnahme umgesetzt oder als benanntes Risiko akzeptiert).
   4. Auf einer auf 34.0.3 aktualisierten Instanz ist nachgewiesen, ob die Store-UI den Install- und Remove-Knopf für ExApps zeigt; docs/exapp-install.md und der Store-Text sagen danach genau das, was gemessen wurde, ohne Ein-Klick-Versprechen ohne Deckung.
   5. Ein Dritter kann die Demo nachfahren: eine reproduzierbare Strecke aus Verbindung, Tool-Aufrufen, Per-User-Verwaltung und Widerruf gegen eine laufende Instanz, mit Drehbuch, plus ein Lightning-Talk-Entwurf aus Folien und Sprechzettel (Einreichung bleibt Owner-Entscheid).
 
@@ -80,7 +80,7 @@ Plans:
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [ ] 06-11-PLAN.md , CLIENT-04 Gap-Closure: das Verworfene sichtbar machen, Wortlaut auf das Gemessene, BL-14 schliessen
+- [x] 06-11-PLAN.md , CLIENT-04 Gap-Closure: das Verworfene sichtbar machen, Wortlaut auf das Gemessene, BL-14 schliessen
 
 ### Phase 7: Verwaltungs-Clients live verprobt
 

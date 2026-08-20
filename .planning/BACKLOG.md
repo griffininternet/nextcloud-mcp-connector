@@ -398,7 +398,64 @@ the warnings (WR-01 to WR-03 of the first pass, WR-01 of the re-review) were clo
 | IN-05 (first pass) | `docs/privacy.md:38` | The row "Client registrations \| clients \| the assistant apps, their redirect targets and issued secrets" reads as if client secrets were stored in the clear; `clients.client_secret_hash` holds only a SHA-256 digest. Imprecise in the wrong direction for a document aimed at data protection officers. | "issued secrets (stored as a hash only, never in the clear)", or fold the row into the hash row of the tokens. |
 | IN-06 (first pass) | `src/mcp_connector/oauth/consent.py:302-304` | `_screen` jumps straight to `_decision` when an authorization row already exists, without reading the account switch, so a consent screen reloaded after the account was paused in another tab still shows approve and deny. No grant is possible (enforcement point 3 answers the click with E9), so this is a UX inconsistency against the documented enforcement points. | Read `_access_disabled` in the `signed_in is not None` branch and answer with the `_refuse_paused` path, as after the poll. (Only the first half was taken: `_refuse_paused` revokes the app password and deletes the flow, and its docstring says it runs where no authorization row exists yet. This branch is a GET with a row present, so it answers the paused page and changes nothing.) |
 
-## BL-14: Cursor still cannot sign in after the partial registration (measured 2026-08-20, CLIENT-04)
+## BL-14: Cursor still cannot sign in after the partial registration (measured 2026-08-20, CLIENT-04, CLOSED 2026-08-20)
+
+**STATUS 2026-08-20: CLOSED** (owner decision of 2026-08-20, option 3 in the reading "make the
+dropped part visible plus documentation"; carried out by plan 06-11). The four options below
+stay word for word, because they are the record the decision was taken from.
+
+**What was done:**
+
+- The refusal page `E5` names the way that works, an app password from the Nextcloud security
+  settings, and it still says nothing about which of the four checks in `oauth/consent.py`
+  fell (T-03-24 unchanged). One test holds both halves of that.
+- `docs/client-setup.md` now carries the reason behind D-35 that it did not carry, and
+  `docs/oauth-setup.md` carries this decision instead of the open sentence it had.
+- CLIENT-04 in `.planning/REQUIREMENTS.md` and success criterion 3 of phase 6 in
+  `.planning/ROADMAP.md` say what was measured, marked as a requirement change made with
+  owner approval, and CLIENT-04 is checked off.
+
+**What was deliberately not done, with the reason for each:**
+
+- Option 1, register the private-use scheme after all: not taken. D-35 is unchanged and so is
+  the reason behind it, that on a desktop no application owns a scheme exclusively, so another
+  program can claim it and receive the authorization code.
+- Option 2, refuse the whole registration again: not taken. That was 0.1.1. It kept Cursor out
+  one endpoint earlier and it additionally kept out clients that do offer an admissible
+  address.
+- The extra field in the registration answer, which is the part of the owner decision that
+  asked whether RFC 7591 would allow naming the dropped addresses: not taken. RFC 7591 3.2.1
+  asks the server to answer with the registered metadata and does not forbid extension fields,
+  but the answer model of the SDK in use carries no extra field. Measured on 2026-08-20
+  against `mcp 2.0.0`, without network, instance or container:
+
+```
+$ uv run --no-sync python -c "
+from mcp.shared.auth import OAuthClientInformationFull as C
+row = {'client_id': 'x', 'redirect_uris': ['https://a.example/cb']}
+c = C.model_validate(row)
+try:
+    c.dropped_redirect_uris = ['cursor://anysphere.cursor-mcp/oauth/callback']
+    print('SET OK')
+except Exception as exc:
+    print('SET REFUSED:', type(exc).__name__, exc)
+extra = C.model_validate({**row, 'dropped_redirect_uris': ['x']}).model_dump_json()
+print('EXTRA IN ANSWER:', 'dropped_redirect_uris' in extra)
+print('SDK model_config:', C.model_config)
+"
+SET REFUSED: ValueError "OAuthClientInformationFull" object has no field "dropped_redirect_uris"
+EXTRA IN ANSWER: False
+SDK model_config: {'url_preserve_empty_path': True}
+```
+
+  So `OAuthClientInformationFull` refuses an undeclared attribute and `model_validate` drops an
+  unknown key silently. The only way to such a field would be an intervention in the
+  registration answer on the auth path itself, for a field that no measured client reads. That
+  is not in this plan, and it is not left out silently either: this paragraph is the reason.
+
+**The measurement this closure rests on:** `06-08-MEASUREMENTS.md`, sections 6 to 8, the
+refusal at `/authorize` with its wording, the three counter checks and the client side reason.
+**The implementation:** plan 06-11 of phase 6.
 
 **What was measured (plan 06-08, `06-08-MEASUREMENTS.md`):** against Cursor 3.2.16 and
 connector 0.1.2, `POST /register` with Cursor's three URI body is answered `201` and the
