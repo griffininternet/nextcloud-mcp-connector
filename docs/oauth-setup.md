@@ -143,6 +143,22 @@ them per request would cost a Nextcloud round trip on every single request, and 
 in the process would be state that outlives a request. The reactivation is the price, and it
 is the only step of this form that is not obvious.
 
+**One cycle is enough, and it is measured.** The cycle above stops and starts the same
+container, and the start after it reads the four values, so a change needs exactly one
+disable and enable, never two. That was measured against Nextcloud 34.0.2 with AppAPI 34.0.0
+behind HaRP, together with the log line described next, instead of being assumed.
+
+**What the container log says on the very first start.** Before Nextcloud has this app on
+`enabled`, the read of these four values answers `401`, and the container says so in one
+information line. That is the expected answer and not a failure of the installation: AppAPI
+accepts the app secret and then refuses the call because the app is not activated yet, and
+`enable` happens after `init`, so every first start after an installation sits inside that
+window. There can be no stored value at that moment either, because the app did not exist
+before. The app keeps serving with the deploy environment, and the values are read again on
+the next start. If the same line appears on a start that followed an `enable`, it means
+something else and is worth looking at: the app secret inside the container is then not the
+one Nextcloud stored for this app.
+
 One consequence worth knowing on an installation that has always used `--env`: as soon as
 the form is saved for the first time, Nextcloud stores a concrete value for both checkboxes,
 and from then on those two beat the variables. Clear the fields if the deploy environment
