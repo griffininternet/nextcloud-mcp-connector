@@ -139,8 +139,11 @@ REDEEM_REUSED = "reused"
 #: The schema of 03-RESEARCH.md, verbatim except for the ``IF NOT EXISTS`` that makes it
 #: idempotent for a second process opening the same file, plus the one table phase 4 adds
 #: (``user_access``, the per account switch of EXAPP-02). ``CREATE TABLE IF NOT EXISTS``
-#: here is the whole migration for a new table: ``_connect`` runs this script on every
-#: open, so a store file written by an earlier build grows the table on its next use.
+#: here is the whole migration for a new table: every process runs this script on its first
+#: open, so a store file written by an earlier build grows the table when the next build
+#: starts. It runs once per store object and no longer on every open (LO-02, see
+#: :meth:`OAuthStore._call`), which is why a new table arrives with a restart and not in
+#: the middle of a request.
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS clients (
   client_id TEXT PRIMARY KEY,
@@ -366,6 +369,9 @@ class OAuthStore:
     def __init__(self, path: Path, key: bytes) -> None:
         self._path = path
         self._key = key
+        # False until this object has opened the file once (LO-02). See :meth:`_call` for
+        # what it is worth and what it deliberately does not promise.
+        self._schema_ready = False
 
     def __repr__(self) -> str:
         return f"OAuthStore(path={self._path!r}, key='***')"
@@ -795,6 +801,19 @@ class OAuthStore:
         switch may not cost a second Nextcloud roundtrip (D-47), and it may not be answered
         from a process cache either, because flipping it has to take effect on the very next
         request (D-48).
+
+        **What it costs, measured instead of assumed (LO-02).** "One local read" was the
+        whole sentence here, and the read is the cheapest part of it. The call opens its own
+        connection in a worker thread, sets three pragmas, reads one row and closes again.
+        Measured on 2026-08-20 on the development machine, 300 warm runs each: **1.77 ms**
+        per call while the schema script ran on every open, **1.56 ms** with the script on
+        the first open only, and 1.51 ms for a bare connection with the three pragmas and
+        this one read. So the schema was the part worth removing, and what remains is the
+        connection itself: the thread hop is 0.06 ms of it and the ``SELECT`` is not
+        measurable beside them. That is the price of the property above, an answer that is
+        never older than the request, and it sits on a route that deliberately carries no
+        throttling (AR-03-04). Anything cheaper means a cache, and a cache means a paused
+        account that is answered for a few seconds more.
 
         A blank account id is never paused and is answered without opening the file: the app
         context has no switch, and the OAuth branch of the boundary decides on the bearer
@@ -1269,8 +1288,25 @@ class OAuthStore:
         rollback is best effort, because there is one case in which no transaction is open
         any more, and it is the interesting one: a body that hit the busy timeout on its
         own ``BEGIN``. Failing there would replace the real error with a second one.
+
+        **The schema runs on the first open of this object and when the file is gone**
+        (LO-02). It used to run on every open, thirteen statements that create what is
+        already there, and that sat on every MCP request of an authenticated identity
+        through :meth:`access_disabled`. What replaces it is a flag plus one ``exists``:
+        the flag is what makes the ordinary call cheap, and the ``exists`` is what keeps
+        the cheap call honest, because SQLite creates an empty file for a connection to a
+        path that has none. Without the second half, a volume that is removed while the
+        process runs would turn every later call into "no such table" until a restart.
+
+        The flag belongs to this object and not to the module. Two processes on the same
+        volume are a supported case (SRV-05), and a process that trusted the flag of
+        another one would be trusting a file it never looked at. Two threads of this object
+        that open at the same moment can both see it unset and both run the script, which
+        costs one extra script and nothing else: every statement of it is
+        ``IF NOT EXISTS``.
         """
-        conn = _connect(self._path)
+        conn = _connect(self._path, schema=not self._schema_ready or not self._path.exists())
+        self._schema_ready = True
         try:
             if commit:
                 conn.execute("BEGIN IMMEDIATE")
@@ -1327,19 +1363,25 @@ def store_opener(env: Mapping[str, str] | None = None) -> Callable[[], Awaitable
     return open_once
 
 
-def _connect(path: Path) -> sqlite3.Connection:
-    """One connection with the three pragmas, and the schema if the file is new.
+def _connect(path: Path, *, schema: bool = True) -> sqlite3.Connection:
+    """One connection with the three pragmas, and the schema when the caller asks for it.
 
     ``isolation_level=None`` turns off the implicit transaction handling of the standard
     library, which is what makes an explicit ``BEGIN IMMEDIATE`` mean what it says.
+
+    The three pragmas run every time, because two of them are properties of a connection
+    and not of a file: ``foreign_keys`` off for one connection means no cascade for the
+    statements of that connection. The schema and the column migration are properties of
+    the file, so :meth:`OAuthStore._call` decides when they are needed (LO-02).
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path, isolation_level=None, timeout=_BUSY_TIMEOUT_SECONDS)
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute(f"PRAGMA busy_timeout = {_BUSY_TIMEOUT_MS}")
-    conn.executescript(SCHEMA)
-    _add_missing_columns(conn)
+    if schema:
+        conn.executescript(SCHEMA)
+        _add_missing_columns(conn)
     return conn
 
 
