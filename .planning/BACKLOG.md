@@ -397,3 +397,39 @@ the warnings (WR-01 to WR-03 of the first pass, WR-01 of the re-review) were clo
 | IN-03 (first pass) | `src/mcp_connector/exapp/admin_settings.py:80-89` | On a fresh store installation with no value set, `doc_url` of the admin form is built from the loopback default, so the form that fixes the state contains a dead link to `http://127.0.0.1:8765/connections`. No security issue, T-04-40 holds. | Leave `doc_url` out when `config.public_url(env) == config.DEFAULT_PUBLIC_URL`, or point it at the repository FAQ. |
 | IN-05 (first pass) | `docs/privacy.md:38` | The row "Client registrations \| clients \| the assistant apps, their redirect targets and issued secrets" reads as if client secrets were stored in the clear; `clients.client_secret_hash` holds only a SHA-256 digest. Imprecise in the wrong direction for a document aimed at data protection officers. | "issued secrets (stored as a hash only, never in the clear)", or fold the row into the hash row of the tokens. |
 | IN-06 (first pass) | `src/mcp_connector/oauth/consent.py:302-304` | `_screen` jumps straight to `_decision` when an authorization row already exists, without reading the account switch, so a consent screen reloaded after the account was paused in another tab still shows approve and deny. No grant is possible (enforcement point 3 answers the click with E9), so this is a UX inconsistency against the documented enforcement points. | Read `_access_disabled` in the `signed_in is not None` branch and answer with the `_refuse_paused` path, as after the poll. (Only the first half was taken: `_refuse_paused` revokes the app password and deletes the flow, and its docstring says it runs where no authorization row exists yet. This branch is a GET with a row present, so it answers the paused page and changes nothing.) |
+
+## BL-14: Cursor still cannot sign in after the partial registration (measured 2026-08-20, CLIENT-04)
+
+**What was measured (plan 06-08, `06-08-MEASUREMENTS.md`):** against Cursor 3.2.16 and
+connector 0.1.2, `POST /register` with Cursor's three URI body is answered `201` and the
+record carries the two admissible addresses, exactly as the partial registration of a80af0a
+intends. Cursor then sends `redirect_uri=cursor://anysphere.cursor-mcp/oauth/callback` to
+`/authorize` and is answered `400` with the refusal page. No code, no token, no tool call.
+Counter checks with the same client id: the registered `http://localhost:8787/callback` and
+the same address on a different port both reach the consent page, so it is neither the
+instance, nor the loopback port rule, nor the partial registration.
+
+**The client side reason:** Cursor keeps its own three addresses after the `201` instead of
+reading the registered ones out of the answer, so it cannot notice that one of them will be
+refused. RFC 7591 3.2.1 asks the server to answer with the registered metadata, and this
+server does.
+
+**The decision that is open, and it is a decision and not a repair:**
+
+1. Register the private-use scheme after all. Contradicts D-35 and its reason: on a desktop
+   no application owns a scheme exclusively, so another program can claim it and receive the
+   code.
+2. Refuse the whole registration again. That was 0.1.1, and it kept Cursor out as well, only
+   one endpoint earlier. It also keeps out clients that would have used an admissible
+   address.
+3. Make the dropped address impossible to miss for a client that does not compare, for
+   example by answering the registration in a way that fails loudly, or by refusing the
+   later `/authorize` with a message the client surfaces. Needs a look at what Cursor
+   actually shows its user.
+4. Leave it and keep pointing Cursor users at the app password path, which is what
+   `docs/client-setup.md` says today.
+
+**Why it is not urgent:** the app password path works for Cursor and is documented, the
+server behaves as specified, and no other measured client is affected (Claude.ai, Claude
+Desktop, Claude Code, ChatGPT and Open WebUI all publish admissible addresses). CLIENT-04
+stays unchecked in REQUIREMENTS.md because its wording asks for a completed sign in.

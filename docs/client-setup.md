@@ -505,7 +505,7 @@ app password is involved.
    every client whose sign in runs in a browser you are already using; it is worth knowing here
    because an administrator testing the setup is usually signed in as the administrator.
 
-### Cursor and other clients with a `cursor://` style callback
+### Cursor and other clients with a `cursor://` style callback: registration goes through, sign in does not
 
 Cursor is configured by writing `~/.cursor/mcp.json`, no button involved:
 
@@ -520,15 +520,35 @@ sentence is this server's: Cursor registers a private-use URI scheme
 this server refused a registration that contained an address it does not admit.
 
 **Since 0.1.2 the inadmissible address is dropped and the registration goes through** with
-the two acceptable ones, so a client of this shape is no longer kept out by an address it
-does not have to use. The rule itself is unchanged: the private-use address is not
+the two acceptable ones. The rule itself is unchanged: the private-use address is not
 registered, so this server never sends anybody there. A client that offers nothing but
-inadmissible addresses is still refused with the same sentence, and for those the app
-password way above stays the answer.
+inadmissible addresses is still refused with the same sentence.
 
-Cursor's own behaviour after the registration is not measured yet. If it insists on its
-`cursor://` callback at sign in, the request is refused by the exact matching of the
-registered addresses, and the app password way applies as before.
+**Measured against Cursor 3.2.16 on 2026-08-20, and it still does not connect.** Writing
+the file is enough for discovery and registration, seconds later and without a click, and
+the registration is answered `201` with two addresses in the record. The sign in is where
+it stops: Cursor takes the first of its own three addresses, and that is the one that was
+dropped.
+
+```
+POST 201  /register     redirect_uris in the record: www.cursor.com and localhost:8787
+GET  400  /authorize    redirect_uri=cursor://anysphere.cursor-mcp/oauth/callback
+```
+
+The browser gets the error page "This app cannot be sent back safely" and no redirect, so
+nothing is shared and no password page is ever shown. The reason is on the client side and
+it is worth knowing before anybody looks for a server bug: Cursor keeps its own three
+addresses after the `201` instead of reading the registered ones back out of the answer, so
+it cannot tell that one of them will be refused. Two counter checks with the same client id
+say the rest: the registered `http://localhost:8787/callback` reaches the consent page, and
+so does the same address on a different port, which is the port rule of RFC 8252 7.3 at
+work. The raw numbers are in
+[06-08-MEASUREMENTS.md](../.planning/phases/06-h-rtung-eigennachweise-und-conference-reife/06-08-MEASUREMENTS.md).
+
+**So for Cursor, use the app password way above.** What changed with 0.1.2 is where the
+attempt fails, not that it succeeds: the registration is no longer refused, and a client of
+this shape that does offer an admissible address at sign in is now let through. Cursor is
+not yet such a client.
 
 ### MUCGPT
 

@@ -692,7 +692,7 @@ the run completed.
 Custom MCP servers need developer mode in ChatGPT: Settings, Security and sign in,
 "Developer mode", which carries an "increased risk" badge.
 
-### Cursor: refused until 0.1.2, registrable since
+### Cursor: registrable since 0.1.2, and still refused at sign in
 
 Cursor 3.2.16 needs no button either, it picks up `~/.cursor/mcp.json` on its own. Up to
 and including 0.1.1 its registration was refused with `400 invalid_redirect_uri`, and
@@ -726,8 +726,37 @@ The rule stays deliberate. RFC 8252 lists private-use schemes as one of three le
 forms for native clients, but on a desktop no application owns a scheme exclusively, so
 another program can claim it and receive the authorization code. What changed is only that
 a client which also offers an admissible address no longer pays for the one it does not
-need to use. The change is covered by unit tests; a live run against Cursor 3.2.16 is
-still open.
+need to use.
+
+**The live run happened on 2026-08-20 against Cursor 3.2.16, and Cursor still does not
+connect.** It registers now, and then it asks to be sent to the address that was dropped:
+
+```
+15:26:39  POST 201  /register    record: www.cursor.com/agents/mcp/oauth/callback, localhost:8787/callback
+15:26:40  GET  400  /authorize   redirect_uri=cursor://anysphere.cursor-mcp/oauth/callback
+15:28:46  GET  400  /authorize   the same request, second attempt
+```
+
+The browser gets the refusal page and no redirect, so no code and no token are issued and
+the sign in page is never reached. Three things did *not* move, and each was measured with
+the same client id rather than argued:
+
+```
+redirect_uri=http://localhost:8787/callback    -> 302 to the consent page
+redirect_uri=http://localhost:51234/callback   -> 302 to the consent page   (port rule, RFC 8252 7.3)
+redirect_uri=cursor://anysphere.cursor-mcp/... -> 400, refusal page
+```
+
+So it is not the instance, not the loopback port rule and not the partial registration. It
+is D-35 doing what it says, plus one client side property that was not known before: Cursor
+keeps its own three addresses after the `201` instead of taking the registered ones out of
+the answer, and therefore cannot notice that one of them is not registered. RFC 7591 3.2.1
+asks the server to answer with what it registered, and this server does; a client that
+ignores that answer cannot be helped by dropping an address silently. Whether that calls
+for a different answer shape on this side is an open decision and not a defect of the rule.
+For Cursor today, the app password way in `docs/client-setup.md` is the answer. Raw numbers,
+including the store rows and the counter checks:
+[06-08-MEASUREMENTS.md](../.planning/phases/06-h-rtung-eigennachweise-und-conference-reife/06-08-MEASUREMENTS.md).
 
 ### Are the two reverse proxy rules required?
 

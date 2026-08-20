@@ -13,6 +13,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The documentation now says what a real Cursor does with this server, because it was
+  measured against Cursor 3.2.16: the registration goes through since 0.1.2, and the sign
+  in is still refused, because Cursor asks to be returned to its `cursor://` address, which
+  this app does not register. Nothing is shared in that case and no password page is shown.
+  Cursor users are pointed at the app password path, and the earlier reading that a client
+  of this shape is no longer kept out is corrected to what it really is: the attempt now
+  fails at the sign in instead of at the registration.
+
 - The documentation now says what Nextcloud 34.0.3 really does with an external app,
   because it was measured there: the apps management lists it with its deploy daemon, its
   install button reads "Deploy and enable", and "Remove" appears in the row actions once
