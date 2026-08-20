@@ -361,6 +361,21 @@ class NextcloudOAuthProvider(
         the one the SDK does not do at all: it accepts any address a registration sends,
         including ``http://`` on a host somebody else controls (T-03-41).
 
+        **Why one forbidden address no longer refuses the whole registration (BL-04).**
+        The rule of D-35 is unchanged and so is the reasoning behind it; what changed is
+        what happens to the entries around a refused one. Cursor sends three addresses in
+        one body, ``cursor://anysphere.cursor-mcp/oauth/callback`` next to an https one and
+        a loopback one, and an all or nothing field check turned that into a 400 with our
+        rule quoted in the client's own log: a whole class of clients stayed out over an
+        entry it would not have had to use. A forbidden entry is therefore dropped and the
+        allowed ones are registered, which RFC 7591 section 3.2.1 covers, because the
+        answer carries the metadata that was registered and not the metadata that was sent.
+        Dropping is not acceptance: the address is not in the record, so the exact matching
+        of the SDK refuses it at ``/authorize`` exactly as before, and it cannot carry a
+        listing in the allowlist mode either. A registration whose every address is
+        forbidden is still a refusal, because a client with no return target is one the SDK
+        would hand its "single registered address" to and there is none.
+
         **Why the scope is overwritten here.** The registration handler of the SDK writes
         the default scopes into a registration that names none, and ``validate_scope``
         later compares everything a client asks for at ``/authorize`` against that one
@@ -385,10 +400,15 @@ class NextcloudOAuthProvider(
         if not self._policy.dcr_enabled:
             raise RegistrationError("invalid_client_metadata", _DCR_OFF)
 
-        addresses = [str(uri) for uri in client_info.redirect_uris or []]
-        for address in addresses:
-            if not redirect_uri_allowed(address):
-                raise RegistrationError("invalid_redirect_uri", _REDIRECT_RULE)
+        registrable = [
+            uri for uri in client_info.redirect_uris or [] if redirect_uri_allowed(str(uri))
+        ]
+        if not registrable:
+            raise RegistrationError("invalid_redirect_uri", _REDIRECT_RULE)
+        # Written into the object, not only into the record: the handler echoes this very
+        # object back, so a client that reads the answer sees what it may come back to.
+        client_info.redirect_uris = registrable
+        addresses = [str(uri) for uri in registrable]
 
         client_info.scope = REGISTERED_SCOPE
         secret = client_info.client_secret
