@@ -107,7 +107,7 @@ Plans:
 | 3. OAuth 2.1 | v1.0 | 9/9 | Complete | 2026-08-16 |
 | 4. Per-User-Verwaltung und prepare_context | v1.0 | 4/4 | Complete | 2026-08-17 |
 | 5. Hardening und Store-Einreichung | v1.0 | 16/16 | Complete | 2026-08-20 |
-| 6. Härtung, Eigennachweise und Conference-Reife | v1.1 | 10/10 | Complete   | 2026-08-20 |
+| 6. Härtung, Eigennachweise und Conference-Reife | v1.1 | 11/11 | Complete   | 2026-08-20 |
 | 7. Verwaltungs-Clients live verprobt | v1.1 | 0/TBD | Not started (extern getaktet) | - |
 
 ## Next

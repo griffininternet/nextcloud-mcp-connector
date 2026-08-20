@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Verwaltungs-Clients und Härtungs-Reste
 status: verifying
-stopped_at: "Plan 06-10 fertig: CONF-01 und CONF-02 abgehakt. docs/conference-demo.md ist einmal vollstaendig durchgefahren (82,2 s Maschinenzeit gegen 82 s Behauptung), Per-User-Schalter und Widerruf sind zweifach belegt (Client: Connected gegen Needs authentication, 200 gegen 403; Draht: Inhalt, 403 mit access_disabled-Rumpf, Inhalt, 401 mit Zeiger plus abgelehnter Auffrischversuch). Vier Fehler im Drehbuch gefunden und behoben, darunter die Probe der Schalter-Stationen. docs/conference-talk.md liegt als acht Folien mit Sprechzettel vor, 280 von 300 Sekunden, jede Behauptung an ihre Messdatei gebunden; nichts eingereicht, niemand kontaktiert. Instanz im Ausgangszustand, 2155 Unit-Tests gruen, ruff sauber. Phase 6 ist damit vollstaendig: naechster Schritt ist die Phasen-Verifikation."
-last_updated: "2026-08-20T17:18:27.706Z"
+stopped_at: "Plan 06-11 fertig: CLIENT-04-Gap geschlossen. E5 nennt den App-Passwort-Weg (ein neuer Test haelt Ausweg und Schweigepflicht), BL-14 mit Option, Datum, Messverweis und SDK-Rohbeleg geschlossen, CLIENT-04 und ROADMAP SC3 auf das Gemessene umformuliert (Owner-Freigabe 2026-08-20) und CLIENT-04 abgehakt, beide Doku-Sektionen mit D-35-Grund, Ausweg und getroffener Entscheidung. D-35, Auth-Pfad, READMEs, Store-Text und Abhaengigkeiten unveraendert. 2165 Unit-Tests gruen, Contract gruen, ruff sauber. Naechster Schritt: Re-Verifikation der Phase 6."
+last_updated: "2026-08-20T18:29:03.093Z"
 last_activity: 2026-08-20
 progress:
   total_phases: 2
   completed_phases: 1
-  total_plans: 10
-  completed_plans: 10
+  total_plans: 11
+  completed_plans: 11
   percent: 50
 ---
 
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 6 (Härtung, Eigennachweise und Conference-Reife), EXECUTING
-Plan: 10 of 10
-Status: Phase complete, ready for verification
+Plan: 11 of 11
+Status: Phase complete, ready for verification (Gap-Closure 06-11 erledigt)
 Milestone: v1.1 Verwaltungs-Clients und Härtungs-Reste (Phasen 6-7)
 Last activity: 2026-08-20
 
@@ -113,6 +113,7 @@ Last activity: 2026-08-20
 | Phase 06 P08 | 35 min | 2 tasks | 6 files |
 | Phase 06 P09 | 50 min | 3 tasks tasks | 6 files files |
 | Phase 06 P10 | 30 | 3 tasks | 5 files |
+| Phase 06 P11 | 30 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -376,6 +377,10 @@ Recent decisions affecting current work:
 - [Phase ?]: 06-10: Der Assistent des Demo-Drehbuchs ist ein echter MCP-Client, weil die Stationen Per-User-Schalter und Widerruf einen Akteur brauchen, der seine Verbindung ueber einen menschlichen Klick hinweg haelt
 - [Phase ?]: 06-10: Die Probe der Schalter-Stationen ist claude mcp list und nicht der Werkzeugaufruf, weil dieser Client nach einem 403 einen eigenen Vermerk haelt; der Beleg mit Inhalt laeuft zusaetzlich am Draht mit Token in der Hand
 - [Phase ?]: 06-10: Die stehengebliebene Werkzeugzahl in scripts/acceptance_all_tools.py (15 gegen 16) bleibt unangetastet und steht in deferred-items.md
+- [Phase ?]: 06-11: Der neue E5-Satz nennt den App-Passwort-Weg, aber kein Client-Scheme, keine Adresse und keinen Protokollwert, und er gilt fuer alle vier Aufrufstellen in consent.py gleich: ein Satz, der nur fuer eine davon wahr waere, waere genau die Auskunft, die T-03-24 verbietet
+- [Phase ?]: 06-11: Der Ausweg auf einer Fehlerseite steht in Worten und nie als Link (E8-Muster): der eine ausgehende Link dieser App ist die Anmeldeadresse, die Nextcloud selbst liefert, ein erfundener Link waere die Phishing-Form, vor der der Fusstext jeder Seite warnt
+- [Phase ?]: 06-11: Kein Zusatzfeld in der DCR-Antwort: OAuthClientInformationFull lehnt ein nicht deklariertes Attribut ab und model_validate verwirft einen unbekannten Schluessel still (mcp 2.0.0, gemessen 2026-08-20); der Weg dorthin waere ein Eingriff in den Auth-Pfad fuer ein Feld, das kein gemessener Client liest
+- [Phase ?]: 06-11: CLIENT-04 und ROADMAP SC3 mit Owner-Freigabe vom 2026-08-20 auf das Gemessene umformuliert und CLIENT-04 abgehakt; D-35 bleibt unveraendert, BL-14 ist mit Option, Datum, Messverweis und SDK-Rohbeleg geschlossen
 
 ### Pending Todos
 
@@ -407,8 +412,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T17:18:27.688Z
-Stopped at: Plan 06-10 fertig: CONF-01 und CONF-02 abgehakt. docs/conference-demo.md ist einmal vollstaendig durchgefahren (82,2 s Maschinenzeit gegen 82 s Behauptung), Per-User-Schalter und Widerruf sind zweifach belegt (Client: Connected gegen Needs authentication, 200 gegen 403; Draht: Inhalt, 403 mit access_disabled-Rumpf, Inhalt, 401 mit Zeiger plus abgelehnter Auffrischversuch). Vier Fehler im Drehbuch gefunden und behoben, darunter die Probe der Schalter-Stationen. docs/conference-talk.md liegt als acht Folien mit Sprechzettel vor, 280 von 300 Sekunden, jede Behauptung an ihre Messdatei gebunden; nichts eingereicht, niemand kontaktiert. Instanz im Ausgangszustand, 2155 Unit-Tests gruen, ruff sauber. Phase 6 ist damit vollstaendig: naechster Schritt ist die Phasen-Verifikation.
+Last session: 2026-08-20T18:28:41.014Z
+Stopped at: Plan 06-11 fertig: CLIENT-04-Gap geschlossen. E5 nennt den App-Passwort-Weg (ein neuer Test haelt Ausweg und Schweigepflicht), BL-14 mit Option, Datum, Messverweis und SDK-Rohbeleg geschlossen, CLIENT-04 und ROADMAP SC3 auf das Gemessene umformuliert (Owner-Freigabe 2026-08-20) und CLIENT-04 abgehakt, beide Doku-Sektionen mit D-35-Grund, Ausweg und getroffener Entscheidung. D-35, Auth-Pfad, READMEs, Store-Text und Abhaengigkeiten unveraendert. 2165 Unit-Tests gruen, Contract gruen, ruff sauber. Naechster Schritt: Re-Verifikation der Phase 6.
 Naechster Schritt: /gsd:execute-phase 6 (Plan 06-09)
 Resume file: None
 
