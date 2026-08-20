@@ -367,5 +367,332 @@ Was noch fehlt, steht damit als offene Behauptung fest und nicht als Lücke:
 welche der drei Adressen Cursor an `/authorize` mitschickt, ob der Tausch am
 Token-Endpunkt gelingt, und ob ein Werkzeugaufruf Inhalt zurückbringt.
 `~/.cursor/mcp.json` bleibt für den Rest des Laufs absichtlich liegen; ihre
-Entfernung ist der letzte Schritt und wird in Abschnitt 6 belegt.
+Entfernung ist der letzte Schritt und wird in Abschnitt 9 belegt.
+
+**Der Halt hat 11 Minuten gedauert.** Um 15:26:38Z hat der Operator in Cursor die
+Anmeldung ausgelöst, und der Lauf ging weiter. Abschnitt 6 ist sein Ergebnis.
+
+## 6. Autorisierung: abgewiesen, weil Cursor auf `cursor://` besteht (15:26:38Z bis 15:28:46Z)
+
+**Der Befund in einem Satz: Cursor schickt an `/authorize` genau die Adresse mit,
+die bei der Registrierung verworfen wurde, und wird dafür abgewiesen.** Die
+Verbindung kommt also auch mit 0.1.2 nicht zustande; was sich gegenüber 0.1.1
+verschoben hat, ist der Ort des Scheiterns, von `/register` nach `/authorize`.
+
+Die Kette aus dem Containerlog, ungekürzt bis auf die Umbrüche in der langen Zeile:
+
+```
+$ docker logs -t nc_app_mcp_connector | grep -v heartbeat | tail -5
+2026-08-20T15:26:38.183Z INFO: - "GET /.well-known/oauth-protected-resource/mcp HTTP/1.1" 200 OK
+2026-08-20T15:26:38.784Z INFO: - "POST /mcp HTTP/1.1" 401 Unauthorized
+2026-08-20T15:26:38.790Z INFO: - "GET /.well-known/oauth-protected-resource/mcp HTTP/1.1" 200 OK
+2026-08-20T15:26:38.797Z INFO: - "GET /.well-known/oauth-authorization-server HTTP/1.1" 200 OK
+2026-08-20T15:26:39.443Z INFO: - "POST /register HTTP/1.1" 201 Created
+2026-08-20T15:26:40.852Z INFO: - "GET /authorize?response_type=code
+    &client_id=d6ea6583-352c-4034-aec9-c286e7a9c611
+    &code_challenge=2MdCI6Jn_cA0h8TiV_W2eJx6ZkM1eAkg1wjBplF_c6M&code_challenge_method=S256
+    &redirect_uri=cursor%3A%2F%2Fanysphere.cursor-mcp%2Foauth%2Fcallback
+    &state=eyJpZCI6InVzZXItbmV4dGNsb3VkLTA2MDgiLCJvd25lciI6...
+    &scope=nextcloud
+    &resource=http%3A%2F%2F127.0.0.1%3A8081%2Fexapps%2Fmcp_connector%2Fmcp HTTP/1.1" 400 Bad Request
+2026-08-20T15:28:46.418Z INFO: - "GET /authorize?<derselbe Rumpf> HTTP/1.1" 400 Bad Request
+```
+
+Dekodiert sind die drei Felder, auf die es ankommt:
+
+```
+redirect_uri  cursor://anysphere.cursor-mcp/oauth/callback     <- die verworfene Adresse
+scope         nextcloud
+resource      http://127.0.0.1:8081/exapps/mcp_connector/mcp   <- RFC 8707, korrekt gesetzt
+state         {"id":"user-nextcloud-0608",
+               "owner":{"workspaceId":"empty-window"},
+               "attemptId":"b5d24d1d-8297-41b8-a59f-669ce9082945"}
+```
+
+Der `state` ist base64-kodiertes JSON und trägt kein Geheimnis, sondern Cursors
+eigene Buchführung; er steht hier, weil er die Anfrage dem Versuch zuordnet, den
+Abschnitt 6.2 nachliest. `resource` ist gesetzt und richtig, also scheitert die
+Anfrage nicht an der Zielgruppe, und `code_challenge_method` ist `S256`.
+
+### 6.1 Was der Nutzer sieht, wörtlich
+
+Die Antwort ist `400` und **keine Weiterleitung**, und das ist der Punkt: an eine
+nicht registrierte Adresse wird nichts gesendet, auch kein Fehler. Der sichtbare
+Text der Seite, aus einer Wiederholung derselben Adresse abgeholt und von den
+Auszeichnungen befreit:
+
+```
+$ curl -s -o e5.html -w 'HTTP %{http_code}  bytes=%{size_download}\n' "<die Adresse von oben>"
+HTTP 400  bytes=4179
+
+MCP Connector for Nextcloud
+127.0.0.1:8081
+This app cannot be sent back safely
+The address Cursor asked us to return to does not match its registration. For your
+safety nothing was shared. Start the connection again in your assistant app, and tell
+your administrator if it keeps happening.
+The password prompt is always Nextcloud itself. If any other page asks you for your
+Nextcloud password, close it.
+```
+
+Die Seite nennt den Client "Cursor", und dieser Name kommt aus der Registrierung und
+nicht aus der Anfrage. Es ist die Seite `E5` aus `03-UI-SPEC.md`, und sie sagt
+absichtlich nicht, welche Hälfte der Prüfung gefallen ist (T-03-47).
+
+Der Codepfad ist damit eindeutig bestimmt, `src/mcp_connector/oauth/consent.py:262-272`:
+die exakte Prüfung des SDK wirft `InvalidRedirectUriError`, danach wird die
+Portregel gefragt, und weil auch die verneint, endet es auf `E5`. Gemessen im
+laufenden Container, statt aus dem Quelltext geschlossen:
+
+```
+$ docker exec -i nc_app_mcp_connector /app/.venv/bin/python
+>>> registry.loopback_match(<Kandidat>, ['https://www.cursor.com/agents/mcp/oauth/callback',
+                                         'http://localhost:8787/callback'])
+'cursor://anysphere.cursor-mcp/oauth/callback' -> None
+'http://localhost:8787/callback'              -> http://localhost:8787/callback
+'http://localhost:51234/callback'             -> http://localhost:8787/callback
+```
+
+Die Portregel aus 06-03 ist also intakt und greift hier nur deshalb nicht, weil sie
+ein Loopback-`http` verlangt: ein privates Schema hat keinen Port, den man lockern
+könnte. **Das ist keine Lücke in `loopback_match`**, und die dritte Zeile belegt es:
+dieselbe Adresse mit einem anderen Port wird angenommen.
+
+### 6.2 Der Klick wirft die Registrierung weg und registriert neu
+
+Die `client_id` der abgewiesenen Anfrage, `d6ea6583-352c-4034-aec9-c286e7a9c611`, ist
+**nicht** die aus Abschnitt 3. Das war nicht vorhergesehen und hat einen belegten
+Grund: der Knopf in Cursor ist ein Abmelden mit anschließendem Neuaufbau, und dabei
+wirft Cursor seine gespeicherte Registrierung weg.
+
+```
+$ tail "…\exthost\anysphere.cursor-mcp\MCP user-nextcloud-0608.log"
+2026-08-20 17:26:38.123 [info] [V2] Handling LogoutServer action
+2026-08-20 17:26:38.123 [info] Clearing stored OAuth data
+2026-08-20 17:26:38.169 [info] Successfully cleared OAuth tokens
+2026-08-20 17:26:38.169 [info] [V2] Removing client, reason: logout_server
+2026-08-20 17:26:38.172 [info] [V2] Handling ReloadClient action
+2026-08-20 17:26:39.427 [info] Registration lock acquired, this provider will register
+2026-08-20 17:26:39.427 [info] No stored client information found
+2026-08-20 17:26:39.454 [info] Persisting new OAuth client registration
+2026-08-20 17:26:40.083 [info] Saving PKCE code verifier
+2026-08-20 17:26:40.094 [info] MCP OAuth redirect to authorization
+2026-08-20 17:26:40.100 [info] Connect failed after auth_required; returning needsAuth
+$ tail "…\workbench.mcp.oauth.log"
+2026-08-20 17:26:38.122 [info] [MCPService] clearing OAuth state for server: user-nextcloud-0608 (cause=user_logout)
+2026-08-20 17:26:40.679 [info] [MCPService] State transition: user-nextcloud-0608 initializing → needsAuth
+```
+
+Die Folge steht im Store: **zwei Cursor-Zeilen**, beide mit denselben zwei Adressen,
+beide ohne die private-use Adresse, die erste ohne jede Verwendung:
+
+```
+$ <select client_id, client_name, registered_at, last_used_at, redirect_uris from clients>
+c06831e2-…  Claude Desktop  reg 1787204156  last_used 1787204394  ['http://127.0.0.1:45001/callback']
+7256ad37-…  Open WebUI      reg 1787204157  last_used 1787204515  ['http://127.0.0.1:45002/callback']
+448414fe-…  Cursor          reg 1787238512  last_used None        ['https://www.cursor.com/agents/mcp/oauth/callback',
+                                                                   'http://localhost:8787/callback']
+d6ea6583-…  Cursor          reg 1787239599  last_used None        ['https://www.cursor.com/agents/mcp/oauth/callback',
+                                                                   'http://localhost:8787/callback']
+```
+
+Und die zweite Versuchsdatei von Cursor, die zur abgewiesenen Anfrage gehört:
+
+```
+attemptId    b5d24d1d-8297-41b8-a59f-669ce9082945   (die aus dem state)
+client_id    d6ea6583-352c-4034-aec9-c286e7a9c611
+redirect_uris ['cursor://anysphere.cursor-mcp/oauth/callback',
+               'https://www.cursor.com/agents/mcp/oauth/callback',
+               'http://localhost:8787/callback']
+```
+
+Cursor führt also weiter alle drei Adressen und nimmt für die Anfrage die **erste**.
+Der Befund aus Abschnitt 4 ist damit nicht nur eine Beobachtung an einer Ablage,
+sondern die Ursache des Fehlschlags: Cursor liest die `redirect_uris` der Antwort
+nicht zurück in seine eigene Liste, also kann es nicht wissen, dass es genau die
+Adresse nimmt, die es nicht nehmen darf.
+
+Jeder Anmeldeversuch hinterlässt damit eine unbenutzbare Client-Zeile. Zwei Versuche
+in 18 Minuten haben zwei erzeugt.
+
+## 7. Der Werkzeugaufruf: hat nicht stattgefunden, und warum
+
+Es gibt keinen Abschnitt mit einem Werkzeugaufruf und Inhalt, weil es keinen
+Werkzeugaufruf gab. Ohne Autorisierung gibt es keinen Code, ohne Code kein Token und
+ohne Token bleibt `/mcp` bei `401`. Der Store sagt dasselbe ohne Auslegung:
+
+```
+$ <counts>
+clients 4        <- 2 Fixture-Clients, 2 unbenutzbare Cursor-Zeilen
+flows 0          <- kein offener Anmeldevorgang
+auth_codes 0     <- kein Code ausgegeben
+access_tokens 0  <- kein Token ausgegeben
+authorizations 2 <- die zwei Verbindungen von jane, unverändert
+refresh_tokens 2
+$ <select nc_user, client_id, revoked_at from authorizations>
+jane  c06831e2-…  revoked_at None
+jane  7256ad37-…  revoked_at None
+```
+
+`last_used_at` ist bei beiden Cursor-Zeilen `None`, also hat keine von ihnen je ein
+Token abgeholt. Der Werkzeugaufruf ist damit nicht "offen", sondern **durch den
+Befund von Abschnitt 6 ausgeschlossen**, solange Cursor auf seiner privaten Adresse
+besteht. Das Konto, mit dem angemeldet worden wäre, hat die Anmeldeseite nie
+gesehen: die Abweisung liegt vor jedem Passwortdialog, was die Fehlerseite auch
+selbst sagt ("nothing was shared").
+
+## 8. Gegenproben: was NICHT passiert ist
+
+Drei Anfragen an `/authorize`, gleiche `client_id`, gleicher `code_challenge`,
+gleicher `resource`, nur die Rückadresse getauscht. Das ist die Trennung zwischen
+"Cursor scheitert an der Adresse" und "Cursor scheitert an dieser Instanz":
+
+| Rückadresse | Antwort |
+|-------------|---------|
+| `http://localhost:8787/callback` (registriert) | **302** auf `…/authorize/consent?flow=…&login=…` |
+| `http://localhost:51234/callback` (registriert, anderer Port) | **302** auf die Zustimmungsseite |
+| `cursor://anysphere.cursor-mcp/oauth/callback` | **400**, Seite `E5` |
+
+```
+$ curl -s -o /dev/null -w 'HTTP %{http_code}  location=%{redirect_url}\n' "<A>"
+HTTP 302  location=http://127.0.0.1:8081/exapps/mcp_connector/authorize/consent?flow=<…>&login=<…>
+$ curl … "<B>"
+HTTP 302  location=…/authorize/consent?flow=<…>&login=<…>
+$ curl … "<C>"
+HTTP 400
+```
+
+Die Werte von `flow` und `login` sind Anmeldegeheimnisse und stehen deshalb nicht
+hier. Die zwei so entstandenen `flows`-Zeilen wurden danach wieder gelöscht, damit
+der Nachzustand kein Nebenprodukt der Messung trägt (T-05-24):
+
+```
+$ <delete from flows where state='gegenprobe-06-08'>
+flows vorher: 2
+flows nachher: 0
+```
+
+Was diese Tabelle zusammen mit Abschnitt 6 belegt, Punkt für Punkt:
+
+* **Es ist nicht die Instanz.** Zwei von drei Anfragen kommen bis zur
+  Zustimmungsseite, mit derselben `client_id`, die abgewiesen wurde.
+* **Es ist nicht der Port und nicht die Loopback-Regel.** Ein anderer Port auf
+  derselben registrierten Adresse wird angenommen, also wirkt die Lockerung aus
+  06-03 auch für diesen Client.
+* **Es ist nicht die Teilregistrierung.** Sie hat getan, was sie soll: `201` statt
+  `400`, zwei Adressen im Store, keine private-use Adresse darin.
+* **D-35 steht unverändert.** Die private-use Adresse ist nicht registriert, also
+  wird sie an der exakten Prüfung abgewiesen, und genau das war die Ansage. Die
+  Abweisung ist kein Fehler des Servers, sondern seine Regel bei der Arbeit.
+* **Kein falscher Negativbefund durch eine alte Fassung.** Gemessen wurde gegen
+  `mcp_connector` 0.1.2, Image-Digest `sha256:3ba4a2ce1921…`, `RestartCount` 0
+  (Topologie-Tabelle), also gegen die Fassung MIT der Teilregistrierung. Der Beleg
+  dafür ist der `201` selbst: 0.1.1 hätte hier `400 invalid_redirect_uri`
+  geantwortet, und genau das ist der historische Befund vom 16.08.
+* **Kein Credential ist geflossen.** Kein Token, kein Code, keine Anmeldeseite. Die
+  zwei Verbindungen von `jane` sind unangetastet und nicht widerrufen.
+
+## 9. Nicht vorhergesagt und darum hier festgehalten
+
+1. **Die Teilregistrierung allein reicht für Cursor nicht.** Der Plan erwartete
+   `201` und danach eine Verbindung. Der `201` kam, die Verbindung nicht: Cursor
+   nimmt die erste seiner drei Adressen, und das ist die verworfene. Der Fehlschlag
+   ist von `/register` nach `/authorize` gewandert, nicht verschwunden. Für die Doku
+   heißt das, dass der Satz "a client of this shape is no longer kept out" so nicht
+   stehenbleiben kann.
+2. **Cursor liest die Antwort der Registrierung nicht zurück.** RFC 7591 §3.2.1
+   verlangt vom Server, die registrierten Metadaten zu antworten, und der Server tut
+   das. Der Client verlässt sich trotzdem auf seine gesendete Liste. Genau diese
+   Asymmetrie macht ein stilles Verwerfen für ihn unsichtbar, und sie ist der Grund,
+   warum "verwerfen statt abweisen" hier nicht hilft.
+3. **Der Anmeldeknopf ist ein Abmelden mit Neuregistrierung.** Er erzeugt eine neue
+   `client_id` und lässt die alte Zeile unbenutzt zurück. Zwei Klicks, zwei
+   Client-Zeilen. Ein Server, der oft angeklickt wird, sammelt also DCR-Zeilen ohne
+   Verwendung ein; die Zeilen sind harmlos (kein Geheimnis, `last_used_at` leer),
+   aber sie sind da.
+4. **Cursor verbindet ohne Klick, aber es autorisiert nicht ohne Klick.** Das
+   Schreiben von `~/.cursor/mcp.json` genügt für Discovery und Registrierung
+   (Abschnitt 2, Sekunden nach dem Schreiben), für die Autorisierung nicht. Die
+   Doku-Zeile "no button involved" ist damit nur für die erste Hälfte richtig.
+5. **Cursor notiert den Autorisierungsserver als `http://127.0.0.1:8081/`.** Diese
+   Zeichenkette ist nicht die Adresse, die es abgerufen hat: die reine Wurzel
+   antwortet `404` (Abschnitt 2). Es ist eine Notiz in Cursors Ablage, nicht ein
+   Messwert über diesen Server, und sie steht hier, damit sie später niemand als
+   Widerspruch liest.
+6. **Was ein Fix wäre, gehört nicht in diesen Plan.** Der Befund ist benannt, nicht
+   behoben. Drei Wege sind sichtbar und alle drei sind Entscheidungen und keine
+   Reparaturen: die private-use Adresse doch registrieren (widerspricht D-35 und
+   seiner Begründung, dass auf einem Desktop kein Programm ein Schema exklusiv
+   besitzt), die Registrierung wieder ganz abweisen (das war 0.1.1 und hat Cursor
+   ebenfalls draußen gelassen, nur früher), oder die Antwort so gestalten, dass ein
+   Client das Verworfene bemerken muss. Ob und welcher davon, entscheidet die
+   Phasen-Verifikation oder ein eigener Plan, nicht dieser.
+
+## 10. Nachzustand: alles zurückgestellt (15:33:29Z)
+
+`~/.cursor/mcp.json` ist wieder im Vorzustand, und der Vorzustand war "existiert
+nicht" (Abschnitt 1). Es wurde also gelöscht und keine Sicherung zurückgeschrieben,
+weil es keine gab und keine gebraucht wurde:
+
+```
+$ date -u +"%Y-%m-%dT%H:%M:%SZ"
+2026-08-20T15:33:29Z
+$ rm -f ~/.cursor/mcp.json
+$ test -f ~/.cursor/mcp.json && echo EXISTS || echo ABSENT
+ABSENT C:/Users/Student/.cursor/mcp.json
+$ ls ~/.cursor
+ai-tracking argv.json extensions ide_state.json plugins projects skills-cursor
+$ ls ~/.cursor/mcp.json.bak-20260820
+(nicht vorhanden: es wurde nie eine Sicherung angelegt, weil nichts zu sichern war)
+```
+
+Cursor hat die Entfernung von sich aus bemerkt, und das ist die Gegenprobe, dass die
+Datei wirklich die Quelle des ganzen Laufs war:
+
+```
+$ tail "…\workbench.mcp.oauth.log"
+2026-08-20 17:33:29.990 [info] [MCPService] OAuth clear candidate for server: user-nextcloud-0608 (cause=config_server_removed)
+2026-08-20 17:33:30.013 [info] [MCPService] Cleared identifier-scoped OAuth state for server: user-nextcloud-0608 (cause=config_server_removed)
+```
+
+Im Store wurden die zwei unbenutzbaren Cursor-Zeilen entfernt. Sie sind Messrückstand
+und keine Substanz: `last_used_at` war bei beiden leer, und eine Neuregistrierung
+kostet einen Dateischreibvorgang. Der Nachzustand ist damit der Vorzustand:
+
+```
+$ <delete from clients where client_id in ('448414fe-…','d6ea6583-…')>
+clients 2
+('c06831e2-36ee-48f9-a99c-d091b3013311', 'Claude Desktop')
+('7256ad37-7670-4621-ba02-021e835fd372', 'Open WebUI')
+flows 0   auth_codes 0   access_tokens 0
+authorizations 2   refresh_tokens 2
+('jane', 'c06831e2-36ee-48f9-a99c-d091b3013311', revoked_at None)
+('jane', '7256ad37-7670-4621-ba02-021e835fd372', revoked_at None)
+```
+
+Nichts wurde installiert, nichts heruntergeladen, kein Container neu gestartet, keine
+Instanzversion angefasst. Und die Instanzen des Owners, die diesen Lauf nur
+ausgehalten haben:
+
+```
+$ docker ps --format '{{.Names}}\t{{.Image}}\t{{.Status}}'
+nc_app_mcp_connector    127.0.0.1:5000/mcp_connector:0.1.2   Up 48 minutes (healthy)
+nc-mcp-exapp-nc         nextcloud:34.0.3-apache              Up About an hour (healthy)
+nc-mcp-exapp-caddy      caddy:2                              Up 11 hours
+nc-mcp-exapp-harp       ghcr.io/nextcloud/...harp:release    Up 11 hours (healthy)
+nc-mcp-exapp-registry   registry:2                           Up 11 hours
+findling-nextcloud      nextcloud:34.0.3-apache              Up 5 days
+nc-mcp-test             nextcloud:34-apache                  Up 5 days (healthy)
+```
+
+## 11. Die Antwort auf CLIENT-04, in einer Tabelle
+
+| Frage | Antwort, gemessen am 2026-08-20 gegen 0.1.2 |
+|-------|---------------------------------------------|
+| Ist Cursor auf diesem Rechner verfügbar? | ja, 3.2.16 |
+| Verbindet Cursor ohne Klick? | ja, das Schreiben von `~/.cursor/mcp.json` genügt für Discovery und Registrierung |
+| Wird der Drei-URI-Rumpf `201`? | **ja**, und der Store trägt die zwei zulässigen Adressen, die private-use nicht |
+| Durchläuft Cursor die Autorisierung? | **nein**: es schickt `cursor://anysphere.cursor-mcp/oauth/callback` an `/authorize` und wird mit `400` und der Seite `E5` abgewiesen |
+| Ruft Cursor ein Werkzeug auf? | nein, und das ist durch die Zeile darüber ausgeschlossen, nicht offen |
+| Liegt die Ursache auf unserer Seite? | nein bei der Portregel und nein bei der Teilregistrierung (Abschnitt 8); die Ursache ist eine Adresse, die D-35 bewusst nicht registriert, und ein Client, der die Antwort seiner Registrierung nicht zurückliest |
 
