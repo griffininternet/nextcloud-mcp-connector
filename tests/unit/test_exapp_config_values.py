@@ -330,6 +330,13 @@ async def test_whitespace_and_a_trailing_slash_are_removed() -> None:
         ("https://cloud.example.test:0/x", "a port outside the range"),
         ("https://cloud.example.test:99999/x", "a port outside the range"),
         ("javascript:alert(1)", "not a URL at all"),
+        # CR-01 of 05-REVIEW.md and gap 1 of 05-VERIFICATION.md: the value that used to pass
+        # this validation and then killed the process on the next start.
+        ("http://cloud.example.com/exapps/mcp_connector", "http on a host that is not loopback"),
+        ("HTTP://Cloud.Example.COM", "the same in upper case, which decides nothing"),
+        ("http://localhost.example.com/x", "a host that merely contains a loopback word"),
+        ("http://127.0.0.1.example.com/x", "the same trick with the loopback address"),
+        ("http://192.168.1.10:8080/x", "a private address is still not loopback"),
     ],
 )
 async def test_an_unusable_public_url_is_dropped_and_named_without_its_value(
@@ -345,6 +352,74 @@ async def test_an_unusable_public_url_is_dropped_and_named_without_its_value(
     logged = "\n".join(record.getMessage() for record in caplog.records)
     assert "public_url" in logged, "the field is named so an administrator can find it"
     assert value not in logged
+
+
+# --- the issuer rule of CR-01: https, with the loopback exception ------------------
+
+
+def test_the_loopback_hosts_are_the_three_spellings_of_this_machine() -> None:
+    """``urlsplit(...).hostname`` lowercases and strips the brackets of an IPv6 host.
+
+    So ``::1`` stands here without brackets, and a fourth entry ``[::1]`` would be a line no
+    comparison could ever reach.
+    """
+    assert config_values.LOOPBACK_HOSTS == frozenset({"localhost", "127.0.0.1", "::1"})
+
+
+@pytest.mark.anyio
+@respx.mock
+@pytest.mark.parametrize(
+    ("value", "why"),
+    [
+        ("https://cloud.example.com/exapps/mcp_connector", "the normal case of an installation"),
+        ("HTTPS://Cloud.Example.COM", "case decides nothing on the accepted side either"),
+        ("http://127.0.0.1:8765", "the default in code, which has to stay usable"),
+        ("http://localhost:8765/exapps/mcp_connector", "loopback by name, with port and subpath"),
+        ("http://localhost", "loopback by name, without a port and without a subpath"),
+        ("http://[::1]:8765", "loopback as an IPv6 literal, which arrives in brackets"),
+    ],
+)
+async def test_https_and_every_loopback_spelling_reach_the_overlay(value: str, why: str) -> None:
+    """The other half of CR-01: the rule refuses http, it does not refuse development.
+
+    A local test topology serves over http on loopback, and RFC 8414 allows exactly that.
+    """
+    answer({"public_url": value})
+
+    assert await config_values.admin_overlay(env=ENV) == {config.ENV_PUBLIC_URL: value}, why
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_the_refused_http_value_leaves_neither_host_nor_value_in_the_log(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """T-05-43: the line names the field and the rule, and a container log is read by more
+    than the administrator who typed the value."""
+    value = "http://cloud.example.com/exapps/mcp_connector"
+    answer({"public_url": value})
+
+    with caplog.at_level(logging.DEBUG):
+        assert await config_values.admin_overlay(env=ENV) == {}
+
+    warnings = [record for record in caplog.records if record.levelno >= logging.WARNING]
+    assert len(warnings) == 1, "one refusal is one line"
+    logged = warnings[0].getMessage()
+    assert "public_url" in logged
+    assert "https" in logged, "the line names the rule the value broke"
+    assert value not in logged
+    assert "cloud.example.com" not in logged
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_the_default_in_code_survives_this_validation() -> None:
+    """Otherwise the fallback of every unconfigured installation would be the trap itself."""
+    answer({"public_url": config.DEFAULT_PUBLIC_URL})
+
+    assert await config_values.admin_overlay(env=ENV) == {
+        config.ENV_PUBLIC_URL: config.DEFAULT_PUBLIC_URL
+    }
 
 
 # --- the overlay: the two switches ------------------------------------------------
