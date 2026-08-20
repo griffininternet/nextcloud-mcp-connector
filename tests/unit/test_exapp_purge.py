@@ -40,6 +40,7 @@ import pytest
 import respx
 from lxml import etree
 from starlette.applications import Starlette
+from starlette.requests import Request
 from starlette.testclient import TestClient
 
 from mcp_connector import config
@@ -504,6 +505,22 @@ def test_the_flag_in_the_query_string_runs_nothing(live: Deployment, query: str)
 
 # --- the body this handler is willing to read (IN-01) ------------------------------
 
+#: One POST at this route, as ASGI hands it over: the scope of the two tests that measure
+#: the reader itself instead of going through the test client.
+_SCOPE: dict[str, Any] = {
+    "type": "http",
+    "http_version": "1.1",
+    "method": "POST",
+    "path": purge.PURGE_PATH,
+    "raw_path": purge.PURGE_PATH.encode(),
+    "query_string": b"",
+    "root_path": "",
+    "scheme": "http",
+    "headers": [(b"content-type", b"application/json")],
+    "client": ("127.0.0.1", 1234),
+    "server": ("testserver", 80),
+}
+
 
 def test_an_announced_body_above_the_limit_is_not_parsed(
     live: Deployment, caplog: pytest.LogCaptureFixture
@@ -524,30 +541,23 @@ def test_an_announced_body_above_the_limit_is_not_parsed(
     assert "aaaa" not in logged, "the body itself stays out of the log"
 
 
-def test_a_chunked_body_above_the_limit_is_not_read_to_its_end(
+def test_a_chunked_body_above_the_limit_does_not_arm_the_purge(
     live: Deployment, caplog: pytest.LogCaptureFixture
 ) -> None:
     """IN-01: the schranke holds without a ``Content-Length`` to trust.
 
-    A request with ``Transfer-Encoding: chunked`` announces no length at all, so a handler
-    that reads the header and then calls ``request.body()`` reads whatever arrives into
-    memory, and the flag hidden in that body arms the one action of this app that cannot be
-    undone. The counter here is the proof: the sender offers half a megabyte around a valid
-    ``force`` flag, and no more than one chunk beyond the limit may be taken off the wire.
+    A request with ``Transfer-Encoding: chunked`` announces no length at all, so the header
+    check never fires for it. Until this test the handler then read whatever arrived into
+    memory, and a valid ``force`` flag hidden in half a megabyte armed the one action of
+    this app that cannot be undone. What the reader takes off the wire is measured one test
+    below; this one is the outcome an administrator would have seen.
     """
-    handed_over: list[int] = []
 
     def in_chunks() -> Iterator[bytes]:
-        head = b'{"options": {"' + purge.FORCE_OPTION.encode() + b'": true}, "pad": "'
-        handed_over.append(len(head))
-        yield head
+        yield b'{"options": {"' + purge.FORCE_OPTION.encode() + b'": true}, "pad": "'
         for _ in range(512):
-            chunk = b"a" * 1024
-            handed_over.append(len(chunk))
-            yield chunk
-        tail = b'"}'
-        handed_over.append(len(tail))
-        yield tail
+            yield b"a" * 1024
+        yield b'"}'
 
     before = live.counts()
     with respx.mock:
@@ -564,13 +574,36 @@ def test_a_chunked_body_above_the_limit_is_not_read_to_its_end(
     assert response.json()["purged"] is False, "a body this handler does not read is no flag"
     assert wire.seen == []
     assert live.counts() == before
-    assert sum(handed_over) <= purge.MAX_BODY_BYTES + 1024, (
-        "the reader stops at the limit instead of taking the whole stream into memory"
-    )
     warnings = [record for record in caplog.records if record.levelno >= logging.WARNING]
     assert len(warnings) == 1, "exactly one line, the same shape the announced case leaves"
     logged = "\n".join(record.getMessage() for record in caplog.records)
     assert "aaaa" not in logged, "the body itself stays out of the log"
+
+
+def test_the_body_reader_stops_at_the_limit_instead_of_draining_the_stream() -> None:
+    """The other half of IN-01, and the reason it is measured below the test client.
+
+    The test client of Starlette reads a generator body into memory itself before the app
+    ever runs (``httpx.Request.read`` in ``testclient.receive``), so nothing counted up
+    there says anything about this application. This test hands the reader an ASGI
+    ``receive`` of its own and counts what the reader asks for: no more than one chunk
+    beyond the limit, and never the rest of a stream that has half a megabyte left in it.
+    """
+    handed_over: list[int] = []
+    chunk = b"a" * 1024
+
+    async def receive() -> dict[str, Any]:
+        if len(handed_over) >= 512:  # pragma: no cover - reached only by a draining reader
+            return {"type": "http.request", "body": b"", "more_body": False}
+        handed_over.append(len(chunk))
+        return {"type": "http.request", "body": chunk, "more_body": True}
+
+    payload = asyncio.run(purge._payload(Request(_SCOPE, receive)))
+
+    assert payload is None, "a body above the limit is not parsed at all"
+    assert sum(handed_over) <= purge.MAX_BODY_BYTES + len(chunk), (
+        "the reader stops at the limit instead of taking the whole stream into memory"
+    )
 
 
 def test_a_chunked_body_below_the_limit_still_arms_the_purge(live: Deployment) -> None:
@@ -623,29 +656,23 @@ def test_a_chunked_body_at_the_limit_is_still_read(live: Deployment) -> None:
     assert wire.seen.count("password") == len(CONNECTIONS)
 
 
-def test_a_body_that_cannot_be_read_is_no_flag(live: Deployment) -> None:
-    """A stream that breaks mid body is not an occ invocation either."""
+def test_a_body_that_cannot_be_read_is_no_flag(caplog: pytest.LogCaptureFixture) -> None:
+    """A stream that breaks mid body is not an occ invocation either.
 
-    def breaks() -> Iterator[bytes]:
-        yield b'{"options": {"force": true'
+    Measured at the reader for the same reason as the test above: the test client reads the
+    body itself, so a sender that breaks never reaches this application through it.
+    """
+
+    async def breaks() -> dict[str, Any]:
         raise RuntimeError("the connection went away")
 
-    before = live.counts()
-    with respx.mock:
-        wire = Wire()
-        wire.install()
-        try:
-            response = live.client.post(
-                purge.PURGE_PATH,
-                content=breaks(),
-                headers=appapi_headers() | {"content-type": "application/json"},
-            )
-        except RuntimeError:  # pragma: no cover - the test client may surface it here
-            pytest.skip("the test client raises the sender error instead of delivering it")
+    with caplog.at_level(logging.DEBUG):
+        payload = asyncio.run(purge._payload(Request(_SCOPE, breaks)))
 
-    assert response.json()["purged"] is False
-    assert wire.seen == []
-    assert live.counts() == before
+    assert payload is None
+    warnings = [record for record in caplog.records if record.levelno >= logging.WARNING]
+    assert len(warnings) == 1
+    assert "the connection went away" not in warnings[0].getMessage()
 
 
 # --- the purge itself, and its order (T-05-27, T-05-30) ----------------------------
