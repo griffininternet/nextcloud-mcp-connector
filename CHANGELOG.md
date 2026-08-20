@@ -13,6 +13,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The page a user sees when an assistant app asks to be returned to an address it did not
+  register now names the way in that works for such apps: an app password from the Nextcloud
+  security settings. Nothing is shared in that case, as before, and the page still says
+  nothing about which check refused the request or which address was asked for. This closes
+  what was left open for apps of that shape: the sign in stays refused, and the reader is no
+  longer left with a refusal and no way forward. The documentation for Cursor and the OAuth
+  setup carries the same way out and the reason behind it.
+
 - The documentation now says what a real Claude Code does with this server, because it was
   measured against Claude Code 2.1.233: it connects without registering, by publishing its
   own metadata document, and it calls tools with the account that signed in. The port it

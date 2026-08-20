@@ -459,12 +459,28 @@ ERROR_TIMEOUT_BODY = (
     "The sign in was not completed in time. Start the connection again in your assistant app."
 )
 
+#: E5, the page a request gets when the address a client asked to be returned to is not one
+#: of the addresses it registered. The last sentence names a way in rather than a cause, and
+#: it was added on 2026-08-20 on the owner's decision on BL-14, option "make the dropped
+#: part visible plus documentation": a measured run showed a real client refused here for
+#: good and reading only a refusal (06-08-MEASUREMENTS.md, Cursor 3.2.16, which keeps asking
+#: to be returned to a private-use address that D-35 does not register).
+#:
+#: Two limits shape that sentence. It names the app password path in words and never as a
+#: link, for the reason spelled out at E8 below: the one outbound link of this app is the
+#: sign in address Nextcloud itself hands us. And it says nothing about which check fell,
+#: because four call sites in ``oauth/consent.py`` answer with this one page (a missing
+#: address, an unreadable one, one that does not match the registration, and one our own
+#: rule refuses), so a sentence that were true for only one of them would be the
+#: information service T-03-24 forbids.
 ERROR_REDIRECT_TITLE = "This app cannot be sent back safely"
 
 ERROR_REDIRECT_BODY = (
     "The address {client} asked us to return to does not match its registration. For your "
     "safety nothing was shared. Start the connection again in your assistant app, and tell "
-    "your administrator if it keeps happening."
+    "your administrator if it keeps happening. Some assistant apps cannot use this sign in "
+    "at all, and for those the way in is an app password from your Nextcloud security "
+    "settings."
 )
 
 ERROR_THROTTLED_TITLE = "Too many attempts"
