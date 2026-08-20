@@ -47,6 +47,7 @@ answer that separates them is an information service for whoever is guessing (T-
 
 import base64
 import binascii
+import copy
 import json
 import logging
 import secrets
@@ -265,6 +266,10 @@ class NextcloudOAuthProvider(
         #: store lookup instead of at once, which is up to five seconds of a connection the
         #: user just ended (T-03-62).
         self._invalidate: Callable[[], None] = _nothing
+        #: The one return address a per request view of this provider lets a client use on
+        #: top of its registration, set by :meth:`also_accepting` and never here. ``None``
+        #: on the provider the application builds, which is the only one that is long lived.
+        self._also: AnyUrl | None = None
 
     def __repr__(self) -> str:
         return f"NextcloudOAuthProvider(resource={self._resource!r}, policy={self._policy!r})"
@@ -334,7 +339,37 @@ class NextcloudOAuthProvider(
             await store.delete_client(client_id)
             return None
 
+        if self._also is not None and self._also not in (client.redirect_uris or []):
+            # The one address :meth:`also_accepting` was asked to let through, added to the
+            # object and to nothing else. It is added last, after every check above, so the
+            # allowlist and the expiry still see the registration as it is on disk.
+            client = client.model_copy(
+                update={"redirect_uris": [*(client.redirect_uris or []), self._also]}
+            )
+
         return client
+
+    def also_accepting(self, address: AnyUrl) -> "NextcloudOAuthProvider":
+        """This provider for one request, whose client also accepts ``address``.
+
+        **Why this exists.** The SDK's authorization handler loads the client itself and
+        compares the return address of the request against the registration a second time
+        (``mcp/server/auth/handlers/authorize.py:180``). So the RFC 8252 7.3 port rule that
+        ``consent.py`` applies to a loopback request has to reach that comparison, or it
+        would have decided nothing: the request would pass our readable check and then be
+        refused by the SDK with ``invalid_request``. This view is how it reaches it.
+
+        **Why a view and not a write.** Nothing is stored. The copy lives for one request,
+        the row on disk is untouched, and the next request sees the registration as it was:
+        the anti pattern of putting a requested address into a registration would grow the
+        row on every run and hand whoever holds a loopback port a permanent entry (T-06-19).
+        The address is the one the port rule of ``registry`` already matched against that
+        same registration, so this view cannot widen anything the rule did not widen, and
+        the rule itself lives in exactly one place on the request path.
+        """
+        view = copy.copy(self)
+        view._also = address
+        return view
 
     async def client_secret_hash(self, client_id: str) -> str | None:
         """The stored digest of this client's secret, or ``None`` for a public client.

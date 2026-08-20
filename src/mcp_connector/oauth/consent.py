@@ -96,7 +96,7 @@ from ..exapp.ui.consent import (
     handoff_page,
     waiting_page,
 )
-from . import crypto, loginflow
+from . import crypto, loginflow, registry
 from .provider import NextcloudOAuthProvider
 from .registry import redirect_uri_allowed
 from .store import FlowRow, OAuthStore
@@ -164,9 +164,18 @@ def consent_routes(
                 # (HI-02).
                 return _page(errors.error_page("E3", env=env))
             params = form
-        refusal = await _refuse(params, provider, env)
+        refusal, relaxed = await _refuse(params, provider, env)
         if refusal is not None:
             return refusal
+        if relaxed is not None:
+            # The SDK handler loads the client itself and compares the return address
+            # against the registration a second time (authorize.py:180), so the port rule
+            # of RFC 8252 7.3 that :func:`_refuse` just applied has to reach that
+            # comparison or it applied to nothing. It reaches it as a view of this provider
+            # that lives for this one request and hands out a client with this one address
+            # added: nothing is written, and the next request sees the registration as it
+            # is (T-06-19).
+            return await AuthorizationHandler(provider.also_accepting(relaxed)).handle(request)
         return await handler.handle(request)
 
     async def consent(request: Request) -> Response:
@@ -218,29 +227,64 @@ async def _refuse(
     params: QueryParams | FormData,
     provider: NextcloudOAuthProvider,
     env: Mapping[str, str] | None,
-) -> Response | None:
-    """The page this request ends on, or ``None`` when it may go to the SDK handler."""
+) -> tuple[Response | None, AnyUrl | None]:
+    """The page this request ends on, and the address the SDK still has to be told about.
+
+    Two values, because the redirect check has two outcomes that both matter. The first is
+    the page: ``None`` means the request may go to the SDK handler. The second is the one
+    address the loopback port rule of RFC 8252 7.3 let through, which the handler's own
+    exact comparison would refuse a second time, and ``None`` for every other request.
+
+    The order of the two halves of that check is fixed: the SDK compares exactly, and only
+    where that fails is the port rule asked. Whatever comes out of it goes through the D-35
+    check below, because a relaxed port must not skip the rule about which addresses may be
+    returned to at all (T-03-41). Every refusal is the same page, ``E5``: an answer that
+    said which half fell would be an information service for whoever is guessing (T-03-47).
+    """
     client_id = str(params.get("client_id") or "")
     if not client_id:
         # Not an authorization request at all: a link somebody kept, a stale tab, or the
         # "Start over" of the timeout page. The empty state says so in a sentence.
-        return empty_page(env=env)
+        return empty_page(env=env), None
 
     client = await provider.get_client(client_id)
     if client is None:
-        return _no_client_page(client_id, provider, env)
+        return _no_client_page(client_id, provider, env), None
 
     raw = params.get("redirect_uri")
     try:
         requested = AnyUrl(str(raw)) if raw else None
+    except (ValidationError, ValueError):
+        return _page(errors.error_page("E5", env=env, client=_name(client))), None
+    relaxed: AnyUrl | None = None
+    try:
         address = client.validate_redirect_uri(requested)
-    except (InvalidRedirectUriError, ValidationError, ValueError):
-        return _page(errors.error_page("E5", env=env, client=_name(client)))
+    except InvalidRedirectUriError:
+        # The one relaxation RFC 8252 7.3 demands, and it is a MUST: a native client takes
+        # whatever port the operating system gives it, so the exact comparison of the SDK
+        # refuses it over a property it cannot control. Claude Code publishes
+        # ``http://localhost/callback`` in its client id metadata document and arrives with
+        # ``http://localhost:3118/callback`` (CLIENT-05). Everything except the port is
+        # still compared exactly, by the port rule of the registry, and nothing is written
+        # back into the registration on a match (T-06-19).
+        registered = [str(uri) for uri in client.redirect_uris or []]
+        if requested is None or registry.loopback_match(str(requested), registered) is None:
+            return _page(errors.error_page("E5", env=env, client=_name(client))), None
+        # The REQUESTED address, with its port, is what travels on into the flow and into
+        # the authorization code. That is what makes the token endpoint correct without a
+        # change: ``mcp/server/auth/handlers/token.py:164-183`` compares the redirect URI of
+        # the token request against the stored value of the code, not against the
+        # registration, so both sides carry the same port of their own accord. A second
+        # relaxation in the token path would be one place too many (T-06-20).
+        address = requested
+        relaxed = requested
+    except (ValidationError, ValueError):
+        return _page(errors.error_page("E5", env=env, client=_name(client))), None
     if not redirect_uri_allowed(str(address)):
         # A registration from before this rule, or one written another way. The address is
         # checked where it is used and not only where it was accepted (T-03-41).
-        return _page(errors.error_page("E5", env=env, client=_name(client)))
-    return None
+        return _page(errors.error_page("E5", env=env, client=_name(client))), None
+    return None, relaxed
 
 
 def _no_client_page(

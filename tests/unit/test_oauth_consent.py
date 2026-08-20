@@ -16,6 +16,7 @@ container, no network, no Nextcloud.
 import asyncio
 import base64
 import html
+import json
 import logging
 import re
 import sqlite3
@@ -50,6 +51,12 @@ CLIENT_ID = "9d0f8f1a-0b3c-4a0e-9f4c-000000000001"
 CLIENT_NAME = "Claude"
 REDIRECT = "https://claude.ai/api/mcp/auth_callback"
 CHALLENGE = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+
+#: What Claude Code publishes in its client id metadata document, and what it arrives with
+#: at runtime: the document is portless, the client listens on 3118 (06-RESEARCH.md,
+#: Pattern 4, fetched 2026-08-20).
+LOOPBACK_REGISTERED = "http://localhost/callback"
+LOOPBACK_REQUESTED = "http://localhost:3118/callback"
 STATE = "state-of-the-client"
 
 LOGIN_URL = "https://cloud.example.com/index.php/login/v2/flow/abc123"
@@ -258,6 +265,117 @@ def test_a_return_address_that_is_not_registered_never_becomes_a_redirect(
 
     assert response.status_code == 400
     assert "location" not in response.headers
+    assert strings.ERROR_REDIRECT_TITLE in response.text
+
+
+# --- the loopback port rule (RFC 8252 7.3, CLIENT-05) ------------------------------------
+
+
+def test_a_loopback_client_may_come_back_on_the_port_it_got(store: OAuthStore) -> None:
+    """CLIENT-05: what Claude Code publishes, and what it arrives with.
+
+    The metadata document names ``http://localhost/callback`` without a port and the client
+    listens on 3118. RFC 8252 7.3 makes accepting that a MUST, and the address that travels
+    on is the requested one, with its port, because that is what the token endpoint of the
+    SDK compares the token request against later.
+    """
+    provider = make(store)
+    register(provider, redirect_uris=[LOOPBACK_REGISTERED])
+    client = TestClient(application(provider))
+
+    with respx.mock:
+        respx.post(INIT_URL).mock(return_value=httpx.Response(200, json=start_body()))
+        response = start(client, redirect_uri=LOOPBACK_REQUESTED)
+
+    assert response.status_code == 302
+    assert response.headers["location"].startswith(f"{PUBLIC_URL}{ui_consent.CONSENT_PATH}?")
+    row = asyncio.run(store.load_flow(flow_of(response)))
+    assert row is not None
+    assert row.redirect_uri == LOOPBACK_REQUESTED
+    assert row.redirect_uri_explicit is True
+
+
+def test_the_relaxed_port_is_never_written_into_the_registration(store: OAuthStore) -> None:
+    """T-06-19: a comparison that registered its input would grow the row every run."""
+    provider = make(store)
+    register(provider, redirect_uris=[LOOPBACK_REGISTERED])
+    client = TestClient(application(provider))
+
+    with respx.mock:
+        respx.post(INIT_URL).mock(return_value=httpx.Response(200, json=start_body()))
+        start(client, redirect_uri=LOOPBACK_REQUESTED)
+
+    row = asyncio.run(store.load_client(CLIENT_ID))
+    assert row is not None
+    assert LOOPBACK_REGISTERED in row.metadata_json
+    assert "3118" not in row.metadata_json
+
+
+def test_a_host_change_is_not_a_port_change(store: OAuthStore) -> None:
+    """RFC 8252 8.3: the name and the literal do not resolve through the same mechanism."""
+    provider = make(store)
+    register(provider, redirect_uris=[LOOPBACK_REGISTERED])
+    client = TestClient(application(provider))
+
+    response = start(client, redirect_uri="http://127.0.0.1:3118/callback")
+
+    assert response.status_code == 400
+    assert "location" not in response.headers
+    assert strings.ERROR_REDIRECT_TITLE in response.text
+
+
+def test_a_hosted_connector_gains_no_port_freedom(store: OAuthStore) -> None:
+    """T-06-16: the relaxation is for loopback, so an https address is compared exactly."""
+    provider = make(store)
+    register(provider)
+    client = TestClient(application(provider))
+
+    response = start(client, redirect_uri="https://claude.ai:8443/api/mcp/auth_callback")
+
+    assert response.status_code == 400
+    assert strings.ERROR_REDIRECT_TITLE in response.text
+
+
+def test_the_registration_rule_still_runs_after_the_port_was_relaxed(
+    store: OAuthStore,
+) -> None:
+    """T-03-41 with the port rule in front of it: a relaxation must not skip D-35.
+
+    The registration is written straight into the store, because the registration endpoint
+    would have dropped this address (that is D-35 at the other end). It is the shape of a
+    row from a build before the rule, and the check where the address is *used* is the one
+    that catches it.
+    """
+    provider = make(store)
+    metadata = {
+        "client_id": CLIENT_ID,
+        "client_name": CLIENT_NAME,
+        "redirect_uris": ["ws://localhost/callback"],
+        "grant_types": ["authorization_code", "refresh_token"],
+        "response_types": ["code"],
+        "token_endpoint_auth_method": "none",
+        "scope": "nextcloud",
+    }
+    asyncio.run(store.save_client(CLIENT_ID, metadata_json=json.dumps(metadata)))
+    client = TestClient(application(provider))
+
+    response = start(client, redirect_uri="ws://localhost:3118/callback")
+
+    assert response.status_code == 400
+    assert strings.ERROR_REDIRECT_TITLE in response.text
+
+
+def test_a_loopback_request_without_a_registration_is_still_refused(
+    store: OAuthStore,
+) -> None:
+    """The rule matches against a registration; it does not replace having one."""
+    provider = make(store)
+    register(provider)
+    client = TestClient(application(provider))
+
+    response = start(client, redirect_uri=LOOPBACK_REQUESTED)
+
+    assert response.status_code == 400
     assert strings.ERROR_REDIRECT_TITLE in response.text
 
 
