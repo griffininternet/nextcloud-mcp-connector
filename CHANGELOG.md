@@ -33,9 +33,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   open of the file, including the account switch check that sits on every request of a
   connected assistant, and it now runs when a process opens the file for the first
   time. A store file that is removed while the app runs is still recreated.
+- The public address is stored in one spelling. An address typed with capital letters
+  in the administration settings became the name this app publishes about itself, and a
+  client that was given the same address in lower case failed a comparison nothing
+  explained. The scheme and the host name are levelled now, which changes nothing about
+  the address itself; a path is left exactly as it was typed, because there capital
+  letters do mean something.
+- The administration form of a fresh installation links to the documentation instead of
+  to a page that cannot exist. Before an address is set, the app does not know where it
+  can be reached, and the link of the form pointed at the administrator's own machine.
+- The log line an administrator gets when no usable public address is set now says
+  which of the two cases it is: none is stored, or one is stored and was refused. The
+  line that reports a refused address names both places it can be corrected, the deploy
+  variable and the form, and which of the two wins. Neither line ever contains the
+  address itself.
+
+### Fixed
+
+- A paused account no longer sees a consent screen it cannot use. If the access switch
+  was pulled in another tab while a consent screen stood open, a reload still showed
+  approve and deny. Nothing could be granted, the click was already refused, but the
+  page said the opposite of the switch. It now shows the same note as everywhere else.
 
 ### Security
 
+- The uninstall command reads only as much of a request as it is willing to read. Its
+  size limit trusted the length a request announced, and a request that announces none
+  was read into memory whole. The path is an internal one and needs the app's own
+  credentials, so nothing was reachable from outside; the limit now counts what actually
+  arrives, and the command behaves exactly as before.
 - The hidden value that protects the consent screen and the connections page against
   forged form submissions now expires. It used to be the same value for an account for
   the whole lifetime of the installation, and the only way to change it would have been

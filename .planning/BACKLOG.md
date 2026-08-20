@@ -235,6 +235,18 @@ model that only reads `text` sees the difference. Both together are a schema dec
 
 ## BL-10: Enforce the switch where an authorization is created too (review 04, ME-04)
 
+**STATUS 2026-08-19: DONE** (plan 05-02, commits `1cbd714` test and `9d16fec` feat for the
+page, `e24673c` test and `cf9f3db` feat for the three enforcement points): the switch is read
+where an authorization is created, not only at `MCP_PATH`. The three points are the poll of
+`/authorize` (before `create_authorization`), `connect._wait` (before the credential is shown)
+and `/authorize/decide` (before the grant); each hands the Nextcloud app password back, so the
+set of valid app passwords does not grow while the brake is pulled. A store that cannot answer
+is never a "no" (fail closed). The refusal is the page `E9` (`PAUSED`) and never an
+`access_denied` redirect, because that error means the user said no and this user said nothing.
+The texts `SWITCH_OFF_STATE`, `CONNECTIONS_PAUSED_BODY` and `ACCESS_DISABLED_DESCRIPTION` stayed
+as they were: they are true now. The consent screen itself was added to the same reading later,
+as IN-06 of BL-13 below.
+
 **Finding:** The gate hangs on `MCP_PATH` only. `/authorize`, `/authorize/decide` and
 `POST /connect` are unthrottled, so a paused account can complete a full login flow,
 and Nextcloud creates a real app password in the process that lands in the store. Only
@@ -319,6 +331,10 @@ connector is online. Question: does MUCGPT need an adapted version?
   Claude.ai). MUCGPT itself has inference_location/data residency (issue #1116), which
   matches docs/privacy.md exactly.
 
+**STATUS 2026-08-20: Owner hat die Mail an it@M gesendet, Antwort ausstehend.** The
+verification below stays open until access to a running instance exists; nothing in this
+repository moves it forward before that answer arrives.
+
 **Verprobung offen (verification still open, plan 05-16):** The MUCGPT section of
 `docs/client-setup.md` is the only client section on that page without a measurement
 behind it; it is derived from the source of it-at-m/mucgpt (2026-08-18), not from a run.
@@ -341,19 +357,43 @@ behind it; it is derived from the source of it-at-m/mucgpt (2026-08-18), not fro
 - **Result:** a measurement file next to the other client proofs, then the gap paragraph
   in `docs/client-setup.md` is replaced by a dated line and this section is closed.
 
-## BL-13: Six advisory findings from the phase 5 review (IN-01 to IN-06)
+## BL-13: The advisory findings of the phase 5 review (IN-01 to IN-06, both passes)
 
-**Trigger:** the next time one of the named files is opened anyway. None of the six is a
-blocker: 05-REVIEW.md (2026-08-19) classified them as info, the one critical (CR-01) and
-the three warnings (WR-01 to WR-03) were closed in plans 05-11 and 05-15. They touch
-files outside the remit of the gap closure plans, which is why they are carried here
-instead of being changed in passing.
+**STATUS 2026-08-20: DONE** (all ten rows below, each with its tests). Two review passes used
+the same ids for different findings: 05-REVIEW.md was rewritten as the re-review of the gap
+closure (diff `eebcc4c..HEAD`), where IN-01 and IN-04 are the two that stayed open from the
+first pass and IN-02, IN-03, IN-05 and IN-06 are new. The four findings of the first pass that
+the re-review did not look at again (its remit was eleven changed files) were still open in the
+code and are closed here as well, marked "first pass" below.
+
+| Id | Fix | Commits |
+|----|-----|---------|
+| IN-01 | `purge._payload` no longer trusts the announced `Content-Length`: `_bounded_body` sums `request.stream()` and stops at `MAX_BODY_BYTES`, so a chunked request without a length is not read into memory. The measured price of the old shape is in the test: half a megabyte around a valid `force` flag purged the whole instance. The stream is left where it stopped, because draining it is the read this avoids; the header check stays as the cheaper first refusal. | `85d19dd` test, `4673479` fix |
+| IN-02 | The rescue line of `entry_exapp.main` names both places an address can come from ("correct the deploy variable, or enter a usable address in the form, a stored value wins over the variable"). Since the CR-01 prevention refuses an unusable form value before the build, the case this branch really sees is a deploy variable, and the old wording sent the administrator to an empty field. | `3a73cab` test, `6c3f795` fix |
+| IN-03 | `config_values._public_url` returns one spelling: scheme and host lowercased per RFC 3986, the path, the query and the port untouched, an IPv6 literal keeps its brackets. The value becomes the `issuer` and the `resource` prefix, and clients compare both character by character. | `4f8dd04` test, `65cae6c` fix |
+| IN-04 | The dated evidence blocks keep `tools=15` and now say which run that is from; a contract test holds the rule that a page naming a count other than the current one has to point at `tests/contract/test_tool_surface.py`, which is where the number lives. `docs/spike-discovery.md` is covered too. | `eb0ba56` (fix and test) |
+| IN-05 | The nine validators of the three shell scripts use `grep -E ... >/dev/null` (and `grep -Ez` where `-z` is needed) instead of `grep -Eq`/`-Eqz`, and the guard test matches the pattern `\| grep -...q` over line continuations instead of the literal `\| grep -q`. The comment states the rule for every pipe, not for occ pipes only. | `9f1deec` test, `9628ee8` fix |
+| IN-06 | `provider.auth_routes` raises `IssuerRefused`, a `ToolError` with a name, and the rescue in `main` catches that type; every other build time failure is reported as itself and ends the start. | `9c4a3f0` test, `b0f808d` fix |
+| IN-02 (first pass) | `connect_routes` calls `store.store_opener(env)` instead of carrying a word for word copy of it. The behaviour was pinned first: one store per application, one sweep, the same file. | `1d71073` test, `4f9d267` refactor |
+| IN-03 (first pass) | The `doc_url` of the admin form points at the public FAQ while `config.public_url` still answers the default in code. Built from the loopback default it was a link into the administrator's own browser machine, on the very form that fixes that state. | `71062fc` test, `d5c7334` fix |
+| IN-05 (first pass) | The `clients` row of `docs/privacy.md` says the issued secret is stored as a hash only, never in the clear, which is what `clients.client_secret_hash` holds. A test holds the row and the schema together. | `064f7c0` (fix and test) |
+| IN-06 (first pass) | `consent._screen` reads the account switch in the `signed_in is not None` branch, so a screen reloaded after the account was paused answers with the paused page instead of offering approve and deny. A display check and not a fourth enforcement point: the GET changes nothing, and an unreadable switch is the same fail closed page the decision gives. | `7e8420f` test, `398d38a` fix |
+
+None of the ten was a blocker: both passes classified them as info, the one critical (CR-01) and
+the warnings (WR-01 to WR-03 of the first pass, WR-01 of the re-review) were closed in plans
+05-11 and 05-15 and in commit `8c5954f`.
+
+**The findings as they were written down, for the record:**
 
 | Id | File | Finding | Proposed fix (from the review) |
 |----|------|---------|--------------------------------|
-| IN-01 | `src/mcp_connector/exapp/purge.py:283-306` | The body size limit of the purge handler only reads the announced `Content-Length`, so a chunked request (or a non numeric header) is read into memory unbounded; reachable only over the authenticated internal AppAPI path. | Read the stream with a limit (sum up `request.stream()` and stop at `MAX_BODY_BYTES`) instead of trusting the header, as `oauth/connections.py` does for its forms. |
-| IN-02 | `src/mcp_connector/oauth/connect.py:127-146` vs `src/mcp_connector/oauth/store.py:1275-1310` | `connect_routes` carries a word for word copy of the opener logic of `store.store_opener` (double checked locking, key first, `purge_expired` on first open); in the ExApp deployment the copy is dead code, so a change to one side silently misses the other. | `store_provider = store_provider or store_opener(env)` at the top of `connect_routes`, then delete the local copy. |
-| IN-03 | `src/mcp_connector/exapp/admin_settings.py:80-89` | On a fresh store installation with no value set, `doc_url` of the admin form is built from the loopback default, so the form that fixes the state contains a dead link to `http://127.0.0.1:8765/connections`. No security issue, T-04-40 holds. | Leave `doc_url` out when `config.public_url(env) == config.DEFAULT_PUBLIC_URL`, or point it at the repository FAQ. |
-| IN-04 | `docs/oauth-setup.md:263, 522` vs `docs/client-setup.md:11` and `docs/store-submission.md:90` | The dated evidence blocks say `tools=15` while the rest of the documentation says 16 (`prepare_context` arrived in phase 4). Formally correct as a literal record of a run, but nothing explains the difference to a reader who counts. | A bracketed note at one of the 15 places ("as of 0.1.0; 16 since ..."), or refresh the evidence on the next run. |
-| IN-05 | `docs/privacy.md:38` | The row "Client registrations \| clients \| the assistant apps, their redirect targets and issued secrets" reads as if client secrets were stored in the clear; `clients.client_secret_hash` holds only a SHA-256 digest. Imprecise in the wrong direction for a document aimed at data protection officers. | "issued secrets (stored as a hash only, never in the clear)", or fold the row into the hash row of the tokens. |
-| IN-06 | `src/mcp_connector/oauth/consent.py:302-304` | `_screen` jumps straight to `_decision` when an authorization row already exists, without reading the account switch, so a consent screen reloaded after the account was paused in another tab still shows approve and deny. No grant is possible (enforcement point 3 answers the click with E9), so this is a UX inconsistency against the three documented enforcement points. | Read `_access_disabled` in the `signed_in is not None` branch and answer with the `_refuse_paused` path, as after the poll. |
+| IN-01 | `src/mcp_connector/exapp/purge.py:356-379` | The body size limit of the purge handler only reads the announced `Content-Length`, so a chunked request (or a non numeric header) is read into memory unbounded; reachable only over the authenticated internal AppAPI path. | Read the stream with a limit (sum up `request.stream()` and stop at `MAX_BODY_BYTES`) instead of trusting the header. |
+| IN-02 | `src/mcp_connector/entry_exapp.py:354-366` | The rescue line says "The stored value is kept, so it can be corrected where it was entered" and points at the admin form, whatever the source was; after the CR-01 hardening the branch really only sees an unusable `NC_MCP_PUBLIC_URL` from the deploy environment, where that form is empty. | Name both sources in the line, with the precedence rule between them. |
+| IN-03 | `src/mcp_connector/exapp/config_values.py:258-302` | `_public_url` returns the value unchanged, so `HTTPS://Cloud.Example.COM` becomes the `issuer` verbatim while the documentation says clients compare it character by character. Scheme and host are case insensitive per RFC 3986, so lowercasing them is lossless. | Normalise scheme and host in `_public_url` and move the pinning test to the normalised expectation. |
+| IN-04 | `docs/oauth-setup.md:287,547` vs `docs/client-setup.md:11,621` | The dated evidence blocks say `tools=15` while the rest of the documentation says 16 (`prepare_context` arrived in phase 4). Formally correct as a literal record of a run, but nothing explains the difference to a reader who counts. | A bracketed note at one of the 15 places, or refresh the evidence on the next run. |
+| IN-05 | `scripts/bootstrap_exapp.sh:166,537,553,562,579` and `tests/unit/test_exapp_env_setup.py:1478-1491` | The rule "grep on an occ pipe never uses -q here" is enforced by a test that only sees the literal `\| grep -q`, while every validator pipes into `grep -Eq` or `grep -Eqz`. Harmless there (the writer is a `printf`), but rule and gate have drifted apart. | Sharpen the test to the pattern and move the validators to `grep -E ... >/dev/null`, or narrow the rule in the comment and document the exception. |
+| IN-06 | `src/mcp_connector/entry_exapp.py:338-374` | The rescue catches every `ToolError` of `build_exapp_app`. True today, because `provider.auth_routes` is the only build time source, but a future second one would be logged as a public URL problem, would have the address dropped and would end in a confusing double message. | Mark the issuer refusal with its own exception type and narrow the rescue to it. |
+| IN-02 (first pass) | `src/mcp_connector/oauth/connect.py:127-146` vs `src/mcp_connector/oauth/store.py:1275-1310` | `connect_routes` carries a word for word copy of the opener logic of `store.store_opener` (double checked locking, key first, `purge_expired` on first open), so a change to one side silently misses the other. | `store_provider = store_provider or store_opener(env)` at the top of `connect_routes`, then delete the local copy. |
+| IN-03 (first pass) | `src/mcp_connector/exapp/admin_settings.py:80-89` | On a fresh store installation with no value set, `doc_url` of the admin form is built from the loopback default, so the form that fixes the state contains a dead link to `http://127.0.0.1:8765/connections`. No security issue, T-04-40 holds. | Leave `doc_url` out when `config.public_url(env) == config.DEFAULT_PUBLIC_URL`, or point it at the repository FAQ. |
+| IN-05 (first pass) | `docs/privacy.md:38` | The row "Client registrations \| clients \| the assistant apps, their redirect targets and issued secrets" reads as if client secrets were stored in the clear; `clients.client_secret_hash` holds only a SHA-256 digest. Imprecise in the wrong direction for a document aimed at data protection officers. | "issued secrets (stored as a hash only, never in the clear)", or fold the row into the hash row of the tokens. |
+| IN-06 (first pass) | `src/mcp_connector/oauth/consent.py:302-304` | `_screen` jumps straight to `_decision` when an authorization row already exists, without reading the account switch, so a consent screen reloaded after the account was paused in another tab still shows approve and deny. No grant is possible (enforcement point 3 answers the click with E9), so this is a UX inconsistency against the documented enforcement points. | Read `_access_disabled` in the `signed_in is not None` branch and answer with the `_refuse_paused` path, as after the poll. (Only the first half was taken: `_refuse_paused` revokes the app password and deletes the flow, and its docstring says it runs where no authorization row exists yet. This branch is a GET with a row present, so it answers the paused page and changes nothing.) |
