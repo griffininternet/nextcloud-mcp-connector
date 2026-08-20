@@ -96,7 +96,7 @@ require_repo_files() {
 # A typo here is a certificate order that fails, and five failed orders per week per name
 # are a rate limit that lasts a week, so the shape is checked before anything starts.
 require_domain_shape() {
-  if ! printf '%s' "${DOMAIN}" | grep -Eq '^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,}$'; then
+  if ! printf '%s' "${DOMAIN}" | grep -E '^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,}$' >/dev/null; then
     echo "ERROR: NC_STAGING_DOMAIN is '${DOMAIN}', which is not a host name." >&2
     echo "Expected something like nc-staging.example.com, without scheme and without path." >&2
     return 1

@@ -163,7 +163,7 @@ ensure_own_topology() {
 # digits, dots and hyphens, at least one dot: anything else is a typo or an injection.
 require_host_name() {
   local value="$1"
-  if ! printf '%s' "$value" | grep -Eq '^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,}$'; then
+  if ! printf '%s' "$value" | grep -E '^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,}$' >/dev/null; then
     echo "ERROR: NC_STAGING_DOMAIN is '${value}', which is not a host name." >&2
     echo "It is interpolated into every URL this app publishes about itself. Refusing." >&2
     return 1
@@ -221,11 +221,18 @@ occ_pw() {
     occ_stdin 'OC_PASS="$(cat)"; export OC_PASS; exec php occ "$@"' "$@"
 }
 
-# grep on an occ pipe never uses -q here: with pipefail, -q exits on the first match,
-# the pipe closes early and the docker side of the pipe can die on SIGPIPE (exit 141),
-# which turns a successful check into a flaky bootstrap failure (two CI runs died with
-# the calendar visibly printed one line above the failing check). grep without -q reads
-# its input to the end; the match result goes to /dev/null instead.
+# grep on a pipe never uses -q here: with pipefail, -q exits on the first match, the pipe
+# closes early and the writing side of the pipe can die on SIGPIPE (exit 141), which turns
+# a successful check into a flaky bootstrap failure (two CI runs died with the calendar
+# visibly printed one line above the failing check). grep without -q reads its input to
+# the end; the match result goes to /dev/null instead.
+#
+# The rule reads "on a pipe" and no longer "on an occ pipe" (IN-05). The validators below
+# pipe a printf into grep, where the writer finishes before grep could ever close anything,
+# so they were an exception nobody had written down, spelled -Eq, and the test that holds
+# this rule did not see them. One rule for every pipe is cheaper to keep than an exception
+# that has to be recognised again in every review; the gate is
+# test_no_grep_q_on_a_pipe_in_the_shell_scripts.
 wait_for_install() {
   local attempt
   for attempt in $(seq 1 60); do
@@ -368,7 +375,7 @@ share_suffix() {
     existing="$(sed -n 's|^NC_MCP_TEST_SHARED_DIR=/\{0,1\}mcp-share-||p' "${ENV_FILE}" |
       head -n1 | tr -d '\r')"
   fi
-  if printf '%s' "$existing" | grep -Eq '^[0-9a-f]{10}$'; then
+  if printf '%s' "$existing" | grep -E '^[0-9a-f]{10}$' >/dev/null; then
     printf '%s' "$existing"
     return 0
   fi
@@ -534,7 +541,7 @@ app_password() {
 # client to HaRP with HP_SHARED_KEY (CR-02). A weak value is refused, never adopted.
 require_hex64() {
   local name="$1" value="$2" origin="$3"
-  if ! printf '%s' "$value" | grep -Eq '^[0-9a-f]{64}$'; then
+  if ! printf '%s' "$value" | grep -E '^[0-9a-f]{64}$' >/dev/null; then
     echo "ERROR: ${name} in ${origin} is not 64 lower case hex characters." >&2
     echo "It looks like a placeholder or a hand written value, and both are secrets that" >&2
     echo "grant full access. Generate one: openssl rand -hex 32" >&2
@@ -550,7 +557,7 @@ require_hex64() {
 # these two shapes are pinned here, immediately before any of them is used.
 require_port_number() {
   local name="$1" value="$2"
-  if ! printf '%s' "$value" | grep -Eq '^[0-9]+$'; then
+  if ! printf '%s' "$value" | grep -E '^[0-9]+$' >/dev/null; then
     echo "ERROR: ${name} is '${value}', not a plain port number." >&2
     echo "It is interpolated unquoted into the registration JSON (IN-07). Refusing." >&2
     return 1
@@ -559,7 +566,7 @@ require_port_number() {
 
 require_registry_shape() {
   local value="$1"
-  if ! printf '%s' "$value" | grep -Eq '^[0-9A-Za-z_.:-]+$'; then
+  if ! printf '%s' "$value" | grep -E '^[0-9A-Za-z_.:-]+$' >/dev/null; then
     echo "ERROR: NC_EXAPP_REGISTRY is '${value}', which is not a host[:port] shape." >&2
     echo "It is interpolated into the registration JSON (IN-07). Refusing." >&2
     return 1
@@ -576,7 +583,7 @@ require_registry_shape() {
 # with a newline would pass on its first line and smuggle the rest into the payload.
 require_url_shape() {
   local name="$1" value="$2"
-  if ! printf '%s' "$value" | grep -Eqz '^https?://[A-Za-z0-9._:-]+(/[A-Za-z0-9._/-]*)?$'; then
+  if ! printf '%s' "$value" | grep -Ez '^https?://[A-Za-z0-9._:-]+(/[A-Za-z0-9._/-]*)?$' >/dev/null; then
     echo "ERROR: ${name} is not a plain http or https address." >&2
     echo "It is interpolated into the registration JSON (WR-03, IN-07). Refusing." >&2
     return 1

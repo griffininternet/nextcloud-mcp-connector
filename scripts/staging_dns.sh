@@ -44,12 +44,12 @@ ZONE_ID="${CF_ZONE_ID:?set CF_ZONE_ID to the id of the zone (Cloudflare dashboar
 DOMAIN="${NC_STAGING_DOMAIN:?set NC_STAGING_DOMAIN to the full host name, for example nc-staging.example.com}"
 IP="${1:-${NC_STAGING_IP:-}}"
 
-if ! printf '%s' "${DOMAIN}" | grep -Eq '^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,}$'; then
+if ! printf '%s' "${DOMAIN}" | grep -E '^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,}$' >/dev/null; then
   echo "ERROR: NC_STAGING_DOMAIN is '${DOMAIN}', which is not a host name." >&2
   exit 1
 fi
 
-if ! printf '%s' "${ZONE_ID}" | grep -Eq '^[0-9a-f]{32}$'; then
+if ! printf '%s' "${ZONE_ID}" | grep -E '^[0-9a-f]{32}$' >/dev/null; then
   echo "ERROR: CF_ZONE_ID is not 32 hex characters. It is the 'Zone ID' from the overview" >&2
   echo "page of the zone in the Cloudflare dashboard." >&2
   exit 1
@@ -111,7 +111,7 @@ else
   echo "address: using ${IP}"
 fi
 
-if ! printf '%s' "${IP}" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'; then
+if ! printf '%s' "${IP}" | grep -E '^[0-9]{1,3}(\.[0-9]{1,3}){3}$' >/dev/null; then
   echo "ERROR: '${IP}' is not an IPv4 address. This script sets an A record." >&2
   exit 1
 fi
