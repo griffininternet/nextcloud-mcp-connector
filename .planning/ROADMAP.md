@@ -204,7 +204,7 @@ Plans:
   3. Der Permission-Parity-Test besteht: Ein eingeschränkter Nutzer sieht via MCP nichts, was die Weboberfläche ihm nicht zeigt; Create-only-Write-Tests und Negative-Credential-Loadtest sind grün
   4. Für Claude.ai/Desktop, ChatGPT, Cursor, Open WebUI und MUCGPT existiert je eine Setup-Doku mit den bekannten Stolperstellen, jeweils gegen den echten Client verprobt
 
-**Plans**: 10 plans in 5 waves
+**Plans**: 16 plans in 8 waves (10 aus dem Erstlauf, 6 zur Schliessung der Luecken aus 05-VERIFICATION.md)
 
 Plans:
 **Wave 1**
@@ -232,6 +232,21 @@ Plans:
 
 - [x] 05-10-PLAN.md - Release 0.1.1 und Store-Pflege mit Live-Nachweis (EXAPP-04) (Wave 5)
 
+**Wave 6, Gap Closure** *(Luecken aus 05-VERIFICATION.md, unabhaengig von Wave 1 bis 5)*
+
+- [ ] 05-11-PLAN.md - CR-01 schliessen: https-oder-Loopback-Regel und Issuer-Refusal ohne Startabbruch (Wave 1)
+- [ ] 05-12-PLAN.md - Ursachenanalyse des 401 beim Startzeit-Lesevorgang der Admin-Werte (Wave 1)
+- [ ] 05-15-PLAN.md - Advisory-Funde WR-01, WR-02 und WR-03 aus dem Phasen-Review (Wave 1)
+- [ ] 05-16-PLAN.md - MUCGPT-Verprobungsprotokoll, gefuehrte Restposten, Owner-Entscheidung (Wave 1)
+
+**Wave 7, Gap Closure** *(blocked on 05-11 und 05-12)*
+
+- [ ] 05-13-PLAN.md - Admin-Werte wirken trotz 401: Overlay-Cache und Erneuerung am enabled-Hook (Wave 2)
+
+**Wave 8, Gap Closure** *(blocked on 05-13)*
+
+- [ ] 05-14-PLAN.md - Live-Nachweis des Rundlaufs vom Admin-Formular ins Discovery-Dokument (Wave 3)
+
 ## Progress
 
 **Execution Order:**
@@ -243,7 +258,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. ExApp-Shell | 7/7 | Complete    | 2026-08-15 |
 | 3. OAuth 2.1 | 8/9 | In Progress|  |
 | 4. Per-User-Verwaltung und prepare_context | 4/4 | Complete   | 2026-08-17 |
-| 5. Hardening und Store-Einreichung | 10/10 | Complete   | 2026-08-19 |
+| 5. Hardening und Store-Einreichung | 10/16 | Gap Closure | 2026-08-19 (Erstlauf) |
 
 ## Coverage
 
