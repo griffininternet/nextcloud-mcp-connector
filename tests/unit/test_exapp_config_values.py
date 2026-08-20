@@ -486,24 +486,86 @@ def test_the_loopback_hosts_are_the_three_spellings_of_this_machine() -> None:
 @pytest.mark.anyio
 @respx.mock
 @pytest.mark.parametrize(
-    ("value", "why"),
+    ("value", "expected", "why"),
     [
-        ("https://cloud.example.com/exapps/mcp_connector", "the normal case of an installation"),
-        ("HTTPS://Cloud.Example.COM", "case decides nothing on the accepted side either"),
-        ("http://127.0.0.1:8765", "the default in code, which has to stay usable"),
-        ("http://localhost:8765/exapps/mcp_connector", "loopback by name, with port and subpath"),
-        ("http://localhost", "loopback by name, without a port and without a subpath"),
-        ("http://[::1]:8765", "loopback as an IPv6 literal, which arrives in brackets"),
+        (
+            "https://cloud.example.com/exapps/mcp_connector",
+            "https://cloud.example.com/exapps/mcp_connector",
+            "the normal case of an installation",
+        ),
+        (
+            "HTTPS://Cloud.Example.COM",
+            "https://cloud.example.com",
+            "case decides nothing on the accepted side either, and it is levelled (IN-03)",
+        ),
+        ("http://127.0.0.1:8765", "http://127.0.0.1:8765", "the default in code, still usable"),
+        (
+            "http://localhost:8765/exapps/mcp_connector",
+            "http://localhost:8765/exapps/mcp_connector",
+            "loopback by name, with port and subpath",
+        ),
+        ("http://localhost", "http://localhost", "loopback by name, without port and subpath"),
+        (
+            "http://[::1]:8765",
+            "http://[::1]:8765",
+            "loopback as an IPv6 literal, which arrives in brackets and keeps them",
+        ),
     ],
 )
-async def test_https_and_every_loopback_spelling_reach_the_overlay(value: str, why: str) -> None:
+async def test_https_and_every_loopback_spelling_reach_the_overlay(
+    value: str, expected: str, why: str
+) -> None:
     """The other half of CR-01: the rule refuses http, it does not refuse development.
 
     A local test topology serves over http on loopback, and RFC 8414 allows exactly that.
     """
     answer({"public_url": value})
 
-    assert await config_values.admin_overlay(env=ENV) == {config.ENV_PUBLIC_URL: value}, why
+    assert await config_values.admin_overlay(env=ENV) == {config.ENV_PUBLIC_URL: expected}, why
+
+
+@pytest.mark.anyio
+@respx.mock
+@pytest.mark.parametrize(
+    ("value", "expected", "why"),
+    [
+        (
+            "HTTPS://Cloud.Example.COM/exapps/MCP_Connector",
+            "https://cloud.example.com/exapps/MCP_Connector",
+            "scheme and host are case insensitive per RFC 3986, a path is not",
+        ),
+        (
+            "https://Cloud.Example.COM:8443/x",
+            "https://cloud.example.com:8443/x",
+            "the port survives the levelling",
+        ),
+        (
+            "http://LOCALHOST:8765",
+            "http://localhost:8765",
+            "the loopback exception is spelled in one case afterwards as well",
+        ),
+        (
+            "https://cloud.example.com/exapps/mcp_connector?x=A",
+            "https://cloud.example.com/exapps/mcp_connector?x=A",
+            "a query is left alone, like the path",
+        ),
+    ],
+)
+async def test_the_issuer_leaves_this_module_in_one_spelling(
+    value: str, expected: str, why: str
+) -> None:
+    """IN-03: this value becomes the ``issuer`` and the prefix of ``resource``.
+
+    Clients compare both character by character, which the trailing slash paragraph of
+    ``docs/client-setup.md`` and ``docs/oauth-setup.md`` says in as many words. An
+    administrator who types the address with a capital letter and then enters it lower case
+    in her client fails a comparison that no log line explains. Scheme and host are case
+    insensitive per RFC 3986 section 3.1 and 3.2.2, so levelling them loses nothing; the
+    path is case sensitive and is therefore left exactly as it arrived.
+    """
+    answer({"public_url": value})
+
+    assert await config_values.admin_overlay(env=ENV) == {config.ENV_PUBLIC_URL: expected}, why
 
 
 @pytest.mark.anyio
