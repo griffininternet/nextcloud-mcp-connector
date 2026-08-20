@@ -119,10 +119,10 @@ http://127.0.0.1:8081/exapps/mcp_connector/connections               the connect
 
 ## The script (run of show)
 
-Total 4:30 on stage. The machine time is called out separately per step, because it is the
-part that cannot be talked faster.
+Total 4:40 on stage. The machine time is called out separately per step, because it is the
+part that cannot be talked faster, and because it is the number the recorded run measured.
 
-### Step 0, the whole flow in printed steps (35 s on stage, 20 s machine)
+### Step 0, the whole flow in printed steps (35 s on stage, 5 s machine)
 
 **Say:** "Before anything visual, here is the entire authorization flow, one line per step,
 against the running instance."
@@ -136,10 +136,12 @@ uv run --no-sync python scripts/oauth_flow_check.py \
 
 **Must be visible:** seven steps with their real status codes, in order, the `401` of the
 MCP route first and the tool call last, then the closing line
-`all steps answered as the specification and this deployment require`. The script ends the
-connection it created itself, so the instance is where it was before.
+`all steps answered as the specification and this deployment require`. Step 7 reports
+`tools=16`, which is the number this server publishes; step 5 below explains why the
+acceptance script says fifteen. The script ends the connection it created itself, so the
+instance is where it was before.
 
-### Step 1, an assistant connects (60 s on stage, 12 s machine)
+### Step 1, an assistant connects (60 s on stage, 6 s machine)
 
 **Say:** "This is a real assistant, and it has never seen this Nextcloud. Watch what it
 does not ask me for: it never asks for a password, and I never paste a token."
@@ -164,7 +166,7 @@ claude mcp login ncmcp
 stops with `stdin isn't a terminal` otherwise, which is only a problem for an automated run
 and never on stage.
 
-### Step 2, the assistant reads real content (25 s on stage, 15 s machine)
+### Step 2, the assistant reads real content (40 s on stage, 30 s machine)
 
 **Say:** "It is connected as me, and only as me."
 
@@ -180,7 +182,7 @@ claude -p "Call the ncmcp tool files_list for the path / and then print, verbati
 home, not a tool description and not an empty list. On the demo fixture two of the entries
 are the marker files the bootstrap creates, so a wrong account is obvious at a glance.
 
-### Step 3, the account pauses and resumes access (65 s on stage, 35 s machine)
+### Step 3, the account pauses and resumes access (60 s on stage, 25 s machine)
 
 **Say:** "Now the part nobody else has. This is not the administrator's page. This is mine."
 
@@ -194,21 +196,40 @@ http://127.0.0.1:8081/exapps/mcp_connector/connections
 `MCP access is paused. Connected apps are refused, nothing is disconnected.` The connected
 app is still listed, because nothing was disconnected.
 
-**Do, in the terminal:** the same command as step 2, unchanged. Scrolling back and pressing
-return is the point: nothing about the assistant was reconfigured.
+**Do, in the terminal:** ask the client what it can still reach.
 
-**Must be visible:** the call does not answer with content. The MCP route answers the
-paused account with `403` and the body
-`{"error":"access_disabled", ...}`, so the assistant reports that it lost access rather
-than returning an empty result.
+```
+claude mcp list
+```
 
-**Do, in the browser:** press `Turn access back on`, then run the same command a third time.
+**Must be visible:** the line for the server flips from `✔ Connected` to
+`! Needs authentication`. On the wire the MCP route answered `403` with the body
+
+```
+{"error": "access_disabled", "error_description": "MCP access is switched off for this
+Nextcloud account. The owner of the account can switch it back on on the connector's
+connections page ..."}
+```
+
+so the refusal names its reason and does not pretend to be an empty result.
+
+**Do, in the browser:** press `Turn access back on`, then run `claude mcp list` again.
 
 **Must be visible:** the page states `MCP access is on. Connected apps can use your
-Nextcloud.` and the tool answers with content again. Nothing was reconnected and no token
-was reissued.
+Nextcloud.` and the client is back to `✔ Connected`, with a `200` on the wire. Nothing was
+reconnected and no token was reissued: it is the same connection, the same row on the page
+and the same token.
 
-### Step 4, the account disconnects one app (45 s on stage, 20 s machine)
+**Why the probe here is `claude mcp list` and not the question from step 2.** Measured on
+2026-08-20: after a `403` this client marks the server as unauthenticated in its own
+bookkeeping, and a non interactive `claude -p` run then refuses to try at all, even after
+access is switched back on. `claude mcp list` re-probes the server and recovers at once.
+The connector recovers immediately either way, which the wire shows, but a demo must not
+depend on a client's memory of a refusal. If a full question with content is wanted after
+the resume, run `claude mcp list` first and then repeat the step 2 command in a fresh
+interactive session.
+
+### Step 4, the account disconnects one app (45 s on stage, 11 s machine)
 
 **Say:** "And this is the end of it. One click, and it is over for that app."
 
@@ -217,18 +238,21 @@ the page that follows.
 
 **Must be visible on the page:** the confirmation page names the app and says
 `{app} loses access to your Nextcloud immediately. Nothing in your Nextcloud is deleted or
-changed.` After the confirmation the list says `Disconnected` and the row is gone.
+changed.` After the confirmation the list says `Disconnected`, the row is gone, and the app
+is named in the callout as the one that lost access.
 
-**Do, in the terminal:** the same command as step 2, a fourth time.
+**Do, in the terminal:** `claude mcp list` once more.
 
-**Must be visible:** the call is refused. The MCP route answers `401` with the
-`WWW-Authenticate` pointer to the protected resource document, which is the specification's
-way of saying "connect again if you want back in". The assistant is not broken, it is
-logged out.
+**Must be visible:** the server is `! Needs authentication` again. Three things happened on
+the wire in that one probe, and they are worth naming if somebody asks: the MCP route
+answered `401` with the `WWW-Authenticate` pointer to the protected resource document, the
+client then re-read the two discovery documents, and its attempt to refresh answered `400`,
+because the refresh token went with the connection. The assistant is not broken, it is
+logged out, and it can connect again with step 1.
 
-### Step 5, the whole set, and what is missing from it (40 s on stage, 40 s machine)
+### Step 5, the whole set, and what is missing from it (40 s on stage, 5 s machine)
 
-**Say:** "Fifteen tools, and here is what is not among them."
+**Say:** "Sixteen tools, and here is what is not among them."
 
 **Do:**
 
@@ -239,9 +263,16 @@ NC_MCP_APP_PASSWORD="$NC_MCP_TEST_APP_PASSWORD" \
     uv run --no-sync python scripts/acceptance_all_tools.py
 ```
 
-**Must be visible:** the acceptance matrix with one line per tool and the closing line
-`OK: all 15 tools answered over stdio.` Read the names out: there is no delete, no move and
-no share. The upload tool creates and refuses a path that exists.
+**Must be visible:** the acceptance matrix, with `OK` on every one of the fifteen tools it
+calls. Read the names out: there is no delete, no move and no share. The upload tool creates
+and refuses a path that exists.
+
+**Read the matrix, not the summary line.** Measured on 2026-08-20: the script also prints
+`FAIL tools/list expected 15 tools, got 16` and exits `1`. That line is about the script and
+not about the connector. Its expected count is the one phase 1 wrote down, the sixteenth
+tool (`prepare_context`) arrived later, and the script never calls that one. Every tool it
+does call answered. The stale count is recorded in the deferred items of this phase, so it
+gets its own change rather than a quick edit inside a demo run.
 
 **Say the transport out loud:** this step runs over the stdio transport with an app
 password, which is the second supported way in and the one for clients that cannot sign in
@@ -328,14 +359,22 @@ A runbook without a fallback path is a script for the good day.
 | Step 1, everything answers `503` | `HP_SHARED_KEY` drifted between HaRP and the daemon registration, the classic restart mistake | Bring the topology up again with the key from `.env.exapp`, see the setup section |
 | Step 2, the tool answers an empty list | The wrong account is signed in | Check the account on the connections page, not in the terminal |
 | Step 3, the page answers `403` or an error page | The browser session is not the account that holds the connection | Sign in again in the browser and reload the page |
-| Step 5, one tool reports `FAIL` | Notes or Deck missing, or the Deck board is absent | Skip the step and say so. The station is the tool list, and the list is also printed by step 0 |
+| Step 3, the client stays refused after the resume | The client kept its own verdict from the `403`, see the note in that step | `claude mcp list` re-probes and recovers. Do not log in again, that would replace the connection the station is about |
+| Step 5, a tool reports `FAIL` | Notes or Deck missing, or the Deck board is absent. The `tools/list` line is the known stale count, see the step | Skip the step and say so. The station is the tool list, and step 0 prints the count too |
 | Anything, and the audience is waiting | | Go to step 3 with the connection from step 0 already in place, or narrate the recorded run from `06-10-MEASUREMENTS.md`. Never debug on stage |
 
-**The one thing to restore afterwards.** Steps 3 and 4 leave the demo account without its
-connection, which is the intended end state, and they leave the access switch on. Check
-both before the next run:
+**What to check afterwards.** Step 4 leaves the demo account without a connection, which is
+the intended end state, and step 3 leaves the access switch on. Three commands say whether
+the next run starts from where this one did:
 
 ```
 docker exec -u www-data nc-mcp-exapp-nc php occ app_api:app:list
-claude mcp logout ncmcp
+docker exec -u www-data nc-mcp-exapp-nc php occ app_api:app:config:list mcp_connector
+curl -s http://127.0.0.1:8081/exapps/mcp_connector/connections -o /dev/null -w '%{http_code}\n'
 ```
+
+Expect `0.1.2 [enabled]`, exactly the two keys `oauth_data_key` and `public_url`, and the
+connections page reachable. The page of the demo account then reads `No connected apps`
+while the switch above it says `MCP access is on`. The client keeps its server entry and
+reports `! Needs authentication`, which is the correct state for a connection that was
+ended on purpose; `claude mcp remove ncmcp -s local` takes the entry out as well.
