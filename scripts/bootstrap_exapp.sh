@@ -566,6 +566,23 @@ require_registry_shape() {
   fi
 }
 
+# The public address is the third value of that class (WR-03, same reason as IN-07): it is
+# overridable from the calling shell and it lands as "value":"${PUBLIC_URL}" in the string
+# of the json_info payload, unescaped. A value carrying a quotation mark produces invalid
+# JSON at best and extra fields AppAPI adopts silently at worst, which is why it is pinned
+# here rather than trusted because a default built it. The value is not echoed back: it can
+# come from a staging environment file, and the name is what the caller has to fix.
+# grep runs with -z so the pattern sees the whole value as one record. Without it a value
+# with a newline would pass on its first line and smuggle the rest into the payload.
+require_url_shape() {
+  local name="$1" value="$2"
+  if ! printf '%s' "$value" | grep -Eqz '^https?://[A-Za-z0-9._:-]+(/[A-Za-z0-9._/-]*)?$'; then
+    echo "ERROR: ${name} is not a plain http or https address." >&2
+    echo "It is interpolated into the registration JSON (WR-03, IN-07). Refusing." >&2
+    return 1
+  fi
+}
+
 # The shared key is read back from the running HaRP container instead of being invented
 # here. Both sides have to carry the same value, and a generated one would silently drift
 # away from the container that was started before this script ran.
@@ -813,6 +830,7 @@ ensure_own_topology
 require_port_number NC_EXAPP_APP_PORT "${APP_PORT}"
 require_port_number NC_EXAPP_MANUAL_PORT "${MANUAL_APP_PORT}"
 require_registry_shape "${REGISTRY}"
+require_url_shape NC_EXAPP_PUBLIC_URL "${PUBLIC_URL}"
 if [ "${STAGING_MODE}" -eq 1 ]; then
   require_host_name "${STAGING_DOMAIN}"
   require_generated_password NC_EXAPP_ALICE_PASSWORD "${ALICE_PASSWORD}"

@@ -1217,6 +1217,15 @@ def test_the_topology_guard_refuses_a_foreign_compose_file(
         ("require_registry_shape 'ghcr.io'", 0),
         ('require_registry_shape \'127.0.0.1:5000","image":"evil\'', 1),
         ("require_registry_shape ''", 1),
+        ("require_url_shape NC_EXAPP_PUBLIC_URL 'https://cloud.test/exapps/mcp_connector'", 0),
+        ("require_url_shape NC_EXAPP_PUBLIC_URL 'http://127.0.0.1:8081/exapps/mcp_connector'", 0),
+        ("require_url_shape NC_EXAPP_PUBLIC_URL 'https://cloud.example.com'", 0),
+        ('require_url_shape NC_EXAPP_PUBLIC_URL \'https://x","system":true\'', 1),
+        ("require_url_shape NC_EXAPP_PUBLIC_URL 'https://cloud.example.com/a b'", 1),
+        ("require_url_shape NC_EXAPP_PUBLIC_URL 'https://cloud.example.com/a\\b'", 1),
+        ("require_url_shape NC_EXAPP_PUBLIC_URL 'https://ok.example.com\n\"evil\":1'", 1),
+        ("require_url_shape NC_EXAPP_PUBLIC_URL 'cloud.example.com'", 1),
+        ("require_url_shape NC_EXAPP_PUBLIC_URL ''", 1),
     ],
     ids=[
         "a plain port",
@@ -1227,16 +1236,27 @@ def test_the_topology_guard_refuses_a_foreign_compose_file(
         "a bare registry host",
         "a registry with a JSON injection",
         "an empty registry",
+        "the public address of a real instance",
+        "the local default with its port",
+        "a public address without a path",
+        "a public address with a JSON injection",
+        "a public address with a space",
+        "a public address with a backslash",
+        "a public address with a second line",
+        "a public address without a scheme",
+        "an empty public address",
     ],
 )
 def test_the_registration_inputs_are_pinned_before_json_info(call: str, expected_code: int) -> None:
-    """IN-07: json_info interpolates the port unquoted and the registry into a string,
-    and both come from overridable variables. A value outside the pinned shape must stop
-    the bootstrap instead of reaching AppAPI as extra JSON fields."""
+    """IN-07 and WR-03: json_info interpolates the port unquoted, and the registry and the
+    public address into strings, and all three come from overridable variables. A value
+    outside the pinned shape must stop the bootstrap instead of reaching AppAPI as extra
+    JSON fields."""
     script = (
         "set -euo pipefail\n"
         f"{shell_function('require_port_number')}\n"
         f"{shell_function('require_registry_shape')}\n"
+        f"{shell_function('require_url_shape')}\n"
         f"{call}\n"
     )
 
@@ -1245,15 +1265,35 @@ def test_the_registration_inputs_are_pinned_before_json_info(call: str, expected
     assert result.returncode == expected_code, result.stderr
 
 
-def test_the_bootstrap_calls_both_registration_validators() -> None:
+def test_the_bootstrap_calls_every_registration_validator() -> None:
     """The functions only protect anything if the main flow actually runs them."""
     text = BOOTSTRAP.read_text(encoding="utf-8")
     for call in (
         'require_port_number NC_EXAPP_APP_PORT "${APP_PORT}"',
         'require_port_number NC_EXAPP_MANUAL_PORT "${MANUAL_APP_PORT}"',
         'require_registry_shape "${REGISTRY}"',
+        'require_url_shape NC_EXAPP_PUBLIC_URL "${PUBLIC_URL}"',
     ):
         assert call in text, f"the bootstrap never runs {call!r}"
+
+
+def test_every_registration_validator_runs_before_json_info_is_built() -> None:
+    """WR-03: a validator after the registration would only describe the payload.
+
+    ``json_info`` is reached through ``ensure_exapp`` and ``register_manual_install``, so
+    the position that matters is the one in the main run at the end of the script, not the
+    position of the function definitions above it.
+    """
+    text = BOOTSTRAP.read_text(encoding="utf-8")
+    run = text[text.index('echo "== ExApp topology bootstrap =="') :]
+    registration = min(run.index("\n  ensure_exapp\n"), run.index("\n  register_manual_install\n"))
+
+    for call in (
+        'require_port_number NC_EXAPP_APP_PORT "${APP_PORT}"',
+        'require_registry_shape "${REGISTRY}"',
+        'require_url_shape NC_EXAPP_PUBLIC_URL "${PUBLIC_URL}"',
+    ):
+        assert run.index(call) < registration, f"{call!r} runs after the registration"
 
 
 # --- the third data layer of the permission parity proof (plan 05-03) --------------
