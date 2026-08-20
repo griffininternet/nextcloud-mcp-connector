@@ -1316,6 +1316,55 @@ def test_the_rescue_line_names_the_rule_and_the_place_but_never_the_value(
     assert "tls-is-missing.example.org" not in messages, "not even the host of the value"
 
 
+def test_the_rescue_line_names_the_deploy_variable_as_a_source_too(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """IN-02: the address that broke did not have to come out of the admin form.
+
+    After the prevention half of CR-01 an unusable form value never reaches the build at
+    all, so the case this branch really sees is the one this test builds: a deploy variable.
+    A line that sends the administrator to the form to correct "the stored value" sends her
+    to an empty field, and she looks for a value that is not there. Both sources are named,
+    with the rule between them, so the sentence is true whichever one it was.
+    """
+    with caplog.at_level("ERROR", logger="mcp_connector.entry_exapp"):
+        start(monkeypatch, tmp_path, env={config.ENV_PUBLIC_URL: UNUSABLE_URL})
+
+    messages = " ".join(record.getMessage() for record in caplog.records)
+    assert config.ENV_PUBLIC_URL in messages, "the deploy variable is a place to correct it"
+    assert strings.ADMIN_SETTINGS_PLACE in messages, "and so is the form"
+    assert "wins over" in messages, "and which of the two wins is said, not guessed"
+    assert "the stored value is kept" not in messages.lower(), (
+        "no claim that a value is waiting in the form, because there may be none"
+    )
+
+
+def test_the_rescue_line_says_the_same_two_places_for_a_stored_value(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    admin_config: AdminConfig,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The counter probe of IN-02: one line for both sources, never a wrong one for either.
+
+    Here the address really did come out of the form (the build is stubbed, because the
+    prevention half refuses such a value before it can reach the real one). Nothing is
+    deleted in Nextcloud either way (T-05-44), so what the administrator finds in the form
+    is still what she typed.
+    """
+    admin_config.values["public_url"] = ADMIN_URL
+    monkeypatch.setattr(entry_exapp, "build_exapp_app", RefusingBuild(failures=1))
+
+    with caplog.at_level("ERROR", logger="mcp_connector.entry_exapp"):
+        start(monkeypatch, tmp_path)
+
+    messages = " ".join(record.getMessage() for record in caplog.records)
+    assert config.ENV_PUBLIC_URL in messages
+    assert strings.ADMIN_SETTINGS_PLACE in messages
+    assert "wins over" in messages
+    assert ADMIN_URL not in messages, "the value itself stays out of the log (T-05-21)"
+
+
 def test_a_missing_volume_stops_the_start_before_anything_is_built(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
