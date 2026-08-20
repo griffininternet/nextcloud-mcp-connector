@@ -53,6 +53,7 @@ __all__ = [
     "is_cimd_client_id",
     "resolve_addresses",
     "target_allowed",
+    "validate_document",
 ]
 
 #: "The recommended maximum response size for client metadata documents is 5 kilobytes"
@@ -65,6 +66,16 @@ MAX_DOCUMENT_BYTES = 5120
 #: already runs ``connect=5.0`` in ``nextcloud/http.py``; a fetch that hangs here hangs the
 #: consent page of a user who is waiting for a browser to answer.
 FETCH_TIMEOUT_SECONDS = 5.0
+
+#: The properties without which a document says nothing: which client it is, what to call it
+#: on the consent page, and where it may be sent back to.
+_REQUIRED = ("client_id", "client_name", "redirect_uris")
+
+#: Authentication methods built on a symmetric secret. They are refusals because there is no
+#: channel over which such a secret could ever have been agreed: nothing registered, so
+#: nothing was ever handed out. A document that names one of them is either confused about
+#: what it is or asking this server to accept an authentication it cannot check (T-06-12).
+_FORBIDDEN_AUTH = frozenset({"client_secret_post", "client_secret_basic", "client_secret_jwt"})
 
 logger = logging.getLogger("mcp_connector.oauth.cimd")
 
@@ -105,7 +116,7 @@ def is_cimd_client_id(value: str) -> bool:
     chain and not the last (T-06-03).
 
     Three of the refusals are ways to smuggle a target past a reader rather than mistakes,
-    which is the reason ``registry.redirect_uri_allowed`` refuses the same three: user info
+    which is the reason the registry's own address check refuses the same three: user info
     renders as the host in more than one client, a fragment is where a value hides from a
     server log, and a dot segment lets one document URL stand for another path entirely.
 
@@ -356,6 +367,41 @@ async def fetch_document(
         raw = await _fetch_pinned(url, addresses[0])
     except _Refused:
         return None
+    return validate_document(raw, identifier)
+
+
+def validate_document(raw: bytes, client_id: str) -> dict[str, Any] | None:
+    """The document these bytes are, or ``None``. Never raises into a handler (D-37).
+
+    The order below is the specification's order, and the four MUSTs are its four MUSTs:
+
+    1. valid JSON, and an object rather than an array or a number;
+    2. the required properties are present;
+    3. the document's own ``client_id`` is the URL it was fetched from;
+    4. the ``token_endpoint_auth_method`` is not one built on a shared symmetric secret.
+
+    **Why step 3 compares byte for byte** (T-06-11). RFC 3986 section 6.2.1 calls this simple
+    string comparison, and it is the same rule this project already applies to the ``issuer``
+    of its own metadata document (``metadata.py``, where the configured value wins over the
+    library's normalised one for exactly this reason). Normalising before comparing would
+    hand an attacker the difference between the two spellings: a document served at one URL
+    could then claim an identity that is a trailing slash, an escaped character or a default
+    port away, and every later decision in this server keys off that identity.
+
+    **What is deliberately not here.** No property of the document is interpreted, rendered
+    or put into a URL by this function, and ``logo_uri`` in particular is not read at all.
+    Fetching it would be a second outbound request into a domain nobody checked and a cross
+    domain tracking channel for every consent page this server shows (draft section 6.7,
+    T-06-13). The omission is written down so it is not later read as a gap.
+
+    ``redirect_uris`` is checked for being a list and is **not** filtered here. The rule of
+    D-35 is applied in ``provider.py`` through the registry's own address check, the same one
+    the registration path applies, and a second filtering place would be a second truth about
+    what this server accepts.
+
+    What is logged is the step that refused, never a value of the document: it arrived from a
+    foreign host over a connection a stranger's identifier chose.
+    """
     try:
         document = json.loads(raw)
     except (json.JSONDecodeError, ValueError, UnicodeDecodeError):
@@ -363,5 +409,17 @@ async def fetch_document(
         return None
     if not isinstance(document, dict):
         logger.warning("a document was refused: its top level is not an object")
+        return None
+    if any(key not in document for key in _REQUIRED):
+        logger.warning("a document was refused: a required property is missing")
+        return None
+    if document["client_id"] != client_id:
+        logger.warning("a document was refused: it names an identifier it was not fetched from")
+        return None
+    if document.get("token_endpoint_auth_method", "none") in _FORBIDDEN_AUTH:
+        logger.warning("a document was refused: it asks for an authentication with a secret")
+        return None
+    if not isinstance(document.get("redirect_uris"), list):
+        logger.warning("a document was refused: its return addresses are not a list")
         return None
     return document

@@ -413,6 +413,93 @@ async def test_a_client_id_that_is_not_https_costs_no_packet_and_no_resolution()
     assert calls == []
 
 
+# --- the document's own rules ------------------------------------------------------------
+
+#: Claude Code's real client id metadata document, fetched in this session on 2026-08-20 from
+#: https://claude.ai/oauth/claude-code-client-metadata. It is here because it is the candidate
+#: client of AUTH-08: a rule that refuses this document refuses the client this phase exists
+#: for. Note that both return addresses are port less, which is what plan 06-03's port rule
+#: is about.
+CLAUDE_CODE_DOCUMENT = {
+    "client_id": "https://claude.ai/oauth/claude-code-client-metadata",
+    "client_name": "Claude Code",
+    "client_uri": "https://claude.ai",
+    "redirect_uris": ["http://localhost/callback", "http://127.0.0.1/callback"],
+    "grant_types": ["authorization_code", "refresh_token"],
+    "response_types": ["code"],
+    "token_endpoint_auth_method": "none",
+}
+
+
+def encoded(**overrides: Any) -> bytes:
+    """The minimal document with these overrides, as the bytes a fetch would return."""
+    return json.dumps(document(**overrides)).encode()
+
+
+def without(key: str) -> bytes:
+    """The minimal document with one property taken out again."""
+    return json.dumps({k: v for k, v in document().items() if k != key}).encode()
+
+
+def test_the_real_claude_code_document_passes_every_rule() -> None:
+    """The candidate client of AUTH-08, measured and not imagined."""
+    raw = json.dumps(CLAUDE_CODE_DOCUMENT).encode()
+
+    result = cimd.validate_document(raw, str(CLAUDE_CODE_DOCUMENT["client_id"]))
+
+    assert result == CLAUDE_CODE_DOCUMENT
+
+
+@pytest.mark.parametrize(
+    ("raw", "why"),
+    [
+        (b"{not json at all", "a body that is not JSON"),
+        (b"", "an empty body"),
+        (b"\xff\xfe{}", "a body that is not even text"),
+        (b'["a", "list"]', "a JSON array instead of an object"),
+        (b'"a string"', "a JSON string instead of an object"),
+        (b"7", "a JSON number instead of an object"),
+        (without("client_id"), "no client_id"),
+        (without("client_name"), "no client_name"),
+        (without("redirect_uris"), "no redirect_uris"),
+        (encoded(redirect_uris="http://127.0.0.1/callback"), "redirect_uris as a string"),
+        (encoded(redirect_uris={"one": "http://127.0.0.1/cb"}), "redirect_uris as an object"),
+        (encoded(client_id=f"{DOCUMENT_URL}/"), "a client_id one trailing slash away"),
+        (encoded(client_id=DOCUMENT_URL.upper()), "a client_id in another case"),
+        (encoded(client_id="https://other.example/c.json"), "somebody else's client_id"),
+        (encoded(token_endpoint_auth_method="client_secret_basic"), "basic secret auth"),
+        (encoded(token_endpoint_auth_method="client_secret_post"), "posted secret auth"),
+        (encoded(token_endpoint_auth_method="client_secret_jwt"), "a secret signed JWT"),
+    ],
+)
+def test_a_document_that_breaks_one_rule_is_refused(raw: bytes, why: str) -> None:
+    """Each row is a rule that would be a claim without it (success criterion 2)."""
+    assert cimd.validate_document(raw, DOCUMENT_URL) is None, why
+
+
+@pytest.mark.parametrize("method", [None, "none", "private_key_jwt"])
+def test_an_authentication_without_a_shared_secret_is_admissible(method: str | None) -> None:
+    """A missing property means ``none``, and ``none`` is what a public client uses."""
+    raw = (
+        without("token_endpoint_auth_method")
+        if method is None
+        else encoded(token_endpoint_auth_method=method)
+    )
+
+    assert cimd.validate_document(raw, DOCUMENT_URL) is not None
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_fetched_document_that_names_another_identifier_is_refused() -> None:
+    """T-06-11 through the whole chain: the transport worked and the answer still is no."""
+    respx.get(PINNED_URL).mock(
+        return_value=httpx.Response(200, json=document(client_id="https://other.example/c.json"))
+    )
+
+    assert await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP)) is None
+
+
 # --- the boundaries of the module itself ------------------------------------------------
 
 
