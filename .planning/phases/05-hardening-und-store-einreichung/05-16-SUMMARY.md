@@ -161,3 +161,8 @@ Quellcode. Die Aenderung ist Text.
 | `grep -ci 'archiv' docs/client-setup.md` | 0 |
 | `git status --porcelain src tests scripts` | leer |
 | `git diff --diff-filter=D HEAD~1 HEAD` nach Task 1 | keine Loeschung |
+
+## Self-Check: PASSED
+
+Alle drei geaenderten Dateien liegen auf der Platte, das SUMMARY existiert, und der Commit
+`785bfe9` ist in `git log` auffindbar.
