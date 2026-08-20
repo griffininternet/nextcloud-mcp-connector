@@ -123,6 +123,14 @@ the reason is written into the container log without repeating what was entered.
 with a fragment, with credentials in it, without a scheme or with an impossible port is
 refused for that reason, because it would become the `issuer` of the metadata document.
 
+**The address has to use `https`, unless it points at loopback** (`localhost`, `127.0.0.1` or
+`[::1]`, which is what a local development setup uses). RFC 8414 requires it for the issuer of
+an authorization server, and a value that the authorization server cannot use as its issuer is
+dropped when the container starts. The app then keeps running with the documented default and
+says so on its connections page, instead of restarting forever with an admin form that
+Nextcloud no longer serves. The value you entered stays in the form, so you can correct it
+there.
+
 **A change takes effect after the app is disabled and enabled again:**
 
 ```

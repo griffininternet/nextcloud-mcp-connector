@@ -912,18 +912,15 @@ def test_a_missing_or_broken_port_stops_the_start(
 # --- the admin values of the start, and the setup state instead of exit 2 (05-04) --
 
 
-def start(
+def deployed(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     env: Mapping[str, str] | None = None,
-) -> Starlette:
-    """Run ``main`` up to the point where it would serve, and return the built application.
+) -> None:
+    """Put a complete AppAPI deploy environment of the HaRP shape into ``os.environ``.
 
-    ``uvicorn.run`` is the last statement of every branch of ``main``, so replacing it is what
-    turns the entry point into something a check can look at: whatever the resolution of the
-    environment produced is now visible in the documents of this application. The HaRP branch
-    is selected because it needs no port, and the data key is answered locally, because a unit
-    test has no Nextcloud to fetch it from.
+    The HaRP branch is selected because it needs no port, and the data key is answered
+    locally, because a unit test has no Nextcloud to fetch it from.
     """
     deploy = {
         **EXAPP_ENV,
@@ -950,6 +947,20 @@ def start(
         return bytes(range(32))
 
     monkeypatch.setattr(store.crypto, "data_key", fake_key)
+
+
+def start(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    env: Mapping[str, str] | None = None,
+) -> Starlette:
+    """Run ``main`` up to the point where it would serve, and return the built application.
+
+    ``uvicorn.run`` is the last statement of every branch of ``main``, so replacing it is what
+    turns the entry point into something a check can look at: whatever the resolution of the
+    environment produced is now visible in the documents of this application.
+    """
+    deployed(monkeypatch, tmp_path, env)
 
     built: list[Starlette] = []
 
@@ -1012,8 +1023,21 @@ def test_the_admin_value_wins_over_the_deploy_variable(
 
 @pytest.mark.parametrize(
     "stored",
-    ["not-an-address", "https://cloud.example.com/x#fragment", "https://a:b@cloud.example.com/x"],
-    ids=["no scheme", "a fragment", "credentials in the address"],
+    [
+        "not-an-address",
+        "https://cloud.example.com/x#fragment",
+        "https://a:b@cloud.example.com/x",
+        # CR-01: this one used to pass the validation and then killed the next start.
+        "http://cloud.example.com/exapps/mcp_connector",
+        "http://localhost.example.com/x",
+    ],
+    ids=[
+        "no scheme",
+        "a fragment",
+        "credentials in the address",
+        "http on a host that is not loopback",
+        "a host that merely contains a loopback word",
+    ],
 )
 def test_an_unusable_admin_value_changes_nothing(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, admin_config: AdminConfig, stored: str
@@ -1174,6 +1198,155 @@ async def test_the_client_of_the_start_time_read_is_hardened_like_the_shared_one
     assert isinstance(startup.cookies.jar, nc_http.NoCookieJar)
     assert startup.headers["user-agent"] == shared.headers["user-agent"]
     await startup.aclose()
+
+
+# --- an unusable public address is survived, not died of (CR-01, gap 1 of 05-VERIFICATION) --
+
+#: The address of the finding: it passes ``config.public_url`` unchanged, and the SDK refuses
+#: it as an issuer. Before this plan that refusal was ``SystemExit(2)`` on every start, which
+#: is a container restart loop, an app that never becomes ``enabled`` again, and with it an
+#: admin form that AppAPI no longer serves. The wrong value was then correctable by hand in
+#: ``oc_appconfig_ex`` and nowhere else.
+#: Deliberately not the host of the example address in the hint of ``provider._HINT_ISSUER``:
+#: this one appears in a log record only if the value itself was logged.
+UNUSABLE_URL = "http://tls-is-missing.example.org/exapps/mcp_connector"
+
+
+class RefusingBuild:
+    """A ``build_exapp_app`` that refuses the issuer as often as it is told to.
+
+    The refusal is the one ``oauth/provider.auth_routes`` raises when the SDK rejects the
+    issuer, so no second wording of the same failure is invented here. ``seen`` is what makes
+    "exactly one rescue" and "the second build ran without the address" assertable.
+    """
+
+    def __init__(self, failures: int) -> None:
+        self._left = failures
+        self.seen: list[dict[str, str]] = []
+
+    def __call__(self, env: Mapping[str, str] | None = None) -> Starlette:
+        self.seen.append(dict(env or {}))
+        if self._left > 0:
+            self._left -= 1
+            raise ToolError(
+                message=f"{config.ENV_PUBLIC_URL} is not a usable issuer: Issuer URL must be HTTPS",
+                hint="RFC 8414 requires https for an issuer, with the loopback exception.",
+            )
+        return Starlette()
+
+
+def test_one_issuer_refusal_drops_the_address_instead_of_the_process(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, admin_config: AdminConfig
+) -> None:
+    """The rescue half of CR-01: the process keeps running and the form stays reachable."""
+    admin_config.values["public_url"] = ADMIN_URL
+    build = RefusingBuild(failures=1)
+    monkeypatch.setattr(entry_exapp, "build_exapp_app", build)
+
+    app = start(monkeypatch, tmp_path)
+
+    assert isinstance(app, Starlette), "main reached uvicorn instead of ending the process"
+    assert len(build.seen) == 2, "exactly one rescue attempt, never a loop"
+    assert build.seen[0][config.ENV_PUBLIC_URL] == ADMIN_URL
+    assert config.ENV_PUBLIC_URL not in build.seen[1], "the address that broke was not dropped"
+
+
+def test_a_second_refusal_ends_the_start_with_exit_two(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, admin_config: AdminConfig
+) -> None:
+    """One rescue and no more: a build that fails without the address is a real defect."""
+    admin_config.values["public_url"] = ADMIN_URL
+    build = RefusingBuild(failures=2)
+    monkeypatch.setattr(entry_exapp, "build_exapp_app", build)
+    deployed(monkeypatch, tmp_path)
+
+    with pytest.raises(SystemExit) as excinfo:
+        entry_exapp.main()
+
+    assert excinfo.value.code == 2
+    assert len(build.seen) == 2
+
+
+def test_an_unusable_address_from_the_deploy_environment_takes_the_same_way(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The prevention half cannot reach this one: nothing validates a deploy variable.
+
+    Nothing is stubbed here either: the real ``build_exapp_app`` runs, the real SDK refuses
+    the issuer, and what the started application answers is the proof that the rescue is
+    wired rather than described.
+    """
+    app = start(monkeypatch, tmp_path, env={config.ENV_PUBLIC_URL: UNUSABLE_URL})
+
+    default = f"{config.DEFAULT_PUBLIC_URL}{RESOURCE_SUFFIX}"
+    assert document_of(app, PRM_SUFFIX)["resource"] == default
+
+
+def test_the_rescued_start_shows_the_setup_state_on_the_connections_page(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The link to plan 05-04: with the default in force the page says what is missing.
+
+    That is what keeps the promise "no silent misconfiguration" after the rescue: the process
+    lives, and it says so where the administrator and the user both look.
+    """
+    app = start(monkeypatch, tmp_path, env={config.ENV_PUBLIC_URL: UNUSABLE_URL})
+
+    with TestClient(app) as client:
+        page = client.get(ui_connections.CONNECTIONS_PATH, headers=appapi_headers(user="alice"))
+
+    assert page.status_code == 200
+    assert strings.SETUP_PUBLIC_URL_TITLE in page.text
+
+
+def test_the_rescue_line_names_the_rule_and_the_place_but_never_the_value(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """T-05-21 and T-05-43: the value may have come out of the form and travelled over HTTP."""
+    with caplog.at_level("ERROR", logger="mcp_connector.entry_exapp"):
+        start(monkeypatch, tmp_path, env={config.ENV_PUBLIC_URL: UNUSABLE_URL})
+
+    messages = " ".join(record.getMessage() for record in caplog.records)
+    assert config.ENV_PUBLIC_URL in messages
+    assert "https" in messages, "the line names the rule the value broke"
+    assert strings.ADMIN_SETTINGS_PLACE in messages, "and where the value is corrected"
+    assert f"app_api:app:disable {APP_ID}" in messages
+    assert f"app_api:app:enable {APP_ID}" in messages
+    assert UNUSABLE_URL not in messages
+    assert "tls-is-missing.example.org" not in messages, "not even the host of the value"
+
+
+def test_a_missing_volume_stops_the_start_before_anything_is_built(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The counter probe: the rescue is for the issuer and for nothing else (T-03-15)."""
+    build = RefusingBuild(failures=0)
+    monkeypatch.setattr(entry_exapp, "build_exapp_app", build)
+    deployed(monkeypatch, tmp_path)
+    monkeypatch.delenv(config.ENV_APP_PERSISTENT_STORAGE, raising=False)
+
+    with pytest.raises(SystemExit) as excinfo:
+        entry_exapp.main()
+
+    assert excinfo.value.code == 2
+    assert build.seen == [], "a broken volume must never reach the build"
+
+
+@pytest.mark.parametrize("conflicting", [config.ENV_STATIC_BEARER, config.ENV_APP_PASSWORD])
+def test_a_second_credential_channel_is_still_exit_two_and_builds_nothing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, conflicting: str
+) -> None:
+    """D-27 is untouched by the rescue: two ways to authenticate stay a refusal to start."""
+    build = RefusingBuild(failures=0)
+    monkeypatch.setattr(entry_exapp, "build_exapp_app", build)
+    deployed(monkeypatch, tmp_path)
+    monkeypatch.setenv(conflicting, "something")
+
+    with pytest.raises(SystemExit) as excinfo:
+        entry_exapp.main()
+
+    assert excinfo.value.code == 2
+    assert build.seen == []
 
 
 # --- the end to end guard of phase 4: the hand on the switch, and the refusal ------

@@ -328,14 +328,50 @@ def main() -> None:
                 app_id,
                 app_id,
             )
-        # The public URL is what the authorization server calls itself, and the SDK refuses
-        # an issuer that is not https unless it is loopback. Building the application here
-        # turns that refusal into the same named exit as a missing volume, instead of into
-        # a traceback in a container log.
-        app = build_exapp_app(resolved)
     except ToolError as exc:
         logger.error("%s %s", exc.message, exc.hint)
         raise SystemExit(2) from None
+
+    # The public URL is what the authorization server calls itself, and the SDK refuses an
+    # issuer that is not https unless it is loopback. This build stands in a try of its own,
+    # because its failure is the only one of this function that is recoverable.
+    try:
+        app = build_exapp_app(resolved)
+    except ToolError as exc:
+        # CR-01 of 05-REVIEW.md, gap 1 of 05-VERIFICATION.md. An exit here is the same
+        # deadlock plan 05-04 removed, only reachable through the form of plan 05-01: an app
+        # that never becomes `enabled` again gets no admin form served by AppAPI, so the wrong
+        # value is correctable by hand in oc_appconfig_ex and nowhere else, while the
+        # container restarts forever. The promise "no silent misconfiguration" is kept here by
+        # this error line plus the visible setup state of the connections page, not by dying.
+        #
+        # Nothing is deleted or written back to Nextcloud in this branch, on purpose (T-05-44):
+        # the stored value stays where the administrator typed it, so she finds it in the form
+        # and corrects it instead of silently losing what she entered.
+        #
+        # The value itself is never named: it may have come out of the form and travelled over
+        # HTTP (T-05-21), and this log is read by everyone who reads container logs.
+        app_id = (resolved.get(config.ENV_APP_ID) or "").strip()
+        resolved.pop(config.ENV_PUBLIC_URL, None)
+        logger.error(
+            "%s %s The stored value is kept, so it can be corrected where it was entered: "
+            '"%s", then disable and enable this app again (occ app_api:app:disable %s, '
+            "occ app_api:app:enable %s). This process keeps serving with the documented "
+            "default in the meantime; the connections page says the same thing.",
+            exc.message,
+            exc.hint,
+            strings.ADMIN_SETTINGS_PLACE,
+            app_id,
+            app_id,
+        )
+        try:
+            # Exactly one more attempt, and with the address gone: config.public_url answers
+            # the loopback default now, which the SDK accepts. A build that fails again fails
+            # for a different reason, and that is not something to retry.
+            app = build_exapp_app(resolved)
+        except ToolError as second:
+            logger.error("%s %s", second.message, second.hint)
+            raise SystemExit(2) from None
 
     if (resolved.get(config.ENV_HP_SHARED_KEY) or "").strip():
         # HaRP with the FRP tunnel: the unix socket is the transport, frpc runs beside us.
