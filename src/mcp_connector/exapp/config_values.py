@@ -52,7 +52,7 @@ no signature in the existing code has to change for an admin value to take effec
 
 import logging
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, NamedTuple
 from urllib.parse import urlsplit
 
 import httpx
@@ -70,10 +70,13 @@ __all__ = [
     "FALSE_VALUES",
     "KEY_TO_ENV",
     "LOOPBACK_HOSTS",
+    "PUBLIC_URL_KEY",
     "SWITCH_OFF",
     "SWITCH_ON",
     "TRUE_VALUES",
+    "AdminValues",
     "admin_overlay",
+    "admin_values",
     "read_values",
 ]
 
@@ -84,10 +87,15 @@ __all__ = [
 #: a prefix or a substring: ``localhost.example.com`` is a public host name.
 LOOPBACK_HOSTS: frozenset[str] = frozenset({"127.0.0.1", "::1", "localhost"})
 
+#: The field id of the public address. Spelled once, because ``entry_exapp.main`` asks
+#: whether this one field was refused when it tells an administrator which setup state she
+#: is looking at, and a second spelling there would be a string that drifts silently.
+PUBLIC_URL_KEY = "public_url"
+
 #: The four keys, in the order the form declares its fields. They are the field ids of the
 #: admin form and the configuration keys at the same time (see the module docstring).
 CONFIG_KEYS: tuple[str, ...] = (
-    "public_url",
+    PUBLIC_URL_KEY,
     "oauth_dcr",
     "oauth_allowlist_only",
     "oauth_allowed_clients",
@@ -96,7 +104,7 @@ CONFIG_KEYS: tuple[str, ...] = (
 #: The variable each key stands for. The overlay speaks the language of the deploy
 #: environment, because that is the language every reader of these values already reads.
 KEY_TO_ENV: Mapping[str, str] = {
-    "public_url": config.ENV_PUBLIC_URL,
+    PUBLIC_URL_KEY: config.ENV_PUBLIC_URL,
     "oauth_dcr": registry.ENV_DCR,
     "oauth_allowlist_only": registry.ENV_ALLOWLIST_ONLY,
     "oauth_allowed_clients": registry.ENV_ALLOWED_CLIENTS,
@@ -115,6 +123,19 @@ SWITCH_ON = "on"
 SWITCH_OFF = "off"
 
 logger = logging.getLogger("mcp_connector.exapp.config_values")
+
+
+class AdminValues(NamedTuple):
+    """What one read of the admin values produced.
+
+    ``overlay`` speaks the language of the deploy environment (see :data:`KEY_TO_ENV`),
+    ``refused`` speaks the language of the form and holds the field ids of
+    :data:`CONFIG_KEYS` that carried a value this module would not use. A field that was
+    never filled in appears in neither.
+    """
+
+    overlay: dict[str, str]
+    refused: frozenset[str]
 
 
 async def read_values(
@@ -215,16 +236,23 @@ async def read_values(
     return values
 
 
-async def admin_overlay(
+async def admin_values(
     *, env: Mapping[str, str] | None = None, client: httpx.AsyncClient | None = None
-) -> dict[str, str]:
-    """Return the usable admin values, keyed by the variable name they stand for.
+) -> AdminValues:
+    """The usable admin values, and the field ids that arrived and were refused.
 
-    Only keys with a value that survives validation appear. A blank value counts as unset,
-    which is what makes the precedence rule work: the deploy environment wins whenever the
-    administrator left a field empty.
+    The second half is what :func:`admin_overlay` cannot answer, and the reason this
+    function exists next to it: "no value in force" and "a value in force nowhere near
+    usable" are the same empty overlay, and they are not the same state to be in. The one
+    reader of the difference is ``entry_exapp.main``, which tells the administrator which of
+    the two she is looking at instead of claiming the field is empty (05-14, line B).
 
-    Validation is per key, so a typo in one field is never an outage of the other three.
+    Only keys with a value that survives validation appear in the overlay. A blank value
+    counts as unset and is refused by nobody, which is what makes the precedence rule work:
+    the deploy environment wins whenever the administrator left a field empty.
+
+    Validation is per key, so a typo in one field is never an outage of the other three, and
+    the refusals are per key for the same reason.
 
     ``client`` is passed straight through to :func:`read_values`, where the one reason it
     exists is written down.
@@ -232,20 +260,33 @@ async def admin_overlay(
     values = await read_values(env=env, client=client)
 
     overlay: dict[str, str] = {}
+    refused: set[str] = set()
     for key in CONFIG_KEYS:
         raw = values.get(key)
         if raw is None or not raw.strip():
             continue
         usable = _usable_value(key, raw)
         if usable is None:
+            refused.add(key)
             continue
         overlay[KEY_TO_ENV[key]] = usable
-    return overlay
+    return AdminValues(overlay, frozenset(refused))
+
+
+async def admin_overlay(
+    *, env: Mapping[str, str] | None = None, client: httpx.AsyncClient | None = None
+) -> dict[str, str]:
+    """Return the usable admin values, keyed by the variable name they stand for.
+
+    The overlay half of :func:`admin_values`, for every caller that has no use for the
+    refused field ids.
+    """
+    return (await admin_values(env=env, client=client)).overlay
 
 
 def _usable_value(key: str, raw: str) -> str | None:
     """The validated form of one admin value, or ``None`` when it is not usable."""
-    if key == "public_url":
+    if key == PUBLIC_URL_KEY:
         return _public_url(raw)
     if key in ("oauth_dcr", "oauth_allowlist_only"):
         return _switch(key, raw)

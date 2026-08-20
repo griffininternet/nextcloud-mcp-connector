@@ -398,6 +398,78 @@ async def test_an_unusable_public_url_is_dropped_and_named_without_its_value(
     assert value not in logged
 
 
+# --- the refused fields, next to the overlay (05-14, line B) -----------------------
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_refused_value_is_named_as_refused_and_not_as_absent() -> None:
+    """The second half of the read: "nothing set" and "set and unusable" are not one state.
+
+    The overlay cannot tell them apart, both are the same missing key, and the setup line of
+    ``entry_exapp.main`` used to report the second one as the first (05-14, line B).
+    """
+    answer({"public_url": "http://cloud.example.com/exapps/mcp_connector"})
+
+    values = await config_values.admin_values(env=ENV)
+
+    assert values.overlay == {}
+    assert values.refused == frozenset({config_values.PUBLIC_URL_KEY})
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_field_nobody_filled_in_is_refused_by_nobody() -> None:
+    """A blank value is not a typo: the deploy environment simply keeps this key."""
+    answer({"public_url": "   ", "oauth_dcr": ""})
+
+    values = await config_values.admin_values(env=ENV)
+
+    assert values.overlay == {}
+    assert values.refused == frozenset()
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_the_refusals_are_per_field_like_the_validation() -> None:
+    """A typo in one field is neither an outage nor a refusal of the other three."""
+    answer({"public_url": ADMIN_URL, "oauth_dcr": "vielleicht"})
+
+    values = await config_values.admin_values(env=ENV)
+
+    assert values.overlay == {config.ENV_PUBLIC_URL: ADMIN_URL}
+    assert values.refused == frozenset({"oauth_dcr"})
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_read_that_failed_refuses_nothing() -> None:
+    """T-05-02 again, from this side: an unreadable answer is not a refused value.
+
+    Reporting a refusal here would tell an administrator her value was rejected when the
+    truth is that this app never saw one.
+    """
+    respx.post(READ_URL).mock(return_value=httpx.Response(500))
+
+    values = await config_values.admin_values(env=ENV)
+
+    assert values.overlay == {}
+    assert values.refused == frozenset()
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_the_overlay_is_the_overlay_half_of_the_same_read() -> None:
+    """One reader of the difference, one function for everyone else, one read for both."""
+    answer({"public_url": ADMIN_URL, "oauth_dcr": "vielleicht"})
+    overlay = await config_values.admin_overlay(env=ENV)
+
+    answer({"public_url": ADMIN_URL, "oauth_dcr": "vielleicht"})
+    values = await config_values.admin_values(env=ENV)
+
+    assert overlay == values.overlay
+
+
 # --- the issuer rule of CR-01: https, with the loopback exception ------------------
 
 

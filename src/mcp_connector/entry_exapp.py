@@ -223,14 +223,19 @@ def _startup_client() -> httpx.AsyncClient:
     )
 
 
-async def _admin_values(env: Mapping[str, str]) -> dict[str, str]:
+async def _admin_values(env: Mapping[str, str]) -> config_values.AdminValues:
     """The admin values of this installation, over a client that dies with this loop."""
     async with _startup_client() as client:
-        return await config_values.admin_overlay(env=env, client=client)
+        return await config_values.admin_values(env=env, client=client)
 
 
-def _resolved_env() -> dict[str, str]:
+def _resolved_env() -> tuple[dict[str, str], frozenset[str]]:
     """The deploy environment with the values an administrator set in Nextcloud on top.
+
+    Returned with the field ids that arrived and were refused, because the environment alone
+    cannot tell "she set nothing" from "what she set is unusable": both are the same missing
+    key. The one place that difference is worth a sentence is the setup state below (05-14,
+    line B), and nothing else reads the second half.
 
     Resolved exactly once, here, and handed to every factory as a plain mapping. The
     alternative would be a read per request, and it is refused for three reasons.
@@ -252,9 +257,9 @@ def _resolved_env() -> dict[str, str]:
     """
     env = dict(os.environ)
     if not config.exapp_configured(env):
-        return env
+        return env, frozenset()
 
-    overlay = asyncio.run(_admin_values(env))
+    overlay, refused = asyncio.run(_admin_values(env))
     if overlay:
         # The names of the keys, never their values: they arrived over HTTP and one of them is
         # a list of client addresses (T-05-21). An administrator needs to see which source won.
@@ -263,7 +268,7 @@ def _resolved_env() -> dict[str, str]:
             "deploy environment: %s",
             ", ".join(sorted(overlay)),
         )
-    return {**env, **overlay}
+    return {**env, **overlay}, refused
 
 
 def main() -> None:
@@ -284,7 +289,7 @@ def main() -> None:
     # administrator set in Nextcloud are part of the environment of this process from here on
     # (plan 05-04). The read happens after the refusal above, so a misconfigured process never
     # opens a socket, and before every check, so the checks judge the values that will be used.
-    resolved = _resolved_env()
+    resolved, refused = _resolved_env()
 
     try:
         config.exapp_settings(resolved)
@@ -315,14 +320,28 @@ def main() -> None:
             and not (resolved.get(config.ENV_PUBLIC_URL) or "").strip()
         ):
             app_id = (resolved.get(config.ENV_APP_ID) or "").strip()
+            # Two states end here, and until plan 05-14 measured line B of its run they ended
+            # in the same sentence: nothing was ever entered, or something was and
+            # `config_values._public_url` refused it. The second one is the wrong thing to
+            # tell an administrator who did fill the field in, because she then looks for an
+            # empty field instead of at the value she typed. The warning of `_rejected` says
+            # why the value was refused; this line says which of the two cases the setup
+            # state is, and it names the value as little as that one does.
+            state = (
+                "the address stored in Nextcloud was refused, so none is in force (the "
+                "warning above says why)"
+                if config_values.PUBLIC_URL_KEY in refused
+                else "no public address is stored in Nextcloud either"
+            )
             logger.error(
-                "%s is not set and no public address is stored in Nextcloud either. Until one "
-                "is, every discovery document, the audience of every token and the consent "
-                'redirect name %s, and no client can connect. Set it in "%s", then disable '
-                "and enable this app again (occ app_api:app:disable %s, "
-                "occ app_api:app:enable %s). This process keeps serving on purpose, so that "
-                "form exists at all; the connections page says the same thing.",
+                "%s is not set and %s. Until a usable one is set, every discovery document, "
+                "the audience of every token and the consent redirect name %s, and no client "
+                'can connect. Set it in "%s", then disable and enable this app again '
+                "(occ app_api:app:disable %s, occ app_api:app:enable %s). This process keeps "
+                "serving on purpose, so that form exists at all; the connections page says "
+                "the same thing.",
                 config.ENV_PUBLIC_URL,
+                state,
                 config.DEFAULT_PUBLIC_URL,
                 strings.ADMIN_SETTINGS_PLACE,
                 app_id,
