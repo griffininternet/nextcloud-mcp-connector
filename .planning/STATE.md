@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Verwaltungs-Clients und Härtungs-Reste
 status: executing
-stopped_at: "Plan 06-03 fertig: die RFC-8252-7.3-Portregel (registry.loopback_match, angewandt an genau einer Stelle in consent.py) und der vierte Admin-Schalter (ENV_CIMD, cimd_enabled fail-closed an DCR gekoppelt). Weil der SDK-Handler die Adresse ein zweites Mal vergleicht, traegt provider.also_accepting(address) die eine gematchte Adresse als Anfrage-Sicht dorthin, ohne etwas zu schreiben. 2003 Tests gruen, ruff/pyright/vulture sauber, pyproject und uv.lock unberuehrt. Naechster Schritt: Wave 2 (06-02 gepinnter Abruf, 06-04 Advertising plus Manifest-Deklaration von NC_MCP_OAUTH_CIMD)."
-last_updated: "2026-08-20T11:55:00.000Z"
-last_activity: 2026-08-20 -- Plan 06-03 fertig (Loopback-Portregel und CIMD-Schalter)
+stopped_at: "Plan 06-02 fertig: fetch_document als einzige Modulgrenze (IP-Pinning auf die gepruefte Adresse, Original-Name in Host und sni_hostname, follow_redirects=False, 5120 Bytes, 5 s), validate_document mit den vier MUSTs, und der Negativkatalog AUTH-09 vollstaendig inklusive benanntem Rebinding-Test und dem Beleg, dass Fehler und kaputte Dokumente nicht gecacht werden. 2090 Tests gruen, ruff/pyright/vulture sauber, pyproject und uv.lock unberuehrt. Naechster Schritt: 06-04 (Advertising im AS-Dokument plus Manifest-Deklaration von NC_MCP_OAUTH_CIMD)."
+last_updated: "2026-08-20T13:06:31.835Z"
+last_activity: 2026-08-20 -- Plan 06-02 fertig (gepinnter CIMD-Abruf und Negativkatalog AUTH-09)
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 10
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 6 (Härtung, Eigennachweise und Conference-Reife), EXECUTING
-Plan: 3 of 10
+Plan: 4 of 10
 Status: Ready to execute
 Milestone: v1.1 Verwaltungs-Clients und Härtungs-Reste (Phasen 6-7)
-Last activity: 2026-08-20 -- Plan 06-03 fertig (Loopback-Portregel und CIMD-Schalter)
+Last activity: 2026-08-20 -- Plan 06-02 fertig (gepinnter CIMD-Abruf und Negativkatalog AUTH-09)
 
 ## Performance Metrics
 
@@ -105,6 +105,7 @@ Last activity: 2026-08-20 -- Plan 06-03 fertig (Loopback-Portregel und CIMD-Scha
 | Phase 05-hardening-und-store-einreichung P14 | 25 min | 2 tasks | 2 files |
 | Phase 06 P01 | 30 min | 2 tasks | 4 files |
 | Phase 06 P03 | 25 min | 3 tasks tasks | 6 files files |
+| Phase 06 P02 | 40 min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -341,6 +342,7 @@ Recent decisions affecting current work:
 - [Phase 06]: Die RFC-8252-7.3-Portregel wirkt in consent.py an einer Stelle, aber der SDK-Handler vergleicht ein zweites Mal (authorize.py:180); provider.also_accepting(address) traegt die eine gematchte Adresse als Sicht fuer genau eine Anfrage dorthin, ohne etwas in die Registrierung zu schreiben
 - [Phase 06]: loopback_match benutzt LOOPBACK_HOSTS (127.0.0.1, localhost, ::1) statt nur der IP-Literale des RFC: Claude Code schickt zur Laufzeit localhost, und D-35 laesst alle drei Namen ohnehin registrieren; frei ist nur der Port, ein Host-Wechsel bleibt eine Absage
 - [Phase 06]: cimd_enabled ist ein eigener Schalter (NC_MCP_OAUTH_CIMD, Default an) mit harter Kopplung an DCR: die Kopplung schlaegt den explizit gesetzten Schalter, ein abgeschaltetes DCR ist ueber CIMD nicht umgehbar (T-06-15)
+- [Phase 06]: Der CIMD-Abruf pinnt auf die gepruefte Adresse und haelt Name und Zertifikatspruefung ueber sni_hostname; genau eine Aufloesung pro Aufruf, kein Negativ-Cache (Drosselung liegt bei throttle.py).
 
 ### Pending Todos
 
@@ -371,8 +373,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T11:52:39.227Z
-Stopped at: Plan 06-01 fertig: die zwei Grenzen des CIMD-Abrufs, die ohne Netzwerk halten, stehen als reine Funktionen (bounded_response neben bounded_body, oauth/cimd.py mit is_cimd_client_id, target_allowed, resolve_addresses). 1983 Tests gruen, ruff/pyright/vulture sauber, pyproject und uv.lock unberuehrt. Naechster Schritt: Wave 1 weiter mit Plan 06-03, danach Wave 2 (06-02 gepinnter Abruf, 06-04 Advertising).
+Last session: 2026-08-20T13:06:31.818Z
+Stopped at: Plan 06-02 fertig: fetch_document als einzige Modulgrenze (IP-Pinning auf die gepruefte Adresse, Original-Name in Host und sni_hostname, follow_redirects=False, 5120 Bytes, 5 s), validate_document mit den vier MUSTs, und der Negativkatalog AUTH-09 vollstaendig inklusive benanntem Rebinding-Test und dem Beleg, dass Fehler und kaputte Dokumente nicht gecacht werden. 2090 Tests gruen, ruff/pyright/vulture sauber, pyproject und uv.lock unberuehrt. Naechster Schritt: 06-04 (Advertising im AS-Dokument plus Manifest-Deklaration von NC_MCP_OAUTH_CIMD).
 Naechster Schritt: /gsd:execute-phase 6 (Plan 06-03)
 Resume file: None
 

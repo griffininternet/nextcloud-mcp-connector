@@ -263,5 +263,3 @@ Negativtest, dessen Zuordnung zur Katalogzeile und zur Threat-ID im Datei-Docstr
 `src/mcp_connector/oauth/cimd.py` und `tests/unit/test_oauth_cimd.py` liegen auf der Platte,
 die drei Task-Commits sind im Log (cfd9b24, 8b01693, de798f5), und der volle Default-Lauf ist
 nachgeprueft gruen (2090 passed).
-</content>
-</invoke>

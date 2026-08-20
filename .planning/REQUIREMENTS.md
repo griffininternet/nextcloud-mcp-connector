@@ -17,7 +17,7 @@
 ### Auth-Härtung (AUTH)
 
 - [ ] **AUTH-08**: Ein Client, der sich per Client ID Metadata Document ausweist (CIMD, DCR-Nachfolger der MCP-Spec; Kandidat: Claude Code), kann sich verbinden; die DCR-Kontrollen gelten unverändert (Redirect-URI-Prüfung, Allowlist-Modus AUTH-07 greift, ein abgeschaltetes DCR ist über CIMD nicht umgehbar) (BL-05).
-- [ ] **AUTH-09**: Der CIMD-Dokumentabruf ist als Outbound-Request SSRF-geprüft und fail-closed: keine privaten/link-lokalen Ziele, nur https, Größen- und Zeitlimit, kontrolliertes Caching; Negativtests belegen jede Grenze.
+- [x] **AUTH-09**: Der CIMD-Dokumentabruf ist als Outbound-Request SSRF-geprüft und fail-closed: keine privaten/link-lokalen Ziele, nur https, Größen- und Zeitlimit, kontrolliertes Caching; Negativtests belegen jede Grenze.
 
 ### Store und Installation (EXAPP)
 
@@ -59,7 +59,7 @@ Vorgemerkt, nicht in v1.1:
 | CLIENT-04 | Phase 6 | Pending |
 | CLIENT-05 | Phase 6 | Pending |
 | AUTH-08 | Phase 6 | Pending |
-| AUTH-09 | Phase 6 | Pending |
+| AUTH-09 | Phase 6 | Complete |
 | EXAPP-06 | Phase 6 | Pending |
 | CONF-01 | Phase 6 | Pending |
 | CONF-02 | Phase 6 | Pending |
