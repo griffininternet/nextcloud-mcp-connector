@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Verwaltungs-Clients und Härtungs-Reste
 status: executing
-stopped_at: "Plan 06-04 fertig: das AS-Dokument kuendigt CIMD nur bei eingeschaltetem Schalter an (client_id_metadata_document_supported = cimd_enabled or None, bei aus FEHLT das Feld), entry_exapp verdrahtet policy.cimd_enabled aus derselben Policy, die provider.get_client befragt, und appinfo/info.xml deklariert NC_MCP_OAUTH_CIMD als fuenften Eintrag ohne default-Element. 2080 Tests gruen, ruff/pyright/vulture sauber, pyproject und uv.lock unberuehrt. Naechster Schritt: 06-05 (CIMD-Zweig in provider.get_client plus Store-Spalten)."
-last_updated: "2026-08-20T13:21:25.797Z"
-last_activity: 2026-08-20 -- Plan 06-04 fertig (CIMD-Advertising am Schalter, NC_MCP_OAUTH_CIMD im Manifest)
+stopped_at: "Plan 06-05 fertig: der CIMD-Zweig liegt in provider.get_client (ein Aufrufpunkt fuer keine Zeile, abgelaufene Frische und frische Zeile), schreibt eine echte clients-Zeile ohne Secret, filtert die Adressen des Dokuments durch redirect_uri_allowed und faellt danach in den gemeinsamen Rest (allowed, Allowlist); clients.cimd_fetched_at und clients.cimd_expires_at sind idempotent nachgezogen, die Registrierungs-TTL nimmt einer CIMD-Verbindung weder in get_client noch im Sweep die Zeile. 2162 Tests gruen, ruff/pyright/vulture sauber, pyproject und uv.lock unberuehrt. AUTH-08 bleibt Pending bis zum Live-Nachweis in 06-09. Naechster Schritt: 06-06 (Zustimmungsseite: Hostnamen und Loopback-Warnung)."
+last_updated: "2026-08-20T13:50:13.302Z"
+last_activity: 2026-08-20 -- Plan 06-05 fertig (CIMD-Zweig in provider.get_client, zwei Frische-Spalten auf clients)
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 10
-  completed_plans: 4
+  completed_plans: 5
   percent: 0
 ---
 
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 6 (Härtung, Eigennachweise und Conference-Reife), EXECUTING
-Plan: 5 of 10
+Plan: 6 of 10
 Status: Ready to execute
 Milestone: v1.1 Verwaltungs-Clients und Härtungs-Reste (Phasen 6-7)
-Last activity: 2026-08-20 -- Plan 06-04 fertig (CIMD-Advertising am Schalter, NC_MCP_OAUTH_CIMD im Manifest)
+Last activity: 2026-08-20 -- Plan 06-05 fertig (CIMD-Zweig in provider.get_client, zwei Frische-Spalten auf clients)
 
 ## Performance Metrics
 
@@ -107,6 +107,7 @@ Last activity: 2026-08-20 -- Plan 06-04 fertig (CIMD-Advertising am Schalter, NC
 | Phase 06 P03 | 25 min | 3 tasks tasks | 6 files files |
 | Phase 06 P02 | 40 min | 3 tasks | 2 files |
 | Phase 06 P04 | 20 min | 2 tasks tasks | 6 files files |
+| Phase 06 P05 | 35 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -346,6 +347,10 @@ Recent decisions affecting current work:
 - [Phase 06]: Der CIMD-Abruf pinnt auf die gepruefte Adresse und haelt Name und Zertifikatspruefung ueber sni_hostname; genau eine Aufloesung pro Aufruf, kein Negativ-Cache (Drosselung liegt bei throttle.py).
 - [Phase 06]: Das AS-Dokument kuendigt CIMD ueber client_id_metadata_document_supported = cimd_enabled or None an: bei abgeschaltetem Schalter FEHLT das Feld statt false zu sagen, weil der Spec-Rueckfall auf DCR nur greift, solange die Faehigkeit abwesend ist
 - [Phase 06]: NC_MCP_OAUTH_CIMD ist als fuenfter environment-variables-Eintrag im Manifest deklariert (ohne default-Element), und ein Gate haelt die deklarierten Namen als Mengengleichheit gegen die Namen, die der Code liest: eine undeklarierte NC_MCP_-Variable wird vom Deploy-Daemon still verworfen
+- [Phase 06]: Der CIMD-Zweig liegt in provider.get_client zwischen 'row is None' und _client_information, mit EINEM Aufrufpunkt fuer alle drei Faelle (keine Zeile, abgelaufene Frische, frische Zeile): _resolve_cimd fragt den Schalter zuerst, damit auch eine bestehende CIMD-Zeile bei abgeschaltetem DCR nicht mehr durchkommt
+- [Phase 06]: _has_expired gilt nicht fuer Zeilen mit gesetztem cimd_fetched_at, und store.expired_clients nimmt sie ebenfalls aus: die Registrierungs-TTL wuerde ueber die Kaskade eine Nutzerverbindung beenden, die niemand beendet hat (Pitfall 4, T-06-31); purge_expired bleibt der Backstop fuer Zeilen ohne Verbindung
+- [Phase 06]: Die Cache-Frist kommt aus dem Cache-Header der Antwort, gekappt auf 300 bis 3600 s; dafuer bekommt cimd.py fetch_document_and_lifetime als Grenze und fetch_document als Projektion davon, weil nur der Fetch den Header sieht
+- [Phase 06]: Aus einem fremden Dokument werden nur client_name, redirect_uris, grant_types und response_types uebernommen; logo_uri und jedes andere Feld landen nicht im Datensatz, token_endpoint_auth_method wird auf none gesetzt (T-06-13, T-06-30)
 
 ### Pending Todos
 
@@ -376,8 +381,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T13:21:25.783Z
-Stopped at: Plan 06-04 fertig: das AS-Dokument kuendigt CIMD nur bei eingeschaltetem Schalter an (client_id_metadata_document_supported = cimd_enabled or None, bei aus FEHLT das Feld), entry_exapp verdrahtet policy.cimd_enabled aus derselben Policy, die provider.get_client befragt, und appinfo/info.xml deklariert NC_MCP_OAUTH_CIMD als fuenften Eintrag ohne default-Element. 2080 Tests gruen, ruff/pyright/vulture sauber, pyproject und uv.lock unberuehrt. Naechster Schritt: 06-05 (CIMD-Zweig in provider.get_client plus Store-Spalten).
+Last session: 2026-08-20T13:50:13.285Z
+Stopped at: Plan 06-05 fertig: der CIMD-Zweig liegt in provider.get_client (ein Aufrufpunkt fuer keine Zeile, abgelaufene Frische und frische Zeile), schreibt eine echte clients-Zeile ohne Secret, filtert die Adressen des Dokuments durch redirect_uri_allowed und faellt danach in den gemeinsamen Rest (allowed, Allowlist); clients.cimd_fetched_at und clients.cimd_expires_at sind idempotent nachgezogen, die Registrierungs-TTL nimmt einer CIMD-Verbindung weder in get_client noch im Sweep die Zeile. 2162 Tests gruen, ruff/pyright/vulture sauber, pyproject und uv.lock unberuehrt. AUTH-08 bleibt Pending bis zum Live-Nachweis in 06-09. Naechster Schritt: 06-06 (Zustimmungsseite: Hostnamen und Loopback-Warnung).
 Naechster Schritt: /gsd:execute-phase 6 (Plan 06-03)
 Resume file: None
 
