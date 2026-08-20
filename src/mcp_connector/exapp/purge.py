@@ -86,10 +86,21 @@ HEADER_ORIGIN_IP = "x-origin-ip"
 #: parsed (the rule of ``oauth/connections.py``, MAX_FORM_BYTES).
 MAX_BODY_BYTES = 4096
 
-#: The words that mean "no" when a flag arrives with a value. Everything else, including a
-#: flag that arrives with no value at all, counts as set: a Symfony option in mode ``none``
-#: is presence and nothing more.
+#: The words that mean "no" when a flag arrives with a value. They are no longer the
+#: decision (:data:`TRUE_WORDS` is), they are the difference between a decision and a typo:
+#: a spelled out no needs no log line, an unknown word does.
 FALSE_WORDS = frozenset({"0", "false", "no", "off", "none", "nein"})
+
+#: The words that mean "yes" when the flag arrives with a value, and the whole list of them
+#: (WR-02). The spellings are the ones ``oauth/registry.py`` and ``exapp/config_values.py``
+#: already use, so a value that arms a switch of this app reads the same everywhere.
+#:
+#: What plan 05-08 measured against a running AppAPI 34.0.0 is not a word at all: the body
+#: of a real invocation is ``{"occ": {"arguments": null, "options": {"force": true}}}``, so
+#: the flag arrives as a JSON boolean and :func:`_is_set` answers it before this list is
+#: consulted. The list is therefore the lower bound of what stays accepted around that
+#: measurement, never a guess that replaces it.
+TRUE_WORDS = frozenset({"1", "true", "yes", "on"})
 
 FORCE_HINT = (
     "Nothing was changed. This command ends every MCP connection of this instance and "
@@ -100,6 +111,17 @@ STORE_HINT = (
     "Nothing was changed: the data of this app could not be opened, so no credential "
     "could be handed back to Nextcloud. Check that the app is enabled and that its volume "
     "is readable, then run the command again before removing the app."
+)
+
+#: Counts and the way out, never an account and never a connection (V7, T-05-60). The
+#: number is already in the answer next to this text, so the sentence carries the meaning
+#: instead of repeating it.
+REVOKE_HINT = (
+    "Nothing was deleted. Not one app password could be handed back to Nextcloud, which "
+    "is a fault of the connection to Nextcloud rather than of a single connection of this "
+    "app. The tables of this app are untouched, so fix the reachability and run the "
+    "command again: that run is a complete one. If it keeps answering this, the manual "
+    "clean up per user is in docs/uninstall.md."
 )
 
 logger = logging.getLogger("mcp_connector.exapp.purge")
@@ -138,6 +160,30 @@ def purge_routes(
             return json_response({"purged": False, "hint": STORE_HINT})
 
         revoked, failures = await _hand_back_every(store, rows, env)
+        if rows and revoked == 0:
+            # WR-01 of 05-REVIEW.md, and the line is drawn at zero on purpose. A run that
+            # handed back nothing at all signals a fault of the connection to Nextcloud and
+            # not a single broken row, and these tables are the only record of which app
+            # password belongs to which connection. Emptying them in this moment destroys
+            # that record while every one of those credentials stays valid in Nextcloud,
+            # which leaves the manual clean up of docs/uninstall.md as the only rescue and
+            # makes a second run of this command pointless. So: keep everything, say so,
+            # stay repeatable.
+            logger.error(
+                "the purge changed nothing: none of the %s connections could hand its app "
+                "password back to Nextcloud",
+                len(rows),
+            )
+            return json_response(
+                {
+                    "purged": False,
+                    "connections": len(rows),
+                    "revoked": revoked,
+                    "revoke_failures": failures,
+                    "hint": REVOKE_HINT,
+                }
+            )
+
         cleared = await _empty(store)
         # Last, and only now. Every ciphertext this key opens is gone at this point, and
         # until this line every one of them still had to be decryptable.
@@ -236,10 +282,14 @@ async def _forced(request: Request) -> bool:
     ``purged: false`` on a live instance, so an administrator would have removed the app
     believing the credentials were gone. A purge that runs without the flag is the other
     failure, an instance wide deletion nobody asked for.
+
+    The query string is not read, and that is WR-02 of 05-REVIEW.md. The measured
+    invocation carries the flag in the JSON body and nowhere else
+    (``AppAPIService::prepareRequestToExApp`` puts the parameters of a POST into the body,
+    and this is a POST only route), so a query parameter is a shape AppAPI never produces.
+    Every additionally accepted shape is attack surface for the day one of the three
+    barriers in front of this handler falls, and an empty ``?force=`` was a yes.
     """
-    params = request.query_params
-    if FORCE_OPTION in params and _is_set(params[FORCE_OPTION]):
-        return True
     return _forced_in(await _payload(request))
 
 
@@ -268,15 +318,38 @@ def _forced_in(payload: Any, *, inside_envelope: bool = False) -> bool:
 
 
 def _is_set(value: object) -> bool:
-    """Whether this value means the flag is set. Only a spelled out no is a no."""
+    """Whether this value means the flag is set. A positive list, and nothing beside it.
+
+    Until WR-02 this read "only a spelled out no is a no", which made every unknown word a
+    yes for the one action of this app that cannot be undone. That inverted the rule
+    ``registry._switch`` and ``config_values._switch`` follow everywhere else: a value
+    nobody understands is a typo, and a typo is not a security switch. So a yes is a JSON
+    ``true``, a number other than zero, a flag that arrived with no value at all (a Symfony
+    option in mode ``none`` is presence and nothing more), or one of :data:`TRUE_WORDS`.
+
+    An unknown word leaves one line behind, a spelled out no does not: the second one is a
+    decision, the first one is the typo somebody has to be able to find.
+    """
     if isinstance(value, bool):
         return value
     if value is None:
         return True
     if isinstance(value, int):
         return value != 0
-    if isinstance(value, str):
-        return value.strip().lower() not in FALSE_WORDS
+    if not isinstance(value, str):
+        return False
+
+    word = value.strip().lower()
+    if word in TRUE_WORDS:
+        return True
+    if word not in FALSE_WORDS:
+        # The word itself stays out of the log, like every other value on this path (V7).
+        logger.warning(
+            "the %s option of a purge carried a value that is neither on nor off, so "
+            "nothing was changed. The values it understands are %s.",
+            FORCE_OPTION,
+            ", ".join(sorted(TRUE_WORDS)),
+        )
     return False
 
 

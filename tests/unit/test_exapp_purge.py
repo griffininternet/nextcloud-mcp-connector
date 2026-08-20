@@ -17,6 +17,9 @@ Threats covered here, in the order of the plan:
 * **T-05-29** an answer or a log line that names an account or a credential.
 * **T-05-30** the order: the data key is deleted last, after every revocation.
 * **T-05-31** one hanging revocation stopping the whole purge.
+* **T-05-57** the destructive local half running although not a single app password could
+  be handed back (WR-01 of 05-REVIEW.md).
+* **T-05-58** a flag shape nobody sends arming the instance wide deletion (WR-02).
 
 Every Nextcloud answer comes from respx and the store is a real SQLite file in
 ``tmp_path``: what is under test is the order of two outgoing calls and the state of that
@@ -154,6 +157,29 @@ def live(tmp_path: Path) -> Deployment:
     deployment = Deployment(tmp_path)
     deployment.seed()
     return deployment
+
+
+@pytest.fixture
+def destructive(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """A spy on the two destructive steps, so "it did not run" is an assertion.
+
+    The row counts below show the same thing from the outside, but only for the tables. The
+    data key lives in Nextcloud, so an untouched key is otherwise a missing respx call, and
+    a missing call is also what a wrong URL looks like (WR-01, T-05-57).
+    """
+    seen: list[str] = []
+
+    async def empty(store: OAuthStore) -> bool:
+        seen.append("empty")
+        return True
+
+    async def delete(env: object = None) -> bool:
+        seen.append("key")
+        return True
+
+    monkeypatch.setattr(purge, "_empty", empty)
+    monkeypatch.setattr(crypto, "delete_key", delete)
+    return seen
 
 
 def call(
@@ -306,6 +332,10 @@ def test_without_force_the_purge_does_nothing(live: Deployment) -> None:
         {"occ": {"arguments": None, "options": {"force": False}}},
         {"occ": {"arguments": None, "options": None}},
         {"occ": "not an object either"},
+        {"occ": {"options": {"force": "maybe"}}},
+        {"occ": {"options": {"force": ""}}},
+        {"options": {"force": "vielleicht"}},
+        {"options": {"force": 0}},
     ],
     ids=[
         "an empty body",
@@ -319,6 +349,10 @@ def test_without_force_the_purge_does_nothing(live: Deployment) -> None:
         "the measured envelope with the flag unset",
         "the measured envelope of a call without options",
         "an envelope that is not an object",
+        "a word nobody understands",
+        "an empty value",
+        "a word in another language",
+        "a zero",
     ],
 )
 def test_a_body_without_the_force_flag_changes_nothing(live: Deployment, body: object) -> None:
@@ -359,10 +393,13 @@ def test_a_body_without_the_force_flag_changes_nothing(live: Deployment, body: o
 def test_every_shape_of_the_flag_appapi_may_send_is_accepted(
     live: Deployment, body: object
 ) -> None:
-    """The exact wire shape of the option is Assumption A5, so the check takes all of them.
+    """The wire shape of the option was Assumption A5 until plan 05-08 measured it.
 
-    The alternative would be one guessed spelling, and a purge that silently does nothing
-    on a real instance is worse than a purge that accepts a synonym.
+    The first two ids of the envelope cases are that measurement: ``{"occ": {"arguments":
+    null, "options": {"force": true}}}`` is what AppAPI 34.0.0 really sent, and a live
+    ``occ mcp_connector:purge --force`` answered ``purged: false`` before this shape was
+    accepted. Every entry in this list stays accepted after WR-02 narrowed the value side
+    to a positive list, so this test is the regression guard against exactly that finding.
     """
     with respx.mock:
         wire = Wire()
@@ -371,6 +408,63 @@ def test_every_shape_of_the_flag_appapi_may_send_is_accepted(
 
     assert response.json()["purged"] is True
     assert wire.seen.count("password") == len(CONNECTIONS)
+
+
+def test_a_value_nobody_understands_is_not_a_yes_and_says_so_once(
+    live: Deployment, caplog: pytest.LogCaptureFixture
+) -> None:
+    """WR-02: the fail closed rule of ``registry._switch``, on the destructive action.
+
+    ``Only a spelled out no is a no`` inverted that rule for the one command that cannot be
+    undone. A word this handler does not know is a typo, and a typo is not a security
+    switch, so it changes nothing and leaves one line behind that explains why.
+    """
+    before = live.counts()
+    with respx.mock:
+        wire = Wire()
+        wire.install()
+        with caplog.at_level(logging.DEBUG):
+            response = call(live, body={"occ": {"options": {purge.FORCE_OPTION: "maybe"}}})
+
+    assert response.json()["purged"] is False
+    assert wire.seen == []
+    assert live.counts() == before
+    logged = "\n".join(record.getMessage() for record in caplog.records)
+    assert "maybe" not in logged, "the value itself stays out of the log"
+    assert [record for record in caplog.records if record.levelno >= logging.WARNING]
+
+
+def test_a_spelled_out_no_needs_no_log_line(
+    live: Deployment, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The counter check of the test above: ``false`` is a decision, not a typo."""
+    with respx.mock:
+        Wire().install()
+        with caplog.at_level(logging.DEBUG):
+            response = call(live, body={"occ": {"options": {purge.FORCE_OPTION: "false"}}})
+
+    assert response.json()["purged"] is False
+    assert [record for record in caplog.records if record.levelno >= logging.WARNING] == []
+
+
+@pytest.mark.parametrize("query", ["?force=1", "?force=true", "?force="])
+def test_the_flag_in_the_query_string_runs_nothing(live: Deployment, query: str) -> None:
+    """WR-02: the measured invocation carries the flag in the JSON body and nowhere else.
+
+    ``AppAPIService::prepareRequestToExApp`` puts the parameters of a POST into the body,
+    and this route is POST only, so a query parameter is a shape AppAPI never produces.
+    Every additional accepted shape is attack surface for the day one of the three barriers
+    in front of this handler falls.
+    """
+    before = live.counts()
+    with respx.mock:
+        wire = Wire()
+        wire.install()
+        response = live.client.post(f"{purge.PURGE_PATH}{query}", json={}, headers=appapi_headers())
+
+    assert response.json()["purged"] is False
+    assert wire.seen == []
+    assert live.counts() == before
 
 
 # --- the purge itself, and its order (T-05-27, T-05-30) ----------------------------
@@ -432,29 +526,81 @@ def test_the_paused_account_row_goes_with_it(live: Deployment) -> None:
     assert live.counts()["user_access"] == 0
 
 
-def test_a_failed_revocation_does_not_stop_the_purge_and_is_a_number(live: Deployment) -> None:
-    """T-05-31: one attempt per credential, no retry, and the loop keeps going."""
+def test_a_failed_revocation_does_not_stop_the_loop_and_is_a_number(
+    live: Deployment, destructive: list[str], caplog: pytest.LogCaptureFixture
+) -> None:
+    """T-05-31 and T-05-57: every row is attempted, and a total failure ends it there.
+
+    Until WR-01 of 05-REVIEW.md this test pinned the opposite: the tables were emptied and
+    the data key deleted although not one app password had been handed back. That state is
+    the catastrophe of pattern 4 in 05-RESEARCH.md, because the tables are the only record
+    of which app password belongs to which connection, while every one of those credentials
+    stays valid in Nextcloud. A run that reaches nothing is a fault of the connection and
+    not of a single row, so it changes nothing and stays repeatable.
+    """
+    before = live.counts()
     with respx.mock:
         wire = Wire()
         wire.install(password=500)
-        response = call(live)
+        with caplog.at_level(logging.DEBUG):
+            response = call(live)
 
     body = response.json()
     assert wire.seen.count("password") == len(CONNECTIONS), "every row was still attempted"
+    assert body["purged"] is False
+    assert body["connections"] == len(CONNECTIONS)
     assert body["revoked"] == 0
     assert body["revoke_failures"] == len(CONNECTIONS)
-    assert body["purged"] is True, "the local half happened anyway"
-    assert live.counts() == dict.fromkeys(TABLES, 0)
+    assert body["hint"] == purge.REVOKE_HINT
+    assert destructive == [], "neither the tables nor the data key were touched"
+    assert live.counts() == before, "the second run after the fault is a complete one"
+    assert [record for record in caplog.records if record.levelno >= logging.ERROR]
 
 
-def test_a_revocation_that_never_reaches_nextcloud_is_a_number_too(live: Deployment) -> None:
+def test_a_revocation_that_never_reaches_nextcloud_stops_the_purge_too(
+    live: Deployment,
+) -> None:
+    """The transport half of the case above: no answer at all is no revocation at all."""
+    before = live.counts()
     with respx.mock:
         respx.delete(PASSWORD_URL).mock(side_effect=httpx.ConnectError("no route"))
         deleted = respx.delete(CONFIG_URL).mock(return_value=httpx.Response(200, json={}))
         response = call(live)
 
-    assert response.json()["revoke_failures"] == len(CONNECTIONS)
-    assert deleted.called, "the key still goes: the rows it protected are gone"
+    body = response.json()
+    assert body["purged"] is False
+    assert body["revoke_failures"] == len(CONNECTIONS)
+    assert not deleted.called, "the key still opens the rows that are still there"
+    assert live.counts() == before
+
+
+def test_a_partly_failed_revocation_purges_and_counts_the_failure(live: Deployment) -> None:
+    """WR-01 draws the line at zero, not at one: one broken connection blocks nothing.
+
+    An uninstall that stops because a single app password could not be handed back would
+    leave an administrator with no way forward at all, and the number in the answer plus
+    the runbook are the documented handling of that case.
+    """
+    answers = iter([200, 500])
+    with respx.mock:
+        seen: list[str] = []
+
+        def revoked(request: httpx.Request) -> httpx.Response:
+            seen.append("password")
+            return httpx.Response(next(answers, 500))
+
+        respx.delete(PASSWORD_URL).mock(side_effect=revoked)
+        deleted = respx.delete(CONFIG_URL).mock(return_value=httpx.Response(200, json={}))
+        response = call(live)
+
+    body = response.json()
+    assert len(seen) == len(CONNECTIONS)
+    assert body["purged"] is True
+    assert body["revoked"] == 1
+    assert body["revoke_failures"] == len(CONNECTIONS) - 1
+    assert body["tables_cleared"] is True
+    assert deleted.called
+    assert live.counts() == dict.fromkeys(TABLES, 0)
 
 
 def test_a_failed_key_deletion_is_its_own_number(live: Deployment) -> None:
@@ -472,7 +618,13 @@ def test_a_failed_key_deletion_is_its_own_number(live: Deployment) -> None:
 
 
 def test_a_purge_of_an_empty_deployment_is_a_clean_zero(tmp_path: Path) -> None:
-    """No connection, nothing to revoke, and the key still goes."""
+    """No connection, nothing to revoke, and the key still goes.
+
+    The other side of the WR-01 line: ``revoked == 0`` alone is not a fault. Without a row
+    there is nothing to hand back, so emptying the tables and deleting the key is exactly
+    right here, and an abort would make an uninstall impossible on a deployment nobody ever
+    connected to.
+    """
     deployment = Deployment(tmp_path)
 
     with respx.mock:

@@ -163,12 +163,41 @@ Every field of that answer is a number an administrator has to read:
 
 | Field | Meaning | What to do about it |
 |-------|---------|---------------------|
-| `purged` | whether the command ran at all | `false` means `--force` was missing, or the data of this app could not be opened. The answer then carries a `hint`, and step 2 must not follow. |
+| `purged` | whether the command ran at all | `false` means `--force` was missing, the data of this app could not be opened, or not one app password could be handed back (see below). The answer then carries a `hint`, nothing was deleted, and step 2 must not follow. |
 | `connections` | authorizations found, revoked ones included | the number of Nextcloud app passwords this is about |
 | `revoked` | app passwords handed back to Nextcloud | equal to `connections` is the good case |
 | `revoke_failures` | app passwords that could not be handed back | above zero means that many app passwords can still be valid. Each affected user has to remove the entry named `MCP Connector: <client>` under Settings, Security, Devices and sessions. |
 | `tables_cleared` | whether all seven tables were emptied | `false` still allows step 2, which takes the file with the volume, but the finding belongs in your notes |
 | `key_deleted` | whether the encryption key was removed from the ExApp configuration | `false` leaves a value behind. It is useless without the volume, but it is there: remove it with the AppAPI configuration API, or accept it and record it. |
+
+#### When the purge stops on purpose
+
+If connections exist and not one of their app passwords could be handed back, the command
+deletes nothing and says so:
+
+```
+$ occ mcp_connector:purge --force
+{"purged":false,"connections":2,"revoked":0,"revoke_failures":2,"hint":"Nothing was deleted.
+Not one app password could be handed back to Nextcloud, ..."}
+```
+
+What it means: this container did not reach Nextcloud, or Nextcloud refused every attempt.
+A single failed revocation does not stop anything, it is counted in `revoke_failures` and
+the run continues; zero successful ones out of a non-empty list is a fault of the connection
+and not of one stored connection.
+
+What was changed: nothing. The tables are untouched and the encryption key is still in the
+ExApp configuration, which is the point. Those tables are the only record of which Nextcloud
+app password belongs to which connection, so emptying them while the credentials stay valid
+would leave the manual clean up further down as the only way out.
+
+What to do:
+
+1. Check that the app is running and can reach Nextcloud, for example
+   `docker logs --tail=50 nc_app_mcp_connector`, and that Nextcloud answers at all.
+2. Run `occ mcp_connector:purge --force` again. Nothing was consumed by the stopped run, so
+   the second one is a complete purge.
+3. Only then continue with step 2 of the order at the top of this page.
 
 Four counter-checks, all measured:
 
