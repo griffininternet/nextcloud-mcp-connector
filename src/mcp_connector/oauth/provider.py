@@ -306,7 +306,9 @@ class NextcloudOAuthProvider(
 
     # --- the two halves this plan builds ------------------------------------------------
 
-    async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
+    async def get_client(
+        self, client_id: str, *, may_fetch: bool = True
+    ) -> OAuthClientInformationFull | None:
         """The enforcement point of AUTH-07, on the way into three endpoints.
 
         Four refusals with one answer, and a fifth that is not a refusal but a sweep: a
@@ -314,6 +316,20 @@ class NextcloudOAuthProvider(
         so is one that has not been used for a season. That is the whole cleanup of the
         registry (T-03-44), because this project has no cron and a table that only grows
         is a denial of service with a delay.
+
+        **``may_fetch`` separates the policy question from the freshness question** (WR-01,
+        WR-03). Every caller of this method asks "may this client still act", and for a
+        document identity that question used to carry a hidden second one: "and is the
+        document still fresh", whose answer could be an outbound request against a host the
+        client named. The verifier of every tool call, the client authentication of
+        ``/token`` and ``/revoke`` and the two exchanges all promise in writing that no
+        foreign network sits in their path, so they ask with ``may_fetch=False`` and read
+        only the stored row: an identity that was bound byte for byte once changes rarely,
+        and a stale one is strictly better on those paths than an unavailable server or a
+        session killed by a stranger's outage minute. The refetch belongs to the one path
+        where a person with a browser is waiting, ``/authorize``, whose callers keep the
+        default. The policy questions themselves, the allowed flag, the allowlist and the
+        switch, are answered either way, so a block still reaches every endpoint at once.
 
         **Why the registration TTL does not apply to a document identity** (pitfall 4,
         T-06-31). The two windows above say "a registration nobody ever used" and "a
@@ -344,7 +360,7 @@ class NextcloudOAuthProvider(
             # expiry are the shared rest of this function and not a copy of it. Three cases
             # arrive here and :meth:`_resolve_cimd` tells them apart: no row at all, a row
             # whose freshness ran out, and a row that is still fresh.
-            row = await self._resolve_cimd(client_id, store, row=row)
+            row = await self._resolve_cimd(client_id, store, row=row, may_fetch=may_fetch)
             if row is None:
                 return None
 
@@ -379,7 +395,12 @@ class NextcloudOAuthProvider(
         return client
 
     async def _resolve_cimd(
-        self, client_id: str, store: OAuthStore, *, row: ClientRow | None = None
+        self,
+        client_id: str,
+        store: OAuthStore,
+        *,
+        row: ClientRow | None = None,
+        may_fetch: bool = True,
     ) -> ClientRow | None:
         """The store row of a client that identifies itself with a metadata document.
 
@@ -406,6 +427,15 @@ class NextcloudOAuthProvider(
         question is asked, so :meth:`get_client` cannot forget it for one of its three
         cases.
 
+        **``may_fetch=False`` is the hot path answer to a deadline that passed** (WR-01,
+        WR-03). The verifier of every tool call and the token endpoints may not wait on a
+        host the client named, so for them a stale row keeps answering: the identity was
+        bound byte for byte once, the shared rest of :meth:`get_client` still applies every
+        policy question to it, and the next ``/authorize`` pays the refetch. A client this
+        server has no row for is a plain refusal on those paths, because an identity that
+        was never read cannot be reused, only fetched, and fetching is exactly what is
+        forbidden there. Fail closed both ways, and no packet either way.
+
         **Why a row and not only a cache entry** (pitfall 3). ``flows.client_id`` and
         ``authorizations.client_id`` reference ``clients(client_id)`` with a foreign key, so
         a client that exists only in memory would fail the first ``/authorize`` with an
@@ -424,6 +454,11 @@ class NextcloudOAuthProvider(
         if not self._policy.cimd_enabled:
             return None
         if row is not None and _cimd_is_fresh(row, self._now()):
+            return row
+        if not may_fetch:
+            # The hot paths (WR-01, WR-03): a stale row keeps answering and a missing one
+            # is a refusal, and neither costs a packet. The shared rest of ``get_client``
+            # still asks every policy question about the row this returns.
             return row
         if client_id != client_id.strip():
             # An identifier this server would fetch under one spelling and store under
@@ -719,7 +754,10 @@ class NextcloudOAuthProvider(
 
         Nothing here talks to Nextcloud. The whole Nextcloud round trip of this phase
         happens in the browser path, where a person is waiting and a second costs nothing;
-        a connector gives its token endpoint about ten seconds (pitfall 13, T-03-58).
+        a connector gives its token endpoint about ten seconds (pitfall 13, T-03-58). And
+        nothing here talks to a document host either (WR-03): the policy check below reads
+        the stored row and never refetches, or the sentence above would hold against
+        Nextcloud and break against whichever host a client id names.
         """
         resource = (authorization_code.resource or "").strip()
         if not resource:
@@ -727,7 +765,7 @@ class NextcloudOAuthProvider(
         if not check_resource_allowed(resource, self._resource):
             raise TokenError("invalid_target", _WRONG_AUDIENCE)
 
-        if await self.get_client(client.client_id) is None:
+        if await self.get_client(client.client_id, may_fetch=False) is None:
             raise TokenError("invalid_client", _CLIENT_GONE)
 
         store = await self.store()
@@ -837,9 +875,12 @@ class NextcloudOAuthProvider(
 
         Nothing here talks to Nextcloud, on any of the three paths. A connector gives its
         token endpoint about ten seconds and its refresh about thirty (pitfall 13, T-03-58),
-        and a family kill under load must not depend on a PHP round trip.
+        and a family kill under load must not depend on a PHP round trip. The same sentence
+        holds against a document host (WR-03): the policy check below reads the stored row
+        and never refetches, so a rotation at the freshness deadline cannot fail over a
+        stranger's outage minute.
         """
-        if await self.get_client(client.client_id) is None:
+        if await self.get_client(client.client_id, may_fetch=False) is None:
             raise TokenError("invalid_client", _CLIENT_GONE)
 
         store = await self.store()
@@ -1444,7 +1485,11 @@ class HashedClientAuthenticator(ClientAuthenticator):
         if not client_id:
             raise AuthenticationError("Missing client_id")
 
-        client = await self._provider.get_client(client_id)
+        # ``may_fetch=False`` (WR-01): this runs on ``/token`` and ``/revoke``, where an
+        # outbound request against a host the client named would put a stranger's outage
+        # into the ten seconds a connector gives its token endpoint. The stored row is the
+        # identity here; the refetch belongs to ``/authorize``.
+        client = await self._provider.get_client(client_id, may_fetch=False)
         if client is None:
             raise AuthenticationError("Invalid client_id")
 

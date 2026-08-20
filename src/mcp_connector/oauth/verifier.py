@@ -63,9 +63,21 @@ __all__ = [
 #: How a caller hands in the store of this application, the same shape ``provider.py`` uses.
 type StoreProvider = Callable[[], Awaitable[OAuthStore]]
 
-#: The enforcement point of AUTH-07, handed in rather than imported: the verifier asks the
-#: very same ``get_client`` the authorization endpoints ask, so one block covers all of them.
-type ClientLookup = Callable[[str], Awaitable[OAuthClientInformationFull | None]]
+
+class ClientLookup(Protocol):
+    """The enforcement point of AUTH-07, handed in rather than imported.
+
+    The verifier asks the very same ``get_client`` the authorization endpoints ask, so one
+    block covers all of them. ``may_fetch`` is part of the shape because this caller must
+    be able to say no to it: a document identity whose freshness ran out would otherwise
+    be refetched from a host the client named, in the hot path of every tool call (WR-01),
+    which is exactly the network call the module docstring promises away.
+    """
+
+    def __call__(
+        self, client_id: str, *, may_fetch: bool = True
+    ) -> Awaitable[OAuthClientInformationFull | None]: ...
+
 
 #: Where the id of the authorization travels inside the SDK token model. The model has no
 #: field for it, and ``claims`` is what it offers for exactly this (RFC 7662 style claims).
@@ -212,9 +224,13 @@ class StoreTokenVerifier:
             # RFC 8707: a token for another MCP server, or one without an audience at all,
             # which would be valid at every server a user connects (pitfall 3, T-03-51).
             return None
-        if await self._get_client(authorization.client_id) is None:
+        if await self._get_client(authorization.client_id, may_fetch=False) is None:
             # The fourth enforcement point of AUTH-07: a block has to reach tokens that
-            # were issued before it (pitfall 9, T-03-55).
+            # were issued before it (pitfall 9, T-03-55). ``may_fetch=False`` keeps the
+            # promise of the module docstring against every host, not only Nextcloud
+            # (WR-01): a document identity is read from its stored row here, stale or not,
+            # and never refetched in the hot path of a tool call. A stranger's outage
+            # minute must not end a running session whose token is valid.
             return None
 
         access = AccessToken(

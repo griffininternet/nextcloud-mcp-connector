@@ -456,6 +456,9 @@ STALE_METADATA = json.dumps(
         "client_id": CIMD_ID,
         "client_name": "The name of an earlier reading",
         "redirect_uris": ["http://127.0.0.1/callback"],
+        # What ``_resolve_cimd`` writes for every row of this path: a document client is
+        # public by definition, and the authenticator of ``/token`` reads this field.
+        "token_endpoint_auth_method": "none",
     }
 )
 
@@ -714,6 +717,235 @@ async def test_a_reading_that_fails_is_a_refusal_and_not_a_walk_on_with_the_old_
 
     assert route.call_count == 1
     assert await store.load_client(CIMD_ID) is not None, "a refusal deletes nothing"
+
+
+# --- WR-01/WR-03: no packet on the hot paths ----------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_a_stale_row_keeps_answering_where_fetching_is_forbidden(tmp_path: Path) -> None:
+    """WR-01: the hot paths read the stored identity and never pay a stranger's fetch.
+
+    The row is past its freshness deadline, which is exactly the moment the old code made
+    an outbound request in the middle of a tool call. With ``may_fetch=False`` the stored
+    identity answers unchanged, nothing is written, and the deadline stays where it was:
+    the next ``/authorize`` pays the refetch.
+    """
+    subject, store = build(tmp_path)
+    moment = int(time.time())
+    await with_a_document_row(store, fetched_at=moment - 4_000, expires_at=moment - 1)
+
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.get(CIMD_FETCH_URL)
+        client = await subject.get_client(CIMD_ID, may_fetch=False)
+
+    assert route.called is False
+    assert client is not None
+    assert client.client_name == "The name of an earlier reading"
+    row = await store.load_client(CIMD_ID)
+    assert row is not None
+    assert row.cimd_expires_at == moment - 1, "and no store write on the hot path either"
+
+
+@pytest.mark.anyio
+async def test_an_unknown_document_client_is_a_plain_refusal_where_fetching_is_forbidden(
+    tmp_path: Path,
+) -> None:
+    """WR-01, the negative half: an identity that was never read cannot be reused.
+
+    It can only be fetched, and fetching is exactly what is forbidden on the hot paths, so
+    the answer is the one every unknown client gets, and no packet leaves.
+    """
+    subject, store = build(tmp_path)
+
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.get(CIMD_FETCH_URL)
+        assert await subject.get_client(CIMD_ID, may_fetch=False) is None
+
+    assert route.called is False
+    assert await store.load_client(CIMD_ID) is None
+
+
+@pytest.mark.anyio
+async def test_a_blocked_document_client_stays_blocked_where_fetching_is_forbidden(
+    tmp_path: Path,
+) -> None:
+    """WR-01 weakens no policy: the shared rest of ``get_client`` still refuses a block.
+
+    ``may_fetch=False`` skips the fetch, never the questions: a stored block reaches the
+    verifier and the token endpoints exactly as before (pitfall 9, T-03-55).
+    """
+    subject, store = build(tmp_path)
+    moment = int(time.time())
+    await store.save_client(
+        CIMD_ID,
+        metadata_json=STALE_METADATA,
+        allowed=False,
+        now=moment - 4_000,
+        cimd_fetched_at=moment - 4_000,
+        cimd_expires_at=moment - 1,
+    )
+
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.get(CIMD_FETCH_URL)
+        assert await subject.get_client(CIMD_ID, may_fetch=False) is None
+
+    assert route.called is False
+
+
+@pytest.mark.anyio
+async def test_the_dcr_switch_reaches_the_hot_paths_as_well(tmp_path: Path) -> None:
+    """The locked decision holds under ``may_fetch=False`` too (T-06-26).
+
+    A stored row of a path an administrator closed answers nobody, packet or no packet:
+    the switch is still the first question of ``_resolve_cimd``, before the reuse branch.
+    """
+    subject, store = build(tmp_path, **{registry.ENV_DCR: "off"})
+    moment = int(time.time())
+    await with_a_document_row(store, fetched_at=moment - 10, expires_at=moment + 200)
+
+    assert await subject.get_client(CIMD_ID, may_fetch=False) is None
+
+
+@pytest.mark.anyio
+async def test_a_running_session_survives_a_document_host_outage(tmp_path: Path) -> None:
+    """WR-01, the verifier's own sentence held against a foreign host.
+
+    The token is valid, Nextcloud is untouched, and the document host is down at the
+    freshness deadline. The old code refetched on the cache miss, got nothing and refused
+    a running session mid conversation; the fix reads the stored row and the session lives.
+    """
+    subject, store = build(tmp_path)
+    moment = int(time.time())
+    await with_a_document_row(store, fetched_at=moment - 4_000, expires_at=moment - 1)
+    await store.create_authorization(
+        CIMD_AUTH_ID,
+        client_id=CIMD_ID,
+        nc_user=CIMD_NC_USER,
+        app_password=CIMD_APP_PASSWORD,
+        scopes=metadata.TOOL_SCOPE,
+        resource=RESOURCE,
+    )
+    bearer = "the-access-token-of-a-running-cimd-session"
+    await store.create_access_token(
+        bearer,
+        auth_id=CIMD_AUTH_ID,
+        family_id="the-family-of-this-session",
+        scopes=metadata.TOOL_SCOPE,
+        resource=RESOURCE,
+        now=moment,
+    )
+    checker = StoreTokenVerifier(
+        store_provider=opener(store), get_client=subject.get_client, env=ENV
+    )
+
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.get(CIMD_FETCH_URL)
+        access = await checker.verify_token(bearer)
+
+    assert route.called is False
+    assert access is not None
+    assert access.client_id == CIMD_ID
+
+
+@pytest.mark.anyio
+async def test_a_rotation_at_the_freshness_deadline_waits_on_no_document_host(
+    tmp_path: Path,
+) -> None:
+    """WR-03: the token endpoint's promise, held against the host a client id names.
+
+    "Nothing here talks to Nextcloud" has to mean "nothing here talks to anybody", or a
+    slow document host delays every rotation of its client by up to five seconds and a
+    down one fails an otherwise valid rotation at the freshness deadline.
+    """
+    subject, store = build(tmp_path)
+    moment = int(time.time())
+    await with_a_document_row(store, fetched_at=moment - 4_000, expires_at=moment - 1)
+    await store.create_authorization(
+        CIMD_AUTH_ID,
+        client_id=CIMD_ID,
+        nc_user=CIMD_NC_USER,
+        app_password=CIMD_APP_PASSWORD,
+        scopes=metadata.TOOL_SCOPE,
+        resource=RESOURCE,
+    )
+    refresh = "the-refresh-token-of-a-cimd-connection"
+    await store.create_refresh_token(
+        refresh, auth_id=CIMD_AUTH_ID, family_id="the-family-of-this-connection", now=moment
+    )
+    loaded = await subject.load_refresh_token(registration(CIMD_ID), refresh)
+    assert loaded is not None
+
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.get(CIMD_FETCH_URL)
+        answer = await subject.exchange_refresh_token(registration(CIMD_ID), loaded, [])
+
+    assert route.called is False
+    assert answer.access_token
+    assert answer.refresh_token is not None
+    assert answer.refresh_token != refresh, "the rotation itself is untouched"
+
+
+@pytest.mark.anyio
+async def test_the_token_endpoint_answers_a_document_client_from_its_stored_row(
+    tmp_path: Path,
+) -> None:
+    """WR-01 and WR-03 end to end: client authentication and code exchange, no packet.
+
+    The row is stale and the document host answers nobody, and the whole ``/token`` walk
+    completes anyway: the authenticator and the exchange both read the stored row.
+    """
+    subject, store = build(tmp_path)
+    moment = int(time.time())
+    await with_a_document_row(store, fetched_at=moment - 4_000, expires_at=moment - 1)
+    await store.create_authorization(
+        CIMD_AUTH_ID,
+        client_id=CIMD_ID,
+        nc_user=CIMD_NC_USER,
+        app_password=CIMD_APP_PASSWORD,
+        scopes=metadata.TOOL_SCOPE,
+        resource=RESOURCE,
+    )
+    await store.create_auth_code(
+        CODE,
+        auth_id=CIMD_AUTH_ID,
+        redirect_uri="http://127.0.0.1/callback",
+        code_challenge=CHALLENGE,
+        resource=RESOURCE,
+    )
+
+    with serving(subject) as http, respx.mock(assert_all_called=False) as mock:
+        route = mock.get(CIMD_FETCH_URL)
+        response = http.post(
+            "/token",
+            data=token_request(client_id=CIMD_ID, redirect_uri="http://127.0.0.1/callback"),
+        )
+
+    assert response.status_code == 200, response.text
+    assert route.called is False
+    assert response.json()["access_token"]
+
+
+@pytest.mark.anyio
+async def test_an_unknown_document_client_at_the_token_endpoint_is_a_401_without_a_packet(
+    tmp_path: Path,
+) -> None:
+    """The fail closed half of the same fix: no row means 401, and still no packet.
+
+    Before the fix ``/token`` was a second unauthenticated trigger for the outbound fetch;
+    now the fetch belongs to ``/authorize`` alone.
+    """
+    subject, _store = build(tmp_path)
+
+    with serving(subject) as http, respx.mock(assert_all_called=False) as mock:
+        route = mock.get(CIMD_FETCH_URL)
+        response = http.post(
+            "/token",
+            data=token_request(client_id=CIMD_ID, redirect_uri="http://127.0.0.1/callback"),
+        )
+
+    assert response.status_code == 401
+    assert route.called is False
 
 
 @pytest.mark.anyio
