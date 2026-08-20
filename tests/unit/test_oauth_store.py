@@ -180,6 +180,132 @@ async def test_the_schema_is_created_on_first_use_and_a_second_open_changes_noth
     }
 
 
+def count_schema_runs(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Every ``executescript`` of every connection opened from here on, in order.
+
+    A spy and not a timing measurement: the finding of LO-02 is that the schema script ran
+    on every open, and "how often did it run" is the fact behind it. The counter sits on
+    the sqlite3 connection class, so it sees the call wherever in the store it is made.
+    """
+    scripts: list[str] = []
+    real_connect = sqlite3.connect
+
+    class Counting(sqlite3.Connection):
+        def executescript(self, sql_script: str) -> sqlite3.Cursor:
+            scripts.append(sql_script)
+            return super().executescript(sql_script)
+
+    def connect(*args: object, **kwargs: object) -> sqlite3.Connection:
+        kwargs["factory"] = Counting
+        return real_connect(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(sqlite3, "connect", connect)
+    return scripts
+
+
+def remove_store_files(tmp_path: Path) -> None:
+    """The store file and the two WAL companions, as a volume that is pulled away."""
+    for path in sorted(tmp_path.glob(f"{store.STORE_FILENAME}*")):
+        path.unlink()
+
+
+@pytest.mark.anyio
+async def test_the_schema_script_runs_on_the_first_open_and_never_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """LO-02: it used to run on every open, and that sits on every MCP request.
+
+    ``access_disabled`` is asked at the transport boundary for every authenticated
+    identity, and ``/mcp`` deliberately carries no throttling (AR-03-04). The measured
+    price of the old behaviour was 1.54 ms per call, for thirteen statements that create
+    what is already there.
+    """
+    scripts = count_schema_runs(monkeypatch)
+    subject = open_store(tmp_path)
+
+    await subject.save_client(CLIENT_ID, metadata_json="{}")
+    assert len(scripts) == 1, "the first open creates the schema"
+
+    for _ in range(5):
+        assert await subject.access_disabled(NC_USER) is False
+    await subject.save_client("another-client", metadata_json="{}")
+
+    assert len(scripts) == 1, "and no open after it pays for it again"
+
+
+@pytest.mark.anyio
+async def test_every_connection_still_sets_the_three_pragmas(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two of the three are per connection, so they may never move into the first open.
+
+    The cascade is the visible half: an authorization for a client that does not exist has
+    to be refused by the file, and it only is while ``foreign_keys`` is on for this very
+    connection.
+    """
+    count_schema_runs(monkeypatch)
+    subject = open_store(tmp_path)
+    await subject.save_client(CLIENT_ID, metadata_json="{}")
+
+    with pytest.raises(sqlite3.IntegrityError):
+        await subject.create_authorization(
+            AUTH_ID,
+            client_id="no-such-client",
+            nc_user=NC_USER,
+            app_password=APP_PASSWORD,
+            scopes=SCOPES,
+            resource=RESOURCE,
+        )
+
+    assert query(tmp_path, "PRAGMA journal_mode")[0][0].lower() == "wal"
+
+
+@pytest.mark.anyio
+async def test_a_store_file_that_disappears_at_runtime_is_created_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The defined behaviour after the flag: an empty file is never used as if it had tables.
+
+    Somebody removes the volume, or the file, while the process runs. SQLite creates an
+    empty one on the next connection, so a flag alone would answer every call from then on
+    with "no such table". The store notices the missing file and lays the schema down
+    again: the rows are gone, which no code can undo, but the process keeps answering and
+    a user can connect again.
+    """
+    scripts = count_schema_runs(monkeypatch)
+    subject = open_store(tmp_path)
+    await subject.set_access(NC_USER, disabled=True)
+    assert len(scripts) == 1
+
+    remove_store_files(tmp_path)
+
+    assert await subject.access_disabled(NC_USER) is False, "the row is gone with the file"
+    assert len(scripts) == 2, "and the schema was laid down again"
+    await subject.set_access(NC_USER, disabled=True)
+    assert await subject.access_disabled(NC_USER) is True, "the file works like a fresh one"
+
+
+@pytest.mark.anyio
+async def test_a_second_store_object_lays_the_schema_down_for_itself(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The flag belongs to the store object, which is what makes it safe.
+
+    Two processes on the same volume are a supported case (SRV-05), and a process that
+    trusted another process's flag would be trusting a file it never looked at. A second
+    object is the cheapest stand in for the second process, and ``IF NOT EXISTS`` makes the
+    repeat free of consequence.
+    """
+    scripts = count_schema_runs(monkeypatch)
+    first = open_store(tmp_path)
+    await first.save_client(CLIENT_ID, metadata_json="{}")
+
+    second = open_store(tmp_path)
+    assert await second.load_client(CLIENT_ID) is not None
+
+    assert len(scripts) == 2, "one per store object, not one per call"
+
+
 @pytest.mark.anyio
 async def test_the_connection_pragmas_are_the_ones_the_rotation_depends_on(tmp_path: Path) -> None:
     """WAL for a reader beside a writer, foreign keys for the cascade, a busy timeout so
