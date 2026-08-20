@@ -346,20 +346,32 @@ def main() -> None:
         # this error line plus the visible setup state of the connections page, not by dying.
         #
         # Nothing is deleted or written back to Nextcloud in this branch, on purpose (T-05-44):
-        # the stored value stays where the administrator typed it, so she finds it in the form
+        # a value the administrator typed stays where she typed it, so she finds it in the form
         # and corrects it instead of silently losing what she entered.
+        #
+        # Both places are named, and that is IN-02 of the re-review. The line used to say "the
+        # stored value is kept ... correct it where it was entered" and point at the form
+        # alone. Since the prevention half of CR-01 refuses an unusable form value in
+        # `config_values._public_url`, the case that really reaches this branch is the other
+        # one: a deploy variable, which nothing validates. An administrator sent to the form
+        # then looks for a stored value that is not there. Naming both sources with the rule
+        # between them is true whichever of the two it was, and the INFO line of
+        # `_resolved_env` above says which one won on this start.
         #
         # The value itself is never named: it may have come out of the form and travelled over
         # HTTP (T-05-21), and this log is read by everyone who reads container logs.
         app_id = (resolved.get(config.ENV_APP_ID) or "").strip()
         resolved.pop(config.ENV_PUBLIC_URL, None)
         logger.error(
-            "%s %s The stored value is kept, so it can be corrected where it was entered: "
-            '"%s", then disable and enable this app again (occ app_api:app:disable %s, '
-            "occ app_api:app:enable %s). This process keeps serving with the documented "
-            "default in the meantime; the connections page says the same thing.",
+            "%s %s Nothing is deleted in Nextcloud, so every value stays where it was set. "
+            'Correct the deploy variable %s, or enter a usable address in "%s" (a stored '
+            "value wins over the variable), then disable and enable this app again "
+            "(occ app_api:app:disable %s, occ app_api:app:enable %s). This process keeps "
+            "serving with the documented default in the meantime; the connections page "
+            "says the same thing.",
             exc.message,
             exc.hint,
+            config.ENV_PUBLIC_URL,
             strings.ADMIN_SETTINGS_PLACE,
             app_id,
             app_id,
