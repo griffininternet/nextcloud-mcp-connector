@@ -82,6 +82,15 @@ BUCKETS = (*KIND_BUCKETS, OTHER_BUCKET)
 MAX_EXCERPTS = 3
 EXCERPT_MAX_BYTES = 2000
 
+#: What the reader is allowed to transfer for one excerpt (LO-06). Without it a hit read up
+#: to ``files.DEFAULT_MAX_BYTES``, 512 kilobytes, to keep two of them: at ``detail="full"``
+#: up to 1.5 megabytes of Nextcloud transfer per bundle call, bounded in time by
+#: :data:`EXCERPT_TIMEOUT` and in volume not at all. Twice the ceiling and not exactly the
+#: ceiling, because the cap counts encoded bytes after decoding and a read that ends inside
+#: a multi byte character loses that character: the wider window makes the excerpt byte for
+#: byte the one a full read produced, and still saves the factor.
+EXCERPT_READ_BYTES = EXCERPT_MAX_BYTES * 2
+
 #: Own budget per excerpt, for the same reason the calendar has one: three reads that
 #: cannot be finished must cost three sentences under ``degraded``, never the bundle.
 EXCERPT_TIMEOUT = 5.0
@@ -277,9 +286,13 @@ async def _excerpts(
 
 
 async def _excerpt(clients: NcClients, identifier: str) -> str:
-    """One excerpt, under its own ceiling, through the routing that already exists."""
+    """One excerpt, under its own two ceilings, through the routing that already exists.
+
+    The second ceiling is the one on the way in: the reader is told how much it may read,
+    instead of reading its own default and having it thrown away here (LO-06).
+    """
     async with asyncio.timeout(EXCERPT_TIMEOUT):
-        fetched = await chatgpt_tools.fetch(clients, identifier)
+        fetched = await chatgpt_tools.fetch(clients, identifier, max_bytes=EXCERPT_READ_BYTES)
     return _capped(str(fetched.get("text") or ""))
 
 

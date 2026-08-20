@@ -105,16 +105,26 @@ def _as_hit(clients: NcClients, hit: dict[str, Any]) -> dict[str, str]:
     }
 
 
-async def fetch(clients: NcClients, resource_id: str) -> dict[str, Any]:
+async def fetch(
+    clients: NcClients, resource_id: str, *, max_bytes: int | None = None
+) -> dict[str, Any]:
     """Read one search result in full and answer in the OpenAI fetch shape.
 
     The parameter is called ``resource_id`` inside the package and ``id`` on the wire: the
     wire name is the OpenAI contract, the Python name is not allowed to shadow a builtin.
+
+    ``max_bytes`` exists for Python callers and is not on the wire: the registered tool has
+    two parameters and keeps them (schema diet), so the ChatGPT contract is unchanged. It
+    is how ``prepare_context`` reads a file for a two kilobyte excerpt without pulling the
+    whole slice ceiling over the wire first (LO-06). ``None`` is the ceiling this tool
+    always used, so every existing caller reads exactly what it read before. Only the file
+    reader slices; for the other three kinds a document is one call and the limit has
+    nothing to apply to.
     """
     kind, parts = ids.parse(resource_id)
     match kind:
         case "file":
-            return await _fetch_file(clients, parts[0])
+            return await _fetch_file(clients, parts[0], max_bytes)
         case "note":
             return await _fetch_note(clients, parts[0])
         case "card":
@@ -128,8 +138,15 @@ async def fetch(clients: NcClients, resource_id: str) -> dict[str, Any]:
             )
 
 
-async def _fetch_file(clients: NcClients, fileid: str) -> dict[str, Any]:
-    """Turn a file id back into a path, then read that path with the ordinary reader."""
+async def _fetch_file(
+    clients: NcClients, fileid: str, max_bytes: int | None = None
+) -> dict[str, Any]:
+    """Turn a file id back into a path, then read that path with the ordinary reader.
+
+    ``MAX_TEXT_BYTES`` is read here and not bound as a default in the signature, so the
+    ceiling stays one module level constant that a caller can lower and a test can lower
+    for the whole module.
+    """
     entry = await dav_client.find_by_fileid(clients.client, clients.creds, fileid)
     if entry is None:
         raise ToolError(
@@ -141,7 +158,8 @@ async def _fetch_file(clients: NcClients, fileid: str) -> dict[str, Any]:
         )
 
     path = str(entry["path"])
-    answer = await files_tools.read(clients, path=path, max_bytes=MAX_TEXT_BYTES)
+    limit = MAX_TEXT_BYTES if max_bytes is None else max_bytes
+    answer = await files_tools.read(clients, path=path, max_bytes=limit)
 
     # The document's own copy of either marker goes before this server writes one of its
     # own (BL-09, ME-03): a complete file that carries the note would claim to be cut, and
