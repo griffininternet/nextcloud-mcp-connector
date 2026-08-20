@@ -68,6 +68,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   itself by the address of its own published metadata document instead of registering.
   It is on unless it is switched off, and switching off client registration switches
   this off with it: a closed door cannot be walked around through the other spelling.
+- A runbook for showing this app to other people, `docs/conference-demo.md`: the one time
+  setup, four stations with every command to copy and what has to be visible at each of
+  them, a checklist for the ten minutes before, the things it deliberately does not show,
+  and a recovery table. It was walked once end to end and it carries the measured time of
+  every step, including the two answers a paused and a disconnected account really get.
+  Next to it, `docs/conference-talk.md`, a five minute talk draft whose every claim names
+  the measurement it comes from.
 
 ## [0.1.2] - 2026-08-20
 
