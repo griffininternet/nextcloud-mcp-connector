@@ -252,6 +252,257 @@ Das zweite Feld gibt es erst seit 06-05; die Store-Fassung 0.1.1 kennt es nicht.
 `issuer` ist die öffentliche Adresse und nicht der dokumentierte Default, also hat die
 Registrierung `NC_MCP_PUBLIC_URL` wieder gesetzt.
 
+## 6. Der UI-Smoke: zeigt die Store-Oberfläche Install- und Remove-Knopf? (14:24 bis 14:45Z)
+
+Die Reihenfolge dieses Abschnitts ist die Reihenfolge der Messung.
+
+**6.0 Die Version, gegen die gemessen wurde**, als erste Zeile und nicht als Docker-Tag:
+
+```
+$ occ status
+  - installed: true
+  - version: 34.0.3.2
+  - versionstring: 34.0.3
+```
+
+**6.1 Das Konto.** Gemessen wurde als `admin`, und das ist ein Konto der Gruppe `admin`.
+Das ist Pflichtangabe, weil der App-Store-Zugang für Normalnutzer in NC 34 bewusst entfernt
+ist (nextcloud/server#60495):
+
+```
+$ occ user:info admin
+  - user_id: admin
+  - groups:
+    - admin
+im Browser: OC.getCurrentUser().uid = "admin", OC.isUserAdmin() = true
+```
+
+**6.2 Der Cache-Schritt.** Der Store-Cache wurde durch **Überschreiben mit `timestamp 0`**
+verworfen, nie durch Löschen der Datei (Phase-05-Entscheidung: eine gelöschte Datei lässt
+jedes folgende AppAPI-Kommando mit `GenericFileException` enden):
+
+```
+$ php -r '<apps.json lesen, timestamp auf 0 setzen, zurueckschreiben>'
+before: timestamp=1787235500 ncversion=34.0.3.2 entries=665
+after:  timestamp=0 ncversion=34.0.3.2 entries=665
+appapi_apps.json exists: 0
+```
+
+Zwei Dinge stehen in diesem Beleg. Erstens: die Datei heißt
+`data/appdata_*/appstore/apps.json`, und das ist der Cache, den `AppAPIFetcher::get`
+verwirft, sobald `timestamp` alt ist (Quelltext `apps/app_api/lib/Fetcher/AppAPIFetcher.php`,
+Zeilen 130 bis 152). Zweitens: die zweite Datei desselben Verzeichnisses,
+`appapi_apps.json`, existierte gar nicht, also gab es dort nichts zu überschreiben und es
+wurde nichts angelegt.
+
+**6.3 Die Gegenprobe vor dem Blick in die Oberfläche**, damit nicht eine leere Liste als
+Frontend-Befund notiert wird, und zugleich der Beleg, dass der Cache-Schritt kein
+AppAPI-Kommando zerstört hat:
+
+```
+$ occ app_api:app:list
+ExApps:
+mcp_connector (MCP Connector): 0.1.2 [enabled]
+```
+
+Keine `GenericFileException`, und die App ist `enabled`, während gemessen wird.
+
+**6.4 Eigenheit der Messumgebung, benannt statt versteckt.** Dieser Sitzung stand kein
+Playwright-Werkzeug zur Verfügung, und ein Paket zu installieren ist in dieser Phase
+ausgeschlossen (T-06-SC). Gemessen wurde deshalb mit dem auf dem Host installierten Chrome
+(`C:\Program Files\Google\Chrome\Application\chrome.exe`, `--headless=new`) über das
+DevTools-Protokoll, angesprochen von einem WebSocket-Client aus der Standardbibliothek. Die
+Anmeldung lief über das Formular, das die Seite selbst rendert; das Kennwort des
+Wegwerf-Kontos steht in `compose.exapp.yml` und nicht hier.
+
+**6.5 Was zu sehen ist.** `/settings/apps` leitet auf `/settings/apps/discover`; die Listen
+der Oberfläche sind `installed`, `enabled`, `disabled`, `updates` und die Kategorien
+(Routen aus `dist/appstore-main.mjs`). Auf **"Your apps"** (`/settings/apps/installed`)
+erscheint die ExApp:
+
+```
+Zeile (innerText):   MCP Connector
+                     (Show details)
+                     	0.1.2	
+                     Harp Proxy (Docker)
+                     	
+                     Disable
+Zeilen-Element:      <tr class="_appTableRow_...">
+Detail-Link:         /settings/apps/installed/mcp_connector
+Knöpfe der Zeile:    "Disable" und ein Menü-Knopf mit aria-label "Actions"
+```
+
+Wo bei einer normalen App das Abzeichen "Featured" steht, steht bei dieser Zeile der Name
+des Deploy Daemon, "Harp Proxy (Docker)". Und die Seite fragt jetzt genau die Route, die auf
+34.0.2 nie angefragt wurde (Netzwerkmitschnitt derselben Navigation, 213 Anfragen, davon die
+interessanten):
+
+```
+http://127.0.0.1:8081/ocs/v2.php/apps/appstore/api/v1/apps
+http://127.0.0.1:8081/ocs/v2.php/apps/appstore/api/v1/apps/categories
+http://127.0.0.1:8081/apps/app_api/daemons
+http://127.0.0.1:8081/apps/app_api/apps/list
+http://127.0.0.1:8081/apps/app_api/img/app-dark.svg
+```
+
+Der 34.0.2-Befund aus `docs/exapp-install.md` bleibt damit richtig und ist überholt: die
+OCS-Route des `appstore` kennt diese App weiter nicht (`mcp_connector` kommt in ihrer
+Antwort von 2 650 705 Bytes **null** mal vor, und `apps/appstore/lib/Controller/ApiController.php`
+trägt in 34.0.3 unverändert `'app_api' => false`), aber die Oberfläche holt die ExApps
+inzwischen selbst über `/apps/app_api/apps/list` dazu.
+
+**6.6 Der Install-Knopf: vorhanden, und er heißt "Deploy and enable".** Für die eigene App
+ist die Frage nicht am eigenen Eintrag zu beantworten, denn sie ist installiert und trägt
+darum "Disable". Gemessen wurde deshalb an einer ExApp, die diese Instanz **nicht**
+installiert hat, in derselben Ansicht (`/settings/apps/office`, 116 Zeilen):
+
+```
+Zeile:    Context Chat Backend
+          (Show details)
+          	5.4.1	
+          	
+          Deploy and enable
+Knöpfe:   "Deploy and enable" und "Actions"
+Alle Knopf-Beschriftungen dieser Tabelle:
+          "Download and enable", "Deploy and enable", "Disable", "Actions"
+```
+
+`Download and enable` ist der Knopf einer normalen App, `Deploy and enable` der einer ExApp.
+Die Store-Oberfläche hat auf 34.0.3 also einen Installationsknopf für ExApps, und sie
+unterscheidet ihn im Wortlaut vom Knopf einer PHP-App.
+
+**6.7 Der Remove-Knopf: vorhanden, aber nur an einer abgeschalteten ExApp.** Am eingeschalteten
+eigenen Eintrag gibt es ihn nicht, und das ist keine Vermutung, sondern gemessen: das
+Aktionsmenü der Zeile und die Detailspalte tragen ihn nicht, und die Route, die die Seite
+liest, sagt es selbst.
+
+```
+Aktionsmenü der Zeile (eingeschaltet):
+          "Limit to groups", "Rate the app", "Report a bug", "Show details"
+Detailspalte /settings/apps/installed/mcp_connector (aside.app-sidebar):
+          Knöpfe: "Close sidebar", "Disable", "Limit to groups"
+          Reiter: Description, Details, Changelog, Daemon
+          Text:   MCP Connector, Version 0.1.2, AGPL-licensed, Daemon: Harp Proxy (Docker)
+          kein Knopf mit "remove", "uninstall" oder "delete" auf der ganzen Seite
+/apps/app_api/apps/list, Eintrag mcp_connector (eingeschaltet):
+          installed=true active=true canInstall=true canUnInstall=false
+```
+
+Der Grund steht im Quelltext von AppAPI, `lib/Controller/ExAppsPageController.php:213`:
+
+```php
+$appData['canUnInstall'] = !$appData['active'] && $appData['removable'] && ...
+```
+
+Also wurde die zweite Hälfte gemessen. Nach `occ app_api:app:disable mcp_connector`
+(14:43:53Z), Blick auf `/settings/apps/disabled`:
+
+```
+Zeile:    MCP Connector
+          (Show details)
+          	0.1.2	
+          Harp Proxy (Docker)
+          	
+          Enable
+Aktionsmenü der Zeile:
+          "Limit to groups", "Remove", "Rate the app", "Report a bug", "Show details"
+/apps/app_api/apps/list, Eintrag mcp_connector (abgeschaltet):
+          installed=true active=false canInstall=true canUnInstall=true removable=true
+```
+
+Der Befund, getrennt beantwortet:
+
+| Frage | Antwort | Sichtbarer Text |
+|-------|---------|-----------------|
+| Zeigt die Oberfläche diese ExApp überhaupt? | **ja** | Zeile "MCP Connector 0.1.2 Harp Proxy (Docker)" unter "Your apps" |
+| Gibt es einen Install-Knopf für eine ExApp? | **ja** | "Deploy and enable" (an einer nicht installierten ExApp derselben Ansicht) |
+| Gibt es einen Remove-Knopf für diese ExApp? | **ja, im Aktionsmenü, und nur solange sie abgeschaltet ist** | "Remove" |
+| Und am eingeschalteten Eintrag? | **nein** | Menü ohne "Remove", `canUnInstall=false` |
+
+**6.8 Der Zustand danach wieder hergestellt**, und die Demo-Substanz nachgezählt:
+
+```
+$ occ app_api:app:enable mcp_connector
+ExApp mcp_connector successfully enabled.
+$ occ app_api:app:list
+ExApps:
+mcp_connector (MCP Connector): 0.1.2 [enabled]
+$ <Zeilen zaehlen>
+authorizations 2
+[('jane', None), ('jane', None)]
+$ curl -s -o /dev/null -w '%{http_code}' .../.well-known/oauth-authorization-server
+200
+```
+
+**6.9 Die statische Gegenprobe**, obwohl der Ausgang positiv ist: die Recherche hatte den
+Fix nicht statisch finden können, und dieser Absatz sagt, warum, damit die Aussage der
+Recherche nicht als widerlegt und unerklärt stehenbleibt. Verglichen wurden alle 122 Dateien
+von `apps/appstore` und alle `*ppstore*`-Dateien aus `dist/` zwischen dem 34.0.2- und dem
+34.0.3-Image, per md5:
+
+```
+$ docker run --rm <image> sh -c 'cd /usr/src/nextcloud && find apps/appstore -type f -exec md5sum {} \; | sort -k2 && find dist -name "*ppstore*" -type f -exec md5sum {} \; | sort -k2'
+34.0.2: 122 Dateien
+34.0.3: 122 Dateien
+Unterschiede ausserhalb von l10n/, .map und .license:
+  apps/appstore/appinfo/signature.json
+  dist/AppstoreBrowse-BY9drF5z.chunk.mjs  ->  dist/AppstoreBrowse-C0Yoxgfp.chunk.mjs  (8721 -> 8707 Bytes)
+  dist/AppstoreDiscover-DdlBIFps.chunk.mjs -> dist/AppstoreDiscover-DuQf5I8Z.chunk.mjs
+  dist/appstore-main.css
+  dist/appstore-main.mjs                   (95762 -> 95841 Bytes)
+```
+
+Die App-Version ist in beiden 1.0.0, und in `AppstoreBrowse` kommt `exapp` in beiden Fassungen
+nicht vor. Der Fix liegt in `dist/appstore-main.mjs`, und er ist ein Aufruf und kein neues
+Wort:
+
+```
+34.0.2: kein Treffer fuer Promise.allSettled([...initialize...])
+34.0.3: Promise.allSettled([V(),Y(),e.isEnabled?e.initialize():Promise.resolve()])
+Vorkommen von "isEnabled":  34.0.2: 2   34.0.3: 3
+Vorkommen von "initialize": 34.0.2: 1   34.0.3: 2
+Vorkommen von "app_api":    34.0.2: 23  34.0.3: 23
+Vorkommen von "exAppsCount":34.0.2: 1   34.0.3: 1
+```
+
+Das ist wörtlich der Titel des Upstream-Merges (`fix(appstore): initialize the exApps store
+when enabled`, `nextcloud/server#62881`, Milestone 34.0.3): der Store der externen Apps wird
+jetzt initialisiert, wenn AppAPI aktiviert ist. Wer nach dem Wort `exapp` sucht, findet
+nichts, weil der Aufruf `e.initialize()` heißt und `e` der minifizierte Name des
+`external-apps`-Stores ist.
+
+**6.10 Bildschirmfotos.** Die Aufnahmen des Laufs liegen unter
+`C:/Users/Student/AppData/Local/Temp/claude/.../scratchpad/out/` (Listen `installed`,
+`enabled`, `disabled`, `updates`, die Kategorieansicht mit "Deploy and enable", die
+Detailspalte der eigenen App). Sie tragen kein Credential und keine fremden Nutzerinhalte,
+sondern den App-Katalog dieser Wegwerf-Instanz. Eine davon geht ins Repository, weil sie den
+Befund dieses Abschnitts in einem Bild trägt:
+`docs/screenshots/exapp-remove-button.png` zeigt die Zeile "MCP Connector 0.1.2, Harp Proxy
+(Docker), Enable" mit dem geöffneten Aktionsmenü und dem Eintrag "Remove".
+
+## 7. Nicht vorhergesagt und darum hier festgehalten
+
+1. **Der explizite `occ upgrade` hatte nichts zu tun.** Der Einsprungpunkt des offiziellen
+   Images führt das Upgrade beim Start selbst aus, also war die Instanz schon auf 34.0.3.2,
+   bevor das geplante Kommando lief. Der Plan-Schritt bleibt richtig, sein Ergebnis ist aber
+   "No upgrade required" und nicht der Upgrade-Bericht; der Bericht steht im Containerlog.
+2. **`bootstrap_exapp.sh` allein hätte den alten Connector weiterlaufen lassen.**
+   `ensure_exapp` überspringt die Registrierung für eine bekannte App, also wäre ein Image
+   0.1.2 gebaut und gepusht worden, während der Container weiter 0.1.1 fährt. Genau der
+   Fehler, gegen den Pitfall 8 warnt, nur eine Ebene tiefer: nicht die Messdatei hätte den
+   Digest verschwiegen, sondern das Werkzeug hätte ihn nicht geändert.
+3. **Der Remove-Knopf hängt am Abschaltzustand.** Ein einziger Blick auf die eingeschaltete
+   App hätte "kein Remove-Knopf" ergeben, und das wäre ein falscher Negativbefund gewesen.
+   Die Regel steht in AppAPI und nicht im Frontend (`canUnInstall = !active && removable`).
+4. **Die Gegenprobe der Recherche war nicht falsch, sondern suchte das falsche Wort.** Der
+   Fix ist ein Aufruf in einem minifizierten Bundle, kein neues `exapp`-Vorkommen. Abschnitt
+   6.9 hält das fest, damit die frühere Aussage nachvollziehbar bleibt.
+5. **Kein Playwright in dieser Sitzung.** Der Browser-Schritt lief über das
+   DevTools-Protokoll mit einem WebSocket-Client aus der Standardbibliothek gegen das
+   installierte Chrome. Kein Paket wurde installiert (T-06-SC).
+
+## 8. Anhang: die Instanzen des Owners
+
 Und die Instanzen des Owners, die diesen Lauf nur ausgehalten haben:
 
 ```
