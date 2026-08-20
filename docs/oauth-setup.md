@@ -778,9 +778,19 @@ is D-35 doing what it says, plus one client side property that was not known bef
 keeps its own three addresses after the `201` instead of taking the registered ones out of
 the answer, and therefore cannot notice that one of them is not registered. RFC 7591 3.2.1
 asks the server to answer with what it registered, and this server does; a client that
-ignores that answer cannot be helped by dropping an address silently. Whether that calls
-for a different answer shape on this side is an open decision and not a defect of the rule.
-For Cursor today, the app password way in `docs/client-setup.md` is the answer. Raw numbers,
+ignores that answer cannot be helped by dropping an address silently.
+
+**What was decided about that, on 2026-08-20.** The dropped part is made visible where a
+reader and a user actually need it, which is this documentation and the refusal page, and the
+shape of the registration answer stays as it is. D-35 stays as it is too. The part that was
+not done has a measured reason rather than a guess: RFC 7591 3.2.1 asks for the registered
+metadata in the answer and does not forbid extension fields, but the answer model of the SDK
+in use carries no extra field, measured on 2026-08-20. The only way to name the dropped
+addresses in the answer would therefore be an intervention in the registration answer on the
+auth path itself, for a field that no measured client reads. The record of that decision,
+including the raw evidence of that measurement, is BL-14 in `.planning/BACKLOG.md`.
+For Cursor today, the app password way in `docs/client-setup.md` is the answer, and the
+refusal page names that way in words as well. Raw numbers,
 including the store rows and the counter checks:
 [06-08-MEASUREMENTS.md](../.planning/phases/06-h-rtung-eigennachweise-und-conference-reife/06-08-MEASUREMENTS.md).
 

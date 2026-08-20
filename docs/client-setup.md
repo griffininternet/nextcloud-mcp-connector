@@ -580,6 +580,11 @@ the two acceptable ones. The rule itself is unchanged: the private-use address i
 registered, so this server never sends anybody there. A client that offers nothing but
 inadmissible addresses is still refused with the same sentence.
 
+**Why that address is not registered.** RFC 8252 lists private-use schemes as one of three
+legitimate forms for a native client, but on a desktop no application
+owns a scheme exclusively, so another program can claim it and receive the authorization
+code. That is the reason behind the rule (D-35), and it is unchanged.
+
 **Measured against Cursor 3.2.16 on 2026-08-20, and it still does not connect.** Writing
 the file is enough for discovery and registration, seconds later and without a click, and
 the registration is answered `201` with two addresses in the record. The sign in is where
@@ -592,7 +597,10 @@ GET  400  /authorize    redirect_uri=cursor://anysphere.cursor-mcp/oauth/callbac
 ```
 
 The browser gets the error page "This app cannot be sent back safely" and no redirect, so
-nothing is shared and no password page is ever shown. The reason is on the client side and
+nothing is shared and no password page is ever shown. That page names the way out itself, in
+words and not as a link: for assistant apps that cannot use this sign in at all, the way in
+is an app password from the Nextcloud security settings, which is the path described at the
+top of this page. The reason is on the client side and
 it is worth knowing before anybody looks for a server bug: Cursor keeps its own three
 addresses after the `201` instead of reading the registered ones back out of the answer, so
 it cannot tell that one of them will be refused. Two counter checks with the same client id
