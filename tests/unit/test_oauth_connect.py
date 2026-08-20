@@ -33,6 +33,7 @@ from mcp_connector import config, entry_http
 from mcp_connector.entry_exapp import build_exapp_app
 from mcp_connector.exapp.ui import strings
 from mcp_connector.oauth import connect, loginflow
+from mcp_connector.oauth import store as store_module
 from mcp_connector.oauth import throttle as throttle_module
 from mcp_connector.oauth.store import FLOW_TTL, FlowRow, OAuthStore
 
@@ -485,6 +486,57 @@ def test_the_start_says_why_it_does_not_check_the_switch() -> None:
     source = Path(connect.__file__).read_text(encoding="utf-8")
     marker = source.index("async def _start(")
     assert "not known" in source[marker : marker + 900]
+
+
+@respx.mock
+def test_a_deployment_without_a_provider_opens_one_store_and_sweeps_it_once(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """IN-02 of 05-REVIEW.md, first pass: the branch every deployment takes, measured.
+
+    In the ExApp process nobody hands a store to this factory, so the opener is what runs:
+    one store for the whole application, opened at the first request that needs it, swept
+    exactly once. The tests of this file all pass a store, so this branch carried a word for
+    word copy of ``store.store_opener`` that no check ever ran, and a change on one side
+    would have missed the other silently. It is the shared opener now, and this is the test
+    that says the shared one behaves the way this factory promised.
+    """
+    swept: list[str] = []
+    original = OAuthStore.purge_expired
+
+    async def counted(self: OAuthStore) -> dict[str, int]:
+        swept.append(str(self._path))  # noqa: SLF001 - the file is the identity here
+        return await original(self)
+
+    async def key(env: object = None) -> bytes:
+        del env
+        return KEY
+
+    monkeypatch.setattr(OAuthStore, "purge_expired", counted)
+    monkeypatch.setattr(store_module.crypto, "data_key", key)
+    env = {**ENV, config.ENV_APP_PERSISTENT_STORAGE: str(tmp_path)}
+    client = TestClient(Starlette(routes=connect.connect_routes(env)))
+
+    first = start_a_flow(client)
+    second = start_a_flow(client)
+
+    assert first != second, "two flows, so the store answered both requests"
+    assert len(swept) == 1, "one open, one sweep, and no second store behind it"
+    assert swept[0] == str(tmp_path / store_module.STORE_FILENAME)
+
+
+def test_the_store_of_this_route_is_the_shared_opener() -> None:
+    """The other half of IN-02: one implementation, not two that look alike.
+
+    A second copy of the double checked locking, the key first rule and the sweep on first
+    open is not a small duplication: it is a second place to fix whenever the first one
+    changes, in a branch no test of this file walks.
+    """
+    source = Path(connect.__file__).read_text(encoding="utf-8")
+    assert "store_opener" in source
+    assert "purge_expired" not in source, "the sweep is the opener's business"
+    assert "crypto.data_key" not in source, "and so is the key"
+    assert "asyncio.Lock()" not in source, "and so is the locking"
 
 
 # --- WR-06: a ciphertext that cannot be read is a page, never a 500 -----------------------
