@@ -27,6 +27,13 @@ proof of the difference is the last row of the table below.
 What remains is maintenance: raise the version, write the changelog, tag, sign the
 release asset and hand its URL to the store. That is the runbook further down.
 
+**Open, 2026-08-20: 0.1.2 is built, published and signed, and not yet submitted.** Steps
+1 to 6 of the runbook are done and every one of them is a row in the table below: the tag
+`v0.1.2` is pushed, the workflow is green, the asset answers 200 and its signature
+verifies against the certificate. Only step 7 is outstanding, because it needs the store
+account, see the note under step 7. The signature is reproduced by re running the two
+commands of step 6 against the published asset, it does not have to be carried around.
+
 ## What the artifacts are
 
 Two separate things, do not confuse them:
@@ -78,6 +85,14 @@ Every line was measured, not assumed. No fact without its check.
 | 2026-08-19 20:46Z | The image of 0.1.1 is pullable anonymously and a real multi arch index: `linux/amd64`, `linux/arm64`, plus the two attestation entries | anonymous token from `ghcr.io/token`, then `https://ghcr.io/v2/street1983nk/mcp_connector/manifests/0.1.1`, `application/vnd.oci.image.index.v1+json` |
 | 2026-08-19 20:46Z | Both tags exist, none was rewritten | `https://ghcr.io/v2/street1983nk/mcp_connector/tags/list` returns `["0.1.0","0.1.1"]` |
 | 2026-08-19 20:53Z | The published 0.1.1 installs over the store path with no environment variable at all and stays up: `0 restarts`, state running, healthy, and it names its setup state in the log. This is the release: 0.1.0 answered the same install with `Restarting (2)` and exit 2 | `occ app_api:app:register mcp_connector harp_proxy_docker --force-scopes --wait-finish`, then `docker inspect nc_app_mcp_connector --format '{{.RestartCount}} {{.State.Status}}'` and `docker logs nc_app_mcp_connector` |
+| 2026-08-20 08:33Z | The release workflow of the tag `v0.1.2` is green in every step, run `32349279561` | `gh run watch 32349279561 --exit-status`, exit 0 |
+| 2026-08-20 08:34Z | The download of 0.1.2 answers 200 with 31909 bytes, the size that was signed | `curl -sSIL https://github.com/street1983nk/nextcloud-mcp-connector/releases/download/v0.1.2/mcp_connector-0.1.2.tar.gz` gives 302 then 200 |
+| 2026-08-20 08:34Z | The asset the release carries is not the locally built one: 31909 bytes against 32168, and a different sha256. This is the reason step 6 signs the download and not `dist/` | `sha256sum` of both files, `912b429d…` against `4ab1fde9…` |
+| 2026-08-20 08:35Z | The signature of 0.1.2 verifies against the merged certificate, so the store will accept it | `openssl x509 -in mcp_connector.crt -pubkey -noout`, then `openssl dgst -sha512 -verify` over the downloaded asset: `Verified OK` |
+| 2026-08-20 08:36Z | The image of 0.1.2 is pullable anonymously and a real multi arch index: `linux/amd64`, `linux/arm64`, plus the two attestation entries | anonymous token from `ghcr.io/token`, then `https://ghcr.io/v2/street1983nk/mcp_connector/manifests/0.1.2`, `application/vnd.oci.image.index.v1+json` |
+| 2026-08-20 08:36Z | All three tags exist, none was rewritten | `https://ghcr.io/v2/street1983nk/mcp_connector/tags/list` returns `["0.1.0","0.1.1","0.1.2"]` |
+| 2026-08-20 08:28Z | Both screenshot URLs answer 200, the overview with 82580 bytes and the connections page with 41825 | `curl -sSI` on `docs/screenshots/connections.png` and `docs/screenshots/connections-page.png` |
+| 2026-08-20 08:30Z | The manifest of 0.1.2 passes the validation the store runs, and both screenshots survive the pre pass | `pre-info.xslt` applied to `appinfo/info.xml`, then `info.xsd`, both fetched from the appstore repository: `assertValid` passes. Raw against `info.xsd` reports `routes` only, the documented false positive |
 
 ### The update keeps the connections
 
@@ -180,6 +195,22 @@ on, and step 4 is irreversible in public.
    the folder structure (exactly one top level folder, lowercase and underscores,
    contains `appinfo/info.xml`) and validates the metadata (after `pre-info.xslt`)
    against `info.xsd`. 201 means accepted.
+
+   **This step needs a person, and that is not going to change.** The token belongs to
+   the store account, it is not a repository secret and it is deliberately not stored in
+   this working copy. Reading it out of a browser profile is not a way around that: the
+   profile of a running browser holds its cookie database under an exclusive lock, and
+   from Chrome 127 on those cookies are additionally bound to the installation that
+   wrote them, so a copied profile does not open the session anyway. Whoever holds the
+   account opens `https://apps.nextcloud.com/account/token`, and either pastes the
+   download URL and the signature into the form at
+   `https://apps.nextcloud.com/developer/apps/releases/new` or runs the `curl` above with
+   the token in the environment. Everything before this step is automatable and is
+   automated; this one is the hand off.
+
+   Steps 1 to 6 leave nothing to redo: the signature is a pure function of the published
+   asset and the key, so it is recomputed with the two commands of step 6 whenever it is
+   needed, and it never has to be written down or passed along.
 8. **Run the four proofs, and write each one into the table above with its date.**
    ```
    curl -sS https://apps.nextcloud.com/api/v1/appapi_apps.json           # release line <version>, same platform span
@@ -229,9 +260,12 @@ app secret is carried over on purpose.
 Blocking, do before submitting:
 
 - [x] Certificate merged (`app-certificate-requests` PR #1160) and app registered.
-- [ ] Image pushed to `ghcr.io/street1983nk/mcp_connector:<version>`, tag equals
+- [x] Image pushed to `ghcr.io/street1983nk/mcp_connector:<version>`, tag equals
       `<version>`, multi arch (amd64 alone would be accepted by the store, we ship both).
-- [ ] Store archive built from the release asset and signed, download URL answers 200.
+      Done for 0.1.2, see the table above.
+- [x] Store archive built from the release asset and signed, download URL answers 200.
+      Done for 0.1.2, and the signature was verified against the certificate before the
+      hand off, see the table above.
 
 info.xml, already in place:
 
@@ -245,7 +279,9 @@ info.xml, already in place:
 - [x] Data flow described in the `<description>` as prose. The store has no
       data sharing field and no ethical AI tag, prose is the only channel. Full note
       in `docs/privacy.md`.
-- [x] One `<screenshot>` with an HTTPS URL, reachable (see the proof table above).
+- [x] Two `<screenshot>` elements with HTTPS URLs, both reachable (see the proof table
+      above). The order is the order the store shows, so the overview leads and the
+      connections page follows.
 - [x] German and French `<summary>` and `<description>` for the local listings.
 - [x] No variable carries an empty `<default>`. An empty XML element parses as `None`,
       and the store field is `CharField(blank=True)` without `null=True`, so the upload
