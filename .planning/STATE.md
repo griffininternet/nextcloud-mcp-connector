@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Plan 05-11 fertig: CR-01 in beiden Haelften geschlossen. Validierung lehnt http auf Nicht-Loopback-Host ab (LOOPBACK_HOSTS, RFC 8414), und ein Issuer-Refusal beim Start verwirft die Adresse, baut einmal neu und laeuft mit dem Default weiter statt in eine Restart-Schleife. 15 Regressionstests, volle Suite gruen, uv.lock unveraendert. Naechster Schritt: 05-VERIFICATION erneut ausfuehren."
-last_updated: "2026-08-20T03:42:45.165Z"
+stopped_at: "Plan 05-12 fertig: die Ursache des Startzeit-401 ist gemessen, nicht vermutet. Der Lesekanal traegt (M1 = 200 mit zurueckgeliefertem Wert), M2 und M3 zeigen keine 401-Zeile, M3b und M3c isolieren das enabled-Flag als einzige Variable (401, OCS 997). Zweig N fuer Plan 05-13: keine Selbstneustart-Mechanik, sondern eine ehrliche Logzeile plus der gemessen wirksame Disable/Enable-Zyklus. Restart-Policy: unless-stopped. Naechster Schritt: /gsd:plan-phase 05 fuer Plan 05-13."
+last_updated: "2026-08-20T04:00:48.714Z"
 last_activity: 2026-08-20
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 50
-  completed_plans: 45
+  completed_plans: 46
   percent: 80
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 05 (hardening-und-store-einreichung) — EXECUTING
-Plan: 2 of 16
+Plan: 3 of 16
 Status: Ready to execute
 Last activity: 2026-08-20
 
-Progress: [█████████░] 90%
+Progress: [█████████░] 92%
 
 ## Performance Metrics
 
@@ -98,6 +98,7 @@ Progress: [█████████░] 90%
 | Phase 05 P08 | 60 min | 3 tasks tasks | 9 files files |
 | Phase 05 P10 | 30 min | 3 tasks | 8 files |
 | Phase 05 P11 | 35 min | 2 tasks tasks | 5 files files |
+| Phase 05 P12 | 20 min | 2 tasks tasks | 1 file files |
 
 ## Accumulated Context
 
@@ -318,6 +319,8 @@ Recent decisions affecting current work:
 - [Phase 05-hardening-und-store-einreichung]: config.normalize_base_url bleibt unveraendert, die Issuer-Regel (https ausser Loopback, RFC 8414) steht in exapp/config_values._public_url: dieselbe Funktion prueft NC_MCP_URL, und dort ist http auf einem internen Host legitim
 - [Phase 05-hardening-und-store-einreichung]: Ein Issuer-Refusal beim Bau der Anwendung ist der einzige erholbare Startfehler: entry_exapp.main verwirft NC_MCP_PUBLIC_URL, baut genau einmal neu und laeuft mit dem Default weiter; ein zweiter Fehlschlag bleibt SystemExit(2)
 - [Phase 05-hardening-und-store-einreichung]: Der gespeicherte Admin-Wert wird im Rettungszweig NICHT geloescht (T-05-44 accept): er bleibt im Formular sichtbar und korrigierbar
+- [Phase 05-hardening-und-store-einreichung]: Der 401 des Startzeit-Lesevorgangs der Admin-Werte haengt allein am Aktivierungszustand der ExApp, nicht am Kanal und nicht am Zeitpunkt. Gemessen in 05-12: M1 antwortet 200 und liefert einen gesetzten Wert zurueck, M2 und M3 starten ohne die 401-Zeile, M3b und M3c isolieren das enabled-Flag als einzige Variable (401, OCS 997, AppAPI authentication failed); die Quelltext-Gegenprobe in AppAPIService::validateExAppRequestToNC bestaetigt es
+- [Phase 05-hardening-und-store-einreichung]: Plan 05-13 geht Zweig N: keine Selbstneustart-Mechanik am enabled=1-Hook, sondern eine ehrliche Logzeile fuer das Fenster vor der Aktivierung plus der dokumentierte Disable/Enable-Zyklus. Ein zweiter Lesevorgang samt Cache waere ohne Wirkung, weil jeder Start einer aktivierten App die Werte bereits vollstaendig liest (M1, M2, M3); die Restart-Policy des Deploy-Daemon-Containers ist gemessen unless-stopped, ein Selbstneustart waere also machbar, loest aber nichts
 
 ### Pending Todos
 
@@ -348,6 +351,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T03:42:45.148Z
-Stopped at: Plan 05-11 fertig: CR-01 in beiden Haelften geschlossen. Validierung lehnt http auf Nicht-Loopback-Host ab (LOOPBACK_HOSTS, RFC 8414), und ein Issuer-Refusal beim Start verwirft die Adresse, baut einmal neu und laeuft mit dem Default weiter statt in eine Restart-Schleife. 15 Regressionstests, volle Suite gruen, uv.lock unveraendert. Naechster Schritt: 05-VERIFICATION erneut ausfuehren.
+Last session: 2026-08-20T04:00:38.232Z
+Stopped at: Plan 05-12 fertig: die Ursache des Startzeit-401 ist gemessen, nicht vermutet. Der Lesekanal traegt (M1 = 200 mit zurueckgeliefertem Wert), M2 und M3 zeigen keine 401-Zeile, M3b und M3c isolieren das enabled-Flag als einzige Variable (401, OCS 997). Zweig N fuer Plan 05-13: keine Selbstneustart-Mechanik, sondern eine ehrliche Logzeile plus der gemessen wirksame Disable/Enable-Zyklus. Restart-Policy: unless-stopped. Naechster Schritt: /gsd:plan-phase 05 fuer Plan 05-13.
 Resume file: None
