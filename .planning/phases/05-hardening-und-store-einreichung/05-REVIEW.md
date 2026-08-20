@@ -1,179 +1,106 @@
 ---
 phase: 05-hardening-und-store-einreichung
-reviewed: 2026-08-19T21:30:00Z
+reviewed: 2026-08-20T10:30:00Z
 depth: standard
-files_reviewed: 37
+files_reviewed: 11
 files_reviewed_list:
-  - appinfo/info.xml
-  - docs/client-setup.md
-  - docs/exapp-install.md
-  - docs/faq.md
-  - docs/oauth-setup.md
-  - docs/privacy.md
-  - docs/store-submission.md
-  - docs/uninstall.md
-  - scripts/bootstrap_exapp.sh
-  - src/mcp_connector/__init__.py
-  - src/mcp_connector/entry_exapp.py
-  - src/mcp_connector/exapp/admin_settings.py
   - src/mcp_connector/exapp/config_values.py
-  - src/mcp_connector/exapp/lifecycle.py
-  - src/mcp_connector/exapp/occ.py
+  - src/mcp_connector/entry_exapp.py
   - src/mcp_connector/exapp/purge.py
-  - src/mcp_connector/exapp/ui/connections.py
-  - src/mcp_connector/exapp/ui/errors.py
-  - src/mcp_connector/exapp/ui/strings.py
-  - src/mcp_connector/oauth/connect.py
-  - src/mcp_connector/oauth/consent.py
-  - src/mcp_connector/oauth/crypto.py
-  - src/mcp_connector/oauth/store.py
-  - tests/contract/test_no_destructive_calls.py
-  - tests/integration/test_credential_flood.py
-  - tests/integration/test_permission_parity_share.py
-  - tests/unit/test_connections_page.py
-  - tests/unit/test_exapp_admin_settings.py
+  - scripts/bootstrap_exapp.sh
   - tests/unit/test_exapp_config_values.py
   - tests/unit/test_exapp_entry.py
   - tests/unit/test_exapp_env_setup.py
   - tests/unit/test_exapp_purge.py
-  - tests/unit/test_oauth_connect.py
-  - tests/unit/test_oauth_consent.py
-  - tests/unit/test_oauth_crypto.py
-  - tests/unit/test_oauth_store.py
-  - tests/unit/test_oauth_ui.py
+  - docs/client-setup.md
+  - docs/oauth-setup.md
+  - docs/uninstall.md
 findings:
-  critical: 1
-  warning: 3
+  critical: 0
+  warning: 1
   info: 6
-  total: 10
-status: issues
+  total: 7
+status: issues_found
 ---
 
-# Phase 05: Code Review Report
+# Phase 05: Code Review Report (Re-Review nach Gap-Closure, Pläne 05-11 bis 05-16)
 
-**Reviewed:** 2026-08-19T21:30:00Z
+**Reviewed:** 2026-08-20T10:30:00Z
 **Depth:** standard
-**Files Reviewed:** 37
+**Files Reviewed:** 11
 **Status:** issues_found
 
 ## Summary
 
-Gegenstand des Reviews waren die Härtungs- und Store-Artefakte der Phase 5: das Admin-Settings-Formular (BL-06) mit dem Konfigurations-Overlay, der Purge-Pfad (`occ mcp_connector:purge`), die drei Enforcement-Punkte des Konto-Schalters (BL-10), das Manifest samt Store-Text-Gates, das Bootstrap-Skript und die zugehörige Dokumentation.
+Gegenstand: das Re-Review des Diffs `eebcc4c..HEAD`, also die Gap-Closure-Läufe der Phase 5. Geprüft wurden die vier geänderten Quellmodule, das Bootstrap-Skript, die vier zugehörigen Testdateien und die drei aktualisierten Dokumente. Zusätzlich wurden die aufgerufenen Nachbarmodule (`config.normalize_base_url`, `crypto.delete_key`, `loginflow.revoke_app_password`, `registry.client_policy`, `store.store_opener`, `provider.auth_routes`) gegen die Annahmen des neuen Codes gelesen.
 
-Gesamteindruck: Die sicherheitskritischen Pfade (OAuth-Flows, CR-01-Relay-Abwehr, Anti-Forgery mit Purpose-Trennung, AES-GCM mit AAD-Bindung, Fail-closed-Verhalten, Lösch-Reihenfolge des Purge) sind konsequent umgesetzt und ungewöhnlich dicht getestet, inklusive Gegenproben für jedes Gate. Es gibt jedoch einen Blocker: Das Validierungsnetz der Admin-Werte lässt genau den Wert durch, den der eigene Startpfad anschließend mit `SystemExit(2)` quittiert. Damit lässt sich die Deadlock-Situation, die Plan 05-04 explizit beseitigt hat, durch eine plausible Admin-Eingabe wieder herstellen, und zwar in einer Form, die sich über die Oberfläche nicht mehr korrigieren lässt.
+**Verifikation der früheren Findings, jeweils explizit nachvollzogen:**
 
-## Critical Issues
+* **CR-01 (alt, http-Crash-Loop): geschlossen, beide Hälften.** Die Prävention steht in `config_values._public_url` (Zeilen 296 bis 301): http auf einem Nicht-Loopback-Host wird verworfen, `LOOPBACK_HOSTS` ist eine exakte Mengen-Mitgliedschaft über `urlsplit(...).hostname` (lowercase, IPv6 ohne Klammern), und die Testmatrix deckt die Umgehungsversuche (`localhost.example.com`, `127.0.0.1.example.com`, private Adresse, Groß-/Kleinschreibung, IPv6-Literal) sowie die Gegenrichtung (Loopback-http bleibt nutzbar, der Default in Code überlebt die Validierung). Die Rettung steht in `entry_exapp.main` (Zeilen 338 bis 374): genau ein Retry ohne `NC_MCP_PUBLIC_URL`, ein zweiter Fehlschlag ist `SystemExit(2)`, nichts wird nach Nextcloud zurückgeschrieben, der Wert erscheint in keiner Log-Zeile (auch der Host nicht, per Test gepinnt). Der Rescue-Pfad ist zusätzlich einmal ungestubbt gegen das echte SDK getestet (`test_an_unusable_address_from_the_deploy_environment_takes_the_same_way`).
+* **WR-01 (alt, Purge trotz Totalausfall der Revocations): geschlossen.** `purge.py` bricht bei `rows and revoked == 0` ab, lässt Tabellen und Schlüssel unangetastet, antwortet mit `purged: false` plus `REVOKE_HINT` und bleibt wiederholbar. Die Linie liegt bewusst bei null, nicht bei eins (Teilfehlschläge zählen und laufen weiter, per Test `test_a_partly_failed_revocation_purges_and_counts_the_failure` gepinnt); das leere Deployment als Gegenprobe ist ebenfalls getestet. `docs/uninstall.md` dokumentiert den neuen Abbruchfall samt Handlungsanweisung.
+* **WR-02 (alt, zu permissive force-Erkennung): im Kern geschlossen, ein Werttyp bleibt offen.** Der Query-String-Zweig ist entfernt (Test: `?force=1`, `?force=true`, `?force=` laufen nichts), `_is_set` arbeitet für Strings mit einer Positivliste (`TRUE_WORDS`), Unbekanntes ist ein Nein plus eine Log-Zeile ohne den Wert. Für JSON-Zahlen gilt die Positivliste jedoch nicht, siehe WR-01 (neu) unten.
+* **WR-03 (alt, `PUBLIC_URL` ungeprüft im Registrierungs-Payload): geschlossen.** `require_url_shape` existiert, läuft im Hauptlauf vor jeder Registrierung (per Test der Position gepinnt), verbietet `"`, `\` und Whitespace, und läuft mit `grep -z`, sodass ein Wert mit eingebetteter Newline nicht auf seiner ersten Zeile durchrutscht (Testfall vorhanden).
 
-### CR-01: Gespeicherte `public_url` mit `http://` auf Nicht-Loopback-Host führt in eine Crash-Loop und reproduziert den Settings-Deadlock
+Neu gefunden wurde kein Blocker. Es bleibt eine Warnung (die Zahlen-Lücke in `_is_set`) und eine Reihe kleinerer Punkte, darunter zwei aus dem alten Review offen gebliebene Infos, deren Dateien in diesem Diff angefasst, deren Findings aber nicht adressiert wurden (IN-01, IN-04).
 
-**File:** `src/mcp_connector/exapp/config_values.py:205-235` (Validierung), `src/mcp_connector/entry_exapp.py:289-338` (Startpfad), `src/mcp_connector/oauth/provider.py:1100-1115` (Issuer-Refusal)
-
-**Issue:** `config_values._public_url` prüft Fragment, Credentials, Host und Port, aber nicht die Regel, die der Wert als `issuer` tatsächlich erfüllen muss: https, mit Loopback-Ausnahme. `config.normalize_base_url` akzeptiert `http` auf jedem Host (verifiziert in `config.py:121-132`). Trägt eine Administratorin im Admin-Formular `http://cloud.example.com/exapps/mcp_connector` ein (naheliegender Tippfehler statt `https://`, oder eine Homelab-Instanz ohne TLS), passiert Folgendes:
-
-1. Der Wert überlebt `_usable_value` und gewinnt per Präzedenzregel über Deploy-Umgebung und Default.
-2. Beim nächsten Disable/Enable liest `entry_exapp.main` das Overlay, `build_exapp_app` ruft `auth_routes` auf, das SDK verweigert den Nicht-https-Issuer, `provider.auth_routes` übersetzt das in einen `ToolError`, und `main` beendet den Prozess mit `SystemExit(2)`.
-3. Der Container geht in eine Restart-Loop (identische Mechanik wie beim dokumentierten 0.1.0-Fehlbild "Restarting (2)" in `docs/store-submission.md`). Die App wird nie wieder `enabled`, damit verschwindet das Admin-Formular (AppAPI liefert nur Formulare aktivierter Apps aus), und der fehlerhafte Wert kann über die Oberfläche nicht mehr korrigiert werden.
-4. Auch der Env-Weg hilft nicht: Der gespeicherte Admin-Wert gewinnt laut Präzedenzregel über `NC_MCP_PUBLIC_URL`. Die Korrektur erfordert einen Eingriff in `oc_appconfig_ex` bzw. die AppAPI-Konfigurations-API von Hand.
-
-Das ist exakt der Deadlock, den Plan 05-04 mit "the process stays alive on purpose, so that form exists at all" beseitigt hat, wieder erreichbar über das Formular selbst. Der Docstring von `_public_url` beansprucht, die "extra conditions" existierten, weil der Wert zum Issuer wird (T-05-01), lässt aber genau die Issuer-Bedingung aus, an der der Start scheitert. Kein Test deckt den Fall: `test_an_unusable_admin_value_changes_nothing` parametrisiert "no scheme", Fragment und Credentials, aber nicht Nicht-Loopback-`http`.
-
-**Fix:** Beide Hälften schließen, Validierung UND Startpfad:
-
-```python
-# config_values.py, in _public_url nach dem Port-Check:
-if parts.scheme != "https" and host not in ("localhost", "127.0.0.1", "::1", "[::1]"):
-    return _rejected(
-        "public_url",
-        "is http on a host that is not loopback; the issuer of the authorization "
-        "server has to be https (RFC 8414)",
-    )
-```
-
-Zusätzlich in `entry_exapp.main`: Wenn `build_exapp_app` mit dem Issuer-`ToolError` scheitert, nicht `SystemExit(2)`, sondern den `NC_MCP_PUBLIC_URL`-Wert aus `resolved` entfernen, die Fehlerzeile loggen (analog zur bestehenden Setup-State-Zeile) und die App mit dem Default weiterservieren, damit das Formular korrigierbar bleibt. Testfall ergänzen: gespeicherter Wert `http://cloud.example.com/x` darf weder das Overlay erreichen noch den Start beenden.
+## Narrative Findings (AI reviewer)
 
 ## Warnings
 
-### WR-01: Purge leert Tabellen und löscht den Schlüssel auch dann, wenn keine einzige Revocation gelang
+### WR-01: `_is_set` wertet jede JSON-Zahl ungleich null als force-Ja und unterläuft damit die eigene Positivlisten-Regel
 
-**File:** `src/mcp_connector/exapp/purge.py:140-153`
-
-**Issue:** `purge` führt `_empty(store)` und `crypto.delete_key(env)` bedingungslos nach `_hand_back_every` aus. Schlagen alle Revocations fehl (z. B. weil der Container Nextcloud in diesem Moment nicht erreicht, während der occ-Aufruf über den internen AppAPI-Pfad sehr wohl ankam, oder bei 5xx unter Last), werden trotzdem alle sieben Tabellen geleert und der Datenschlüssel gelöscht. Damit ist die einzige maschinenlesbare Zuordnung "welches App-Passwort gehört zu welcher Verbindung" zerstört, während sämtliche App-Passwörter in Nextcloud gültig bleiben, also genau das Szenario, das Pattern 4 der eigenen Recherche als Katastrophe beschreibt. Die Antwort nennt nur die Zahl (`revoke_failures`), nicht die betroffenen Konten (bewusst, V7), und ein zweiter Lauf des Kommandos kann nichts mehr nachholen, weil die Zeilen weg sind. Die Milderung existiert (Einträge heißen `MCP Connector: <client>` in `oc_authtoken`, Runbook `docs/uninstall.md` beschreibt die manuelle Bereinigung pro Nutzer), aber der Totalausfall-Fall (failures == connections > 0) signalisiert eine Störung und keinen Einzelfehler und sollte den destruktiven lokalen Teil nicht auslösen.
-
-**Fix:** Vor `_empty` unterscheiden: Wenn `rows` nicht leer ist und `revoked == 0` (kompletter Fehlschlag, typisch Transportfehler), mit `{"purged": false, "hint": ...}` abbrechen und den Store unangetastet lassen, damit der Lauf nach Behebung der Störung wiederholbar ist. Teilfehlschläge können wie bisher gezählt und fortgesetzt werden. Tests `test_a_failed_revocation_does_not_stop_the_purge_and_is_a_number` und `test_a_revocation_that_never_reaches_nextcloud_is_a_number_too` entsprechend anpassen (sie pinnen das aktuelle Verhalten).
-
-### WR-02: `--force`-Erkennung ist für eine irreversible Aktion zu permissiv
-
-**File:** `src/mcp_connector/exapp/purge.py:228-280`
-
-**Issue:** Zwei Aufweichungen an der Stelle, an der die Doku "checked here as well, because what AppAPI hands over is input" verspricht:
-
-1. `_forced` akzeptiert das Flag auch als Query-Parameter (`?force=...`), obwohl die vermessene AppAPI-Invocation das Flag ausschließlich im JSON-Body (`{"occ": {"options": {...}}}`) transportiert. Ein `?force=` mit leerem Wert zählt über `_is_set("")` als gesetzt (leerer String ist nicht in `FALSE_WORDS`).
-2. `_is_set` behandelt jeden unbekannten String als Ja ("Only a spelled out no is a no"). Für einen Symfony-Flag im Modus `none` ist das begründbar, aber es invertiert für die destruktivste Aktion der App die sonst überall gelebte Fail-closed-Regel (`registry._switch` und `config_values._switch` verweigern Unbekanntes ausdrücklich). `{"options": {"force": "maybe"}}` löst den Purge aus.
-
-Die Erreichbarkeit ist durch den AppAPI-Handshake, die fehlende Route im Manifest und den `x-origin-ip`-Check stark eingeschränkt, deshalb Warning und nicht Critical. Trotzdem ist jede zusätzliche akzeptierte Form Angriffsfläche für den Tag, an dem eine der drei Schranken bröckelt.
-
-**Fix:** Query-Parameter-Zweig entfernen (AppAPI sendet ihn nie; `test_every_shape_of_the_flag_appapi_may_send_is_accepted` deckt ihn nicht ab, es bricht also kein Test). In `_is_set` nur `True`, `None`, `1`/`"1"`/`"true"`/`"yes"`/`"on"` als gesetzt werten und Unbekanntes mit `purged: false` plus Log-Zeile beantworten, analog zu `_switch`.
-
-### WR-03: `PUBLIC_URL` wird ungeprüft in den JSON-Registrierungs-Payload interpoliert (gleiche Fehlerklasse wie IN-07)
-
-**File:** `scripts/bootstrap_exapp.sh:145, 723-728`
-
-**Issue:** IN-07 hat `APP_PORT`, `MANUAL_APP_PORT` und `REGISTRY` per `require_port_number`/`require_registry_shape` gepinnt, weil sie unquotiert bzw. in einen String der `json_info`-Payload interpoliert werden und aus der aufrufenden Shell überschreibbar sind. `PUBLIC_URL="${NC_EXAPP_PUBLIC_URL:-...}"` hat exakt dieselben Eigenschaften: aus der Shell überschreibbar, landet als `"value":"${PUBLIC_URL}"` unescaped im JSON, wird aber von keinem der Validatoren geprüft. Ein Wert mit `"` erzeugt bestenfalls ungültiges JSON, schlimmstenfalls zusätzliche Felder, die AppAPI stillschweigend übernimmt, das ist wortgleich die Begründung von IN-07. Auch das Staging-Profil validiert nur `NC_STAGING_DOMAIN`, nicht die `NC_EXAPP_PUBLIC_URL`-Übersteuerung.
-
-**Fix:** Einen `require_url_shape`-Validator ergänzen (z. B. `^https?://[A-Za-z0-9._:-]+(/[A-Za-z0-9._/-]*)?$`, insbesondere ohne `"` und `\`) und im Hauptlauf vor `json_info` auf `${PUBLIC_URL}` anwenden, daneben eine Zeile in `test_the_bootstrap_calls_both_registration_validators` bzw. einen eigenen Parametrize-Fall in `test_the_registration_inputs_are_pinned_before_json_info`.
+**File:** `src/mcp_connector/exapp/purge.py:320-353`
+**Issue:** Der WR-02-Fix (alt) begründet die Positivliste damit, dass für die eine nicht rückgängig machbare Aktion "a value nobody understands is a typo, and a typo is not a security switch". Für Strings ist das umgesetzt: `"2"` und `"-1"` sind ein Nein plus Warnung (per Test gepinnt). Für JSON-Integer gilt das Gegenteil: `isinstance(value, int)` mit `value != 0` macht `{"options": {"force": 2}}` und `{"options": {"force": -1}}` zu einem Ja, ohne Log-Zeile. Das ist eine sichtbare Asymmetrie (der String `"2"` verweigert, die Zahl `2` löscht die ganze Instanz) und exakt die Restfläche, die der eigene Docstring als Angriffsfläche benennt "for the day one of the three barriers in front of this handler falls". Die gemessene AppAPI-Invocation sendet Booleans, nie Zahlen; erreichbar ist der Pfad nur mit gültigem App-Secret hinter dem `x-origin-ip`-Check, daher Warning und nicht Critical.
+**Fix:**
+```python
+if isinstance(value, int):
+    if value in (0, 1):
+        return value == 1
+    logger.warning(...)  # dieselbe Zeile wie fuer ein unbekanntes Wort
+    return False
+```
+Plus ein Parametrize-Fall in `test_a_body_without_the_force_flag_changes_nothing` (`{"options": {"force": 2}}`, `{"options": {"force": -1}}`).
 
 ## Info
 
-### IN-01: Body-Größenschranke des Purge-Handlers ist per Chunked-Encoding umgehbar
+### IN-01: Body-Größenschranke des Purge-Handlers bleibt per Chunked-Encoding umgehbar (offen aus 05-REVIEW alt, IN-01)
 
-**File:** `src/mcp_connector/exapp/purge.py:283-306`
+**File:** `src/mcp_connector/exapp/purge.py:356-379`
+**Issue:** `_payload` prüft weiterhin nur den angekündigten `Content-Length`-Header (`announced.isdigit()`). Ein Request mit `Transfer-Encoding: chunked` oder ohne bzw. mit nicht-numerischem Content-Length wird von `request.body()` vollständig und unbegrenzt in den Speicher gelesen; die Docstring-Behauptung "an announced length above MAX_BODY_BYTES ... is not parsed at all" hält nur für den Header-Fall. `purge.py` wurde in diesem Diff geändert, das alte Info-Finding aber nicht adressiert. Erreichbar nur über den authentifizierten internen AppAPI-Pfad, daher weiterhin informativ.
+**Fix:** `request.stream()` aufsummieren und bei `MAX_BODY_BYTES` abbrechen, wie es die Formulare von `oauth/connections.py` tun.
 
-**Issue:** `_payload` prüft nur den angekündigten `Content-Length`-Header. Ein Request mit `Transfer-Encoding: chunked` (oder nicht-numerischem Content-Length) hat keinen bzw. keinen digit-Header und wird von `request.body()` vollständig und unbegrenzt in den Speicher gelesen. Erreichbar nur über den authentifizierten internen AppAPI-Pfad, daher informativ.
+### IN-02: Die Rescue-Log-Zeile behauptet auch für einen Deploy-Env-Wert, er stünde im Admin-Formular
 
-**Fix:** Statt der Header-Prüfung den Stream begrenzt lesen (z. B. `request.stream()` aufsummieren und bei `MAX_BODY_BYTES` abbrechen), wie es `oauth/connections.py` laut LO-08 für seine Formulare tut.
+**File:** `src/mcp_connector/entry_exapp.py:354-366`
+**Issue:** Nach der Härtung von `config_values._public_url` erreicht ein unbrauchbarer Formularwert den Build gar nicht mehr; der Rescue-Zweig greift real nur noch für einen unbrauchbaren `NC_MCP_PUBLIC_URL` aus der Deploy-Umgebung (genau der Fall, den `test_an_unusable_address_from_the_deploy_environment_takes_the_same_way` baut). Die Log-Zeile sagt aber unabhängig von der Quelle "The stored value is kept, so it can be corrected where it was entered" und verweist auf das Admin-Formular, in dem in diesem Fall nichts steht. Die Anleitung funktioniert trotzdem (ein Formularwert übersteuert die Variable), die Diagnose ist aber irreführend: eine Administratorin sucht einen gespeicherten Wert, den es nicht gibt, statt die Deploy-Variable zu korrigieren.
+**Fix:** In der Zeile beide Quellen nennen, z. B. "correct the deploy variable, or set the address in <Formular> (a stored value wins over the variable), then disable and enable ...".
 
-### IN-02: `connect_routes` dupliziert die Opener-Logik von `store.store_opener`
+### IN-03: Ein Mixed-Case-`public_url` wird unverändert zum Issuer
 
-**File:** `src/mcp_connector/oauth/connect.py:127-146` vs. `src/mcp_connector/oauth/store.py:1275-1310`
+**File:** `src/mcp_connector/exapp/config_values.py:258-302`
+**Issue:** `_public_url` gibt den Wert nach `normalize_base_url` unverändert zurück; `test_https_and_every_loopback_spelling_reach_the_overlay` pinnt bewusst, dass `HTTPS://Cloud.Example.COM` wortgleich ins Overlay gelangt. Dieser String wird `issuer` und `resource`-Präfix, und die eigene Doku betont an mehreren Stellen, dass Clients diese Werte zeichengenau vergleichen (Trailing-Slash-Absatz in `docs/client-setup.md` und `docs/oauth-setup.md`). Ein Nutzer, der die Adresse kleingeschrieben in den Client eingibt, während die Metadaten den Mixed-Case-Issuer nennen, scheitert an einem Vergleich, den keine Log-Zeile erklärt. Schema und Host sind per RFC 3986 case-insensitiv, das Lowercasing wäre also verlustfrei.
+**Fix:** In `_public_url` Schema und Host normalisieren (`parts._replace(scheme=parts.scheme.lower(), netloc=<host lowercased, Port erhalten>)` bzw. schlicht über `urlsplit`/`urlunsplit` neu zusammensetzen); den pinnenden Test auf die normalisierte Erwartung umstellen.
 
-**Issue:** Der Fallback-Zweig (Double-checked Locking, Schlüssel zuerst, `purge_expired` beim ersten Öffnen, Cache im Closure) existiert zweimal wortgleich. Im ExApp-Deployment ist die Kopie tot (Entry übergibt `store_provider`), sie läuft nur, wenn `connect_routes` ohne Provider gebaut wird. Eine künftige Änderung an einer Stelle (z. B. eine zusätzliche Prüfung beim Öffnen) verfehlt die andere.
+### IN-04: Werkzeugzahl 15 vs. 16 bleibt unerklärt (offen aus 05-REVIEW alt, IN-04)
 
-**Fix:** `store_provider = store_provider or store_opener(env)` am Anfang von `connect_routes`, die lokale Kopie entfernen.
+**File:** `docs/oauth-setup.md:287,547` vs. `docs/client-setup.md:11,621`
+**Issue:** `docs/client-setup.md` wurde in diesem Diff erweitert und verweist im MUCGPT-Protokoll ausdrücklich auf "16 at the time of writing, which is the number tests/contract/test_tool_surface.py holds", während die Evidenzblöcke in `docs/oauth-setup.md` weiterhin `tools=15` und "15 tools listed" zeigen, ohne dass die Differenz irgendwo eingeordnet wird. Die Evidenz ist datiert und wörtlich, formal also korrekt, aber ein Leser, der beide Seiten liest, hält eine der Zahlen für falsch.
+**Fix:** Eine Klammerbemerkung an einer 15er-Stelle ("Stand des Laufs vom 2026-08-16; seither 16 Tools") oder die Evidenz beim nächsten Lauf erneuern.
 
-### IN-03: `doc_url` des Admin-Formulars zeigt auf einer unkonfigurierten Installation auf `http://127.0.0.1:8765/connections`
+### IN-05: Das Bootstrap-Skript benutzt `grep -Eq`/`-Eqz` auf Pipes, der eigene Guard-Test erkennt nur das Literal `| grep -q`
 
-**File:** `src/mcp_connector/exapp/admin_settings.py:80-89`
+**File:** `scripts/bootstrap_exapp.sh:166,537,553,562,579` und `tests/unit/test_exapp_env_setup.py:1478-1491`
+**Issue:** Der Kommentar über `wait_for_install` erklärt die Regel "grep on an occ pipe never uses -q here" mit dem SIGPIPE-Flake unter `pipefail`, und `test_no_grep_q_on_a_pipe_in_the_shell_scripts` erzwingt sie, prüft aber nur den Teilstring `| grep -q`. Die Validatoren (`require_host_name`, `require_hex64`, `require_port_number`, `require_registry_shape`, `require_url_shape`) pipen alle `printf`-Ausgaben in `grep -Eq` bzw. `grep -Eqz`, was der Test wegen des `-E` nicht sieht. Funktional ist das hier unkritisch (die Werte sind wenige Bytes, `printf` ist fertig, bevor `grep` beendet; das SIGPIPE-Risiko betrifft nur langlaufende Schreiber wie `docker exec`), aber Regel und Gate sind auseinandergelaufen: das nächste `| grep -Eq` an einer occ-Pipe würde der Test ebenfalls durchwinken.
+**Fix:** Entweder den Test auf das Muster `\| grep -E?q` verschärfen und die Validatoren auf `grep -E ... >/dev/null` umstellen, oder die Regel im Kommentar auf "auf Pipes von langlaufenden Prozessen" präzisieren und die Ausnahme im Test dokumentieren.
 
-**Issue:** `form_scheme` baut `doc_url` aus `config.public_url(env)`. Auf einer frischen Store-Installation (kein Wert gesetzt) ist das der Loopback-Default, also ein toter Link, ausgerechnet in dem Formular, mit dem der Zustand behoben wird. Kein Sicherheitsproblem (T-04-40 wird eingehalten, kein interner Host), aber verwirrend.
+### IN-06: Der Rescue in `main` behandelt jeden `ToolError` aus `build_exapp_app` als Issuer-Fall
 
-**Fix:** Bei `config.public_url(env) == config.DEFAULT_PUBLIC_URL` das Feld `doc_url` weglassen oder auf die Repository-FAQ zeigen.
-
-### IN-04: Werkzeugzahl inkonsistent dokumentiert (15 vs. 16 Tools)
-
-**File:** `docs/oauth-setup.md:263, 522` vs. `docs/client-setup.md:11` und `docs/store-submission.md:90`
-
-**Issue:** Die Evidenzblöcke vom 2026-08-16 nennen `tools=15` bzw. "15 tools listed", die übrigen Dokumente durchgehend 16 Tools. Die Evidenz ist als wörtliche Kopie datiert und daher formal korrekt, aber nichts erklärt die Differenz; ein Leser, der die Zahl nachzählt, hält eine der beiden Angaben für falsch.
-
-**Fix:** Eine Klammerbemerkung an einer der 15er-Stellen ("Stand 0.1.0; seit ... sind es 16") oder die Evidenz beim nächsten Lauf erneuern.
-
-### IN-05: privacy.md behauptet, "issued secrets" der Clients würden gespeichert
-
-**File:** `docs/privacy.md:38`
-
-**Issue:** Die Tabellenzeile "Client registrations | clients | the assistant apps, their redirect targets and issued secrets" liest sich, als lägen Client-Secrets im Klartext in der Datenbank. Tatsächlich speichert `clients.client_secret_hash` nur den SHA-256-Digest (`store.py:145-152`). Für ein Dokument, das sich an Datenschutzbeauftragte richtet, ist die Formulierung unnötig ungenau, in die falsche Richtung.
-
-**Fix:** "issued secrets (stored as a hash only, never in the clear)" oder die Zeile in die Hash-Zeile der Tokens integrieren.
-
-### IN-06: Konsens-Screen wird einem pausierten Konto beim Reload noch gerendert
-
-**File:** `src/mcp_connector/oauth/consent.py:302-304`
-
-**Issue:** `_screen` springt bei bereits existierender Authorization-Zeile (`load_authorization(flow_id) is not None`) direkt zu `_decision`, ohne den Konto-Schalter zu lesen. Ablauf: Sign-in beendet (Zeile existiert), Konto pausiert in anderem Tab, Consent-Screen neu geladen: die Approve/Deny-Buttons erscheinen, obwohl E9 der vertraglich zugesagte Zustand wäre. Kein Grant ist möglich (Enforcement-Punkt 3 in `_decide` fängt den Klick mit E9 und Withdraw ab), daher nur eine UX-Inkonsistenz gegenüber den drei dokumentierten Enforcement-Punkten.
-
-**Fix:** In dem `signed_in is not None`-Zweig `_access_disabled` lesen und bei `True` denselben `_refuse_paused`-artigen Pfad antworten wie nach dem Poll.
+**File:** `src/mcp_connector/entry_exapp.py:338-374`
+**Issue:** Der Kommentar behauptet, der Issuer-Refusal sei "the only one of this function that is recoverable". Das stimmt heute: die einzige `ToolError`-Quelle zur Bauzeit von `build_exapp_app` ist `provider.auth_routes` (verifiziert; `client_policy`, `store_opener`, die Routen-Fabriken und die Krypto-Fehler laufen erst zur Request-Zeit). Der `except ToolError` ist aber typbreit: eine künftige zweite Bauzeit-Quelle würde still als Public-URL-Problem geloggt, die (dann möglicherweise gültige) Adresse gedroppt und der zweite Build mit einer verwirrenden Doppelmeldung beendet. Das ist keine heutige Fehlfunktion, nur eine Annahme ohne Marker.
+**Fix:** Den Issuer-Refusal in `provider.auth_routes` mit einem eigenen Exception-Typ (z. B. `IssuerRefused(ToolError)`) markieren und den Rescue darauf einschränken; oder einen Kommentar-Test, der die `raise ToolError`-Stellen im Baupfad zählt.
 
 ---
 
-_Reviewed: 2026-08-19T21:30:00Z_
+_Reviewed: 2026-08-20T10:30:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
