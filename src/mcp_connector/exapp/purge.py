@@ -324,18 +324,27 @@ def _is_set(value: object) -> bool:
     yes for the one action of this app that cannot be undone. That inverted the rule
     ``registry._switch`` and ``config_values._switch`` follow everywhere else: a value
     nobody understands is a typo, and a typo is not a security switch. So a yes is a JSON
-    ``true``, a number other than zero, a flag that arrived with no value at all (a Symfony
-    option in mode ``none`` is presence and nothing more), or one of :data:`TRUE_WORDS`.
+    ``true``, the number one, a flag that arrived with no value at all (a Symfony option in
+    mode ``none`` is presence and nothing more), or one of :data:`TRUE_WORDS`.
 
-    An unknown word leaves one line behind, a spelled out no does not: the second one is a
+    The number side is WR-01 of the re-review: "a number other than zero" survived the
+    WR-02 fix, so the string ``"2"`` was a no with a warning while the number ``2`` armed
+    the purge. Numbers now follow the same positive list as words: one is the yes, zero is
+    the spelled out no, and every other number is the typo an unknown word is.
+
+    An unknown value leaves one line behind, a spelled out no does not: the second one is a
     decision, the first one is the typo somebody has to be able to find.
     """
     if isinstance(value, bool):
         return value
     if value is None:
         return True
-    if isinstance(value, int):
-        return value != 0
+    if isinstance(value, int | float):
+        if value == 1:
+            return True
+        if value != 0:
+            _warn_unknown_value()
+        return False
     if not isinstance(value, str):
         return False
 
@@ -343,14 +352,21 @@ def _is_set(value: object) -> bool:
     if word in TRUE_WORDS:
         return True
     if word not in FALSE_WORDS:
-        # The word itself stays out of the log, like every other value on this path (V7).
-        logger.warning(
-            "the %s option of a purge carried a value that is neither on nor off, so "
-            "nothing was changed. The values it understands are %s.",
-            FORCE_OPTION,
-            ", ".join(sorted(TRUE_WORDS)),
-        )
+        _warn_unknown_value()
     return False
+
+
+def _warn_unknown_value() -> None:
+    """The one line an unrecognized flag value leaves behind.
+
+    The value itself stays out of the log, like every other value on this path (V7).
+    """
+    logger.warning(
+        "the %s option of a purge carried a value that is neither on nor off, so "
+        "nothing was changed. The values it understands are %s.",
+        FORCE_OPTION,
+        ", ".join(sorted(TRUE_WORDS)),
+    )
 
 
 async def _payload(request: Request) -> Any:

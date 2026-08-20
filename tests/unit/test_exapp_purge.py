@@ -336,6 +336,9 @@ def test_without_force_the_purge_does_nothing(live: Deployment) -> None:
         {"occ": {"options": {"force": ""}}},
         {"options": {"force": "vielleicht"}},
         {"options": {"force": 0}},
+        {"options": {"force": 2}},
+        {"options": {"force": -1}},
+        {"options": {"force": 0.5}},
     ],
     ids=[
         "an empty body",
@@ -353,6 +356,9 @@ def test_without_force_the_purge_does_nothing(live: Deployment) -> None:
         "an empty value",
         "a word in another language",
         "a zero",
+        "the number two",
+        "a negative number",
+        "a fraction",
     ],
 )
 def test_a_body_without_the_force_flag_changes_nothing(live: Deployment, body: object) -> None:
@@ -372,6 +378,7 @@ def test_a_body_without_the_force_flag_changes_nothing(live: Deployment, body: o
     [
         {"options": {"force": True}},
         {"options": {"force": "1"}},
+        {"options": {"force": 1}},
         {"options": {"force": None}},
         {"options": ["force"]},
         {"options": ["--force"]},
@@ -382,6 +389,7 @@ def test_a_body_without_the_force_flag_changes_nothing(live: Deployment, body: o
     ids=[
         "the flag as true",
         "the flag as a one",
+        "the flag as the number one",
         "the flag without a value",
         "a list of option names",
         "a list with the dashes",
@@ -432,6 +440,32 @@ def test_a_value_nobody_understands_is_not_a_yes_and_says_so_once(
     logged = "\n".join(record.getMessage() for record in caplog.records)
     assert "maybe" not in logged, "the value itself stays out of the log"
     assert [record for record in caplog.records if record.levelno >= logging.WARNING]
+
+
+@pytest.mark.parametrize(
+    "number", [2, -1, 0.5], ids=["the number two", "a negative number", "a fraction"]
+)
+def test_a_number_other_than_one_is_not_a_yes_and_says_so_once(
+    live: Deployment, caplog: pytest.LogCaptureFixture, number: object
+) -> None:
+    """WR-01 of the re-review: the positive list of WR-02 holds for JSON numbers as well.
+
+    Before this test the string ``"2"`` was a no with a warning while the number ``2`` armed
+    the one action of this app that cannot be undone. A number this handler does not know is
+    the same typo an unknown word is: it changes nothing and leaves exactly one line behind.
+    """
+    before = live.counts()
+    with respx.mock:
+        wire = Wire()
+        wire.install()
+        with caplog.at_level(logging.DEBUG):
+            response = call(live, body={"occ": {"options": {purge.FORCE_OPTION: number}}})
+
+    assert response.json()["purged"] is False
+    assert wire.seen == []
+    assert live.counts() == before
+    warnings = [record for record in caplog.records if record.levelno >= logging.WARNING]
+    assert len(warnings) == 1, "exactly one line, the same one an unknown word leaves"
 
 
 def test_a_spelled_out_no_needs_no_log_line(
