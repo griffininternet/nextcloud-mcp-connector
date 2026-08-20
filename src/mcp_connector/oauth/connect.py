@@ -31,7 +31,6 @@ mechanics of them:
   where it belongs: it is the user's connection, not ours.
 """
 
-import asyncio
 import logging
 import secrets
 import time
@@ -41,7 +40,6 @@ from starlette.requests import Request
 from starlette.responses import RedirectResponse, Response
 from starlette.routing import Route
 
-from .. import config
 from ..errors import ToolError
 from ..exapp.auth import appapi_user, is_user
 from ..exapp.responses import NO_STORE, form_or_none
@@ -58,8 +56,8 @@ from ..exapp.ui.connect import (
     result_page,
     waiting_page,
 )
-from . import crypto, loginflow
-from .store import STORE_FILENAME, OAuthStore
+from . import loginflow
+from .store import OAuthStore, store_opener
 from .throttle import CLASS_CONNECT, CLASS_CONNECT_START, FLOW_LIMIT, Throttle, Throttled
 
 __all__ = [
@@ -121,29 +119,12 @@ def connect_routes(
     The store is opened once per application and not once per request, and the first open is
     also where :meth:`OAuthStore.purge_expired` runs: this project has no cron and no
     scheduler, so the sweep that removes what ran out hangs on the first use of the store
-    (T-03-17). The cache lives in this closure and not in a module global, because a
-    dictionary that outlives a request is one refactor away from being a session store
-    (D-20), and because two applications in one process are a thing tests do.
+    (T-03-17). :func:`~mcp_connector.oauth.store.store_opener` is what does that, and it is
+    called and not copied: this factory carried its own word for word twin of the double
+    checked locking until IN-02 of 05-REVIEW.md, in the one branch no test of this route
+    walked, so a change to one side would silently have missed the other.
     """
-    opened: dict[str, OAuthStore] = {}
-    lock = asyncio.Lock()
-
-    async def store() -> OAuthStore:
-        if store_provider is not None:
-            return await store_provider()
-        ready = opened.get("store")
-        if ready is not None:
-            return ready
-        async with lock:
-            ready = opened.get("store")
-            if ready is None:
-                # The key first: it is the one step that can fail with a named error, and it
-                # fails before anything creates a directory.
-                key = await crypto.data_key(env)
-                ready = OAuthStore(config.persistent_storage(env) / STORE_FILENAME, key)
-                await ready.purge_expired()
-                opened["store"] = ready
-            return ready
+    store = store_provider or store_opener(env)
 
     async def invitation(request: Request) -> Response:
         """The page that explains the way and offers the one button that starts it."""

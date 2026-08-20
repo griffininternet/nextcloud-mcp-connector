@@ -496,17 +496,17 @@ def test_a_deployment_without_a_provider_opens_one_store_and_sweeps_it_once(
 
     In the ExApp process nobody hands a store to this factory, so the opener is what runs:
     one store for the whole application, opened at the first request that needs it, swept
-    exactly once. The tests of this file all pass a store, so this branch carried a word for
-    word copy of ``store.store_opener`` that no check ever ran, and a change on one side
-    would have missed the other silently. It is the shared opener now, and this is the test
-    that says the shared one behaves the way this factory promised.
+    exactly once. This branch carried a word for word copy of ``store.store_opener``, and
+    the one check that walked it looked at the key read alone, so the sweep and the file it
+    opens were nobody's assertion. It is the shared opener now, and this test says the
+    shared one behaves the way this factory promised.
     """
     swept: list[str] = []
     original = OAuthStore.purge_expired
 
-    async def counted(self: OAuthStore) -> dict[str, int]:
-        swept.append(str(self._path))  # noqa: SLF001 - the file is the identity here
-        return await original(self)
+    async def counted(self: OAuthStore) -> None:
+        swept.append(str(self.path))
+        await original(self)
 
     async def key(env: object = None) -> bytes:
         del env
@@ -533,9 +533,10 @@ def test_the_store_of_this_route_is_the_shared_opener() -> None:
     changes, in a branch no test of this file walks.
     """
     source = Path(connect.__file__).read_text(encoding="utf-8")
-    assert "store_opener" in source
-    assert "purge_expired" not in source, "the sweep is the opener's business"
-    assert "crypto.data_key" not in source, "and so is the key"
+    assert "store_opener(" in source, "the opener is called here"
+    # The calls, not the prose: the docstring names all three, which is the point of it.
+    assert "purge_expired()" not in source, "the sweep is the opener's business"
+    assert "crypto.data_key(" not in source, "and so is the key"
     assert "asyncio.Lock()" not in source, "and so is the locking"
 
 
@@ -856,14 +857,19 @@ def test_the_exapp_application_serves_the_onboarding_and_the_http_mode_does_not(
 def test_the_default_store_is_opened_once_and_purged_at_the_first_use(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The process wide store and the purge at the first use are wired here (T-03-17)."""
+    """The process wide store and the purge at the first use are wired here (T-03-17).
+
+    The key read is patched in ``oauth.store``, which is where the opener this route calls
+    reads it (IN-02). It used to be patched through ``connect.crypto``, the same module
+    object under a second name, and that name is gone with the copy.
+    """
     opened: list[str] = []
 
     async def fake_key(env: object = None) -> bytes:
         opened.append("key")
         return KEY
 
-    monkeypatch.setattr(connect.crypto, "data_key", fake_key)
+    monkeypatch.setattr(store_module.crypto, "data_key", fake_key)
     env = ENV | {config.ENV_APP_PERSISTENT_STORAGE: str(tmp_path)}
     client = TestClient(Starlette(routes=connect.connect_routes(env)))
 
