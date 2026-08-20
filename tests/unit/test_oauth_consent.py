@@ -1325,6 +1325,64 @@ def test_an_account_paused_while_the_screen_was_open_gets_no_code(store: OAuthSt
     assert asyncio.run(store.load_flow(flow_id, now=0)) is None
 
 
+def test_a_screen_reloaded_after_the_pause_shows_no_buttons_to_press(
+    store: OAuthStore,
+) -> None:
+    """IN-06 of 05-REVIEW.md, first pass: the screen used to be the one unread point.
+
+    With an authorization row already written, ``_screen`` went straight to the consent
+    page, so a reload after the account was paused in another tab still showed approve and
+    deny. No grant was possible, enforcement point 3 answers the click, but a surface that
+    offers a button it will refuse says the opposite of what the switch promises. Nothing is
+    withdrawn here: this is a GET, and the decision point is where state changes.
+    """
+    provider = make(store)
+    register(provider)
+    client, flow_id, page = signed_in(provider)
+    assert strings.CONSENT_APPROVE in page, "the screen offered the buttons before the pause"
+    paused(store)
+
+    with respx.mock:
+        revoke = respx.delete(REVOKE_URL).mock(return_value=httpx.Response(200, json={}))
+        response = client.get(consent_url(flow_id))
+
+    assert response.status_code == 403
+    assert strings.CONNECTIONS_PAUSED_TITLE in response.text
+    assert strings.CONSENT_APPROVE not in response.text, "nothing to approve while paused"
+    assert revoke.call_count == 0, "a reload is not a decision, so nothing is withdrawn"
+    assert len(rows(store, "authorizations")) == 1, "and the row of the sign in stays"
+
+
+def test_a_screen_of_an_account_that_is_not_paused_still_shows_the_buttons(
+    store: OAuthStore,
+) -> None:
+    """The positive control of the check above: one case is refused, not the surface."""
+    provider = make(store)
+    register(provider)
+    client, flow_id, _page = signed_in(provider)
+
+    response = client.get(consent_url(flow_id))
+
+    assert response.status_code == 200
+    assert strings.CONSENT_APPROVE in response.text
+
+
+def test_a_screen_whose_switch_cannot_be_read_grants_no_view_of_the_buttons(
+    store: OAuthStore,
+) -> None:
+    """Fail closed on the screen too (D-37), the same answer the decision point gives."""
+    provider = make(store)
+    register(provider)
+    client, flow_id, _page = signed_in(provider)
+    broken_switch(store)
+
+    response = client.get(consent_url(flow_id))
+
+    assert response.status_code == 500
+    assert strings.ERROR_GENERIC_TITLE in response.text
+    assert strings.CONSENT_APPROVE not in response.text
+
+
 def test_the_refusal_of_a_paused_account_is_not_reported_as_a_user_decision(
     store: OAuthStore,
 ) -> None:
