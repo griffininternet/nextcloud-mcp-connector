@@ -18,7 +18,7 @@ import logging
 from collections.abc import Awaitable, Callable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import pytest
@@ -32,12 +32,13 @@ from starlette.routing import Route
 from starlette.testclient import TestClient
 
 from mcp_connector import config, entry_exapp, entry_http
-from mcp_connector.errors import ToolError
+from mcp_connector.errors import IssuerRefused, ToolError
 from mcp_connector.exapp.middleware import RequireAppApi
 from mcp_connector.exapp.ui import connections as ui_connections
 from mcp_connector.exapp.ui import strings
 from mcp_connector.nextcloud import http as nc_http
 from mcp_connector.oauth import connections, crypto, registry, store
+from mcp_connector.oauth.provider import auth_routes
 from mcp_connector.oauth.metadata import (
     AS_METADATA_SUFFIX,
     PRM_SUFFIX,
@@ -1284,11 +1285,69 @@ class RefusingBuild:
         self.seen.append(dict(env or {}))
         if self._left > 0:
             self._left -= 1
-            raise ToolError(
+            raise IssuerRefused(
                 message=f"{config.ENV_PUBLIC_URL} is not a usable issuer: Issuer URL must be HTTPS",
                 hint="RFC 8414 requires https for an issuer, with the loopback exception.",
             )
         return Starlette()
+
+
+class FailingBuild:
+    """A ``build_exapp_app`` whose failure is not the issuer, and never becomes one."""
+
+    def __init__(self) -> None:
+        self.seen: list[dict[str, str]] = []
+
+    def __call__(self, env: Mapping[str, str] | None = None) -> Starlette:
+        self.seen.append(dict(env or {}))
+        raise ToolError(
+            message="the persistent volume of this app is not writable",
+            hint="Check the volume of the deploy daemon.",
+        )
+
+
+def test_a_build_failure_that_is_not_the_issuer_is_not_rescued(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    admin_config: AdminConfig,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """IN-06: the rescue is for the issuer refusal and for nothing that merely resembles it.
+
+    ``except ToolError`` was true about today and an assumption about tomorrow: the issuer
+    refusal of ``provider.auth_routes`` is the only ``ToolError`` raised while this
+    application is built, so any second source would have been logged as an address
+    problem, would have had the (possibly perfectly good) address dropped, and would have
+    ended in a second build with a confusing double message. The refusal carries its own
+    type now, and this test is the second source arriving.
+    """
+    admin_config.values["public_url"] = ADMIN_URL
+    build = FailingBuild()
+    monkeypatch.setattr(entry_exapp, "build_exapp_app", build)
+    deployed(monkeypatch, tmp_path)
+
+    with caplog.at_level("ERROR", logger="mcp_connector.entry_exapp"):
+        with pytest.raises(SystemExit) as excinfo:
+            entry_exapp.main()
+
+    assert excinfo.value.code == 2
+    assert len(build.seen) == 1, "no second build, because dropping the address fixes nothing"
+    messages = " ".join(record.getMessage() for record in caplog.records)
+    assert "not writable" in messages, "the failure is reported as what it is"
+    assert strings.ADMIN_SETTINGS_PLACE not in messages, "and never as an address problem"
+
+
+def test_the_issuer_refusal_of_the_provider_is_the_type_the_rescue_catches() -> None:
+    """The other half of IN-06: the marker is on the raise site, not only in the test.
+
+    A rescue narrowed to a type that nothing raises would be a rescue that never runs, and
+    CR-01 would be open again with nothing to show for it.
+    """
+    with pytest.raises(IssuerRefused):
+        auth_routes(
+            {**EXAPP_ENV, config.ENV_PUBLIC_URL: "http://tls-is-missing.example.org"},
+            provider=cast(Any, object()),
+        )
 
 
 def test_one_issuer_refusal_drops_the_address_instead_of_the_process(
