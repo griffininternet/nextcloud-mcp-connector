@@ -436,6 +436,17 @@ class NextcloudOAuthProvider(
         was never read cannot be reused, only fetched, and fetching is exactly what is
         forbidden there. Fail closed both ways, and no packet either way.
 
+        **The allowlist is asked before any packet as well** (WR-02). In the allowlist
+        mode an unlisted identifier used to be fetched first and refused after, which
+        handed an unauthenticated caller of ``/authorize`` an outbound GET to any public
+        https target of their choosing, in the hardest configuration this server has. The
+        identifier of this path is the URL of the document, so the id form of the listing
+        is known before any request and is required here: an administrator who runs the
+        allowlist mode lists a document client by that URL. A listing by return address
+        cannot admit the fetch, because the addresses exist only inside the document
+        nobody has read yet; that residual asymmetry is deliberate and the price of "no
+        packet on a stranger's word", and the registration path is untouched by it.
+
         **Why a row and not only a cache entry** (pitfall 3). ``flows.client_id`` and
         ``authorizations.client_id`` reference ``clients(client_id)`` with a foreign key, so
         a client that exists only in memory would fail the first ``/authorize`` with an
@@ -460,6 +471,12 @@ class NextcloudOAuthProvider(
             # is a refusal, and neither costs a packet. The shared rest of ``get_client``
             # still asks every policy question about the row this returns.
             return row
+        if self._policy.allowlist_only and not self._policy.listed(client_id):
+            # Before any packet (WR-02): in the allowlist mode the listed id decides
+            # whether this server makes an outbound request at all. The identifier of this
+            # path is the URL of the document, so an administrator can list it in advance,
+            # and an unlisted one is refused without a resolution and without a fetch.
+            return None
         if client_id != client_id.strip():
             # An identifier this server would fetch under one spelling and store under
             # another is a refusal, not a normalisation: the difference between the two
@@ -499,10 +516,12 @@ class NextcloudOAuthProvider(
                 client_id,
                 metadata_json=client.model_dump_json(exclude={"client_secret"}),
                 secret_hash=None,
-                # In the allowlist mode an unlisted client is stored as not allowed, exactly
-                # like a registration, so the block survives a restart and is visible in the
-                # admin view. The refusal itself happens in the shared rest of
-                # :meth:`get_client` and not here (T-06-27).
+                # The same question a registration answers at this point, although in the
+                # allowlist mode an unlisted identifier no longer reaches this write at all
+                # (WR-02: it is refused before any packet). The call stays, so a policy
+                # whose listing changes between the gate above and this write is recorded
+                # as the policy answered it, and the refusal for a stored block still lives
+                # in the shared rest of :meth:`get_client` (T-06-27).
                 allowed=self._policy.allows(client_id, addresses),
                 now=moment,
                 cimd_fetched_at=moment,

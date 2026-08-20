@@ -574,23 +574,48 @@ async def test_a_url_client_id_is_refused_while_dcr_is_off(tmp_path: Path) -> No
 
 
 @pytest.mark.anyio
-async def test_the_allowlist_mode_holds_an_unlisted_document_client(tmp_path: Path) -> None:
-    """T-06-27: the allowlist stays in the shared rest of ``get_client``, for both paths.
+async def test_the_allowlist_mode_refuses_an_unlisted_document_client_before_any_packet(
+    tmp_path: Path,
+) -> None:
+    """WR-02: in the hardest configuration no packet leaves on a stranger's word.
 
-    This path is where the allowlist finally works the way an administrator expects: the
-    identifier of a registration is a random UUID nobody can name in advance, while the
-    identifier here is a published URL that can be written into the configuration before any
-    client ever connects.
+    The identifier of this path is a published URL an administrator can list in advance
+    (which is where the allowlist finally works the way one expects, against the random
+    UUID of a registration). The other side of that coin: an unlisted identifier used to
+    be fetched first and refused after, which made ``/authorize`` an unauthenticated
+    request reflector against any public https target. The refusal now costs no packet and
+    writes no row.
     """
     subject, store = build(tmp_path, **{registry.ENV_ALLOWLIST_ONLY: "on"})
 
-    with respx.mock:
-        cimd_route()
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.get(CIMD_FETCH_URL)
         assert await subject.get_client(CIMD_ID) is None
 
-    blocked = await store.load_client(CIMD_ID)
-    assert blocked is not None, "the block is stored, so it survives a restart"
-    assert blocked.allowed is False
+    assert route.called is False, "the allowlist decides before the fetch, not after"
+    assert await store.load_client(CIMD_ID) is None
+
+
+@pytest.mark.anyio
+async def test_the_allowlist_mode_refuses_a_stale_unlisted_row_without_a_packet(
+    tmp_path: Path,
+) -> None:
+    """WR-02 with a row that already exists: a listing that went away ends the refetch too.
+
+    The freshness deadline passed and the client is on no list, so the read that would
+    normally follow never leaves the machine, and the shared rest of ``get_client`` keeps
+    refusing the stored row either way (T-06-27).
+    """
+    subject, store = build(tmp_path, **{registry.ENV_ALLOWLIST_ONLY: "on"})
+    moment = int(time.time())
+    await with_a_document_row(store, fetched_at=moment - 4_000, expires_at=moment - 1)
+
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.get(CIMD_FETCH_URL)
+        assert await subject.get_client(CIMD_ID) is None
+
+    assert route.called is False
+    assert await store.load_client(CIMD_ID) is not None, "the refusal deletes nothing"
 
 
 @pytest.mark.anyio
