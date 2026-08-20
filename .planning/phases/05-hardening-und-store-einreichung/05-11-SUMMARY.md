@@ -173,3 +173,7 @@ Keine neue Angriffsflaeche ausserhalb des Registers: es entstand keine Route, ke
 - [x] Kein Weg ueber das Admin-Formular fuehrt mehr in eine Restart-Schleife ohne UI-Recovery
 - [x] http auf Loopback und https bleiben unveraendert brauchbar, bestehende Installationen laufen weiter
 - [x] Die Regressionstests decken Fehler-, Edge- und Negativfaelle ab, nicht nur den Happy Path
+
+## Self-Check: PASSED
+
+Alle fuenf genannten Dateien existieren, das SUMMARY liegt am angegebenen Pfad, und alle vier Commits (`4f9b747`, `bb32a62`, `791e6b9`, `9b681b4`) sind im Repository nachweisbar.

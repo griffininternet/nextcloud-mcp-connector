@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Plan 05-10 fertig: Release 0.1.1 ist live im Store (HTTP 201, Workflow-Lauf 32299836095 gruen). Vier Live-Nachweise geprueft: Store fuehrt 0.1.1 mit >=32.0.0 <35.0.0, Asset 200 mit 29491 Bytes, Manifest anonym als OCI-Index mit amd64 und arm64, Tagliste [0.1.0, 0.1.1]. Ein-Klick-Installation ohne jede Variable kommt mit 0 restarts hoch und nennt ihren Setup-Zustand (0.1.0 crash-loopte hier mit Exit 2). Update-Nachweis: ein Zugriffstoken aus 0.1.0 bediente nach dem Update auf 0.1.1 weiter 16 Werkzeuge und einen echten files_list-Aufruf. Store-Cache nur durch Ueberschreiben verwerfen, nie loeschen (GenericFileException). EXAPP-04 Complete. Phase 05 bereit zur Verifikation."
-last_updated: "2026-08-20T03:29:14.181Z"
-last_activity: 2026-08-20 -- Phase 05 planning complete
+stopped_at: "Plan 05-11 fertig: CR-01 in beiden Haelften geschlossen. Validierung lehnt http auf Nicht-Loopback-Host ab (LOOPBACK_HOSTS, RFC 8414), und ein Issuer-Refusal beim Start verwirft die Adresse, baut einmal neu und laeuft mit dem Default weiter statt in eine Restart-Schleife. 15 Regressionstests, volle Suite gruen, uv.lock unveraendert. Naechster Schritt: 05-VERIFICATION erneut ausfuehren."
+last_updated: "2026-08-20T03:42:45.165Z"
+last_activity: 2026-08-20
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 50
-  completed_plans: 44
+  completed_plans: 45
   percent: 80
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 05 (hardening-und-store-einreichung) — EXECUTING
-Plan: 10 of 10
+Plan: 2 of 16
 Status: Ready to execute
-Last activity: 2026-08-20 -- Phase 05 planning complete
+Last activity: 2026-08-20
 
-Progress: [██████████] 100%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
@@ -97,6 +97,7 @@ Progress: [██████████] 100%
 | Phase 05 P09 | 15 min | 2 tasks tasks | 6 files files |
 | Phase 05 P08 | 60 min | 3 tasks tasks | 9 files files |
 | Phase 05 P10 | 30 min | 3 tasks | 8 files |
+| Phase 05 P11 | 35 min | 2 tasks tasks | 5 files files |
 
 ## Accumulated Context
 
@@ -314,6 +315,9 @@ Recent decisions affecting current work:
 - [Phase 05]: Ein Update behaelt die Verbindungen, gemessen an einem Zugriffstoken der Vorversion, das nach dem Update 16 Werkzeuge und einen echten Tool-Aufruf bediente
 - [Phase 05]: Der AppAPI-Store-Cache wird durch Ueberschreiben mit timestamp 0 verworfen, nie durch Loeschen der Datei: sonst endet jedes folgende AppAPI-Kommando mit GenericFileException
 - [Phase 05]: Ein Kommentar in appinfo/info.xml darf das Versionselement nicht in spitzen Klammern wiederholen, weil build_store_release.sh und release.yml die Version per grep auf dieses Tag lesen
+- [Phase 05-hardening-und-store-einreichung]: config.normalize_base_url bleibt unveraendert, die Issuer-Regel (https ausser Loopback, RFC 8414) steht in exapp/config_values._public_url: dieselbe Funktion prueft NC_MCP_URL, und dort ist http auf einem internen Host legitim
+- [Phase 05-hardening-und-store-einreichung]: Ein Issuer-Refusal beim Bau der Anwendung ist der einzige erholbare Startfehler: entry_exapp.main verwirft NC_MCP_PUBLIC_URL, baut genau einmal neu und laeuft mit dem Default weiter; ein zweiter Fehlschlag bleibt SystemExit(2)
+- [Phase 05-hardening-und-store-einreichung]: Der gespeicherte Admin-Wert wird im Rettungszweig NICHT geloescht (T-05-44 accept): er bleibt im Formular sichtbar und korrigierbar
 
 ### Pending Todos
 
@@ -344,6 +348,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-19T20:59:41.055Z
-Stopped at: Plan 05-10 fertig: Release 0.1.1 ist live im Store (HTTP 201, Workflow-Lauf 32299836095 gruen). Vier Live-Nachweise geprueft: Store fuehrt 0.1.1 mit >=32.0.0 <35.0.0, Asset 200 mit 29491 Bytes, Manifest anonym als OCI-Index mit amd64 und arm64, Tagliste [0.1.0, 0.1.1]. Ein-Klick-Installation ohne jede Variable kommt mit 0 restarts hoch und nennt ihren Setup-Zustand (0.1.0 crash-loopte hier mit Exit 2). Update-Nachweis: ein Zugriffstoken aus 0.1.0 bediente nach dem Update auf 0.1.1 weiter 16 Werkzeuge und einen echten files_list-Aufruf. Store-Cache nur durch Ueberschreiben verwerfen, nie loeschen (GenericFileException). EXAPP-04 Complete. Phase 05 bereit zur Verifikation.
+Last session: 2026-08-20T03:42:45.148Z
+Stopped at: Plan 05-11 fertig: CR-01 in beiden Haelften geschlossen. Validierung lehnt http auf Nicht-Loopback-Host ab (LOOPBACK_HOSTS, RFC 8414), und ein Issuer-Refusal beim Start verwirft die Adresse, baut einmal neu und laeuft mit dem Default weiter statt in eine Restart-Schleife. 15 Regressionstests, volle Suite gruen, uv.lock unveraendert. Naechster Schritt: 05-VERIFICATION erneut ausfuehren.
 Resume file: None
