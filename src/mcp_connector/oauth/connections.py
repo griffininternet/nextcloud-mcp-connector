@@ -50,7 +50,7 @@ from starlette.routing import Route
 
 from ..errors import ToolError
 from ..exapp.auth import appapi_user, is_user
-from ..exapp.responses import form_or_none
+from ..exapp.responses import BodyTooLarge, BodyUnreadable, bounded_body, form_or_none, with_body
 from ..exapp.ui import errors
 from ..exapp.ui.connections import (
     ACTION_CONFIRM,
@@ -153,7 +153,19 @@ def connections_routes(
             logger.warning("a form larger than this page has fields for was refused unread")
             return await _list(store, user, env, status_code=400)
 
-        form = await form_or_none(request)
+        # The announced length above is the cheap refusal, this is the one that holds: a
+        # request with ``Transfer-Encoding: chunked`` announces no length at all, so the
+        # check above never fired for it and ``request.form()`` read whatever arrived into
+        # memory, action included (IN-01, the same hole the purge handler had).
+        try:
+            raw = await bounded_body(request, MAX_FORM_BYTES)
+        except BodyTooLarge:
+            logger.warning("a form larger than this page has fields for was refused unread")
+            return await _list(store, user, env, status_code=400)
+        except BodyUnreadable:
+            return _generic("a submitted form could not be read", env)
+
+        form = await form_or_none(with_body(request, raw))
         if form is None:
             # A body this server cannot read is not a refusal of one of the guards below,
             # so it is the generic page with a reference in the log, and never the traceback
@@ -399,6 +411,11 @@ def _oversized(request: Request) -> bool:
     A header that is not a number is refused as well: it is not a browser sending this form
     either, and reading a body whose length nobody can name is the case this check exists
     against.
+
+    This is the announcement and not the body. A request that announces nothing passes here
+    and meets ``responses.bounded_body`` in the handler, which counts what really arrives
+    (IN-01); this check stays because refusing before a single byte is on the wire is
+    cheaper than counting.
     """
     announced = request.headers.get("content-length") or "0"
     try:

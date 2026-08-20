@@ -21,13 +21,30 @@ from typing import Any
 from starlette.datastructures import FormData
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+from starlette.types import Message
 
-__all__ = ["NO_STORE", "form_or_none", "json_response"]
+__all__ = [
+    "NO_STORE",
+    "BodyTooLarge",
+    "BodyUnreadable",
+    "bounded_body",
+    "form_or_none",
+    "json_response",
+    "with_body",
+]
 
 #: On every answer of this package, success and rejection alike (pitfall 4, T-02-42).
 NO_STORE = {"Cache-Control": "no-store"}
 
 logger = logging.getLogger("mcp_connector.exapp.responses")
+
+
+class BodyTooLarge(Exception):
+    """More body arrived than the caller of :func:`bounded_body` is willing to read."""
+
+
+class BodyUnreadable(Exception):
+    """The body could not be read to its end, so there is nothing to decide on."""
 
 
 def json_response(
@@ -45,6 +62,54 @@ def json_response(
     decision and not an accident.
     """
     return JSONResponse(payload, status_code=status_code, headers={**NO_STORE, **(headers or {})})
+
+
+async def bounded_body(request: Request, max_bytes: int) -> bytes:
+    """The body, read no further than ``max_bytes``.
+
+    The one place a size limit on a request body is implemented, because an announced
+    ``Content-Length`` is the sender's claim about the body and not the body (IN-01). A
+    request with ``Transfer-Encoding: chunked`` announces nothing at all, so a handler that
+    reads the header and then calls ``request.body()`` or ``request.form()`` has no limit
+    left on the one shape that carries no number. Both places that had such a check had that
+    hole: the purge handler and the connections form.
+
+    Raises :class:`BodyTooLarge` and :class:`BodyUnreadable` rather than answering, because
+    the two callers answer differently and neither answer belongs in this module. Nothing of
+    the body is ever logged here, for the reason :func:`form_or_none` gives.
+
+    The stream is left where it stopped rather than drained: draining it is the read this
+    function exists to avoid.
+    """
+    chunks: list[bytes] = []
+    seen = 0
+    try:
+        async for chunk in request.stream():
+            seen += len(chunk)
+            if seen > max_bytes:
+                raise BodyTooLarge
+            chunks.append(chunk)
+    except BodyTooLarge:
+        raise
+    except Exception as exc:
+        raise BodyUnreadable from exc
+    return b"".join(chunks)
+
+
+def with_body(request: Request, raw: bytes) -> Request:
+    """The same request with a body already in hand, for a parser that wants to stream it.
+
+    :func:`bounded_body` has consumed the stream by the time a caller knows the body is
+    small enough to parse, and ``Request.form()`` wants to read one. So it gets a request
+    over the same scope whose stream is these bytes and nothing more. The scope carries the
+    identity, the headers and the content type, so the parser sees exactly what it saw
+    before; what it cannot do any more is read further than the limit allowed.
+    """
+
+    async def replay() -> Message:
+        return {"type": "http.request", "body": raw, "more_body": False}
+
+    return Request(request.scope, replay)
 
 
 async def form_or_none(request: Request) -> FormData | None:

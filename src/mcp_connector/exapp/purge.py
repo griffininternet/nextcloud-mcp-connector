@@ -50,7 +50,7 @@ from ..errors import ToolError
 from ..oauth import crypto, loginflow
 from ..oauth.store import AuthorizationRow, OAuthStore
 from .auth import AppApiRejected, require_appapi
-from .responses import NO_STORE, json_response
+from .responses import NO_STORE, BodyTooLarge, BodyUnreadable, bounded_body, json_response
 
 __all__ = ["FORCE_OPTION", "PURGE_PATH", "purge_routes"]
 
@@ -381,14 +381,23 @@ async def _payload(request: Request) -> Any:
     makes no claim at all: it carried no ``content-length``, the check therefore never fired,
     and ``request.body()`` read whatever arrived into memory, flag included. The announced
     length is still read first, because refusing before a single byte is on the wire is
-    cheaper than counting; the count below is what actually holds.
+    cheaper than counting; ``responses.bounded_body`` is what actually holds.
+
+    That counting lives in ``exapp/responses.py`` and not here, because the connections form
+    had the identical hole behind the identical header check, and one limit with two callers
+    is one place to get it right.
     """
     announced = request.headers.get("content-length", "")
     if announced.isdigit() and int(announced) > MAX_BODY_BYTES:
         logger.warning("a purge call announced a body this handler does not read")
         return None
-    raw = await _bounded_body(request)
-    if raw is None:
+    try:
+        raw = await bounded_body(request, MAX_BODY_BYTES)
+    except BodyTooLarge:
+        logger.warning("a purge call sent a body this handler does not read")
+        return None
+    except BodyUnreadable:
+        logger.warning("the body of a purge call could not be read")
         return None
     if not raw:
         return None
@@ -397,28 +406,6 @@ async def _payload(request: Request) -> Any:
     except ValueError:
         logger.warning("the body of a purge call is not JSON")
         return None
-
-
-async def _bounded_body(request: Request) -> bytes | None:
-    """The body up to :data:`MAX_BODY_BYTES`, or ``None`` when it is longer than that.
-
-    The stream is left where it stopped rather than drained: draining it is the very read
-    this function exists to avoid, and nothing behind this point wants the body again. The
-    value never reaches a log line, here as everywhere else on this path (V7).
-    """
-    chunks: list[bytes] = []
-    seen = 0
-    try:
-        async for chunk in request.stream():
-            seen += len(chunk)
-            if seen > MAX_BODY_BYTES:
-                logger.warning("a purge call sent a body this handler does not read")
-                return None
-            chunks.append(chunk)
-    except Exception:
-        logger.warning("the body of a purge call could not be read")
-        return None
-    return b"".join(chunks)
 
 
 def _text(body: str, status_code: int) -> Response:

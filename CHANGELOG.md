@@ -62,6 +62,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   was read into memory whole. The path is an internal one and needs the app's own
   credentials, so nothing was reachable from outside; the limit now counts what actually
   arrives, and the command behaves exactly as before.
+- The connections page has the same limit on the same terms. Its size check also read the
+  length a request announced, so a submission that announced none was read whole and
+  carried out, although the page says it refuses a body larger than its four short fields
+  unread. The check now counts what arrives, both places share one implementation, and an
+  ordinary submission is answered exactly as before.
 - The hidden value that protects the consent screen and the connections page against
   forged form submissions now expires. It used to be the same value for an account for
   the whole lifetime of the installation, and the only way to change it would have been

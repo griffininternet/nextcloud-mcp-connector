@@ -22,7 +22,7 @@ import calendar
 import re
 import sqlite3
 import time
-from collections.abc import Coroutine, Mapping
+from collections.abc import Coroutine, Iterator, Mapping
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
@@ -1284,6 +1284,62 @@ def test_a_body_far_larger_than_this_page_has_fields_for_is_refused_unread(
     assert SECTION_HEADING in response.text, "the list, exactly as an unknown action gets it"
     assert run(live.store.access_disabled(NC_USER)) is False, "the body was never acted on"
     assert caplog.records
+
+
+def test_a_chunked_body_far_larger_than_this_page_has_fields_for_is_refused_too(
+    live: Deployment, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The same limit, for a request that announces no length at all (IN-01, second place).
+
+    ``_oversized`` reads the announced ``Content-Length``, and a request with
+    ``Transfer-Encoding: chunked`` announces none, so the check passed it through and
+    ``request.form()`` read whatever arrived into memory. The action inside that body was
+    then carried out, which is what this test would have measured before: a switch flipped
+    by a request the page said it refuses unread. The limit counts what arrives now.
+    """
+
+    def in_chunks() -> Iterator[bytes]:
+        yield (
+            f"{ui.ACTION_FIELD}={ui.ACTION_PAUSE}"
+            f"&{ui.CONFIRM_PARAM}={live.switch_token_of()}&padding="
+        ).encode()
+        for _ in range(64):
+            yield b"p" * 1024
+
+    with caplog.at_level("WARNING", logger="mcp_connector.oauth.connections"):
+        response = live.client.post(
+            ui.CONNECTIONS_PATH,
+            content=in_chunks(),
+            headers=appapi_headers(NC_USER) | {"Content-Type": "application/x-www-form-urlencoded"},
+        )
+
+    assert response.status_code == 400
+    assert SECTION_HEADING in response.text, "the list, exactly as the announced case gets it"
+    assert run(live.store.access_disabled(NC_USER)) is False, "the body was never acted on"
+    assert caplog.records
+    assert "pppp" not in "\n".join(record.getMessage() for record in caplog.records)
+
+
+def test_a_chunked_body_inside_the_limit_is_acted_on_as_before(live: Deployment) -> None:
+    """The counter check: the limit bounds the read, it does not refuse chunked bodies.
+
+    Nothing says a browser has to announce a length, and a form of four short fields is far
+    inside the limit however it arrives.
+    """
+
+    def in_chunks() -> Iterator[bytes]:
+        yield f"{ui.ACTION_FIELD}={ui.ACTION_PAUSE}".encode()
+        yield f"&{ui.CONFIRM_PARAM}={live.switch_token_of()}".encode()
+
+    response = live.client.post(
+        ui.CONNECTIONS_PATH,
+        content=in_chunks(),
+        headers=appapi_headers(NC_USER) | {"Content-Type": "application/x-www-form-urlencoded"},
+    )
+
+    assert response.status_code == 200
+    assert strings.CONNECTIONS_PAUSED_TITLE in response.text
+    assert run(live.store.access_disabled(NC_USER)) is True
 
 
 def test_a_form_body_that_cannot_be_parsed_is_a_page_and_never_an_unhandled_500(
