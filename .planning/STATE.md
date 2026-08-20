@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Verwaltungs-Clients und Härtungs-Reste
 status: executing
-stopped_at: "Plan 06-01 fertig: die zwei Grenzen des CIMD-Abrufs, die ohne Netzwerk halten, stehen als reine Funktionen (bounded_response neben bounded_body, oauth/cimd.py mit is_cimd_client_id, target_allowed, resolve_addresses). 1983 Tests gruen, ruff/pyright/vulture sauber, pyproject und uv.lock unberuehrt. Naechster Schritt: Wave 1 weiter mit Plan 06-03, danach Wave 2 (06-02 gepinnter Abruf, 06-04 Advertising)."
-last_updated: "2026-08-20T11:29:55.931Z"
-last_activity: 2026-08-20 -- Plan 06-01 fertig (CIMD-Grenzen ohne Netzwerk)
+stopped_at: "Plan 06-03 fertig: die RFC-8252-7.3-Portregel (registry.loopback_match, angewandt an genau einer Stelle in consent.py) und der vierte Admin-Schalter (ENV_CIMD, cimd_enabled fail-closed an DCR gekoppelt). Weil der SDK-Handler die Adresse ein zweites Mal vergleicht, traegt provider.also_accepting(address) die eine gematchte Adresse als Anfrage-Sicht dorthin, ohne etwas zu schreiben. 2003 Tests gruen, ruff/pyright/vulture sauber, pyproject und uv.lock unberuehrt. Naechster Schritt: Wave 2 (06-02 gepinnter Abruf, 06-04 Advertising plus Manifest-Deklaration von NC_MCP_OAUTH_CIMD)."
+last_updated: "2026-08-20T11:55:00.000Z"
+last_activity: 2026-08-20 -- Plan 06-03 fertig (Loopback-Portregel und CIMD-Schalter)
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 10
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 6 (Härtung, Eigennachweise und Conference-Reife), EXECUTING
-Plan: 2 of 10
+Plan: 3 of 10
 Status: Ready to execute
 Milestone: v1.1 Verwaltungs-Clients und Härtungs-Reste (Phasen 6-7)
-Last activity: 2026-08-20 -- Plan 06-01 fertig (CIMD-Grenzen ohne Netzwerk)
+Last activity: 2026-08-20 -- Plan 06-03 fertig (Loopback-Portregel und CIMD-Schalter)
 
 ## Performance Metrics
 
@@ -104,6 +104,7 @@ Last activity: 2026-08-20 -- Plan 06-01 fertig (CIMD-Grenzen ohne Netzwerk)
 | Phase 05-hardening-und-store-einreichung P13 | 15 min | 2 tasks tasks | 4 files files |
 | Phase 05-hardening-und-store-einreichung P14 | 25 min | 2 tasks | 2 files |
 | Phase 06 P01 | 30 min | 2 tasks | 4 files |
+| Phase 06 P03 | 25 min | 3 tasks tasks | 6 files files |
 
 ## Accumulated Context
 
@@ -337,6 +338,9 @@ Recent decisions affecting current work:
 - [Phase 06]: Das Groessenlimit des CIMD-Abrufs bleibt in exapp/responses.py (bounded_response neben bounded_body) und wird von oauth/cimd.py importiert: zwei Groessenlimits in zwei Modulen sind genau die Kopie, die dieses Modul einmal abgeschafft hat
 - [Phase 06]: MAX_DOCUMENT_BYTES (5120) und FETCH_TIMEOUT_SECONDS (5.0) sind Modulkonstanten ohne Env-Schalter: ein Schalter waere eine Grenze, die ein Admin versehentlich aufweichen kann (T-06-06); ein Test haelt fest, dass os.environ im Modul nicht vorkommt
 - [Phase 06]: resolve_addresses verwirft den ganzen Namen, sobald EINE Adresse durchfaellt, und lehnt zusaetzlich eine Antwort ab, die keine Adresse ist, sowie einen leeren Hostnamen ohne den Resolver zu fragen: waehlte die Funktion die gute Adresse, waere die Regel per DNS-Antwort umschaltbar (T-06-02)
+- [Phase 06]: Die RFC-8252-7.3-Portregel wirkt in consent.py an einer Stelle, aber der SDK-Handler vergleicht ein zweites Mal (authorize.py:180); provider.also_accepting(address) traegt die eine gematchte Adresse als Sicht fuer genau eine Anfrage dorthin, ohne etwas in die Registrierung zu schreiben
+- [Phase 06]: loopback_match benutzt LOOPBACK_HOSTS (127.0.0.1, localhost, ::1) statt nur der IP-Literale des RFC: Claude Code schickt zur Laufzeit localhost, und D-35 laesst alle drei Namen ohnehin registrieren; frei ist nur der Port, ein Host-Wechsel bleibt eine Absage
+- [Phase 06]: cimd_enabled ist ein eigener Schalter (NC_MCP_OAUTH_CIMD, Default an) mit harter Kopplung an DCR: die Kopplung schlaegt den explizit gesetzten Schalter, ein abgeschaltetes DCR ist ueber CIMD nicht umgehbar (T-06-15)
 
 ### Pending Todos
 
@@ -367,7 +371,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T11:28:40.575Z
+Last session: 2026-08-20T11:52:39.227Z
 Stopped at: Plan 06-01 fertig: die zwei Grenzen des CIMD-Abrufs, die ohne Netzwerk halten, stehen als reine Funktionen (bounded_response neben bounded_body, oauth/cimd.py mit is_cimd_client_id, target_allowed, resolve_addresses). 1983 Tests gruen, ruff/pyright/vulture sauber, pyproject und uv.lock unberuehrt. Naechster Schritt: Wave 1 weiter mit Plan 06-03, danach Wave 2 (06-02 gepinnter Abruf, 06-04 Advertising).
 Naechster Schritt: /gsd:execute-phase 6 (Plan 06-03)
 Resume file: None
