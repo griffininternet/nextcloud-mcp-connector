@@ -1481,14 +1481,55 @@ def test_no_grep_q_on_a_pipe_in_the_shell_scripts() -> None:
     141) and pipefail turns the successful check into a failure. Two CI runs failed exactly
     there, with the wanted calendar visibly printed one line above the failing check. A
     grep without -q reads its input to the end, so `grep pattern >/dev/null` is the shape
-    every piped check uses; -q stays allowed where grep reads from a file, not a pipe."""
+    every piped check uses; -q stays allowed where grep reads from a file, not a pipe.
+
+    IN-05 is why the check is a pattern and no longer the literal `| grep -q`: every
+    validator of `bootstrap_exapp.sh` piped into `grep -Eq` or `grep -Eqz`, which the
+    literal did not see, so rule and gate had drifted apart and the next `| grep -Eq` on an
+    occ pipe would have been waved through. Any letter may stand between the dash and the
+    q, and a pipe may sit at the end of the line before it or behind a backslash.
+    """
+    piped_quiet = re.compile(r"\|\s*grep\s+(?:-[A-Za-z]*\s+)*-[A-Za-z]*q")
     scripts = sorted((ROOT / "scripts").glob("*.sh"))
     assert scripts, "no shell scripts found, the guard would silently pass"
     for script in scripts:
-        text = script.read_text(encoding="utf-8")
-        assert "| grep -q" not in text, (
-            f"{script.name} pipes into grep -q; under pipefail that is the SIGPIPE flake"
+        # A pipe or a backslash at the end of a line continues the same command, and a rule
+        # that only reads single lines would miss exactly the shape somebody reaches for
+        # when the line gets long.
+        text = re.sub(r"(\||\\)\s*\n\s*", r"\1 ", script.read_text(encoding="utf-8"))
+        found = piped_quiet.findall(text)
+        assert found == [], (
+            f"{script.name} pipes into a quiet grep ({found}); under pipefail that is the "
+            "SIGPIPE flake, and >/dev/null is the shape that reads its input to the end"
         )
+
+
+def test_the_guard_sees_the_spellings_that_used_to_pass_it() -> None:
+    """The counter probe of IN-05: the rule is a rule only if it catches the near misses.
+
+    Without this, the guard above is a check on a literal that every writer of the script
+    can miss by adding one letter, which is exactly what happened.
+    """
+    piped_quiet = re.compile(r"\|\s*grep\s+(?:-[A-Za-z]*\s+)*-[A-Za-z]*q")
+    caught = (
+        "docker exec x occ y | grep -q wanted",
+        "docker exec x occ y | grep -Eq '^wanted$'",
+        "printf '%s' \"$value\" | grep -Eqz '^https?://'",
+        "docker exec x occ y |\n  grep -q wanted",
+        "docker exec x occ y \\\n  | grep -Eq wanted",
+        "docker exec x occ y | grep -E -q wanted",
+    )
+    allowed = (
+        'grep -q "^name: x$" "${COMPOSE_FILE}"',
+        "docker exec x occ y | grep -E '^wanted$' >/dev/null",
+        "printf '%s' \"$value\" | grep -zE '^https?://' >/dev/null",
+    )
+    for line in caught:
+        text = re.sub(r"(\||\\)\s*\n\s*", r"\1 ", line)
+        assert piped_quiet.search(text), f"the guard has to see {line!r}"
+    for line in allowed:
+        text = re.sub(r"(\||\\)\s*\n\s*", r"\1 ", line)
+        assert not piped_quiet.search(text), f"the guard must leave {line!r} alone"
 
 
 def test_the_registration_verifies_what_the_registry_serves() -> None:
