@@ -456,9 +456,13 @@ class FakeFetch:
         self.hang = hang
         self.barrier = barrier
         self.ids: list[str] = []
+        self.limits: list[int | None] = []
 
-    async def __call__(self, _clients: NcClients, resource_id: str) -> dict[str, Any]:
+    async def __call__(
+        self, _clients: NcClients, resource_id: str, *, max_bytes: int | None = None
+    ) -> dict[str, Any]:
         self.ids.append(resource_id)
+        self.limits.append(max_bytes)
         if self.barrier is not None:
             await asyncio.wait_for(self.barrier.wait(), timeout=5)
         if self.hang:
@@ -543,6 +547,48 @@ async def test_a_short_excerpt_is_not_marked_as_truncated(
     result = await context_tools.prepare_context(clients, query="budget", detail="full")
 
     assert result["results"]["file"][0]["excerpt"] == "Straßenbau: 1,2 Mio"
+
+
+@pytest.mark.anyio
+async def test_an_excerpt_asks_the_reader_for_no_more_than_it_keeps(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """LO-06: two kilobytes were kept out of a read of up to 512, per hit and per bundle."""
+    wire(monkeypatch, search=FakeCall(search_answer([FILE_HIT])))
+    fetch = wire_fetch(monkeypatch, FakeFetch({"file:4711": "Straßenbau: 1,2 Mio"}))
+
+    result = await context_tools.prepare_context(clients, query="budget", detail="full")
+
+    assert fetch.limits == [context_tools.EXCERPT_READ_BYTES], "the ceiling travels with the call"
+    assert result["results"]["file"][0]["excerpt"] == "Straßenbau: 1,2 Mio", "same answer as before"
+
+
+def test_the_read_limit_is_wider_than_what_the_excerpt_keeps() -> None:
+    """Reading exactly the ceiling could return fewer bytes than the ceiling.
+
+    The cap counts encoded bytes after decoding, and a read that ends inside a multi byte
+    character loses that character. Twice the ceiling makes the excerpt byte for byte the
+    one a full read produced, and still leaves the factor this finding was about.
+    """
+    assert context_tools.EXCERPT_READ_BYTES == 2 * context_tools.EXCERPT_MAX_BYTES
+    assert context_tools.EXCERPT_READ_BYTES < chatgpt_tools.MAX_TEXT_BYTES
+
+
+@pytest.mark.anyio
+async def test_a_cut_excerpt_reads_the_same_two_kilobytes_it_used_to(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The result is the property under test, not the transfer: nothing about it changes."""
+    wire(monkeypatch, search=FakeCall(search_answer([FILE_HIT])))
+    # What a reader capped at EXCERPT_READ_BYTES hands back for a longer document.
+    wire_fetch(monkeypatch, FakeFetch({"file:4711": "ü" * context_tools.EXCERPT_READ_BYTES}))
+
+    result = await context_tools.prepare_context(clients, query="budget", detail="full")
+
+    excerpt = result["results"]["file"][0]["excerpt"]
+    assert excerpt.startswith("ü" * 1000), "1000 umlauts are the 2000 bytes of the ceiling"
+    assert excerpt.endswith(context_tools.EXCERPT_TRUNCATION)
+    assert "ü" * 1001 not in excerpt, "and not one character more"
 
 
 @pytest.mark.anyio

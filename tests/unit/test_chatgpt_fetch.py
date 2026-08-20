@@ -255,6 +255,77 @@ async def test_a_file_above_the_hard_ceiling_is_fetched_as_a_marked_slice(
 
 
 @pytest.mark.anyio
+async def test_a_caller_may_read_less_than_the_default_ceiling(clients: NcClients) -> None:
+    """LO-06: the excerpt of ``prepare_context`` keeps 2 KB and used to transfer up to 512.
+
+    The parameter exists for Python callers only. It is not part of the OpenAI contract and
+    the registered tool does not have it, so the wire shape of ``fetch`` is unchanged.
+    """
+    body = b"x" * 500
+
+    with respx.mock(assert_all_called=True) as mock:
+        mock.route(method="SEARCH", url=DAV_ROOT).mock(
+            return_value=httpx.Response(207, text=search_body())
+        )
+        mock.route(method="PROPFIND", url=f"{FILES_ROOT}{FILE_PATH}").mock(
+            return_value=httpx.Response(207, text=stat_body(length=len(body)))
+        )
+        slice_route = mock.route(method="GET", url=f"{FILES_ROOT}{FILE_PATH}").mock(
+            return_value=httpx.Response(206, content=body[:40])
+        )
+
+        result = await chatgpt.fetch(clients, "file:4711", max_bytes=40)
+
+    assert slice_route.calls[0].request.headers["Range"] == "bytes=0-39", "only what was asked"
+    assert result["text"].startswith("x" * 40)
+    assert result["metadata"]["next_offset"] == "40", "the rest is still reachable"
+
+
+@pytest.mark.anyio
+async def test_without_a_limit_the_reader_keeps_the_ceiling_it_always_had(
+    clients: NcClients,
+) -> None:
+    """The default is the old behaviour, so the ChatGPT contract is untouched."""
+    with respx.mock(assert_all_called=True) as mock:
+        mock_file(mock)
+
+        result = await chatgpt.fetch(clients, "file:4711")
+
+    assert chatgpt.MAX_TEXT_BYTES == files_tools.DEFAULT_MAX_BYTES == 512 * 1024
+    assert result["text"] == FILE_CONTENT
+    assert "truncated" not in result["metadata"]
+
+
+@pytest.mark.anyio
+async def test_a_limit_outside_the_allowed_range_is_refused_with_the_slice_hint(
+    clients: NcClients,
+) -> None:
+    """Negative path: the reader owns the range check, and it stays the one that answers."""
+    with respx.mock(assert_all_called=False) as mock:
+        mock_file(mock)
+
+        with pytest.raises(ToolError) as excinfo:
+            await chatgpt.fetch(clients, "file:4711", max_bytes=0)
+
+    assert "max_bytes" in excinfo.value.message
+    assert excinfo.value.hint
+
+
+@pytest.mark.anyio
+async def test_a_kind_without_a_reader_ceiling_ignores_the_limit(clients: NcClients) -> None:
+    """A note is one document over one REST call: there is nothing to slice, and no error."""
+    note = {"id": 12, "title": "Protokoll", "content": "Anwesend: Anja", "modified": 1755180000}
+
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock, notes=NOTES_INSTALLED)
+        mock.get(f"{NOTES_API}/12").mock(return_value=httpx.Response(200, json=note))
+
+        result = await chatgpt.fetch(clients, "note:12", max_bytes=40)
+
+    assert result["text"] == "Anwesend: Anja"
+
+
+@pytest.mark.anyio
 async def test_a_document_cannot_forge_the_truncation_note_of_a_whole_file(
     clients: NcClients,
 ) -> None:
