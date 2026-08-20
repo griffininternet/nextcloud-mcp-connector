@@ -46,7 +46,7 @@ from .settings_form import SETTINGS_PATH
 from .ui import strings
 from .ui.connections import CONNECTIONS_PATH
 
-__all__ = ["ADMIN_FORM_ID", "form_scheme", "register_admin_form"]
+__all__ = ["ADMIN_FORM_ID", "PUBLIC_DOCS_URL", "form_scheme", "register_admin_form"]
 
 #: The second form id of this app. ``insertOrUpdate`` keys on (appid, formid), so this one
 #: never collides with the personal signpost and re-enabling updates it in place.
@@ -61,6 +61,13 @@ ADMIN_SECTION_TYPE = "admin"
 ADMIN_SECTION_ID = "security"
 
 ADMIN_FORM_PRIORITY = 10
+
+#: Where the ``doc_url`` of this form points as long as this app does not know its own
+#: public address. The loopback default is no address to send an administrator to: in her
+#: browser it is her own machine, not this container, so the link of the form that fixes
+#: exactly that state would be the one link that leads nowhere (IN-03). The address is the
+#: one ``appinfo/info.xml`` already names in all three languages.
+PUBLIC_DOCS_URL = "https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/faq.md"
 
 logger = logging.getLogger("mcp_connector.exapp.admin_settings")
 
@@ -77,7 +84,16 @@ def form_scheme(env: Mapping[str, str] | None = None) -> dict[str, Any]:
     documented for Declarative Settings looks like; the two switches show the state this app
     ships with, so an administrator sees what is in force before touching anything.
     """
-    connections_url = f"{config.public_url(env)}{CONNECTIONS_PATH}"
+    configured = config.public_url(env)
+    # A fresh store installation has set nothing, so this is the default in code, and a link
+    # built from it points at the administrator's own machine (IN-03). The public FAQ is what
+    # helps in that state; once an address is known, the connections page of this deployment
+    # is the better target, because it shows the setup state of this very installation.
+    doc_url = (
+        PUBLIC_DOCS_URL
+        if configured == config.DEFAULT_PUBLIC_URL
+        else f"{configured}{CONNECTIONS_PATH}"
+    )
     public_url_field, dcr_field, allowlist_field, allowed_field = CONFIG_KEYS
     return {
         "id": ADMIN_FORM_ID,
@@ -86,7 +102,7 @@ def form_scheme(env: Mapping[str, str] | None = None) -> dict[str, Any]:
         "section_id": ADMIN_SECTION_ID,
         "title": strings.ADMIN_SETTINGS_TITLE,
         "description": strings.ADMIN_SETTINGS_DESCRIPTION,
-        "doc_url": connections_url,
+        "doc_url": doc_url,
         "fields": [
             {
                 "id": public_url_field,
