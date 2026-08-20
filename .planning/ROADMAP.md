@@ -23,7 +23,7 @@ Audit: [milestones/v1.0-MILESTONE-AUDIT.md](milestones/v1.0-MILESTONE-AUDIT.md) 
 
 ### v1.1 Verwaltungs-Clients und Härtungs-Reste (Phasen 6-7)
 
-- [ ] **Phase 6: Härtung, Eigennachweise und Conference-Reife** - Alles, was ohne fremde Instanz beweisbar ist: CIMD mit SSRF-Grenze, Cursor und Loopback-Port gemessen, Ein-Klick-Story wörtlich wahr, Conference-Material steht
+- [x] **Phase 6: Härtung, Eigennachweise und Conference-Reife** - Alles, was ohne fremde Instanz beweisbar ist: CIMD mit SSRF-Grenze, Cursor und Loopback-Port gemessen, Ein-Klick-Story wörtlich wahr, Conference-Material steht (completed 2026-08-20)
 - [ ] **Phase 7: Verwaltungs-Clients live verprobt** - MUCGPT, F13 und BaerGPT verbinden sich gegen den Connector, jeder Nachweis mit Messdatei und Berechtigungs-Gegenprobe (extern getaktet)
 
 ## Phase Details
@@ -76,7 +76,7 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 06-10-PLAN.md , CONF-01 und CONF-02: Demo-Drehbuch und Lightning-Talk-Entwurf
+- [x] 06-10-PLAN.md , CONF-01 und CONF-02: Demo-Drehbuch und Lightning-Talk-Entwurf
 
 ### Phase 7: Verwaltungs-Clients live verprobt
 
@@ -103,7 +103,7 @@ Plans:
 | 3. OAuth 2.1 | v1.0 | 9/9 | Complete | 2026-08-16 |
 | 4. Per-User-Verwaltung und prepare_context | v1.0 | 4/4 | Complete | 2026-08-17 |
 | 5. Hardening und Store-Einreichung | v1.0 | 16/16 | Complete | 2026-08-20 |
-| 6. Härtung, Eigennachweise und Conference-Reife | v1.1 | 9/10 | In Progress|  |
+| 6. Härtung, Eigennachweise und Conference-Reife | v1.1 | 10/10 | Complete   | 2026-08-20 |
 | 7. Verwaltungs-Clients live verprobt | v1.1 | 0/TBD | Not started (extern getaktet) | - |
 
 ## Next

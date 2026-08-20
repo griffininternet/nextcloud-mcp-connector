@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Verwaltungs-Clients und Härtungs-Reste
-status: executing
-stopped_at: "Plan 06-09 fertig: AUTH-08 und CLIENT-05 sind live belegt. Claude Code 2.1.233 weist sich per Metadatendokument aus, verbindet sich gegen 0.1.2 auf 34.0.3.2 und ruft files_list mit Inhalt auf; die clients-Zeile traegt ein leeres Secret und die zwei portlosen Rueckadressen. Der Loopback-Port wechselte ueber drei Laeufe (45157, 47608, 41977), plus ein Override-Lauf mit 34567; der Entscheid ist die umgesetzte RFC-8252-7.3-Ausnahme mit benanntem Restrisiko Port-Squatting. Die drei Kontrollproben greifen live, und mit abgeschaltetem DCR verlaesst kein Paket die Instanz (0 Sockets auf Port 443 gegen 4 in der Positivkontrolle). Schalter, Client-Konfiguration und Store sind belegt im Vorzustand, 2155 Unit-Tests gruen, ruff sauber. Naechster Schritt: 06-10."
-last_updated: "2026-08-20T16:38:39.920Z"
+status: verifying
+stopped_at: "Plan 06-10 fertig: CONF-01 und CONF-02 abgehakt. docs/conference-demo.md ist einmal vollstaendig durchgefahren (82,2 s Maschinenzeit gegen 82 s Behauptung), Per-User-Schalter und Widerruf sind zweifach belegt (Client: Connected gegen Needs authentication, 200 gegen 403; Draht: Inhalt, 403 mit access_disabled-Rumpf, Inhalt, 401 mit Zeiger plus abgelehnter Auffrischversuch). Vier Fehler im Drehbuch gefunden und behoben, darunter die Probe der Schalter-Stationen. docs/conference-talk.md liegt als acht Folien mit Sprechzettel vor, 280 von 300 Sekunden, jede Behauptung an ihre Messdatei gebunden; nichts eingereicht, niemand kontaktiert. Instanz im Ausgangszustand, 2155 Unit-Tests gruen, ruff sauber. Phase 6 ist damit vollstaendig: naechster Schritt ist die Phasen-Verifikation."
+last_updated: "2026-08-20T17:18:27.706Z"
 last_activity: 2026-08-20
 progress:
   total_phases: 2
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 10
-  completed_plans: 9
-  percent: 0
+  completed_plans: 10
+  percent: 50
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 
 Phase: 6 (Härtung, Eigennachweise und Conference-Reife), EXECUTING
 Plan: 10 of 10
-Status: Ready to execute
+Status: Phase complete, ready for verification
 Milestone: v1.1 Verwaltungs-Clients und Härtungs-Reste (Phasen 6-7)
 Last activity: 2026-08-20
 
@@ -112,6 +112,7 @@ Last activity: 2026-08-20
 | Phase 06 P07 | 45 min | 3 tasks tasks | 9 files files |
 | Phase 06 P08 | 35 min | 2 tasks | 6 files |
 | Phase 06 P09 | 50 min | 3 tasks tasks | 6 files files |
+| Phase 06 P10 | 30 | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -372,6 +373,9 @@ Recent decisions affecting current work:
 - [Phase ?]: 06-09: Der CIMD-Live-Nachweis laeuft mit dem echten claude mcp login ueber eine Pseudo-Konsole (CreatePseudoConsole per ctypes): der Client verlangt ein Terminal, winpty lehnt ohne eigenes tty ab und ein Paket-Install ist ausgeschlossen (T-06-SC)
 - [Phase ?]: 06-09: Der Beleg fuer ein AUSBLEIBEN braucht eine Positivkontrolle mit demselben Messwerkzeug: 0 Sockets auf Port 443 bei abgeschaltetem DCR gegen 4 Socket-Zustaende im identischen Lauf mit Schalter an, /proc-Zaehlung im Container
 - [Phase ?]: 06-09: Drei der vier OAuth-Schalter sind Admin-Werte und brauchen nur occ app_api:app:config:set plus disable/enable; nur NC_MCP_OAUTH_CIMD steht nicht in CONFIG_KEYS und verlangt unregister (ohne --rm-data) plus register mit der Variable im json-info
+- [Phase ?]: 06-10: Der Assistent des Demo-Drehbuchs ist ein echter MCP-Client, weil die Stationen Per-User-Schalter und Widerruf einen Akteur brauchen, der seine Verbindung ueber einen menschlichen Klick hinweg haelt
+- [Phase ?]: 06-10: Die Probe der Schalter-Stationen ist claude mcp list und nicht der Werkzeugaufruf, weil dieser Client nach einem 403 einen eigenen Vermerk haelt; der Beleg mit Inhalt laeuft zusaetzlich am Draht mit Token in der Hand
+- [Phase ?]: 06-10: Die stehengebliebene Werkzeugzahl in scripts/acceptance_all_tools.py (15 gegen 16) bleibt unangetastet und steht in deferred-items.md
 
 ### Pending Todos
 
@@ -403,8 +407,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T16:38:39.903Z
-Stopped at: Plan 06-09 fertig: AUTH-08 und CLIENT-05 sind live belegt. Claude Code 2.1.233 weist sich per Metadatendokument aus, verbindet sich gegen 0.1.2 auf 34.0.3.2 und ruft files_list mit Inhalt auf; die clients-Zeile traegt ein leeres Secret und die zwei portlosen Rueckadressen. Der Loopback-Port wechselte ueber drei Laeufe (45157, 47608, 41977), plus ein Override-Lauf mit 34567; der Entscheid ist die umgesetzte RFC-8252-7.3-Ausnahme mit benanntem Restrisiko Port-Squatting. Die drei Kontrollproben greifen live, und mit abgeschaltetem DCR verlaesst kein Paket die Instanz (0 Sockets auf Port 443 gegen 4 in der Positivkontrolle). Schalter, Client-Konfiguration und Store sind belegt im Vorzustand, 2155 Unit-Tests gruen, ruff sauber. Naechster Schritt: 06-10.
+Last session: 2026-08-20T17:18:27.688Z
+Stopped at: Plan 06-10 fertig: CONF-01 und CONF-02 abgehakt. docs/conference-demo.md ist einmal vollstaendig durchgefahren (82,2 s Maschinenzeit gegen 82 s Behauptung), Per-User-Schalter und Widerruf sind zweifach belegt (Client: Connected gegen Needs authentication, 200 gegen 403; Draht: Inhalt, 403 mit access_disabled-Rumpf, Inhalt, 401 mit Zeiger plus abgelehnter Auffrischversuch). Vier Fehler im Drehbuch gefunden und behoben, darunter die Probe der Schalter-Stationen. docs/conference-talk.md liegt als acht Folien mit Sprechzettel vor, 280 von 300 Sekunden, jede Behauptung an ihre Messdatei gebunden; nichts eingereicht, niemand kontaktiert. Instanz im Ausgangszustand, 2155 Unit-Tests gruen, ruff sauber. Phase 6 ist damit vollstaendig: naechster Schritt ist die Phasen-Verifikation.
 Naechster Schritt: /gsd:execute-phase 6 (Plan 06-09)
 Resume file: None
 

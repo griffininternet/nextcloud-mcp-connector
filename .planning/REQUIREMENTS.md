@@ -25,8 +25,8 @@
 
 ### Conference (CONF)
 
-- [ ] **CONF-01**: Demo-Material für die Nextcloud Conference September 2026 steht: eine reproduzierbare Demo-Strecke (Verbindung, Tool-Aufrufe, Per-User-Verwaltung, Widerruf) gegen eine laufende Instanz, mit Drehbuch.
-- [ ] **CONF-02**: Ein Lightning-Talk-Entwurf (Folien plus Sprechzettel) liegt vor; ob eingereicht wird, entscheidet der Owner.
+- [x] **CONF-01**: Demo-Material für die Nextcloud Conference September 2026 steht: eine reproduzierbare Demo-Strecke (Verbindung, Tool-Aufrufe, Per-User-Verwaltung, Widerruf) gegen eine laufende Instanz, mit Drehbuch.
+- [x] **CONF-02**: Ein Lightning-Talk-Entwurf (Folien plus Sprechzettel) liegt vor; ob eingereicht wird, entscheidet der Owner.
 
 ## Future Requirements
 
@@ -61,8 +61,8 @@ Vorgemerkt, nicht in v1.1:
 | AUTH-08 | Phase 6 | Complete |
 | AUTH-09 | Phase 6 | Complete |
 | EXAPP-06 | Phase 6 | Complete |
-| CONF-01 | Phase 6 | Pending |
-| CONF-02 | Phase 6 | Pending |
+| CONF-01 | Phase 6 | Complete |
+| CONF-02 | Phase 6 | Complete |
 
 **Coverage:** 10/10 v1.1-Requirements auf genau eine Phase abgebildet, keine Waisen, keine Dubletten.
 
