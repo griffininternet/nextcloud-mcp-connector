@@ -21,6 +21,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and `http` on loopback only, a dropped address is never a redirect target, and a
   registration whose every address is inadmissible is still refused.
 
+### Security
+
+- The hidden value that protects the consent screen and the connections page against
+  forged form submissions now expires. It used to be the same value for an account for
+  the whole lifetime of the installation, and the only way to change it would have been
+  to replace the data key, which makes every stored connection unreadable. It is bound
+  to a one hour window now, and the previous window is accepted as well, so a page that
+  was open across a full hour still submits. A page older than that is refused the way a
+  forged one is: it shows itself again, and the action has to be repeated.
+
 ## [0.1.1] - 2026-08-19
 
 A maintenance release that makes the listed version installable with one click, and

@@ -48,6 +48,13 @@ as both threat models require.
 
 ## BL-04: Local clients (loopback, private-use scheme) as OAuth clients
 
+**STATUS 2026-08-20: DONE** (commit a80af0a, owner decision "Teilregistrierung"):
+`register_client` drops the inadmissible entries of `redirect_uris` and registers the
+allowed ones, so Cursor's three-way body is answered with 201 naming its two allowed
+addresses, while a body of inadmissible addresses alone stays a 400 `invalid_redirect_uri`
+and private-use schemes stay unregistrable (D-35 unchanged). Tests 6b26f46, docs 8da82b9.
+Still open below: the loopback port question, which this change does not touch.
+
 **Finding (03-RESEARCH.md):** Claude Code uses loopback redirects and CIMD and does
 not fit the exact redirect matching of v1. In v1 Claude Code stays on the app
 password path (AUTH-01, works today). Later: implement the loopback exception per
@@ -161,6 +168,13 @@ EU/self-hosted LLM (e.g. MUCGPT) defuses this.
 belong to phase 5 (EXAPP-04/05, SC 1).
 
 ## BL-08: Anti-forgery values with a time window, or track as accepted risk (review 04, ME-02)
+
+**STATUS 2026-08-20: DONE** (commit f65225c, owner decision "Zeitfenster 1h"):
+`form_token` takes `FORM_TOKEN_WINDOW = 3600` into its derivation and the new
+`form_token_valid` accepts the current and the previous window with `compare_digest`, so a
+form open across a full hour still submits and one older than two windows gets the existing
+quiet refusal; the `crypto.py` docstring now says what the value is and what it still is not
+(no nonce, no consumption, replayable inside its window). Tests 2ae2e3e.
 
 **Finding:** `form_token` is a pure function of data key, purpose and handle. The
 value has no validity period, no nonce, no session binding and no consumption count:
