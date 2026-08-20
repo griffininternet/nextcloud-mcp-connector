@@ -202,7 +202,7 @@ app is still listed, because nothing was disconnected.
 claude mcp list
 ```
 
-**Must be visible:** the line for the server flips from `✔ Connected` to
+**Must be visible:** the line for the server flips from `Connected`, with a check mark in front of it, to
 `! Needs authentication`. On the wire the MCP route answered `403` with the body
 
 ```
@@ -216,7 +216,7 @@ so the refusal names its reason and does not pretend to be an empty result.
 **Do, in the browser:** press `Turn access back on`, then run `claude mcp list` again.
 
 **Must be visible:** the page states `MCP access is on. Connected apps can use your
-Nextcloud.` and the client is back to `✔ Connected`, with a `200` on the wire. Nothing was
+Nextcloud.` and the client is back to `Connected` with its check mark, and to a `200` on the wire. Nothing was
 reconnected and no token was reissued: it is the same connection, the same row on the page
 and the same token.
 
