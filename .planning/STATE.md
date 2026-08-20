@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Verwaltungs-Clients und Härtungs-Reste
-status: planning
-last_updated: "2026-08-20T09:12:02.298Z"
+status: ready_to_plan
+last_updated: "2026-08-20T11:40:00.000Z"
 last_activity: 2026-08-20
 progress:
-  total_phases: 0
+  total_phases: 2
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-14)
 
 **Core value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Current focus:** Milestone complete
+**Current focus:** Phase 6, Härtung, Eigennachweise und Conference-Reife (CIMD mit SSRF-Grenze, Cursor- und Loopback-Messung, 34.0.3-UI-Smoke, Conference-Material)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 6 - Härtung, Eigennachweise und Conference-Reife
 Plan: —
-Status: Defining requirements
-Last activity: 2026-08-20 — Milestone v1.1 started
+Status: Ready to plan
+Milestone: v1.1 Verwaltungs-Clients und Härtungs-Reste (Phasen 6-7)
+Last activity: 2026-08-20, Roadmap v1.1 erstellt (Phase 6 eigenbeweisbar, Phase 7 extern getaktet)
 
 ## Performance Metrics
 
@@ -360,9 +361,11 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-08-20T05:02:38.257Z
-Stopped at: Plan 05-14 fertig: der Rundlauf vom Admin-Formular ins Discovery-Dokument ist auf einer frisch aufgebauten Topologie ohne NC_MCP_PUBLIC_URL gemessen (Linie A issuer zeichengleich, Linie B kein Restart-Loop, Linie C Rueckweg allein ueber das Formular). Die 401-Zeile in deferred-items.md ist geschlossen. Naechster Schritt: Phasenabschluss 05 erneut pruefen (Verifier).
+Stopped at: Roadmap v1.1 geschrieben (Phasen 6 und 7, 10/10 Requirements abgebildet). Vorher: Plan 05-14 fertig: der Rundlauf vom Admin-Formular ins Discovery-Dokument ist auf einer frisch aufgebauten Topologie ohne NC_MCP_PUBLIC_URL gemessen (Linie A issuer zeichengleich, Linie B kein Restart-Loop, Linie C Rueckweg allein ueber das Formular). Die 401-Zeile in deferred-items.md ist geschlossen. Naechster Schritt: Phasenabschluss 05 erneut pruefen (Verifier).
+Naechster Schritt: /gsd:plan-phase 6
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Phase 6 planen: `/gsd:plan-phase 6`
+- Phase 7 haengt an fremden Zugaengen (it@M-Antwort fuer MUCGPT, Owner-Kontakte fuer F13 und BaerGPT); sie blockiert keinen Liefergegenstand aus Phase 6

@@ -53,17 +53,19 @@ Vorgemerkt, nicht in v1.1:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CLIENT-01 | — | Pending |
-| CLIENT-02 | — | Pending |
-| CLIENT-03 | — | Pending |
-| CLIENT-04 | — | Pending |
-| CLIENT-05 | — | Pending |
-| AUTH-08 | — | Pending |
-| AUTH-09 | — | Pending |
-| EXAPP-06 | — | Pending |
-| CONF-01 | — | Pending |
-| CONF-02 | — | Pending |
+| CLIENT-01 | Phase 7 | Pending |
+| CLIENT-02 | Phase 7 | Pending |
+| CLIENT-03 | Phase 7 | Pending |
+| CLIENT-04 | Phase 6 | Pending |
+| CLIENT-05 | Phase 6 | Pending |
+| AUTH-08 | Phase 6 | Pending |
+| AUTH-09 | Phase 6 | Pending |
+| EXAPP-06 | Phase 6 | Pending |
+| CONF-01 | Phase 6 | Pending |
+| CONF-02 | Phase 6 | Pending |
+
+**Coverage:** 10/10 v1.1-Requirements auf genau eine Phase abgebildet, keine Waisen, keine Dubletten.
 
 ---
 *Requirements defined: 2026-08-20*
-*Last updated: 2026-08-20*
+*Last updated: 2026-08-20 (Roadmap v1.1: Phasen 6-7 zugeordnet)*
