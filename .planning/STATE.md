@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: "Plan 05-13 fertig: der 401 des Fensters vor der Aktivierung ist eine ehrliche INFO-Zeile mit Ausweg statt einer ERROR-Zeile (Zweig N aus 05-12); Overlay-Cache, vierte Registrierung am enabled=1-Hook und Selbstneustart bewusst nicht gebaut. Die 401-Zeile in deferred-items.md ist geschlossen. Naechster Schritt: Phasenabschluss 05 pruefen (Verifier)."
-last_updated: "2026-08-20T04:33:48.105Z"
+status: verifying
+stopped_at: "Plan 05-14 fertig: der Rundlauf vom Admin-Formular ins Discovery-Dokument ist auf einer frisch aufgebauten Topologie ohne NC_MCP_PUBLIC_URL gemessen (Linie A issuer zeichengleich, Linie B kein Restart-Loop, Linie C Rueckweg allein ueber das Formular). Die 401-Zeile in deferred-items.md ist geschlossen. Naechster Schritt: Phasenabschluss 05 erneut pruefen (Verifier)."
+last_updated: "2026-08-20T05:02:51.642Z"
 last_activity: 2026-08-20
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 50
-  completed_plans: 49
-  percent: 80
+  completed_plans: 50
+  percent: 100
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 
 Phase: 05 (hardening-und-store-einreichung) — EXECUTING
 Plan: 16 of 16
-Status: Plan 05-13 abgeschlossen (Gap Closure, nach 05-16 ausgefuehrt)
+Status: Phase complete — ready for verification
 Last activity: 2026-08-20
 
-Progress: [██████████] 98%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -102,6 +102,7 @@ Progress: [██████████] 98%
 | Phase 05 P15 | 30 min | 2 tasks tasks | 5 files files |
 | Phase 05-hardening-und-store-einreichung P16 | 20 | 2 tasks | 3 files |
 | Phase 05-hardening-und-store-einreichung P13 | 15 min | 2 tasks tasks | 4 files files |
+| Phase 05-hardening-und-store-einreichung P14 | 25 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -329,6 +330,7 @@ Recent decisions affecting current work:
 - [Phase 05-hardening-und-store-einreichung]: require_url_shape pinnt NC_EXAPP_PUBLIC_URL vor json_info (WR-03) und laeuft mit grep -Eqz, weil ein Wert mit Zeilenumbruch sonst auf seiner ersten Zeile bestehen wuerde
 - [Phase ?]: 05-16: option-b, EXAPP-05 wird mit der dokumentierten, gefuehrten MUCGPT-Luecke abgenommen (2026-08-20); gefuehrt ueber BL-12 und deferred-items.md, einloesbar per Protokoll in docs/client-setup.md
 - [Phase 05]: Zweig N aus 05-12 ausgefuehrt: der 401 des Fensters vor der Aktivierung ist eine INFO-Zeile mit Ausweg, jeder andere Fehlschlag desselben Lesevorgangs bleibt ERROR; Overlay-Cache, vierte Registrierung am enabled=1-Hook und Selbstneustart wurden bewusst nicht gebaut, weil M1, M2 und M3 sie als wirkungslos belegen
+- [Phase ?]: 05-14: Der Live-Nachweis fuer admin-gesetzte Werte braucht eine Registrierung ohne NC_MCP_PUBLIC_URL; AppAPI 34 kennt kein occ-Kommando dafuer, also unregister plus register ohne environment-variables-Block
 
 ### Pending Todos
 
@@ -359,6 +361,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T04:33:48.088Z
-Stopped at: Plan 05-13 fertig: der 401 des Fensters vor der Aktivierung ist eine ehrliche INFO-Zeile mit Ausweg statt einer ERROR-Zeile (Zweig N aus 05-12); Overlay-Cache, vierte Registrierung am enabled=1-Hook und Selbstneustart bewusst nicht gebaut. Die 401-Zeile in deferred-items.md ist geschlossen. Naechster Schritt: Phasenabschluss 05 pruefen (Verifier).
+Last session: 2026-08-20T05:02:38.257Z
+Stopped at: Plan 05-14 fertig: der Rundlauf vom Admin-Formular ins Discovery-Dokument ist auf einer frisch aufgebauten Topologie ohne NC_MCP_PUBLIC_URL gemessen (Linie A issuer zeichengleich, Linie B kein Restart-Loop, Linie C Rueckweg allein ueber das Formular). Die 401-Zeile in deferred-items.md ist geschlossen. Naechster Schritt: Phasenabschluss 05 erneut pruefen (Verifier).
 Resume file: None
