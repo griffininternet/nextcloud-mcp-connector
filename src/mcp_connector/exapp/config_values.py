@@ -25,6 +25,13 @@ the administrator has not set anything. Falling back to the deploy environment i
 correct answer, and stopping an installation over an unreachable OCS call would be the
 wrong one. Every failure below is therefore an empty result plus exactly one log line.
 
+**Why ``config.normalize_base_url`` stays as it is.** The public address of this app is held
+to a harder rule here than that function applies (https, with the loopback exception of RFC
+8414), and the rule deliberately lives here instead of in it: the same function validates
+``NC_MCP_URL``, the address of the Nextcloud this container talks to, and http on an internal
+host is a legitimate deployment there. One shared rule would either break those installations
+or leave this value unchecked (CR-01).
+
 The precedence rule this implements, together with plan 05-04 which applies it: admin value,
 then the ``NC_MCP_*`` variable of the deploy environment, then the default in code. That is
 why :func:`admin_overlay` returns the spelling of those variables and not a settings object:
@@ -50,12 +57,20 @@ __all__ = [
     "CONFIG_KEYS",
     "FALSE_VALUES",
     "KEY_TO_ENV",
+    "LOOPBACK_HOSTS",
     "SWITCH_OFF",
     "SWITCH_ON",
     "TRUE_VALUES",
     "admin_overlay",
     "read_values",
 ]
+
+#: The hosts an issuer may carry without https, and the only exception RFC 8414 allows.
+#: ``urlsplit(...).hostname`` answers in lower case and without the brackets of an IPv6
+#: literal, so ``::1`` stands here without them; an additional entry ``[::1]`` would be a
+#: line no comparison could ever reach. Membership of the full host name is the test, never
+#: a prefix or a substring: ``localhost.example.com`` is a public host name.
+LOOPBACK_HOSTS: frozenset[str] = frozenset({"127.0.0.1", "::1", "localhost"})
 
 #: The four keys, in the order the form declares its fields. They are the field ids of the
 #: admin form and the configuration keys at the same time (see the module docstring).
@@ -208,11 +223,19 @@ def _public_url(raw: str) -> str | None:
     This is the most dangerous of the four values and the reason the rule here is harder
     than :func:`config.normalize_base_url` alone: it becomes the ``issuer`` of the
     authorization server metadata and the ``resource`` of the protected resource metadata
-    (security domain V5, T-05-01). The extra conditions are the ones
-    ``registry.redirect_uri_allowed`` names for a return address, for the same reasons: a
-    fragment is where a token hides from a server log, credentials in a URL render as a
-    host in more than one client, and an address this library cannot take apart is not one
-    a browser and this server would agree about.
+    (security domain V5, T-05-01).
+
+    Three of the extra conditions are the ones ``registry.redirect_uri_allowed`` names for a
+    return address, for the same reasons: a fragment is where a token hides from a server
+    log, credentials in a URL render as a host in more than one client, and an address this
+    library cannot take apart is not one a browser and this server would agree about.
+
+    The fourth condition is this function's own, and it is the one CR-01 found missing: this
+    value becomes the ``issuer`` of the authorization server metadata, the SDK refuses an
+    issuer that is not https unless it points at loopback (RFC 8414), and until this rule
+    stood here that refusal only surfaced where it strikes, in ``provider.auth_routes``
+    during the next start. Refusing the value here is the prevention half of CR-01; the
+    rescue half lives in ``entry_exapp.main``.
     """
     candidate = raw.strip().rstrip("/")
     try:
@@ -232,6 +255,12 @@ def _public_url(raw: str) -> str | None:
         return _rejected("public_url", "has no host or carries credentials")
     if port is not None and not 0 < port <= 65535:
         return _rejected("public_url", "has a port outside the range 1 to 65535")
+    if parts.scheme != "https" and host not in LOOPBACK_HOSTS:
+        return _rejected(
+            "public_url",
+            "is http on a host that is not loopback; the issuer of the authorization "
+            "server has to be https (RFC 8414)",
+        )
     return candidate
 
 

@@ -363,7 +363,8 @@ def test_the_loopback_hosts_are_the_three_spellings_of_this_machine() -> None:
     So ``::1`` stands here without brackets, and a fourth entry ``[::1]`` would be a line no
     comparison could ever reach.
     """
-    assert config_values.LOOPBACK_HOSTS == frozenset({"localhost", "127.0.0.1", "::1"})
+    assert isinstance(config_values.LOOPBACK_HOSTS, frozenset)
+    assert set(config_values.LOOPBACK_HOSTS) == {"localhost", "127.0.0.1", "::1"}
 
 
 @pytest.mark.anyio
