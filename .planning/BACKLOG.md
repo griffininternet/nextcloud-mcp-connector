@@ -197,6 +197,24 @@ are a product decision. ME-01 (purpose binding) is implemented and independent o
 
 ## BL-09: Pull the excerpt truncation marker out of the text (review 04, ME-03, D-57)
 
+**STATUS 2026-08-20: DONE (interim)** (commit 9b3a46e, tests a0deb8e, owner decision
+"Interim-Fix"): the marker stays in the text and can no longer come from a document. The
+new `tools/marks.py` holds both sequences and one filter for them; `context._capped` runs
+the filter before it measures and marks, and all four readers of `chatgpt.fetch` run it
+before the file reader writes its own note back in. The response schema of
+`prepare_context` and the ChatGPT contract of `fetch` are **unchanged**, which is the whole
+point of the interim variant.
+
+**The schema variant was deliberately not chosen.** A separate field
+(`hit["excerpt_truncated"] = True`) is the clean answer and stays the one named above: it
+is the only form a document cannot produce at all. It changes the response structure of
+`prepare_context` and touches `chatgpt.fetch`, where the marker sits in the text on purpose
+so a model that reads only `text` sees the difference. That is a schema decision (tool
+budget, client compatibility) and it was not made here. The honest limit of what shipped is
+in the module docstring of `marks.py`: only the exact sequences are removed, a document can
+still write something that reads like a marker, and no filter over free text can prevent
+that.
+
 **Finding:** `context._capped` appends `EXCERPT_TRUNCATION` to the user text without a
 separator, and `chatgpt.TRUNCATION_NOTE` runs into the same text stream. A document
 containing the same character sequence can look to the model as if the server excerpt
@@ -237,6 +255,14 @@ exactly once and an abort after the poll forces a return. That is a design decis
 not worth guessing.
 
 ## BL-11: Three smaller findings from the phase 4 review (LO-02, LO-03, LO-06)
+
+**STATUS 2026-08-20: DONE** (all three, with their tests):
+
+| Id | Fix | Commits |
+|----|-----|---------|
+| LO-02 | The schema script runs on the first open of a store object plus whenever the file is gone, instead of on every open. The `access_disabled` docstring now carries what was measured on 2026-08-20 (300 warm runs each): 1.77 ms per call before, 1.56 ms after, and a bare connection with the three pragmas and this one read is 1.51 ms of it, so what is left is the connection and not the script. The file that disappears at runtime is the named case: the `exists` check lays the schema down again, the rows are gone with the file and the process keeps answering. | 6790ef2, tests 0d96f91 |
+| LO-03 | `purge_expired` removes a `user_access` row when the account has no authorization at all and the pause is older than the new `STALE_ACCESS_TTL` (90 days, the same season as `IDLE_CLIENT_TTL`). A revoked authorization still counts as a connection. The reused account id case and the price of the window (a pause without any connection is forgotten after 90 days) are named in `docs/faq.md`, administrator section. | 16d2fee, tests 2d992cc, docs 259721b |
+| LO-06 | `chatgpt.fetch` takes an optional `max_bytes` and hands it to the file reader; `context._excerpt` passes `EXCERPT_READ_BYTES` (twice the excerpt ceiling, so a multi byte cut still fills it). The default is the old ceiling, the registered tool keeps its two parameters, and the excerpt is byte for byte the one a full read produced. | fd2c53c, tests 9751889 |
 
 None of the three is a security defect, but each has a nameable price.
 
