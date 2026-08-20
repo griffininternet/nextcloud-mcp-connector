@@ -10,6 +10,51 @@ The address catalogue is the measurement of 06-RESEARCH.md, pattern 3, against t
 below asserts the measurement itself so a future Python that changes one of those flags
 fails here and not in production: 100.64.0.1 and 64:ff9b::7f00:1 are not ``is_private``,
 and 224.0.0.1 is ``is_global``.
+
+**The catalogue of AUTH-09, row by row, and which test carries it.** This is the mapping
+success criterion 2 of the phase asks for: every boundary has a negative that passes without
+the boundary, and nothing in the catalogue of 06-RESEARCH.md is covered by a claim only.
+
+* https only, path required, no fragment, no user info, no dot segments (T-06-03):
+  ``everything_else_is_refused_without_a_packet`` holds the rule and
+  ``a_refusal_on_the_form_costs_neither_a_resolution_nor_a_packet`` holds the consequence.
+* private, loopback, link local, v4 mapped, NAT64, CGNAT and multicast targets (T-06-01):
+  ``a_target_that_is_not_a_public_address_is_refused`` for the rule and
+  ``a_name_behind_a_forbidden_address_is_never_connected_to`` for the transport, one row each.
+* mixed resolution, never "take the good one" (T-06-02):
+  ``a_mixed_answer_discards_the_whole_name_and_never_picks_the_good_one`` and
+  ``a_mixed_answer_is_not_fetched_from_the_good_address_either``.
+* DNS rebinding, and exactly one resolution (T-06-07):
+  ``a_rebinding_resolver_changes_nothing_because_there_is_no_second_window`` and
+  ``one_fetch_resolves_the_name_exactly_once``.
+* no redirect following (T-06-08): ``a_redirect_is_a_refusal_and_its_target_is_never_asked``.
+* size limit, with the break before the full read (T-06-09, T-06-04):
+  ``a_document_of_exactly_the_limit_is_still_a_document``,
+  ``one_byte_over_the_limit_is_a_refusal``, and the chunk counter in
+  ``test_exapp_responses.py`` that proves where the read stops.
+* time limit (T-06-09): ``a_target_that_never_answers_is_a_refusal_and_not_an_exception``,
+  next to ``a_transport_error_is_the_same_refusal``.
+* error answers not cached (T-06-10):
+  ``an_error_answer_is_not_cached_and_the_second_call_really_goes_out``.
+* malformed documents not cached (T-06-10): ``a_malformed_document_is_not_cached_either``.
+* client_id mismatch and missing required properties (T-06-11):
+  ``a_document_that_breaks_one_rule_is_refused`` carries them row by row, and
+  ``a_fetched_document_that_names_another_identifier_is_refused`` carries it through the
+  whole chain.
+* shared secret authentication (T-06-12): three rows of the same catalogue, against
+  ``an_authentication_without_a_shared_secret_is_admissible``.
+* no shared connection pool, no cookies, no second user agent (T-06-14):
+  ``the_request_goes_to_the_checked_address_with_the_original_name_in_tls``, plus the fact
+  that the client is built inside the fetch and reaches nothing else.
+* refusals log their kind and never a value (T-06-05):
+  ``a_refusal_records_its_kind_and_no_value_of_the_request`` and the AST gate that reads
+  every ``logger`` call of the module.
+* the limits are constants and not switches (T-06-06):
+  ``the_two_limits_are_module_constants_without_a_switch``.
+
+Three rows of the catalogue are deliberately not here: the CIMD switch, the DCR switch and
+the allow list are policy and live where the policy lives, so their negatives are in
+``test_oauth_registry.py`` and ``test_oauth_provider.py`` rather than around the transport.
 """
 
 import ast
@@ -498,6 +543,169 @@ async def test_a_fetched_document_that_names_another_identifier_is_refused() -> 
     )
 
     assert await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP)) is None
+
+
+# --- rebinding, the cache prohibition, and every target class ---------------------------
+
+
+@pytest.mark.anyio
+async def test_a_rebinding_resolver_changes_nothing_because_there_is_no_second_window() -> None:
+    """T-06-07, the test the whole pinning exists for.
+
+    The resolver answers a public address the first time and a loopback address every time
+    after, which is a DNS rebinding attempt written out. Two things have to hold at once for
+    the defence to be real, and one without the other proves nothing: the outcome is the same
+    as without the attempt, because the connection went to the address that was checked, and
+    the resolver was asked exactly once, because there is no second resolution to poison.
+
+    Without the pinning this test still passes on the first assertion and fails on the third:
+    ``httpx`` would resolve the name itself and the request would arrive at 127.0.0.1.
+    """
+    asked: list[str] = []
+
+    async def rebinding(host: str, port: int) -> list[str]:
+        asked.append(host)
+        return [PUBLIC_IP] if len(asked) == 1 else ["127.0.0.1"]
+
+    with respx.mock(assert_all_called=False) as mock:
+        checked = mock.get(PINNED_URL).mock(return_value=httpx.Response(200, json=document()))
+        rebound = mock.get("https://127.0.0.1/c.json")
+
+        result = await cimd.fetch_document(DOCUMENT_URL, resolver=rebinding)
+
+    assert result is not None
+    assert asked == [NAME], "a second resolution is a second window, and there must not be one"
+    assert checked.calls.last.request.url.host == PUBLIC_IP
+    assert rebound.called is False, "the rebound address was contacted, which is the whole hole"
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_an_error_answer_is_not_cached_and_the_second_call_really_goes_out() -> None:
+    """The draft's own MUST NOT, and the reason there is no negative cache (T-06-10).
+
+    "The authorization server MUST NOT cache error responses." So a client whose metadata
+    host had one bad minute is not locked out for the length of a cache entry, and the proof
+    is that the route counts two calls rather than one.
+    """
+    route = respx.get(PINNED_URL).mock(
+        side_effect=[httpx.Response(500), httpx.Response(200, json=document())]
+    )
+
+    first = await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
+    second = await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
+
+    assert first is None
+    assert second is not None
+    assert route.call_count == 2
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_malformed_document_is_not_cached_either() -> None:
+    """The same MUST NOT, second sentence: "documents which are invalid or malformed"."""
+    route = respx.get(PINNED_URL).mock(
+        side_effect=[
+            httpx.Response(200, content=b"{ this is not a document"),
+            httpx.Response(200, json=document()),
+        ]
+    )
+
+    first = await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
+    second = await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
+
+    assert first is None
+    assert second is not None
+    assert route.call_count == 2
+
+
+@pytest.mark.parametrize(
+    "identifier",
+    [
+        "http://example.com/c.json",
+        "https://example.com/",
+        "https://example.com",
+        "https://example.com/c.json#fragment",
+        "https://u:p@example.com/c.json",
+        "https://example.com/a/../../etc/c.json",
+        "https://example.com/./c.json",
+        "",
+    ],
+)
+@pytest.mark.anyio
+async def test_a_refusal_on_the_form_costs_neither_a_resolution_nor_a_packet(
+    identifier: str,
+) -> None:
+    """T-06-03: the cheapest check is first, and cheap here means no packet at all."""
+    asked: list[tuple[str, int]] = []
+
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.get(host__regex=r".*")
+
+        result = await cimd.fetch_document(identifier, resolver=answering(PUBLIC_IP, calls=asked))
+
+    assert result is None
+    assert route.called is False
+    assert asked == []
+
+
+@pytest.mark.parametrize(
+    "literal",
+    [
+        "10.0.0.5",
+        "127.0.0.1",
+        "::1",
+        "169.254.169.254",
+        "::ffff:127.0.0.1",
+        "64:ff9b::7f00:1",
+        "100.64.0.1",
+        "224.0.0.1",
+    ],
+)
+@pytest.mark.anyio
+async def test_a_name_behind_a_forbidden_address_is_never_connected_to(literal: str) -> None:
+    """Every row of the target catalogue, checked at the transport and not only in the rule.
+
+    The registered route is the exact URL a pinned fetch would have used, so the assertion
+    is not "nothing happened" but "this target was not contacted".
+    """
+    pinned = f"[{literal}]" if ":" in literal else literal
+
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.get(f"https://{pinned}/c.json")
+
+        result = await cimd.fetch_document(DOCUMENT_URL, resolver=answering(literal))
+
+    assert result is None
+    assert route.called is False
+
+
+@pytest.mark.anyio
+async def test_a_mixed_answer_is_not_fetched_from_the_good_address_either() -> None:
+    """T-06-02 at the transport: "take the public one" is the rule made switchable by DNS."""
+    with respx.mock(assert_all_called=False) as mock:
+        public = mock.get("https://8.8.8.8/c.json")
+        private = mock.get("https://127.0.0.1/c.json")
+
+        result = await cimd.fetch_document(DOCUMENT_URL, resolver=answering("8.8.8.8", "127.0.0.1"))
+
+    assert result is None
+    assert public.called is False
+    assert private.called is False
+
+
+@pytest.mark.anyio
+async def test_a_name_that_does_not_resolve_is_a_refusal_without_a_packet() -> None:
+    """The no_data path: nothing answered, so nothing is fetched and nothing raises."""
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.get(host__regex=r".*")
+
+        empty = await cimd.fetch_document(DOCUMENT_URL, resolver=answering())
+        broken = await cimd.fetch_document(DOCUMENT_URL, resolver=failing(OSError("no such name")))
+
+    assert empty is None
+    assert broken is None
+    assert route.called is False
 
 
 # --- the boundaries of the module itself ------------------------------------------------
