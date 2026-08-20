@@ -475,6 +475,13 @@ result. It is recorded in the plan summary of 05-08 and in the project state, no
 
 ## Nextcloud 34 has no interface for installing or removing an ExApp
 
+**Fixed upstream in Nextcloud 34.0.3** (verified 2026-08-20: the finding below is
+[nextcloud/app_api#971](https://github.com/nextcloud/app_api/issues/971) and
+[nextcloud/server#61709](https://github.com/nextcloud/server/issues/61709), resolved by
+[server PR 62276](https://github.com/nextcloud/server/pull/62276), backported to 34.0.3 and
+confirmed by the original reporter). On 34.0.2 and earlier everything below still applies,
+and occ remains the reliable path on every version.
+
 Measured on **2026-08-19** against Nextcloud 34.0.2 with AppAPI 34.0.0, while looking for the
 Install button of this app:
 
