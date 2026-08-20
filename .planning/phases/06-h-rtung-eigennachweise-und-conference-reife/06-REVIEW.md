@@ -31,6 +31,12 @@ findings:
   info: 3
   total: 6
 status: issues_found
+fixes:
+  fixed_at: 2026-08-20
+  scope: critical_warning
+  WR-01: a47bb57
+  WR-02: bd75cd8
+  WR-03: a47bb57
 ---
 
 # Phase 6: Code Review Report
@@ -63,11 +69,24 @@ CIMD-Fetch in den Request-Lebenszyklus verdrahtet ist: der Refetch laeuft auf de
 Token-Verifikations-Hot-Path (WR-01), und die Allowlist verhindert den ausgehenden Fetch
 nicht (WR-02).
 
+**Fix-Status (2026-08-20):** Alle drei Warnings sind behoben. WR-01 und WR-03 teilen den
+Fix `may_fetch=False` auf allen Nicht-`/authorize`-Pfaden (Commit a47bb57), WR-02 zieht
+die Allowlist-Verweigerung vor jedes Paket (Commit bd75cd8). Die Infos IN-01 bis IN-03
+bleiben laut Fix-Scope (Critical + Warning) unveraendert als Advisory dokumentiert.
+
 ## Narrative Findings (AI reviewer)
 
 ## Warnings
 
 ### WR-01: CIMD-Refetch laeuft auf dem Token-Verifikations-Hot-Path (ausgehender HTTP-Request plus Store-Write pro Tool-Call-Fenster)
+
+**Status:** FIXED (Commit a47bb57). `get_client` traegt ein Keyword `may_fetch` (Default
+True fuer die `/authorize`-Kette); Verifier, `HashedClientAuthenticator` und beide
+Exchange-Methoden rufen mit `may_fetch=False`. Eine vorhandene Zeile beantwortet den
+Hot-Path auch mit abgelaufener Frische (kein Netz, kein Store-Write), eine fehlende Zeile
+ist eine schlichte Verweigerung; die Policy-Fragen (allowed, Allowlist, Schalter,
+Registrierungs-TTL) bleiben unveraendert im gemeinsamen Rest. Negativtests: Block-Zeile,
+unbekannter Client, DCR-off, jeweils ohne Paket.
 
 **File:** `src/mcp_connector/oauth/verifier.py:215`, `src/mcp_connector/oauth/provider.py:340-347`, `src/mcp_connector/oauth/provider.py:436-476`
 
@@ -128,6 +147,14 @@ Sitzung ueberlebt einen kurzen Ausfall des Dokument-Hosts.
 
 ### WR-02: Allowlist-only verhindert den ausgehenden CIMD-Fetch nicht (Refetch vor der Allowlist-Verweigerung)
 
+**Status:** FIXED (Commit bd75cd8). `_resolve_cimd` verweigert im Allowlist-Modus einen
+per Id ungelisteten Bezeichner vor jeder Aufloesung und vor jedem Paket und schreibt keine
+Zeile. Die Restluecke aus dem Review-Text (per-redirect_uri-Listung kann den Fetch nicht
+freischalten, weil die Adressen erst im ungelesenen Dokument stehen) ist absichtlich
+fail-closed und am Gate wie im Docstring dokumentiert: ein CIMD-Client wird im
+Allowlist-Modus ueber seine Dokument-URL gelistet. Tests: ungelistet ohne Zeile,
+ungelistet mit abgelaufener Zeile (beide ohne Paket), gelistet mit Fetch.
+
 **File:** `src/mcp_connector/oauth/provider.py:461-476`, `src/mcp_connector/oauth/provider.py:355-359`
 
 **Issue:**
@@ -168,6 +195,12 @@ gaengigen Fall (ID-Listen) und dokumentiert die verbleibende Luecke ehrlich.
 
 ### WR-03: Refetch auf dem Token-Pfad widerspricht der dokumentierten "kein Nextcloud/Netz"-Zusage der Exchange-Methoden
 
+**Status:** FIXED (Commit a47bb57, derselbe Fix wie WR-01). `exchange_authorization_code`
+und `exchange_refresh_token` rufen `get_client(..., may_fetch=False)`; die Docstrings
+beider Methoden nennen die Zusage jetzt auch gegen den Dokument-Host. Tests: Rotation an
+der Frische-Grenze ohne Paket, kompletter `/token`-Lauf eines Dokument-Clients aus der
+gespeicherten Zeile, unbekannter Dokument-Client am Token-Endpoint = 401 ohne Paket.
+
 **File:** `src/mcp_connector/oauth/provider.py:730-731`, `src/mcp_connector/oauth/provider.py:842-843`
 
 **Issue:**
@@ -188,6 +221,9 @@ Policy-Pruefung lokal bleibt und keine fremde Netzabhaengigkeit in den Token-End
 gelangt.
 
 ## Info
+
+Die drei Infos bleiben unbehoben und gelten als Advisory: der Fix-Scope dieses Laufs ist
+Critical + Warning (Owner-Vorgabe vom 2026-08-20).
 
 ### IN-01: `is_cimd_client_id` verwirft prozentkodierte Dot-Segmente nicht
 
