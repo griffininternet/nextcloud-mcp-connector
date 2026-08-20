@@ -104,7 +104,10 @@ PUBLIC_CLIENT_AUTH_METHOD = "none"
 
 
 def metadata_routes(
-    env: Mapping[str, str] | None = None, *, dcr_enabled: bool = True
+    env: Mapping[str, str] | None = None,
+    *,
+    dcr_enabled: bool = True,
+    cimd_enabled: bool = True,
 ) -> list[Route]:
     """Build the three discovery routes against one environment.
 
@@ -117,6 +120,15 @@ def metadata_routes(
     When dynamic client registration is off, the document stops advertising an endpoint that
     would refuse every call. The default keeps this plan free of a policy it does not have
     yet, and matches the delivery state of D-35 (registration on).
+
+    ``cimd_enabled`` is the second switch of the same policy, for client id metadata
+    documents (AUTH-08), and it is handed in for the same reason rather than written into the
+    document as a constant: a server that announces the capability and then answers
+    ``invalid_client`` sends a client into a dead end. The fallback to dynamic registration
+    that the specification describes only applies when the capability is ABSENT from this
+    document, not when it is announced and broken (specification 2026-07-28, client
+    registration order). So the announcement has to be a function of the switch, and the
+    switched off state has to be an absent field rather than a ``false``.
     """
 
     async def protected_resource(request: Request) -> Response:
@@ -125,7 +137,9 @@ def metadata_routes(
 
     async def authorization_server(request: Request) -> Response:
         """The RFC 8414 document, served at both reachable paths, byte for byte the same."""
-        return json_response(_authorization_server_document(env, dcr_enabled=dcr_enabled))
+        return json_response(
+            _authorization_server_document(env, dcr_enabled=dcr_enabled, cimd_enabled=cimd_enabled)
+        )
 
     return [
         Route(PRM_SUFFIX, protected_resource, methods=["GET"]),
@@ -159,9 +173,9 @@ def _protected_resource_document(env: Mapping[str, str] | None) -> dict[str, Any
 
 
 def _authorization_server_document(
-    env: Mapping[str, str] | None, *, dcr_enabled: bool
+    env: Mapping[str, str] | None, *, dcr_enabled: bool, cimd_enabled: bool
 ) -> dict[str, Any]:
-    """Build the RFC 8414 document from the SDK, then add the three fields it does not set.
+    """Build the RFC 8414 document from the SDK, then add the four fields it does not set.
 
     The four endpoints it names are built in plan 03-05. A discovery document describes the
     addresses of an authorization server, not their implementation state, and a client reads
@@ -200,6 +214,13 @@ def _authorization_server_document(
     # RFC 9207: the authorization response carries the issuer, which is what lets a client
     # notice a mix-up attack between two authorization servers it talks to.
     metadata.authorization_response_iss_parameter_supported = True
+    # The capability of AUTH-08, and the switch decides it. ``or None`` is not a trick, it is
+    # the established behaviour of this function: ``exclude_none`` below drops a ``None``
+    # field out of the document, so a switched off connector says nothing about client id
+    # metadata documents, which is the shape that lets a client fall back to dynamic
+    # registration. A ``false`` would be an announcement of its own, and an announced but
+    # refused capability is a dead end the specification provides no way out of.
+    metadata.client_id_metadata_document_supported = cimd_enabled or None
 
     document = metadata.model_dump(mode="json", exclude_none=True)
     # RFC 8414 compares the issuer byte for byte against the value the discovery URL was

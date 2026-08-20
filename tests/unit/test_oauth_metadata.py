@@ -18,6 +18,7 @@ configuration unnoticed).
 """
 
 import base64
+import inspect
 import json
 
 import pytest
@@ -72,12 +73,24 @@ AS_FIELDS = {
     "token_endpoint_auth_methods_supported",
     "code_challenge_methods_supported",
     "authorization_response_iss_parameter_supported",
+    "client_id_metadata_document_supported",
 }
 
+#: The field of AUTH-08. Named once, because half of what the checks below say is about the
+#: difference between "absent" and "false".
+CIMD_FIELD = "client_id_metadata_document_supported"
 
-def client(env: dict[str, str] | None = None, *, dcr_enabled: bool = True) -> TestClient:
+
+def client(
+    env: dict[str, str] | None = None,
+    *,
+    dcr_enabled: bool = True,
+    cimd_enabled: bool = True,
+) -> TestClient:
     """A fresh app per call: one Starlette instance is one lifespan."""
-    routes = metadata.metadata_routes(ENV if env is None else env, dcr_enabled=dcr_enabled)
+    routes = metadata.metadata_routes(
+        ENV if env is None else env, dcr_enabled=dcr_enabled, cimd_enabled=cimd_enabled
+    )
     return TestClient(Starlette(routes=routes))
 
 
@@ -206,15 +219,16 @@ def test_the_authorization_server_document_names_the_four_endpoints() -> None:
     assert body["revocation_endpoint"] == f"{PUBLIC_URL}/revoke"
 
 
-def test_the_authorization_server_document_carries_the_three_own_additions() -> None:
-    """The three fields the SDK does not set: the public client method, the scope list
-    and the RFC 9207 issuer parameter."""
+def test_the_authorization_server_document_carries_the_four_own_additions() -> None:
+    """The four fields the SDK does not set: the public client method, the scope list,
+    the RFC 9207 issuer parameter and the capability of AUTH-08."""
     with client() as http:
         body = http.get(OPENID_PATH).json()
     assert "none" in body["token_endpoint_auth_methods_supported"]
     assert body["scopes_supported"] == ["nextcloud", "offline_access"]
     assert body["authorization_response_iss_parameter_supported"] is True
     assert body["code_challenge_methods_supported"] == ["S256"]
+    assert body[CIMD_FIELD] is True
 
 
 def test_a_public_client_is_told_it_may_revoke() -> None:
@@ -259,6 +273,85 @@ def test_a_disabled_registration_removes_the_endpoint_from_the_document() -> Non
         body = http.get(OPENID_PATH).json()
     assert "registration_endpoint" not in body
     assert body["token_endpoint"] == f"{PUBLIC_URL}/token"
+
+
+def test_a_disabled_cimd_switch_omits_the_capability_instead_of_denying_it() -> None:
+    """The whole point of ``or None`` (pitfall 5 of 06-RESEARCH.md).
+
+    A client reads this document before it ever calls an endpoint, and the order it picks a
+    registration way in is: pre registration, then the metadata document way if this field
+    says so, then dynamic registration if there is an endpoint. The fallback to the third
+    way only exists while this field is ABSENT. A ``false`` would be an announcement of its
+    own, and a ``true`` over a switched off path would be a dead end: the client would ask
+    with a URL client id, be refused, and have nowhere left to go.
+    """
+    with client(cimd_enabled=False) as http:
+        response = http.get(OPENID_PATH)
+    body = response.json()
+    assert CIMD_FIELD not in body
+    assert CIMD_FIELD not in response.text
+    assert "false" not in response.text
+
+
+def test_the_capability_is_announced_when_the_switch_is_on() -> None:
+    """The other half of the same rule, spelled as the exact JSON value a client reads."""
+    with client(cimd_enabled=True) as http:
+        body = http.get(OPENID_PATH).json()
+    assert body[CIMD_FIELD] is True
+
+
+def test_the_delivery_state_of_the_factory_announces_the_capability() -> None:
+    """The default of the parameter, read off the signature.
+
+    The default matters on its own: every caller that does not pass the switch, including
+    the tests of neighbouring modules, describes an installation with the shipped state of
+    D-35 (registration on), and the capability of AUTH-08 rides along with it.
+    """
+    default = inspect.signature(metadata.metadata_routes).parameters["cimd_enabled"].default
+    assert default is True
+
+
+@pytest.mark.parametrize("cimd_enabled", [True, False])
+def test_the_public_client_auth_method_survives_both_switch_positions(
+    cimd_enabled: bool,
+) -> None:
+    """Claude picks the metadata document way only when BOTH fields are right: the
+    capability above and a token endpoint that admits a client without a secret. This plan
+    changes neither of the two lists, and this check is what says so out loud.
+    """
+    with client(cimd_enabled=cimd_enabled) as http:
+        body = http.get(OPENID_PATH).json()
+    assert "none" in body["token_endpoint_auth_methods_supported"]
+
+
+@pytest.mark.parametrize("cimd_enabled", [True, False])
+def test_the_issuer_survives_both_switch_positions(cimd_enabled: bool) -> None:
+    """RFC 8414 compares the issuer character for character against the value the discovery
+    URL was built from, so no new field may cost the configured spelling its trailing
+    slash-less form."""
+    with client(cimd_enabled=cimd_enabled) as http:
+        body = http.get(OPENID_PATH).json()
+    assert body["issuer"] == PUBLIC_URL
+
+
+@pytest.mark.parametrize(
+    ("dcr_enabled", "cimd_enabled", "advertised"),
+    [(True, True, True), (True, False, True), (False, True, False), (False, False, False)],
+)
+def test_the_registration_endpoint_hangs_on_the_dcr_switch_alone(
+    dcr_enabled: bool, cimd_enabled: bool, advertised: bool
+) -> None:
+    """Two switches, two independent fields in one document.
+
+    The coupling of 06-03 runs in the policy, not here: ``client_policy`` never hands in
+    ``cimd_enabled=True`` with ``dcr_enabled=False``. The third row is that impossible pair
+    written down anyway, because a document builder that silently dropped the registration
+    endpoint over the other switch would hide a policy mistake instead of showing it.
+    """
+    with client(dcr_enabled=dcr_enabled, cimd_enabled=cimd_enabled) as http:
+        body = http.get(OPENID_PATH).json()
+    assert ("registration_endpoint" in body) is advertised
+    assert (CIMD_FIELD in body) is cimd_enabled
 
 
 def test_the_authorization_server_document_ignores_a_stray_authorization_header() -> None:
