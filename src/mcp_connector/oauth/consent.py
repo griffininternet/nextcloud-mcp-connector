@@ -301,6 +301,25 @@ async def _screen(
 
     signed_in = await store.load_authorization(flow_id)
     if signed_in is not None:
+        # The switch again, between point 1 (after the poll, below) and point 3 (the
+        # decision), and IN-06 of 05-REVIEW.md is why it is read here at all. This branch
+        # runs when an authorization row already exists, which is every reload of the
+        # screen: after the account was paused in another tab it still showed approve and
+        # deny. No grant was possible, point 3 answers the click with the paused page, but a
+        # surface that offers a button it is going to refuse says the opposite of what the
+        # switch promises. This is a display check and not a fourth enforcement point:
+        # nothing is granted here, and nothing would be granted without it.
+        #
+        # Nothing is withdrawn on this path, unlike after the poll and unlike at the
+        # decision: this is a GET, a reload is not a decision, and a request that changes
+        # state because a browser repeated it is its own defect. The row and the app
+        # password behind it end where they always did, at the decision or with the flow.
+        disabled = await _access_disabled(store, signed_in.nc_user)
+        if disabled is None:
+            return _generic("the access switch could not be read", env)
+        if disabled:
+            logger.info("a consent screen was refused because the account has paused access")
+            return _page(errors.error_page(errors.PAUSED, env=env))
         return _decision(client, signed_in.nc_user, row, store, provider, env)
 
     if params.get(STEP_PARAM) != STEP_WAIT:
