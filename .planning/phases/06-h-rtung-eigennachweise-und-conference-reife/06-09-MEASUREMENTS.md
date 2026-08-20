@@ -460,3 +460,218 @@ storage or provider not round-tripping the value)`. Sie kommt aus der Ablage des
 seine **anderen** Server (die Meldung erschien auch vor dem ersten Kontakt mit unserer
 Instanz) und ist keine Aussage über unsere Antworten. Unser AS-Dokument trägt `issuer`, und
 die Rückseite trägt `iss` (3.6).
+
+---
+
+## 7. Wie ein Schalter für diese Messung umgelegt wurde
+
+Zwei Wege, und die Wahl hängt am Schalter und nicht an der Bequemlichkeit:
+
+| Schalter | Weg | Warum dieser Weg |
+|----------|-----|------------------|
+| `NC_MCP_OAUTH_DCR` | `occ app_api:app:config:set mcp_connector oauth_dcr --value 0`, danach `app_api:app:disable` plus `app_api:app:enable` | Der Schalter ist einer der vier Admin-Werte (`exapp/config_values.py`, `CONFIG_KEYS`). Ein Admin-Wert wird beim Prozessstart einmal gelesen, und `disable` plus `enable` stoppt und startet diesen Container (in 05-12 gemessen) |
+| `NC_MCP_OAUTH_ALLOWLIST_ONLY`, `NC_MCP_OAUTH_ALLOWED_CLIENTS` | derselbe Weg | dieselben zwei Gründe |
+| `NC_MCP_OAUTH_CIMD` | `occ app_api:app:unregister mcp_connector` **ohne** `--rm-data`, danach `app_api:app:register` mit einem json-info, dessen `external-app.environment-variables` die Variable trägt | Dieser Schalter ist **kein** Admin-Wert (er steht nicht in `CONFIG_KEYS`), und AppAPI 34 kennt kein occ-Kommando zum Ändern einer Umgebungsvariable. Also der Weg aus 06-07 |
+
+Vor dem Abmelden wurden die zwei Konfigurationswerte (`oauth_data_key`, `public_url`)
+außerhalb des Repositories gesichert. Sie haben beide Ab- und Anmeldungen überlebt, was den
+Befund aus 06-07 bestätigt: `unregisterExApp` lässt `oc_appconfig_ex` unberührt, solange
+`--rm-data` nicht gesetzt ist.
+
+**Wie ein ausgehender Request gezählt wurde.** Nicht abgeschaltet, sondern gezählt: ein
+Skript im Container liest `/proc/net/tcp` und `/proc/net/tcp6` in einer Schleife (etwa 90
+Abfragen pro Sekunde, 12 Sekunden lang) und sammelt jeden Socket mit Gegenport 443. Der
+Zähler ist mit einer **Positivkontrolle** geprüft, bevor er als Beleg für ein Ausbleiben
+benutzt wurde: derselbe `/authorize`-Request, dieselbe Zähldauer, alle Schalter auf
+Werkseinstellung.
+
+Positivkontrolle, 16:16:23Z, `/authorize` antwortete `302` in **0,935 s**:
+
+```
+polls=1102 over 12.0s
+sockets to port 443 seen: 4
+  remote=0A684FA0:01BB state=01 seen_in_52_polls     (ESTABLISHED)
+  remote=0A684FA0:01BB state=02 seen_in_5_polls      (SYN_SENT)
+  remote=0A684FA0:01BB state=05 seen_in_4_polls      (FIN_WAIT2)
+  remote=0A684FA0:01BB state=06 seen_in_726_polls    (TIME_WAIT)
+```
+
+`0A684FA0` ist `160.79.104.10`, also eine der zwei Adressen, die `claude.ai` in diesem
+Container auflöst (3.5). Der Zähler sieht den Abruf also, wenn er stattfindet.
+
+---
+
+## 8. Kontrollprobe 1: DCR aus, und CIMD ist nicht der Weg darum herum (16:17:30Z)
+
+Gesetzt: `oauth_dcr` auf `0`, danach `disable` plus `enable`. `occ app_api:app:list` meldet
+danach weiter `mcp_connector (MCP Connector): 0.1.2 [enabled]`.
+
+**Erstens: das AS-Dokument trägt das Feld nicht mehr.** Beide Wege verschwinden aus der
+Werbung, und `none` bleibt stehen, weil es nichts mit Registrierung zu tun hat:
+
+```
+client_id_metadata_document_supported present: False
+registration_endpoint present: False
+token_endpoint_auth_methods_supported: ['client_secret_post', 'client_secret_basic', 'none']
+```
+
+**Zweitens: die Absage.**
+
+| Anfrage | Antwort | Sichtbarer Text |
+|---------|---------|-----------------|
+| `GET /authorize` mit der URL-`client_id` | **400** in **0,126 s** | `Automatic registration is off` |
+| `POST /register` | **404** | die Route ist nicht angehängt |
+
+```
+2026-08-20T16:17:30.735023303Z INFO: - "GET /authorize?...client_id=https%3A%2F%2Fclaude.ai%2F... HTTP/1.1" 400 Bad Request
+2026-08-20T16:17:30.776845239Z INFO: - "POST /register HTTP/1.1" 404 Not Found
+```
+
+**Drittens: kein Paket hat die Instanz verlassen.** Derselbe Zähler, dieselbe Dauer, dieselbe
+Anfrage wie in der Positivkontrolle eine Minute davor:
+
+```
+polls=1077 over 12.0s
+sockets to port 443 seen: 0
+```
+
+Die 0,8 Sekunden Unterschied in der Antwortzeit sagen dasselbe noch einmal: 0,935 s mit
+Abruf, 0,126 s ohne. Das ist die Locked Decision dieser Phase und der Kern von Success
+Criterion 1: `cimd_enabled` wird in `registry.client_policy` mit `and` aus dem
+Registrierungsschalter abgeleitet, und `provider._resolve_cimd` fragt ihn, **bevor** die Form
+der Kennung geprüft oder ein Socket geöffnet wird.
+
+---
+
+## 9. Kontrollprobe 2: CIMD aus, DCR an (16:21:56Z)
+
+Gesetzt über Abmelden und Neuanmelden mit `NC_MCP_OAUTH_CIMD=0` im json-info. Im Container:
+
+```
+NC_MCP_PUBLIC_URL=http://127.0.0.1:8081/exapps/mcp_connector
+NC_MCP_OAUTH_CIMD=0
+```
+
+**Der Schalter nimmt DCR nicht mit**, und das ist die Hälfte, die hier zählt:
+
+| Anfrage | Antwort | Beleg |
+|---------|---------|-------|
+| `GET /authorize` mit der URL-`client_id` | **400** in 0,115 s | Seite `This link has expired` |
+| `POST /register` | **201** | neuer Client `ff9244cb-…` |
+| `GET /authorize` mit diesem frischen DCR-Client | **302** auf `/authorize/consent` | die Registrierung ist auch benutzbar, nicht nur erlaubt |
+| AS-Dokument | `client_id_metadata_document_supported` **fehlt**, `registration_endpoint` **steht** | nur der eine Weg ist zu |
+
+Und wieder kein ausgehender Request:
+
+```
+polls=1101 over 12.0s
+sockets to port 443 seen: 0
+```
+
+**Ein Fund, der nicht vorhergesagt war** (und der zu 6.x gehört, aber hier entstand): die
+Absage bei abgeschaltetem CIMD zeigt die Seite `This link has expired`, nicht die Seite
+`Automatic registration is off` aus Kontrollprobe 1. Der Grund liegt in der Reihenfolge:
+`_resolve_cimd` gibt bei ausgeschaltetem Schalter `None` zurück, es entsteht also gar kein
+Client, und der Handler antwortet mit der Seite für eine Anfrage ohne bekannten Client. Das
+ist mit T-03-47 vereinbar (die Fehlerseite sagt nie, welche Hälfte der Prüfung gefallen ist),
+aber der Wortlaut passt schlecht zu der Ursache. Festgehalten, nicht geändert: eine Änderung
+an einer Fehlerseite ist keine Messung.
+
+---
+
+## 10. Kontrollprobe 3: Allowlist an, beide Richtungen (16:18:58 und 16:19:44Z)
+
+Damit "dieselbe Fehlerseite wie bei einem nicht gelisteten DCR-Client" eine Messung und keine
+Behauptung ist, wurde vorher ein DCR-Client registriert, solange die Allowlist noch aus war
+(`Allowlist probe`, `92c0488b-…`, `POST /register 201`).
+
+**Richtung 1, `oauth_allowlist_only=1` mit leerer Liste:**
+
+| Anfrage | Antwort | Sichtbarer Text |
+|---------|---------|-----------------|
+| `/authorize` mit der URL-`client_id` (CIMD) | **403** | `This app is not allowed` |
+| `/authorize` mit dem registrierten, nicht gelisteten DCR-Client | **403** | `This app is not allowed` |
+
+Es ist zeichengleich dieselbe Seite. Die Allowlist unterscheidet die zwei Wege nicht, weil
+sie sie nicht kennt: `get_client` ist der eine Prüfpunkt, durch den `/authorize`, `/token`
+und `/revoke` alle drei laufen.
+
+**Richtung 2, `oauth_allowed_clients` auf genau die `client_id`-URL:**
+
+| Anfrage | Antwort |
+|---------|---------|
+| `/authorize` mit der URL-`client_id` (CIMD) | **302** auf `/authorize/consent` |
+| `/authorize` mit dem nicht gelisteten DCR-Client | **403**, dieselbe Seite |
+
+Eine URL ist also ein tragfähiger Allowlist-Eintrag, und die Liste wirkt weiter auf alles,
+was nicht darauf steht.
+
+**Ein Fund, der nicht vorhergesagt war:** mit bewaffneter Allowlist und leerer Liste
+antwortet `POST /register` weiter **201**. Das ist kein Loch, sondern die Bauform: `D-35`
+nennt vier Prüfpunkte, und `register_client` fragt dort nur den Registrierungsschalter und
+die Adressregel; die Allowlist sitzt in `get_client`, also an `/authorize`, `/token` und
+`/revoke`. Eine Registrierung ist keine Autorisierung, und `docs/oauth-setup.md` sagt genau
+das ("Only clients named below may **authorize**"). Notiert, weil jemand, der die Tür bei
+`/register` erwartet, sonst eine Lücke sieht, wo keine ist.
+
+---
+
+## 11. Der Nachzustand
+
+**Die drei Schalter sind zurück, und jeder einzeln belegt** (16:22Z):
+
+```
+occ app_api:app:config:list mcp_connector
+{ "mcp_connector": { "oauth_data_key": "***REMOVED SENSITIVE VALUE***",
+                     "public_url":     "***REMOVED SENSITIVE VALUE***" } }
+```
+
+Also genau die zwei Schlüssel, die vor dem Lauf da waren, und keiner der drei
+Schalter-Schlüssel mehr. Im Container ist keine `NC_MCP_OAUTH_*`-Variable gesetzt, und das
+AS-Dokument wirbt wieder mit allem:
+
+```
+cimd field: True | registration_endpoint: True | none in auth methods: True
+```
+
+**Die App läuft** (`occ app_api:app:list`: `mcp_connector (MCP Connector): 0.1.2 [enabled]`),
+der Image-Digest ist unverändert `sha256:3ba4a2ce1921…`, und die PRM antwortet `200`.
+`occ status` meldet weiter `34.0.3.2`.
+
+**Der Client ist im Vorzustand.** `claude mcp logout ncmcp` hat die letzte lebende
+Verbindung über die Widerrufsstrecke beendet (zwei `POST /revoke 200` um 16:23:14Z, also
+nicht per Datenbankeingriff), danach `claude mcp remove ncmcp`. Der Vergleich gegen die
+Sicherung von `C:\Users\Student\.claude.json`:
+
+```
+global mcpServers before: ['firecrawl-mcp', 'obsidian', 'stitch']
+global mcpServers now   : ['firecrawl-mcp', 'obsidian', 'stitch']
+identical               : True
+scratch project entry present: False
+scratch project in the backup: False
+```
+
+Die drei globalen Server des Owners sind unverändert, und der Projekteintrag des
+Messverzeichnisses ist ganz verschwunden, weil Claude Code ihn mit seinem letzten Server
+entfernt.
+
+**Der Store trägt wieder genau die Demo-Substanz.** Entfernt wurden die sechs Zeilen dieses
+Laufs (die CIMD-Zeile plus fünf Mess-Registrierungen), die vier Autorisierungen von `alice`
+mit ihren Token und die sechs liegengebliebenen `flows` (der Zählerstand war vor dem Lauf 0).
+Dasselbe Vorgehen wie in 06-08 mit den zwei Cursor-Zeilen:
+
+| Tabelle | Vor dem Lauf | Nach dem Lauf |
+|---------|--------------|---------------|
+| `clients` | 2 | **2** |
+| `flows` | 0 | **0** |
+| `auth_codes` | 0 | **0** |
+| `access_tokens` | 0 | **0** |
+| `refresh_tokens` | 2 | **2** |
+| `authorizations` | 2 | **2** |
+| `user_access` | 0 | **0** |
+
+Beide verbliebenen Autorisierungen gehören `jane` (`Claude Desktop` und `Open WebUI`), und
+beide tragen `revoked_at = None`. Die Demo-Substanz für CONF-01 steht unangetastet.
+
+**Die Owner-Instanzen liefen durch:** `docker ps` meldet `nc-mcp-test` "Up 5 days (healthy)"
+und `findling-nextcloud` "Up 5 days". Kein Kommando dieses Laufs nennt eine von beiden.
