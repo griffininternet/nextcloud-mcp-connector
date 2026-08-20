@@ -1432,6 +1432,109 @@ async def test_a_client_secret_that_ran_out_stops_working(tmp_path: Path) -> Non
     assert response.json()["error"] == "invalid_client"
 
 
+# --- the token end of the loopback port rule (RFC 8252 7.3, T-06-20) ---------------------
+#
+# The relaxation lives in ``oauth/consent.py``: a native client publishes a portless loopback
+# address and arrives with whatever port the operating system gave it, so the exact
+# comparison of the SDK is asked a second question there and the REQUESTED address, with its
+# port, is what travels into the authorization code. The claim behind that decision is that
+# the token endpoint then needs no second relaxation, because the SDK compares the token
+# request against the stored value of the code and not against the registration. The consent
+# tests hold the first half; these two hold the second, so a change to that comparison in a
+# future SDK release lands on a red check instead of on a client that signs in and then
+# cannot exchange its code.
+
+
+#: What Claude Code publishes and what it arrives with: the document names no port and the
+#: client listens on whatever port the operating system gave it (06-RESEARCH.md, pattern 4).
+LOOPBACK_REGISTERED = CIMD_URIS[0]
+LOOPBACK_APPROVED = "http://localhost:3118/callback"
+LOOPBACK_ANOTHER_PORT = "http://localhost:4242/callback"
+
+
+async def approved_on_a_relaxed_port(
+    tmp_path: Path,
+) -> tuple[provider_module.NextcloudOAuthProvider, OAuthStore]:
+    """A portless registration and a code that carries the port the consent approved.
+
+    The one case where the two addresses differ, and the reason it exists in the store at
+    all: ``oauth/consent.py`` writes the REQUESTED address into the flow and therefore into
+    the code, so the port lives in the code and never in the registration (T-06-19).
+    """
+    subject, store = build(tmp_path)
+    await subject.register_client(registration(redirect_uris=[LOOPBACK_REGISTERED]))
+    await store.create_authorization(
+        AUTH_ID,
+        client_id=CLIENT_ID,
+        nc_user=NC_USER,
+        app_password=APP_PASSWORD,
+        scopes=metadata.TOOL_SCOPE,
+        resource=RESOURCE,
+    )
+    await store.create_auth_code(
+        CODE,
+        auth_id=AUTH_ID,
+        redirect_uri=LOOPBACK_APPROVED,
+        code_challenge=CHALLENGE,
+        resource=RESOURCE,
+    )
+    return subject, store
+
+
+@pytest.mark.anyio
+async def test_a_relaxed_loopback_port_walks_the_token_endpoint_unchanged(
+    tmp_path: Path,
+) -> None:
+    """The registration is portless, the code carries the port, and the exchange goes through."""
+    subject, _store = await approved_on_a_relaxed_port(tmp_path)
+
+    with serving(subject) as http:
+        response = http.post("/token", data=token_request(redirect_uri=LOOPBACK_APPROVED))
+
+    assert response.status_code == 200, response.text
+    assert response.json()["refresh_token"]
+
+
+@pytest.mark.anyio
+async def test_another_port_at_the_token_endpoint_is_not_the_approved_one(tmp_path: Path) -> None:
+    """T-06-20: the relaxation is one place and the token endpoint is not a second one.
+
+    A client that comes back on the port it was given is admitted; a request that names any
+    other port is a request about another address than the one a person approved, and the
+    code stays unspent.
+    """
+    subject, store = await approved_on_a_relaxed_port(tmp_path)
+
+    with serving(subject) as http:
+        response = http.post("/token", data=token_request(redirect_uri=LOOPBACK_ANOTHER_PORT))
+
+    assert response.status_code == 400
+    # The SDK answers a redirect URI that is not the one of the code with ``invalid_request``
+    # (``mcp/server/auth/handlers/token.py``), not with ``invalid_grant``. The spelling is
+    # measured here rather than assumed, because it is the SDK's answer and not ours.
+    assert response.json()["error"] == "invalid_request"
+    assert await store.load_auth_code(CODE) is not None, "the code was not spent"
+
+
+@pytest.mark.anyio
+async def test_the_portless_registration_is_not_the_address_the_code_carries(
+    tmp_path: Path,
+) -> None:
+    """And the registration itself is no longer an admissible answer at this endpoint.
+
+    Not a detail: it is what proves the comparison runs against the code. If the SDK ever
+    compared against the registration instead, this request would pass and the one above
+    would fail, which is exactly the drift these three checks exist to catch.
+    """
+    subject, _store = await approved_on_a_relaxed_port(tmp_path)
+
+    with serving(subject) as http:
+        response = http.post("/token", data=token_request(redirect_uri=LOOPBACK_REGISTERED))
+
+    assert response.status_code == 400
+    assert response.json()["error"] == "invalid_request"
+
+
 @pytest.mark.anyio
 async def test_a_wrong_pkce_verifier_is_refused_by_the_sdk(tmp_path: Path) -> None:
     """The checks the SDK owns stay the SDK's, and this proves they are still in the path."""

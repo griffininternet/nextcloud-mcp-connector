@@ -8,9 +8,12 @@ address of the document, so the value that arrives at ``/authorize`` decides whe
 process connects to. That is the reason this file is a module of its own and not four
 helpers inside the provider.
 
-:func:`fetch_document_and_lifetime` is the one boundary this module offers outwards, and
-:func:`fetch_document` is the same call for a caller that keeps nothing. Everything else is
-a step of them that is public only so a test can hold that step on its own.
+:func:`fetch_document_and_lifetime` is the one boundary this module offers outwards.
+Everything else is a step of it that is public only so a test can hold that step on its own.
+There used to be a second projection next to it, ``fetch_document``, for a caller with
+nowhere to keep a freshness window; no caller of this app ever was that caller, because the
+one that writes the row is the one that owns the deadline, and an export whose only reader is
+the test suite is dead code that reads as a contract (audit finding W-8).
 
 Four deliberate settings, each with the reason it exists:
 
@@ -55,7 +58,6 @@ __all__ = [
     "MAX_DOCUMENT_BYTES",
     "AddressLookup",
     "cache_lifetime",
-    "fetch_document",
     "fetch_document_and_lifetime",
     "is_cimd_client_id",
     "resolve_addresses",
@@ -109,8 +111,9 @@ class _Refused(Exception):
     The shape exists because the fetch has seven ways to say no and they all mean the same
     thing to the caller, so a chain of return values would either lose the distinction
     anyway or spread it over five levels of ``if``. It stays private and it stops at
-    :func:`fetch_document`, which turns it into ``None``: fail closed is a return value on a
-    request path here and never an exception (D-37, shared pattern A of 06-PATTERNS.md),
+    :func:`fetch_document_and_lifetime`, which turns it into ``None``: fail closed is a return
+    value on a request path here and never an exception (D-37, shared pattern A of
+    06-PATTERNS.md),
     because the callers are request handlers in four endpoints.
     """
 
@@ -376,19 +379,6 @@ async def _fetch_pinned(url: httpx.URL, ip: str) -> tuple[bytes, int]:
             raise _Refused from exc
         finally:
             await response.aclose()
-
-
-async def fetch_document(
-    client_id: str, *, resolver: AddressLookup = _system_addresses
-) -> dict[str, Any] | None:
-    """The document behind a client identifier URL, or ``None``.
-
-    The projection of :func:`fetch_document_and_lifetime` for a caller that has nowhere to
-    keep a freshness window. There is one implementation and two views of it, so the two can
-    never answer differently about the same identifier.
-    """
-    found = await fetch_document_and_lifetime(client_id, resolver=resolver)
-    return None if found is None else found[0]
 
 
 async def fetch_document_and_lifetime(

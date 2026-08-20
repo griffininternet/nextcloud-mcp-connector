@@ -322,6 +322,19 @@ async def test_the_default_resolver_is_wired_and_answers_into_the_same_rule() ->
 # --- the pinned fetch: where the request goes, and what stops it ------------------------
 
 
+async def only_document(client_id: str, *, resolver: cimd.AddressLookup) -> dict[str, Any] | None:
+    """The document of one fetch, without the freshness window the answer asked for.
+
+    This was ``cimd.fetch_document`` until the v1.0 milestone audit: a projection of
+    :func:`cimd.fetch_document_and_lifetime` exported for a caller that keeps nothing. That
+    caller never existed in this app, because the one that writes the row is the one that
+    owns the deadline, so the export's only reader was this file (finding W-8). The two lines
+    live here now, where the checks below want a document and have nowhere to put a window.
+    """
+    found = await cimd.fetch_document_and_lifetime(client_id, resolver=resolver)
+    return None if found is None else found[0]
+
+
 @pytest.mark.anyio
 @respx.mock
 async def test_the_request_goes_to_the_checked_address_with_the_original_name_in_tls() -> None:
@@ -335,7 +348,7 @@ async def test_the_request_goes_to_the_checked_address_with_the_original_name_in
     body = document()
     route = respx.get(PINNED_URL).mock(return_value=httpx.Response(200, json=body))
 
-    result = await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
+    result = await only_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
 
     assert result == body
     sent = route.calls.last.request
@@ -351,7 +364,7 @@ async def test_an_ipv6_address_is_pinned_in_brackets_and_the_name_still_travels(
     """The bracket form is the one thing about v6 a URL cannot get wrong twice."""
     route = respx.get(PINNED_URL_V6).mock(return_value=httpx.Response(200, json=document()))
 
-    result = await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IPV6))
+    result = await only_document(DOCUMENT_URL, resolver=answering(PUBLIC_IPV6))
 
     assert result is not None
     sent = route.calls.last.request
@@ -367,7 +380,7 @@ async def test_one_fetch_resolves_the_name_exactly_once() -> None:
     calls: list[tuple[str, int]] = []
     respx.get(PINNED_URL).mock(return_value=httpx.Response(200, json=document()))
 
-    await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP, calls=calls))
+    await only_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP, calls=calls))
 
     assert calls == [(NAME, PORT)]
 
@@ -381,7 +394,7 @@ async def test_a_redirect_is_a_refusal_and_its_target_is_never_asked() -> None:
         )
         second = mock.get("http://127.0.0.1/c.json")
 
-        result = await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
+        result = await only_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
 
     assert result is None
     assert first.called is True
@@ -396,7 +409,7 @@ async def test_a_document_of_exactly_the_limit_is_still_a_document() -> None:
         return_value=httpx.Response(200, content=sized_document(cimd.MAX_DOCUMENT_BYTES))
     )
 
-    result = await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
+    result = await only_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
 
     assert result is not None
     assert result["client_name"] == "A client that names itself"
@@ -410,7 +423,7 @@ async def test_one_byte_over_the_limit_is_a_refusal() -> None:
         return_value=httpx.Response(200, content=sized_document(cimd.MAX_DOCUMENT_BYTES + 1))
     )
 
-    assert await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP)) is None
+    assert await only_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP)) is None
 
 
 @pytest.mark.anyio
@@ -419,7 +432,7 @@ async def test_a_target_that_never_answers_is_a_refusal_and_not_an_exception() -
     """A timeout is the failure this fetch has to survive silently: it sits in a page."""
     respx.get(PINNED_URL).mock(side_effect=httpx.ReadTimeout("the target did not answer"))
 
-    assert await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP)) is None
+    assert await only_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP)) is None
 
 
 @pytest.mark.anyio
@@ -428,17 +441,17 @@ async def test_a_transport_error_is_the_same_refusal() -> None:
     """A refused connection, a broken certificate: one shape of no for all of them."""
     respx.get(PINNED_URL).mock(side_effect=httpx.ConnectError("connection refused"))
 
-    assert await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP)) is None
+    assert await only_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP)) is None
 
 
 @pytest.mark.parametrize("status", [302, 400, 401, 403, 404, 500, 503])
 @pytest.mark.anyio
 @respx.mock
 async def test_no_answer_but_200_produces_a_document_and_none_of_them_raises(status: int) -> None:
-    """D-37: ``fetch_document`` answers ``None`` on every one of these, never an exception."""
+    """D-37: the fetch answers ``None`` on every one of these, never an exception."""
     respx.get(PINNED_URL).mock(return_value=httpx.Response(status, json=document()))
 
-    assert await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP)) is None
+    assert await only_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP)) is None
 
 
 @pytest.mark.anyio
@@ -449,7 +462,7 @@ async def test_a_client_id_that_is_not_https_costs_no_packet_and_no_resolution()
     with respx.mock(assert_all_called=False) as mock:
         route = mock.get(PINNED_URL)
 
-        result = await cimd.fetch_document(
+        result = await only_document(
             "http://example.com/c.json", resolver=answering(PUBLIC_IP, calls=calls)
         )
 
@@ -542,7 +555,7 @@ async def test_a_fetched_document_that_names_another_identifier_is_refused() -> 
         return_value=httpx.Response(200, json=document(client_id="https://other.example/c.json"))
     )
 
-    assert await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP)) is None
+    assert await only_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP)) is None
 
 
 # --- rebinding, the cache prohibition, and every target class ---------------------------
@@ -571,7 +584,7 @@ async def test_a_rebinding_resolver_changes_nothing_because_there_is_no_second_w
         checked = mock.get(PINNED_URL).mock(return_value=httpx.Response(200, json=document()))
         rebound = mock.get("https://127.0.0.1/c.json")
 
-        result = await cimd.fetch_document(DOCUMENT_URL, resolver=rebinding)
+        result = await only_document(DOCUMENT_URL, resolver=rebinding)
 
     assert result is not None
     assert asked == [NAME], "a second resolution is a second window, and there must not be one"
@@ -592,8 +605,8 @@ async def test_an_error_answer_is_not_cached_and_the_second_call_really_goes_out
         side_effect=[httpx.Response(500), httpx.Response(200, json=document())]
     )
 
-    first = await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
-    second = await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
+    first = await only_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
+    second = await only_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
 
     assert first is None
     assert second is not None
@@ -611,8 +624,8 @@ async def test_a_malformed_document_is_not_cached_either() -> None:
         ]
     )
 
-    first = await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
-    second = await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
+    first = await only_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
+    second = await only_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
 
     assert first is None
     assert second is not None
@@ -642,7 +655,7 @@ async def test_a_refusal_on_the_form_costs_neither_a_resolution_nor_a_packet(
     with respx.mock(assert_all_called=False) as mock:
         route = mock.get(host__regex=r".*")
 
-        result = await cimd.fetch_document(identifier, resolver=answering(PUBLIC_IP, calls=asked))
+        result = await only_document(identifier, resolver=answering(PUBLIC_IP, calls=asked))
 
     assert result is None
     assert route.called is False
@@ -674,7 +687,7 @@ async def test_a_name_behind_a_forbidden_address_is_never_connected_to(literal: 
     with respx.mock(assert_all_called=False) as mock:
         route = mock.get(f"https://{pinned}/c.json")
 
-        result = await cimd.fetch_document(DOCUMENT_URL, resolver=answering(literal))
+        result = await only_document(DOCUMENT_URL, resolver=answering(literal))
 
     assert result is None
     assert route.called is False
@@ -687,7 +700,7 @@ async def test_a_mixed_answer_is_not_fetched_from_the_good_address_either() -> N
         public = mock.get("https://8.8.8.8/c.json")
         private = mock.get("https://127.0.0.1/c.json")
 
-        result = await cimd.fetch_document(DOCUMENT_URL, resolver=answering("8.8.8.8", "127.0.0.1"))
+        result = await only_document(DOCUMENT_URL, resolver=answering("8.8.8.8", "127.0.0.1"))
 
     assert result is None
     assert public.called is False
@@ -700,8 +713,8 @@ async def test_a_name_that_does_not_resolve_is_a_refusal_without_a_packet() -> N
     with respx.mock(assert_all_called=False) as mock:
         route = mock.get(host__regex=r".*")
 
-        empty = await cimd.fetch_document(DOCUMENT_URL, resolver=answering())
-        broken = await cimd.fetch_document(DOCUMENT_URL, resolver=failing(OSError("no such name")))
+        empty = await only_document(DOCUMENT_URL, resolver=answering())
+        broken = await only_document(DOCUMENT_URL, resolver=failing(OSError("no such name")))
 
     assert empty is None
     assert broken is None
@@ -761,16 +774,19 @@ async def test_the_fetch_hands_out_the_window_of_the_answer_it_read() -> None:
 
 @pytest.mark.anyio
 @respx.mock
-async def test_the_two_views_of_the_boundary_answer_the_same_about_one_identifier() -> None:
-    """One implementation, two projections: a caller with nowhere to keep a deadline drops it."""
+async def test_an_answer_without_a_cache_header_lands_on_the_floor_of_the_window() -> None:
+    """An answer that asks for nothing is not an answer that may be kept forever.
+
+    The floor is the end of the range that costs a fetch rather than a stale identity, so
+    "no header" and "the shortest window" are deliberately the same outcome.
+    """
     respx.get(PINNED_URL).mock(return_value=httpx.Response(200, json=document()))
 
-    pair = await cimd.fetch_document_and_lifetime(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
-    plain = await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
+    found = await cimd.fetch_document_and_lifetime(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
 
-    assert pair is not None
-    assert pair[0] == plain
-    assert pair[1] == cimd.CACHE_MIN_SECONDS, "no header at all is the floor"
+    assert found is not None
+    assert found[0] == document()
+    assert found[1] == cimd.CACHE_MIN_SECONDS
 
 
 @pytest.mark.anyio

@@ -13,14 +13,17 @@ Every Nextcloud answer comes from respx and the store is a SQLite file in ``tmp_
 container, no network, no Nextcloud.
 """
 
+import ast
 import asyncio
 import base64
 import html
+import inspect
 import json
 import logging
 import re
 import sqlite3
 import time
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
@@ -588,16 +591,38 @@ CIMD_HOST = "claude.ai"
 CIMD_URIS = [LOOPBACK_REGISTERED, "http://127.0.0.1/callback"]
 
 
-def save_document_client(store: OAuthStore, *, redirect_uris: list[str] | None = None) -> None:
-    """A row as the document branch of ``get_client`` writes it, and still fresh.
+#: The document such a client publishes, and the address its name resolves to in this file.
+#: No name is ever looked up: the provider of the fetch checks below carries a resolver that
+#: answers this literal, so ``respx`` sees the pinned request and no socket is opened.
+CIMD_IP = "93.184.216.34"
+CIMD_FETCH_URL = "https://93.184.216.34/oauth/claude-code-client-metadata"
+CIMD_DOCUMENT: dict[str, object] = {
+    "client_id": CIMD_CLIENT_ID,
+    "client_name": "Claude Code",
+    "client_uri": "https://claude.ai",
+    "redirect_uris": CIMD_URIS,
+    "grant_types": ["authorization_code", "refresh_token"],
+    "response_types": ["code"],
+    "token_endpoint_auth_method": "none",
+}
 
-    Fresh on purpose: a row inside its freshness window is handed straight back, so nothing
-    here fetches a document and no test in this file opens a socket for one. The fetch itself
-    is covered in ``test_oauth_cimd.py`` and ``test_oauth_provider.py``.
+
+def save_document_client(
+    store: OAuthStore,
+    *,
+    redirect_uris: list[str] | None = None,
+    client_name: str = "Claude Code",
+    expires_in: int = 3600,
+) -> None:
+    """A row as the document branch of ``get_client`` writes it, fresh unless asked otherwise.
+
+    Fresh by default: a row inside its freshness window is handed straight back, so nothing
+    here fetches a document and no check of this file opens a socket for one. A negative
+    ``expires_in`` is what the fetch checks below want, a row whose deadline has passed.
     """
     metadata = {
         "client_id": CIMD_CLIENT_ID,
-        "client_name": "Claude Code",
+        "client_name": client_name,
         "redirect_uris": redirect_uris or CIMD_URIS,
         "grant_types": ["authorization_code", "refresh_token"],
         "response_types": ["code"],
@@ -610,9 +635,38 @@ def save_document_client(store: OAuthStore, *, redirect_uris: list[str] | None =
             CIMD_CLIENT_ID,
             metadata_json=json.dumps(metadata),
             cimd_fetched_at=moment,
-            cimd_expires_at=moment + 3600,
+            cimd_expires_at=moment + expires_in,
         )
     )
+
+
+def resolving(*addresses: str) -> Callable[[str, int], Awaitable[list[str]]]:
+    """A resolver that answers with these literals, so no name of a test is looked up."""
+
+    async def resolve(host: str, port: int) -> list[str]:
+        del host, port
+        return list(addresses)
+
+    return resolve
+
+
+def fetching(store: OAuthStore, **env: str) -> provider_module.NextcloudOAuthProvider:
+    """The provider of :func:`make`, with the resolver a pinned fetch needs."""
+
+    async def provide() -> OAuthStore:
+        return store
+
+    return provider_module.NextcloudOAuthProvider(
+        env=ENV | env,
+        policy=registry.client_policy(ENV | env),
+        store_provider=provide,
+        resolver=resolving(CIMD_IP),
+    )
+
+
+def cimd_route() -> respx.Route:
+    """The transport of one document fetch, answered at the pinned address."""
+    return respx.get(CIMD_FETCH_URL).mock(return_value=httpx.Response(200, json=CIMD_DOCUMENT))
 
 
 def signed_in_screen(provider: provider_module.NextcloudOAuthProvider, **overrides: str) -> str:
@@ -710,6 +764,110 @@ def test_the_host_is_read_from_the_identifier_and_from_nothing_else(
     """No store row is read for it: the string carries the fact, and this route costs
     exactly one Nextcloud round trip per request (SC 5 of phase 3)."""
     assert consent._identifier_host(client_id) == expected
+
+
+# --- the default of may_fetch, pinned at the call sites of this route (W-06) --------------
+#
+# ``get_client(client_id)`` fetches a document; ``get_client(client_id, may_fetch=False)``
+# does not, and since plan 06-10 every hot path passes the second form: the verifier of a
+# tool call, the client authentication of /token and /revoke, and both exchanges. This route
+# is the one place that must keep the default, because it is the one place where a person
+# with a browser is waiting and a first connection has to be possible at all. That default is
+# a keyword nobody sees when it is right, so it gets checks of its own: a may_fetch=False
+# that slipped into consent.py would turn every first connection of such a client into an
+# error page, and every check of the file above would stay green, because they all place a
+# fresh row in the store by hand.
+
+
+def test_the_authorize_chain_fetches_the_document_of_an_identity_it_has_no_row_for(
+    store: OAuthStore,
+) -> None:
+    """The first connection of a document client, end to end through the real route.
+
+    No row exists, so the identity can only come from the document, and the fetch is what
+    makes the request survive. What is asserted is the outbound call plus its consequence:
+    the browser goes to our own page instead of an error page, and the row is written.
+    """
+    provider = fetching(store)
+    client = TestClient(application(provider))
+
+    with respx.mock:
+        route = cimd_route()
+        respx.post(INIT_URL).mock(return_value=httpx.Response(200, json=start_body()))
+        response = start(client, client_id=CIMD_CLIENT_ID, redirect_uri=LOOPBACK_REQUESTED)
+
+    assert route.called, "the consent route asked the document host"
+    assert response.status_code == 302, response.text
+    assert ui_consent.CONSENT_PATH in response.headers["location"]
+    assert asyncio.run(store.load_client(CIMD_CLIENT_ID)) is not None
+
+
+def test_the_authorize_chain_reads_a_document_again_once_its_window_has_passed(
+    store: OAuthStore,
+) -> None:
+    """T-06-32 at this route: the refetch belongs to the path with a person on it.
+
+    The row is past its freshness deadline, which is the state the hot paths deliberately
+    keep answering from. Here it costs exactly one fetch, and the new reading is the identity
+    that travels on: the name of the earlier reading is gone from the screen.
+    """
+    provider = fetching(store)
+    save_document_client(store, client_name="The name of an earlier reading", expires_in=-1)
+    client = TestClient(application(provider))
+
+    with respx.mock:
+        route = cimd_route()
+        respx.post(INIT_URL).mock(return_value=httpx.Response(200, json=start_body()))
+        flow_id = flow_of(start(client, client_id=CIMD_CLIENT_ID, redirect_uri=LOOPBACK_REQUESTED))
+        respx.post(POLL_URL).mock(return_value=httpx.Response(200, json=poll_body()))
+        page = client.get(consent_url(flow_id, step=ui_consent.STEP_WAIT))
+
+    assert route.call_count >= 1
+    assert page.status_code == 200, page.text
+    assert "The name of an earlier reading" not in page.text
+
+
+def test_no_call_of_this_module_switches_the_fetch_off() -> None:
+    """The same rule as the two checks above, on the three call sites at once.
+
+    The first of them is caught end to end, and the two behind it are reached only after it
+    has already refreshed the row, so a transport check cannot tell them apart. The keyword
+    can: this route keeps the default everywhere, and a ``may_fetch=False`` anywhere in it is
+    a deliberate change that has to argue with this line.
+    """
+    tree = ast.parse(inspect.getsource(consent))
+    calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "get_client"
+    ]
+
+    assert calls, "this route asks the provider about the client, or the gate reads nothing"
+    for call in calls:
+        assert not [keyword for keyword in call.keywords if keyword.arg == "may_fetch"], (
+            "the consent route is the one path that pays the refetch (WR-01, WR-03)"
+        )
+
+
+def test_a_fresh_row_still_costs_this_route_no_packet_at_all(store: OAuthStore) -> None:
+    """The counter probe of both checks above, and the whole point of the freshness window.
+
+    Without it the two checks above would also pass with a route that fetches on every
+    single request, which is the shape plan 06-05 exists against.
+    """
+    provider = fetching(store)
+    save_document_client(store)
+    client = TestClient(application(provider))
+
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.get(CIMD_FETCH_URL)
+        mock.post(INIT_URL).mock(return_value=httpx.Response(200, json=start_body()))
+        response = start(client, client_id=CIMD_CLIENT_ID, redirect_uri=LOOPBACK_REQUESTED)
+
+    assert route.called is False
+    assert response.status_code == 302, response.text
 
 
 def test_an_expired_flow_shows_the_timeout_page_and_stops_polling(store: OAuthStore) -> None:
