@@ -59,6 +59,7 @@ __all__ = [
     "REDEEM_UNKNOWN",
     "REFRESH_TOKEN_TTL",
     "ROTATION_GRACE",
+    "STALE_ACCESS_TTL",
     "STATES",
     "STATE_ACTIVE",
     "STATE_REVOKED",
@@ -110,6 +111,16 @@ UNUSED_CLIENT_TTL = 24 * 3600
 
 #: A client that has not been seen for a season goes, and takes its authorizations along.
 IDLE_CLIENT_TTL = 90 * 24 * 3600
+
+#: How long a pause with nothing behind it is kept (LO-03). ``user_access`` has no foreign
+#: key and nothing ever removed a row from it, so the table grew monotonically and held
+#: rows for accounts that no longer exist. A row goes when it has nothing left to switch:
+#: no authorization of that account at all, and the pause older than this window. The same
+#: season as :data:`IDLE_CLIENT_TTL`, and for the same reason: long enough that a holiday,
+#: a sabbatical or a device swap does not resume anybody's access, short enough that the
+#: table does not carry a deleted account forever. The price is named in ``docs/faq.md``:
+#: an account that pauses without ever connecting is switched on again after 90 days.
+STALE_ACCESS_TTL = 90 * 24 * 3600
 
 #: SQLite's own spelling of "no upper bound": a negative ``LIMIT`` expression returns every
 #: row. It lets a read that must not be capped keep one constant statement with one
@@ -1202,11 +1213,27 @@ class OAuthStore:
         the app passwords, deletes the authorizations and then deletes the client. What is
         left for this method is the ordinary case, a registration nobody ever signed in
         under.
+
+        The third statement is the one table that had no cleanup at all (LO-03). A pause is
+        one row under an account id, written by the connections page and removed when the
+        user resumes, and nothing ever removed it otherwise: a deleted account kept its
+        pause, and on a directory setup that reuses account ids the next account of that
+        name started silently paused. A row goes only when both halves hold, no
+        authorization of that account and a pause older than :data:`STALE_ACCESS_TTL`, so
+        the switch of anybody who has a connection stays untouched however old it is. A
+        revoked authorization counts as a connection here: its Nextcloud app password may
+        still exist, so the account is not a stranger.
         """
         moment = _moment(now)
 
         def work(conn: sqlite3.Connection) -> None:
             _purge_expired_rows(conn, moment)
+            conn.execute(
+                "DELETE FROM user_access WHERE disabled_at < ? "
+                "AND NOT EXISTS (SELECT 1 FROM authorizations AS a "
+                "WHERE a.nc_user = user_access.nc_user)",
+                (moment - STALE_ACCESS_TTL,),
+            )
             conn.execute(
                 "DELETE FROM clients WHERE last_used_at IS NULL AND registered_at < ? "
                 "AND NOT EXISTS (SELECT 1 FROM authorizations AS a "
