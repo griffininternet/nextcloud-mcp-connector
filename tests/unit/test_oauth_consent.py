@@ -574,6 +574,144 @@ def test_the_unverified_callout_is_absent_for_a_listed_client(store: OAuthStore)
     assert strings.CONSENT_WARNING_TITLE not in response.text
 
 
+# --- the two display duties of a document identity (AUTH-08, plan 06-06) -----------------
+#
+# The screen renders them and this route computes them, which is the mechanism ``unverified``
+# already uses. What is checked here is therefore the computation: a document identity has a
+# host to show, a registration has none, and the loopback question hangs on the addresses and
+# not on the path a client took to get registered.
+
+#: The candidate client of AUTH-08 and the two portless loopback addresses of its document,
+#: measured on 2026-08-20 (06-RESEARCH.md, pattern 4).
+CIMD_CLIENT_ID = "https://claude.ai/oauth/claude-code-client-metadata"
+CIMD_HOST = "claude.ai"
+CIMD_URIS = [LOOPBACK_REGISTERED, "http://127.0.0.1/callback"]
+
+
+def save_document_client(store: OAuthStore, *, redirect_uris: list[str] | None = None) -> None:
+    """A row as the document branch of ``get_client`` writes it, and still fresh.
+
+    Fresh on purpose: a row inside its freshness window is handed straight back, so nothing
+    here fetches a document and no test in this file opens a socket for one. The fetch itself
+    is covered in ``test_oauth_cimd.py`` and ``test_oauth_provider.py``.
+    """
+    metadata = {
+        "client_id": CIMD_CLIENT_ID,
+        "client_name": "Claude Code",
+        "redirect_uris": redirect_uris or CIMD_URIS,
+        "grant_types": ["authorization_code", "refresh_token"],
+        "response_types": ["code"],
+        "token_endpoint_auth_method": "none",
+        "scope": "nextcloud",
+    }
+    moment = int(time.time())
+    asyncio.run(
+        store.save_client(
+            CIMD_CLIENT_ID,
+            metadata_json=json.dumps(metadata),
+            cimd_fetched_at=moment,
+            cimd_expires_at=moment + 3600,
+        )
+    )
+
+
+def signed_in_screen(provider: provider_module.NextcloudOAuthProvider, **overrides: str) -> str:
+    """The consent screen of one finished sign in, as text."""
+    client = TestClient(application(provider))
+    with respx.mock:
+        respx.post(INIT_URL).mock(return_value=httpx.Response(200, json=start_body()))
+        flow_id = flow_of(start(client, **overrides))
+        respx.post(POLL_URL).mock(return_value=httpx.Response(200, json=poll_body()))
+        response = client.get(consent_url(flow_id, step=ui_consent.STEP_WAIT))
+    assert response.status_code == 200, response.text
+    return response.text
+
+
+def test_a_document_identity_shows_its_host_and_both_warnings(store: OAuthStore) -> None:
+    """The MUST and the SHOULD of the specification on one page, for the one client the
+    phase is about: the identifier is a URL, and every address of it is loopback."""
+    provider = make(store)
+    save_document_client(store)
+
+    page = signed_in_screen(provider, client_id=CIMD_CLIENT_ID, redirect_uri=LOOPBACK_REQUESTED)
+
+    assert strings.CONSENT_DETAIL_CLIENT_HOST in page
+    assert CIMD_HOST in page
+    assert strings.CONSENT_WARNING_TITLE in page, "nobody listed it"
+    assert strings.CONSENT_LOOPBACK_TITLE in page, "and every address of it is loopback"
+
+
+def test_a_registered_client_with_a_hosted_address_shows_neither(store: OAuthStore) -> None:
+    provider = make(store)
+    register(provider)
+
+    page = signed_in_screen(provider)
+
+    assert strings.CONSENT_DETAIL_CLIENT_HOST not in page
+    assert strings.CONSENT_LOOPBACK_TITLE not in page
+
+
+def test_a_registered_client_on_loopback_gets_the_warning_without_a_host(
+    store: OAuthStore,
+) -> None:
+    """The flag hangs on the return address, the origin on the identifier (T-06-35).
+
+    Cursor's own loopback address, as it registers it: any program on that machine can hold
+    the port, and that risk does not become smaller because this client registered itself
+    instead of publishing a document.
+    """
+    provider = make(store)
+    register(provider, redirect_uris=["http://localhost:8787/callback"])
+
+    page = signed_in_screen(provider, redirect_uri="http://localhost:8787/callback")
+
+    assert strings.CONSENT_LOOPBACK_TITLE in page
+    assert strings.CONSENT_DETAIL_CLIENT_HOST not in page
+
+
+@pytest.mark.parametrize(
+    ("addresses", "expected"),
+    [
+        ([], False),
+        (CIMD_URIS, True),
+        (["http://localhost:8787/callback", "http://[::1]:9000/cb"], True),
+        (["http://localhost/callback", REDIRECT], False),
+        ([REDIRECT], False),
+        (["http://localhost:99999/callback"], False),
+    ],
+    ids=["none at all", "the document", "every spelling", "one hosted", "hosted", "unparsable"],
+)
+def test_the_loopback_flag_is_all_of_them_and_never_none_of_them(
+    addresses: list[str], expected: bool
+) -> None:
+    """A client with no return address is not a loopback client, it is a client that ends
+    on the redirect page before this screen; that is why the empty list is ``False`` and not
+    a vacuous truth. Checked on the computation itself, because the route cannot deliver a
+    client without an address to the consent screen at all.
+    """
+    assert consent._loopback_only(addresses) is expected
+
+
+@pytest.mark.parametrize(
+    ("client_id", "expected"),
+    [
+        (CIMD_CLIENT_ID, CIMD_HOST),
+        (CLIENT_ID, None),
+        ("https://claude.ai", None),
+        ("http://claude.ai/oauth/document", None),
+        ("https://user:pw@claude.ai/oauth/document", None),
+        ("", None),
+    ],
+    ids=["a document url", "a registration", "no path", "not https", "user info", "empty"],
+)
+def test_the_host_is_read_from_the_identifier_and_from_nothing_else(
+    client_id: str, expected: str | None
+) -> None:
+    """No store row is read for it: the string carries the fact, and this route costs
+    exactly one Nextcloud round trip per request (SC 5 of phase 3)."""
+    assert consent._identifier_host(client_id) == expected
+
+
 def test_an_expired_flow_shows_the_timeout_page_and_stops_polling(store: OAuthStore) -> None:
     provider = make(store)
     register(provider)

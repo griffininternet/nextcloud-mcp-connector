@@ -60,7 +60,7 @@ refusal can escape as a 500 (the shape of ``exapp/lifecycle.py``).
 import logging
 import secrets
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from urllib.parse import urlsplit
 
 from mcp.server.auth.handlers.authorize import AuthorizationHandler
@@ -96,7 +96,7 @@ from ..exapp.ui.consent import (
     handoff_page,
     waiting_page,
 )
-from . import crypto, loginflow, registry
+from . import cimd, crypto, loginflow, registry
 from .provider import NextcloudOAuthProvider
 from .registry import redirect_uri_allowed
 from .store import FlowRow, OAuthStore
@@ -428,12 +428,27 @@ def _decision(
     provider: NextcloudOAuthProvider,
     env: Mapping[str, str] | None,
 ) -> Response:
-    """The consent screen, with the warning that belongs to a self registered client.
+    """The consent screen, with the three things about this client the reader has to know.
 
-    The warning is the answer to "who says this app is what it says it is". In v1 every
-    client in the registry got there by registering itself, so the honest condition is
-    membership of the administrator's list, and the shipped state (an empty list) shows the
-    warning for every one of them (03-UI-SPEC.md, S3, T-03-42).
+    The first is the answer to "who says this app is what it says it is". In v1 every
+    client in the registry got there by registering itself or by publishing a document, so
+    the honest condition is membership of the administrator's list, and the shipped state
+    (an empty list) shows the warning for every one of them (03-UI-SPEC.md, S3, T-03-42).
+
+    The other two are the display duties the MCP specification puts on a client that
+    identifies itself with a metadata document, and they are computed here for the same
+    reason ``unverified`` is: the caller decides, the page renders (plan 06-06).
+
+    * The host comes from the identifier itself, because such an identifier *is* an https
+      URL while a registered one is a random identifier. No store row and no column is read
+      for it, deliberately: this route costs exactly one Nextcloud round trip per request
+      (success criterion 5 of phase 3), and a second lookup for a fact the string already
+      carries would be a round trip bought for nothing.
+    * The loopback question is asked of the registered addresses and never of the
+      registration path, because the danger lives in the address: on a desktop any program
+      can hold a loopback port and name a foreign identifier, so a client that registered
+      itself with nothing but loopback addresses is in the same position as one that
+      published a document (T-06-35).
     """
     addresses = [str(uri) for uri in client.redirect_uris or []]
     return consent_page(
@@ -444,8 +459,51 @@ def _decision(
         row.flow_id,
         store.form_token(row.flow_id, purpose=crypto.PURPOSE_CONSENT),
         unverified=not provider.policy.listed(client.client_id, addresses),
+        client_host=_identifier_host(client.client_id),
+        loopback_only=_loopback_only(addresses),
         env=env,
     )
+
+
+def _identifier_host(client_id: str) -> str | None:
+    """The host of an identifier that is a document URL, and ``None`` for anything else.
+
+    The form of the identifier is the whole test (``cimd.is_cimd_client_id``): a document
+    identity is an https URL with a path by definition of the draft, and a registration
+    carries a random identifier the SDK minted. An unparsable value is ``None`` and never an
+    exception, like every other reading of an address in this module.
+    """
+    if not cimd.is_cimd_client_id(client_id):
+        return None
+    try:
+        return urlsplit(client_id).hostname
+    except ValueError:
+        return None
+
+
+def _loopback_only(addresses: Sequence[str]) -> bool:
+    """Whether every registered return address of this client is on the user's own machine.
+
+    An empty list is not "only loopback": a client with no return address at all is a
+    different situation, and it already ends in a page of its own before this screen.
+    """
+    if not addresses:
+        return False
+    return all(_is_loopback(address) for address in addresses)
+
+
+def _is_loopback(address: str) -> bool:
+    """One address against :data:`registry.LOOPBACK_HOSTS`, the set D-35 already admits.
+
+    Both the host and the port are read, the reading of ``registry._comparable_host``: an
+    address this library cannot take apart is not one this page would claim anything about.
+    """
+    parts = urlsplit(address)
+    try:
+        host, _port = parts.hostname, parts.port
+    except ValueError:
+        return False
+    return bool(host) and host.lower() in registry.LOOPBACK_HOSTS
 
 
 async def _decide(
