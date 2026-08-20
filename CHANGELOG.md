@@ -11,6 +11,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- A locally running assistant may now come back on the port it actually got. A native
+  client publishes a return address without a port and takes whatever free port the
+  operating system hands it at the moment of the request, and the app used to refuse
+  that as a mismatch. Scheme, host, path and query are still compared exactly and only
+  loopback addresses are affected, so `localhost` still does not stand in for
+  `127.0.0.1` and a hosted connector gains no freedom at all. This is what kept Claude
+  Code out.
+
+### Added
+
+- A new administrator switch, `NC_MCP_OAUTH_CIMD`, for the way a client identifies
+  itself by the address of its own published metadata document instead of registering.
+  It is on unless it is switched off, and switching off client registration switches
+  this off with it: a closed door cannot be walked around through the other spelling.
+
 ## [0.1.2] - 2026-08-20
 
 A maintenance release with no new feature. It opens the app to clients that register a
