@@ -289,7 +289,15 @@ outbound socket counted rather than blocked:
   switch on.
 - **This switch alone does not touch registration.** With `NC_MCP_OAUTH_CIMD=0` the document
   address is refused and no request goes out, while `/register` still answers `201` and the
-  client it mints reaches the consent screen.
+  client it mints reaches the consent screen. **What the refused client sees is the page
+  `This link has expired`**, the same page an unknown or long gone registration gets. That is
+  the honest limit of a rule this app keeps on purpose: the error page is chosen from the
+  administrator's own configuration alone, never from anything the request says about itself,
+  because a page that told a caller which check fired would answer whoever is guessing client
+  ids. Registration is open in this configuration, so the page cannot name it as the reason
+  either. A client of this shape can still connect the other way, by registering itself; a
+  user who reads that page and expected the document way should ask the administrator about
+  this switch.
 - **The allowlist applies to this way exactly as it applies to registration.** Armed with an
   empty list it refuses the document address and a registered, unlisted client with the same
   page, `This app is not allowed`; with the document address on the list that client passes
@@ -340,8 +348,12 @@ NC_MCP_OAUTH_ALLOWLIST_ONLY=1
 NC_MCP_OAUTH_ALLOWED_CLIENTS=https://claude.ai/oauth/claude-code-client-metadata
 ```
 
-An unlisted client of this kind is refused with the same page an unlisted registration gets,
-and the refusal is stored, so it survives a restart.
+An unlisted client of this kind is refused with the same page an unlisted registration gets.
+**Nothing is written for it**: since the allowlist is asked before the fetch, an unlisted
+document address never becomes a row at all, so there is no stored refusal to survive a
+restart, and no unauthenticated caller of `/authorize` can make this server fetch a URL of
+their choosing in the hardest configuration it has. A registration that an administrator
+blocked afterwards is the other case, and that block is stored and does survive a restart.
 
 ### What the fetch of a document is allowed to do
 
@@ -364,6 +376,30 @@ fallback:
 - the answer is kept for as long as its own cache header asks for, between five minutes and
   one hour; **failures are never kept**, which the draft forbids in those words, and the
   flooding of this route is handled by the throttle of `/authorize` instead
+
+**Where the reading is renewed, and where it is not.** Only `/authorize` reads a document
+again. It is the one path with a person and a browser waiting on it, so it is the one path
+that may wait on a foreign host at all. `/token`, `/revoke` and every tool call use the
+identity as it was read and stored, whether its window has passed or not, and they never make
+an outbound request of their own. Three consequences, and they are a trade this app makes on
+purpose rather than an oversight:
+
+- A connection that works keeps working while the host of the document is unreachable. An
+  outage at `claude.ai` does not end a running session, and it can never sit inside a tool
+  call or a token exchange.
+- A document that was **withdrawn or changed** does not reach a session that already exists.
+  The identity was bound once, byte for byte, and the next `/authorize` of that client is what
+  reads the new version. So a document is not a revocation channel.
+- **Ending access is a revocation, not a document edit.** A user disconnects the app on the
+  connections page of this connector, or an administrator removes the client; both take effect
+  at once, on the very next request. An administrator who wants such a client out of an
+  instance for good switches it off or removes it from the allow list, which is asked on every
+  request as well.
+
+Every policy question is asked on every request either way: a blocked client, an emptied allow
+list and a switch an administrator closed reach `/token`, `/revoke` and every tool call
+immediately. It is the identity behind an unchanged client id that can be one reading old, and
+never the permission to use it.
 
 ### What the consent screen says about such a client, and what it does not
 

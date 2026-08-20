@@ -67,11 +67,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - An assistant can now connect by publishing its own metadata document instead of
   registering with this app first. The address of that document is the name the client
   goes by, the app reads it once and keeps the answer for as long as the answer asks for
-  and at least five minutes, and it reads it again when that window is over. Everything
-  that holds for a registration holds here too: only `https` return addresses and
-  loopback ones, an inadmissible address is dropped and the rest kept, the client list of
-  an administrator decides in exactly the same place, and a client of this kind never
-  holds a shared secret. The app reads such a document from public addresses only, never
+  and at least five minutes. It reads the document again when that window is over, and it
+  does so while a connection is being made and at no other moment: a running connection,
+  a token exchange and every single tool call use the information as it was read, so an
+  app you connected keeps working while the site that publishes its document is
+  unreachable, and nothing your assistant does can make this app wait on that site. The
+  other side of that trade, said plainly: a document that was withdrawn or changed does
+  not reach a connection that already exists. Ending access is a disconnect on the
+  connections page of this app, or an administrator who removes the app, and both take
+  effect on the very next request. Everything that holds for a registration holds here
+  too: only `https` return addresses and loopback ones, an inadmissible address is dropped
+  and the rest kept, the client list of an administrator decides in exactly the same
+  place, and a client of this kind never holds a shared secret. The app reads such a document from public addresses only, never
   from an address inside a network, never more than five kilobytes of it, never longer than
   five seconds, never after a redirect and never an image out of it, and a failed read is
   not remembered. This is the way the current specification prefers, and it is the way
