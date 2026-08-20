@@ -92,7 +92,7 @@ from ..errors import IssuerRefused
 from ..exapp.auth import is_user
 from ..exapp.responses import NO_STORE, form_or_none, json_response
 from ..exapp.ui.consent import consent_url
-from . import loginflow
+from . import cimd, loginflow
 from .metadata import (
     AS_METADATA_SUFFIX,
     PUBLIC_CLIENT_AUTH_METHOD,
@@ -114,6 +114,7 @@ from .store import (
     REDEEM_REUSED,
     ROTATION_GRACE,
     STATE_REVOKED,
+    ClientRow,
     OAuthStore,
     store_opener,
     token_hash,
@@ -247,6 +248,7 @@ class NextcloudOAuthProvider(
         policy: ClientPolicy | None = None,
         store_provider: StoreProvider | None = None,
         clock: Callable[[], float] | None = None,
+        resolver: cimd.AddressLookup | None = None,
     ) -> None:
         self._env = env
         self._policy = policy if policy is not None else client_policy(env)
@@ -260,6 +262,12 @@ class NextcloudOAuthProvider(
         #: second worker on the same file. A parameter, so a test can stand on both sides
         #: of a ten second window without sleeping.
         self._clock = clock if clock is not None else time.time
+        #: How a name is resolved for the one outbound request this server makes on a
+        #: stranger's behalf (AUTH-08). A parameter for the same reason ``clock`` is one: a
+        #: test hands in a resolver instead of patching a library, and nothing in the unit
+        #: suite touches a socket. ``None`` means the resolver of ``cimd`` itself, which is
+        #: this host's own.
+        self._resolver = resolver
         self._held: dict[str, _Held] = {}
         #: The process cache of the verifier, handed in by ``entry_exapp`` through
         #: :meth:`on_revocation`. Without it a revocation would take effect at the next
@@ -306,6 +314,19 @@ class NextcloudOAuthProvider(
         so is one that has not been used for a season. That is the whole cleanup of the
         registry (T-03-44), because this project has no cron and a table that only grows
         is a denial of service with a delay.
+
+        **Why the registration TTL does not apply to a document identity** (pitfall 4,
+        T-06-31). The two windows above say "a registration nobody ever used" and "a
+        connection nobody has used for a season", and both sentences describe something
+        nobody can bring back. An identity that came from a metadata document is the
+        opposite of that: it can be read again at any moment, so it is never orphaned, and
+        the row is not a registration a client made but this server's own note of what it
+        read. Deleting it would take every ``authorizations`` row under it along through
+        the cascade, which is a user's connection ended by a deadline that user never met.
+        What does run out for such a row is its freshness, and running out of freshness
+        costs one fetch. The sweep of :meth:`sweep_expired_clients` skips these rows in the
+        store for the same reason, and ``purge_expired`` still removes them once no
+        connection hangs on them at all, which is what keeps the table finite.
         """
         try:
             store = await self.store()
@@ -316,8 +337,16 @@ class NextcloudOAuthProvider(
             logger.error("the client lookup has no store: %s", type(exc).__name__)
             return None
 
-        if row is None:
-            return None
+        if row is None or row.cimd_fetched_at is not None:
+            # The one branch of AUTH-08, and it is here so that everything below it applies
+            # to a client that identifies itself with a metadata document exactly as it
+            # applies to one that registered: the allowed flag, the allowlist and the
+            # expiry are the shared rest of this function and not a copy of it. Three cases
+            # arrive here and :meth:`_resolve_cimd` tells them apart: no row at all, a row
+            # whose freshness ran out, and a row that is still fresh.
+            row = await self._resolve_cimd(client_id, store, row=row)
+            if row is None:
+                return None
 
         client = _client_information(row.metadata_json, client_id)
         if client is None:
@@ -330,7 +359,7 @@ class NextcloudOAuthProvider(
         if not self._policy.allows(client_id, addresses):
             return None
 
-        if _has_expired(row.registered_at, row.last_used_at):
+        if row.cimd_fetched_at is None and _has_expired(row.registered_at, row.last_used_at):
             # The credentials first, then the row (WR-04): ``authorizations`` points at
             # ``clients`` with ON DELETE CASCADE, so the delete would take the ciphertext of
             # every app password under this client along and leave the credentials working
@@ -348,6 +377,106 @@ class NextcloudOAuthProvider(
             )
 
         return client
+
+    async def _resolve_cimd(
+        self, client_id: str, store: OAuthStore, *, row: ClientRow | None = None
+    ) -> ClientRow | None:
+        """The store row of a client that identifies itself with a metadata document.
+
+        ``None`` for every refusal, never an exception (D-37): the callers of
+        :meth:`get_client` are request handlers in four endpoints, and a client whose
+        document could not be read gets the same answer as one nobody ever heard of
+        (T-06-33).
+
+        **The switch is the first question, before any packet** (T-06-26, T-06-28). A
+        disabled CIMD must not be a switched off feature that still makes outbound requests
+        for whoever asks, so the refusal happens before the form of the identifier is even
+        looked at. ``cimd_enabled`` is derived fail closed from the DCR switch in
+        ``registry`` (plan 06-03), which is how the locked decision "a disabled DCR must not
+        be bypassable through CIMD" holds without a second reading of a second switch here.
+        It also holds for a row that already exists: an administrator who turns the switch
+        off means the clients of this path, not only the next one of them.
+
+        **Then freshness, and only then a request.** A row whose ``cimd_expires_at`` is
+        still in the future is handed straight back, which is the whole cache: no request,
+        no second identity, and the deadline is the one the answer's own cache header asked
+        for inside our bounds (:func:`cimd.cache_lifetime`). A row whose deadline passed is
+        read again, and a read that fails is a refusal rather than a walk on with an
+        identity that may have changed (T-06-32). This is the one place the freshness
+        question is asked, so :meth:`get_client` cannot forget it for one of its three
+        cases.
+
+        **Why a row and not only a cache entry** (pitfall 3). ``flows.client_id`` and
+        ``authorizations.client_id`` reference ``clients(client_id)`` with a foreign key, so
+        a client that exists only in memory would fail the first ``/authorize`` with an
+        integrity error. The row is therefore written before this returns, and it is written
+        with ``secret_hash=None`` in every case: a client of this path is public by
+        definition, ``validate_document`` already refuses every shared secret method
+        (T-06-30), and ``client_secret_hash`` reads ``None`` as "this client has no secret".
+
+        The return addresses go through the very same check as a registration
+        (``redirect_uri_allowed``, D-35), including the partial acceptance of plan 03-09: a
+        forbidden entry is dropped and the admissible ones are kept, and a document with no
+        admissible entry left writes no row at all (T-06-29). There is no
+        ``RegistrationError`` anywhere on this path, because an exception out of
+        :meth:`get_client` would be a new failure shape in four endpoints.
+        """
+        if not self._policy.cimd_enabled:
+            return None
+        if row is not None and _cimd_is_fresh(row, self._now()):
+            return row
+        if client_id != client_id.strip():
+            # An identifier this server would fetch under one spelling and store under
+            # another is a refusal, not a normalisation: the difference between the two
+            # spellings is what an attacker would get (the rule of the ``issuer`` check).
+            return None
+        if not cimd.is_cimd_client_id(client_id):
+            return None
+
+        if self._resolver is None:
+            found = await cimd.fetch_document_and_lifetime(client_id)
+        else:
+            found = await cimd.fetch_document_and_lifetime(client_id, resolver=self._resolver)
+        if found is None:
+            return None
+        document, lifetime = found
+
+        client = _cimd_client_information(document, client_id)
+        if client is None:
+            return None
+        registrable = [uri for uri in client.redirect_uris or [] if redirect_uri_allowed(str(uri))]
+        if not registrable:
+            # The same refusal a registration of nothing but forbidden addresses gets: a
+            # client with no return target is one this server could never send anywhere.
+            logger.warning("a document was refused: it names no admissible return address")
+            return None
+        client.redirect_uris = registrable
+        addresses = [str(uri) for uri in registrable]
+        # The advertised set and the granted set have to be the same set, for the reason the
+        # docstring of :meth:`register_client` gives at length: a client that reads
+        # ``scopes_supported`` and asks for both entries would otherwise be refused by this
+        # very server with ``invalid_scope``.
+        client.scope = REGISTERED_SCOPE
+
+        moment = self._now()
+        try:
+            await store.save_client(
+                client_id,
+                metadata_json=client.model_dump_json(exclude={"client_secret"}),
+                secret_hash=None,
+                # In the allowlist mode an unlisted client is stored as not allowed, exactly
+                # like a registration, so the block survives a restart and is visible in the
+                # admin view. The refusal itself happens in the shared rest of
+                # :meth:`get_client` and not here (T-06-27).
+                allowed=self._policy.allows(client_id, addresses),
+                now=moment,
+                cimd_fetched_at=moment,
+                cimd_expires_at=moment + lifetime,
+            )
+            return await store.load_client(client_id)
+        except Exception as exc:
+            logger.error("a document identity could not be written: %s", type(exc).__name__)
+            return None
 
     def also_accepting(self, address: AnyUrl) -> "NextcloudOAuthProvider":
         """This provider for one request, whose client also accepts ``address``.
@@ -1441,6 +1570,54 @@ def _client_information(metadata_json: str, client_id: str) -> OAuthClientInform
         return None
     client.scope = REGISTERED_SCOPE
     return client
+
+
+#: What of a foreign metadata document becomes this server's record of a client. Everything
+#: else is dropped rather than stored, and ``logo_uri`` above all: reading it would put a URL
+#: of a domain nobody checked into the record, from where a later consent page would have to
+#: decide again not to fetch it (draft section 6.7, T-06-13). The four here are the ones this
+#: server uses: the name the consent screen shows, the addresses it compares a request
+#: against, and the two lists the SDK's own handlers check a grant against.
+_CIMD_TAKEN = ("client_name", "redirect_uris", "grant_types", "response_types")
+
+
+def _cimd_client_information(
+    document: Mapping[str, object], client_id: str
+) -> OAuthClientInformationFull | None:
+    """The SDK model of a document, or ``None``. The same model a registration produces.
+
+    A projection and not a parse of the whole document: only the properties of
+    :data:`_CIMD_TAKEN` travel into the record, the identifier is the one this server fetched
+    rather than the one the document repeats (they are equal, because ``validate_document``
+    compared them byte for byte, and taking ours means a later change of that comparison
+    cannot make the two drift apart), and the authentication method is written as the truth
+    of this path: a client of it is public and holds no secret.
+
+    Never raises. A document that the model refuses is a client this server does not know,
+    which is the same answer every other refusal of this path gives.
+    """
+    metadata = {key: document[key] for key in _CIMD_TAKEN if key in document}
+    try:
+        return OAuthClientInformationFull.model_validate(
+            metadata
+            | {
+                "client_id": client_id,
+                "token_endpoint_auth_method": PUBLIC_CLIENT_AUTH_METHOD,
+            }
+        )
+    except (ValidationError, ValueError) as exc:
+        logger.warning("a document could not be read as a client: %s", type(exc).__name__)
+        return None
+
+
+def _cimd_is_fresh(row: ClientRow, now: int) -> bool:
+    """Whether the document behind this row may still be reused without reading it again.
+
+    A row without a deadline is never fresh: that is a row of the registration path, which
+    has no document, and a row of this path whose deadline is missing is one this code cannot
+    judge. Both readings end in a read of the document, which is the safe end.
+    """
+    return row.cimd_expires_at is not None and row.cimd_expires_at > now
 
 
 def _inside_grace(used_at: int | None, now: int) -> bool:

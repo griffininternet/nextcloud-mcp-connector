@@ -8,10 +8,11 @@ address of the document, so the value that arrives at ``/authorize`` decides whe
 process connects to. That is the reason this file is a module of its own and not four
 helpers inside the provider.
 
-:func:`fetch_document` is the one boundary this module offers outwards. Everything else is
-a step of it that is public only so a test can hold that step on its own.
+:func:`fetch_document_and_lifetime` is the one boundary this module offers outwards, and
+:func:`fetch_document` is the same call for a caller that keeps nothing. Everything else is
+a step of them that is public only so a test can hold that step on its own.
 
-Three deliberate settings, each with the reason it exists:
+Four deliberate settings, each with the reason it exists:
 
 * ``MAX_DOCUMENT_BYTES``, five kilobytes - the draft's own recommendation, and the limit is
   enforced by :func:`mcp_connector.exapp.responses.bounded_response`, not by a second
@@ -19,7 +20,9 @@ Three deliberate settings, each with the reason it exists:
 * ``FETCH_TIMEOUT_SECONDS = 5.0`` for connect and read - the fetch sits inside a browser
   request of the consent page, where the ten seconds of the reference implementation read
   as a hung page.
-* Neither is an environment switch. A switch on a limit is a limit an administrator can
+* ``CACHE_MIN_SECONDS`` and ``CACHE_MAX_SECONDS``, five minutes and one hour - the bounds
+  the draft leaves to the authorization server, around the cache header of the answer.
+* None of them is an environment switch. A switch on a limit is a limit an administrator can
   weaken by accident, and an accident is what this whole file exists against (open
   question 5 of the research, T-06-06).
 
@@ -46,10 +49,14 @@ from mcp_connector.exapp.responses import BodyTooLarge, BodyUnreadable, bounded_
 from mcp_connector.nextcloud.http import USER_AGENT, NoCookieJar
 
 __all__ = [
+    "CACHE_MAX_SECONDS",
+    "CACHE_MIN_SECONDS",
     "FETCH_TIMEOUT_SECONDS",
     "MAX_DOCUMENT_BYTES",
     "AddressLookup",
+    "cache_lifetime",
     "fetch_document",
+    "fetch_document_and_lifetime",
     "is_cimd_client_id",
     "resolve_addresses",
     "target_allowed",
@@ -66,6 +73,16 @@ MAX_DOCUMENT_BYTES = 5120
 #: already runs ``connect=5.0`` in ``nextcloud/http.py``; a fetch that hangs here hangs the
 #: consent page of a user who is waiting for a browser to answer.
 FETCH_TIMEOUT_SECONDS = 5.0
+
+#: The floor and the ceiling of the window a fetched document may be reused in. The draft
+#: says an authorization server "SHOULD respect HTTP cache headers" and "MAY define its own
+#: upper and/or lower bounds" (section 6.6), and the reference implementation of the draft
+#: runs five minutes by default with an hour as its cap. So these two are that MAY: a floor,
+#: because a document that says "never cache me" would otherwise turn every authorization
+#: request of that client into an outbound request, and a ceiling, because a client that
+#: changes its return addresses has to be able to reach this server again the same day.
+CACHE_MIN_SECONDS = 300
+CACHE_MAX_SECONDS = 3600
 
 #: The properties without which a document says nothing: which client it is, what to call it
 #: on the consent page, and where it may be sent back to.
@@ -181,6 +198,41 @@ def target_allowed(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     )
 
 
+def cache_lifetime(cache_control: str | None) -> int:
+    """How long this answer may be reused, in seconds, inside our own two bounds.
+
+    One header and not three. ``Cache-Control: max-age`` is the one an origin actually sends
+    for a static JSON document, and it is a duration, so it needs no clock. ``Expires`` is a
+    date that would have to be compared against the ``Date`` of the same answer, and both of
+    them come from the host the identifier named: a comparison of two attacker chosen
+    timestamps decides nothing, and getting it wrong decides it in the attacker's favour. So
+    ``Expires`` alone reads as no usable header and the floor applies, which is the safe end
+    of the range.
+
+    ``no-store`` and ``no-cache`` are respected as far as our own floor: they end up at
+    :data:`CACHE_MIN_SECONDS` rather than at zero, because a row for this client has to exist
+    for the foreign key of ``flows`` and ``authorizations`` either way (pitfall 3), so "do not
+    keep this" cannot mean "keep nothing" here. It means "keep it for the shortest window this
+    server has", and the draft's MAY is what allows that.
+
+    Never raises and never logs: a malformed header is not a value worth a line in a file
+    somebody else reads, and the floor is the answer to all of them.
+    """
+    if not cache_control:
+        return CACHE_MIN_SECONDS
+    seconds = CACHE_MIN_SECONDS
+    for directive in cache_control.lower().split(","):
+        token = directive.strip()
+        if token in ("no-store", "no-cache"):
+            return CACHE_MIN_SECONDS
+        if token.startswith("max-age="):
+            try:
+                seconds = int(token.removeprefix("max-age=").strip())
+            except ValueError:
+                return CACHE_MIN_SECONDS
+    return max(CACHE_MIN_SECONDS, min(seconds, CACHE_MAX_SECONDS))
+
+
 async def _system_addresses(host: str, port: int) -> list[str]:
     """The default resolver: what this host's own resolver says, TCP records only.
 
@@ -252,8 +304,13 @@ async def resolve_addresses(
     return literals
 
 
-async def _fetch_pinned(url: httpx.URL, ip: str) -> bytes:
+async def _fetch_pinned(url: httpx.URL, ip: str) -> tuple[bytes, int]:
     """The document, fetched from this address with the original name in TLS and ``Host``.
+
+    The second half of the pair is how long the answer may be reused, read from the cache
+    header of this very answer: the header exists only here, and passing the response object
+    out of this function so that a caller could read it would hand a caller an open stream
+    whose body limit this function is responsible for.
 
     **Why the address and not the name** (T-06-07). The address is the one
     :func:`resolve_addresses` checked, and handing ``httpx`` the host name instead would let
@@ -309,7 +366,8 @@ async def _fetch_pinned(url: httpx.URL, ip: str) -> bytes:
             if response.status_code != 200:
                 logger.warning("a document was refused: status %s", response.status_code)
                 raise _Refused
-            return await bounded_response(response, MAX_DOCUMENT_BYTES)
+            raw = await bounded_response(response, MAX_DOCUMENT_BYTES)
+            return raw, cache_lifetime(response.headers.get("cache-control"))
         except BodyTooLarge as exc:
             logger.warning("a document was refused: it is larger than the limit")
             raise _Refused from exc
@@ -323,7 +381,25 @@ async def _fetch_pinned(url: httpx.URL, ip: str) -> bytes:
 async def fetch_document(
     client_id: str, *, resolver: AddressLookup = _system_addresses
 ) -> dict[str, Any] | None:
-    """The document behind a client identifier URL, or ``None``. The one boundary outwards.
+    """The document behind a client identifier URL, or ``None``.
+
+    The projection of :func:`fetch_document_and_lifetime` for a caller that has nowhere to
+    keep a freshness window. There is one implementation and two views of it, so the two can
+    never answer differently about the same identifier.
+    """
+    found = await fetch_document_and_lifetime(client_id, resolver=resolver)
+    return None if found is None else found[0]
+
+
+async def fetch_document_and_lifetime(
+    client_id: str, *, resolver: AddressLookup = _system_addresses
+) -> tuple[dict[str, Any], int] | None:
+    """The document behind a client identifier URL and its window, or ``None``.
+
+    The one boundary outwards. The window is what :func:`cache_lifetime` read from the
+    answer, and it is handed out next to the document rather than applied here, because this
+    module knows nothing about where a document is kept: the caller that writes the row is
+    the caller that owns the deadline (``provider.py``, plan 06-05).
 
     The order is the one the diagram of 06-RESEARCH.md draws, and each step is where it is
     for a reason:
@@ -364,10 +440,11 @@ async def fetch_document(
     if not addresses:
         return None
     try:
-        raw = await _fetch_pinned(url, addresses[0])
+        raw, lifetime = await _fetch_pinned(url, addresses[0])
     except _Refused:
         return None
-    return validate_document(raw, identifier)
+    document = validate_document(raw, identifier)
+    return None if document is None else (document, lifetime)
 
 
 def validate_document(raw: bytes, client_id: str) -> dict[str, Any] | None:

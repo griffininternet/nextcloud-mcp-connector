@@ -45,7 +45,7 @@ from starlette.testclient import TestClient
 from mcp_connector import config, entry_http
 from mcp_connector.entry_exapp import MCP_PATH, build_exapp_app
 from mcp_connector.exapp.middleware import RequireAppApi
-from mcp_connector.oauth import loginflow, metadata, registry
+from mcp_connector.oauth import cimd, loginflow, metadata, registry
 from mcp_connector.oauth import provider as provider_module
 from mcp_connector.oauth import throttle as throttle_module
 from mcp_connector.oauth.store import (
@@ -87,6 +87,28 @@ CURSOR_URIS = [
 ]
 CURSOR_REGISTRABLE = CURSOR_URIS[1:]
 
+#: The candidate client of AUTH-08 and its document, measured on 2026-08-20 (the same run
+#: ``test_oauth_cimd.py`` carries its copy from). Both return addresses are port less, which
+#: is what the port rule of plan 06-03 is about.
+CIMD_ID = "https://claude.ai/oauth/claude-code-client-metadata"
+CIMD_URIS = ["http://localhost/callback", "http://127.0.0.1/callback"]
+CIMD_DOCUMENT: dict[str, object] = {
+    "client_id": CIMD_ID,
+    "client_name": "Claude Code",
+    "client_uri": "https://claude.ai",
+    "redirect_uris": CIMD_URIS,
+    "grant_types": ["authorization_code", "refresh_token"],
+    "response_types": ["code"],
+    "token_endpoint_auth_method": "none",
+}
+
+#: The address the name of the identifier resolves to in this file, and the URL a pinned
+#: fetch therefore asks for. No name is ever resolved here: every provider these tests build
+#: carries a resolver that answers this literal, so ``respx`` sees the pinned request and no
+#: socket is opened (the injection form of ``clock`` and ``store_provider``).
+CIMD_IP = "93.184.216.34"
+CIMD_FETCH_URL = "https://93.184.216.34/oauth/claude-code-client-metadata"
+
 
 def opener(subject: OAuthStore) -> Callable[[], Awaitable[OAuthStore]]:
     async def open_it() -> OAuthStore:
@@ -95,15 +117,46 @@ def opener(subject: OAuthStore) -> Callable[[], Awaitable[OAuthStore]]:
     return open_it
 
 
+def resolving(*addresses: str) -> Callable[[str, int], Awaitable[list[str]]]:
+    """A resolver that answers with these literals, so no name of a test is looked up."""
+
+    async def resolve(host: str, port: int) -> list[str]:
+        return list(addresses)
+
+    return resolve
+
+
 def build(tmp_path: Path, **env: str) -> tuple[provider_module.NextcloudOAuthProvider, OAuthStore]:
     """A provider on a real store file, with the policy of the given environment."""
     subject = OAuthStore(tmp_path / "oauth.sqlite3", KEY)
     policy = registry.client_policy(ENV | env)
     return (
         provider_module.NextcloudOAuthProvider(
-            env=ENV | env, policy=policy, store_provider=opener(subject)
+            env=ENV | env,
+            policy=policy,
+            store_provider=opener(subject),
+            resolver=resolving(CIMD_IP),
         ),
         subject,
+    )
+
+
+def cimd_document(**overrides: object) -> dict[str, object]:
+    """The measured document with these properties replaced, as a fetch would return it."""
+    return CIMD_DOCUMENT | overrides
+
+
+def cimd_route(
+    document: dict[str, object] | None = None,
+    *,
+    status: int = 200,
+    headers: dict[str, str] | None = None,
+) -> respx.Route:
+    """The transport of one document fetch, answered at the pinned address."""
+    return respx.get(CIMD_FETCH_URL).mock(
+        return_value=httpx.Response(
+            status, json=CIMD_DOCUMENT if document is None else document, headers=headers
+        )
     )
 
 
@@ -390,6 +443,437 @@ async def test_a_stored_row_that_cannot_be_read_is_refused_and_not_raised(
     await store.save_client(CLIENT_ID, metadata_json="not json at all")
 
     assert await subject.get_client(CLIENT_ID) is None
+
+
+# --- AUTH-08: the client that shows a document instead of registering --------------------
+
+CIMD_AUTH_ID = "the-connection-of-a-client-that-showed-a-document"
+CIMD_NC_USER = "jane"
+CIMD_APP_PASSWORD = "fffff-ggggg-hhhhh-iiiii-jjjjj"
+
+STALE_METADATA = json.dumps(
+    {
+        "client_id": CIMD_ID,
+        "client_name": "The name of an earlier reading",
+        "redirect_uris": ["http://127.0.0.1/callback"],
+    }
+)
+
+
+async def with_a_document_row(
+    store: OAuthStore, *, fetched_at: int, expires_at: int, registered_at: int | None = None
+) -> None:
+    """A row of the document path, placed in time by hand: the freshness is a deadline."""
+    await store.save_client(
+        CIMD_ID,
+        metadata_json=STALE_METADATA,
+        now=registered_at if registered_at is not None else fetched_at,
+        cimd_fetched_at=fetched_at,
+        cimd_expires_at=expires_at,
+    )
+
+
+@pytest.mark.anyio
+async def test_a_client_that_shows_a_document_is_resolved_and_gets_a_row_of_its_own(
+    tmp_path: Path,
+) -> None:
+    """The whole of AUTH-08 in one run: the identifier is the address of the document.
+
+    The row is not a convenience. ``flows.client_id`` and ``authorizations.client_id``
+    reference ``clients(client_id)``, so a client that lived only in a cache would fail the
+    first authorization request with an integrity error (pitfall 3).
+    """
+    subject, store = build(tmp_path)
+
+    with respx.mock:
+        route = cimd_route()
+        client = await subject.get_client(CIMD_ID)
+
+    assert route.call_count == 1
+    assert client is not None
+    assert client.client_id == CIMD_ID
+    assert client.client_name == "Claude Code"
+    assert [str(uri) for uri in client.redirect_uris or []] == CIMD_URIS
+    assert client.scope == metadata.REGISTERED_SCOPE
+
+    row = await store.load_client(CIMD_ID)
+    assert row is not None
+    assert row.client_secret_hash is None, "a client of this path is public by definition"
+    assert row.allowed is True
+    assert row.cimd_fetched_at is not None
+    assert row.cimd_expires_at is not None
+    assert row.cimd_expires_at > row.cimd_fetched_at
+
+
+@pytest.mark.anyio
+async def test_the_row_of_a_document_client_carries_the_foreign_key_of_a_flow(
+    tmp_path: Path,
+) -> None:
+    """Pitfall 3, spelled out as the insert that used to fail: the first flow of the client."""
+    subject, store = build(tmp_path)
+
+    with respx.mock:
+        cimd_route()
+        assert await subject.get_client(CIMD_ID) is not None
+
+    await store.create_flow(
+        "the-first-flow-of-a-document-client",
+        client_id=CIMD_ID,
+        redirect_uri=CIMD_URIS[0],
+        redirect_uri_explicit=True,
+        code_challenge=CHALLENGE,
+        state=None,
+        scopes=metadata.TOOL_SCOPE,
+        resource=f"{PUBLIC_URL}/mcp",
+        poll_token="the-poll-token-of-this-sign-in",
+    )
+
+    flow = await store.load_flow("the-first-flow-of-a-document-client")
+    assert flow is not None
+    assert flow.client_id == CIMD_ID
+
+
+@pytest.mark.anyio
+async def test_a_url_client_id_is_refused_while_the_cimd_switch_is_off(tmp_path: Path) -> None:
+    """T-06-28: a switched off feature that still makes outbound requests is an SSRF tool.
+
+    The switch is asked before the form of the identifier and before any resolution, so the
+    proof is not "the answer was none" but "this target was never contacted".
+    """
+    subject, store = build(tmp_path, **{registry.ENV_CIMD: "off"})
+
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.get(CIMD_FETCH_URL)
+        client = await subject.get_client(CIMD_ID)
+
+    assert client is None
+    assert route.called is False
+    assert await store.load_client(CIMD_ID) is None
+
+
+@pytest.mark.anyio
+async def test_a_url_client_id_is_refused_while_dcr_is_off(tmp_path: Path) -> None:
+    """The locked decision of this phase: a disabled DCR must not be bypassable through CIMD.
+
+    It holds without a second reading of a second switch here, because ``cimd_enabled`` is
+    derived fail closed from both in ``registry`` (T-06-26). The switch of this path may even
+    be set to ``on`` at the same time, which is the case this test names.
+    """
+    subject, store = build(tmp_path, **{registry.ENV_DCR: "off", registry.ENV_CIMD: "on"})
+
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.get(CIMD_FETCH_URL)
+        client = await subject.get_client(CIMD_ID)
+
+    assert client is None
+    assert route.called is False
+    assert await store.load_client(CIMD_ID) is None
+
+
+@pytest.mark.anyio
+async def test_the_allowlist_mode_holds_an_unlisted_document_client(tmp_path: Path) -> None:
+    """T-06-27: the allowlist stays in the shared rest of ``get_client``, for both paths.
+
+    This path is where the allowlist finally works the way an administrator expects: the
+    identifier of a registration is a random UUID nobody can name in advance, while the
+    identifier here is a published URL that can be written into the configuration before any
+    client ever connects.
+    """
+    subject, store = build(tmp_path, **{registry.ENV_ALLOWLIST_ONLY: "on"})
+
+    with respx.mock:
+        cimd_route()
+        assert await subject.get_client(CIMD_ID) is None
+
+    blocked = await store.load_client(CIMD_ID)
+    assert blocked is not None, "the block is stored, so it survives a restart"
+    assert blocked.allowed is False
+
+
+@pytest.mark.anyio
+async def test_a_listed_document_client_comes_through_the_allowlist(tmp_path: Path) -> None:
+    subject, _ = build(
+        tmp_path,
+        **{registry.ENV_ALLOWLIST_ONLY: "on", registry.ENV_ALLOWED_CLIENTS: CIMD_ID},
+    )
+
+    with respx.mock:
+        cimd_route()
+        client = await subject.get_client(CIMD_ID)
+
+    assert client is not None
+    assert client.client_name == "Claude Code"
+
+
+@pytest.mark.anyio
+async def test_a_forbidden_return_address_of_a_document_is_dropped_and_the_rest_registered(
+    tmp_path: Path,
+) -> None:
+    """D-35 through the same function as a registration, with the same partial acceptance."""
+    subject, store = build(tmp_path)
+
+    with respx.mock:
+        cimd_route(cimd_document(redirect_uris=CURSOR_URIS))
+        client = await subject.get_client(CIMD_ID)
+
+    assert client is not None
+    assert [str(uri) for uri in client.redirect_uris or []] == CURSOR_REGISTRABLE
+    row = await store.load_client(CIMD_ID)
+    assert row is not None
+    assert json.loads(row.metadata_json)["redirect_uris"] == CURSOR_REGISTRABLE
+
+
+@pytest.mark.anyio
+async def test_a_document_of_nothing_but_forbidden_addresses_writes_no_row(
+    tmp_path: Path,
+) -> None:
+    """T-06-29: a client with no admissible return target is one this server never sends to."""
+    subject, store = build(tmp_path)
+
+    with respx.mock:
+        cimd_route(cimd_document(redirect_uris=[CURSOR_URIS[0]]))
+        assert await subject.get_client(CIMD_ID) is None
+
+    assert await store.load_client(CIMD_ID) is None
+
+
+@pytest.mark.anyio
+async def test_a_document_that_carries_a_secret_still_becomes_a_public_client(
+    tmp_path: Path,
+) -> None:
+    """T-06-30: there is no channel over which a secret of this client could be agreed.
+
+    ``validate_document`` refuses every authentication method built on a shared secret
+    already; this is the other half, the one that holds if a document names an admissible
+    method and puts a secret next to it anyway.
+    """
+    subject, store = build(tmp_path)
+
+    with respx.mock:
+        cimd_route(cimd_document(client_secret="a-secret-nobody-ever-handed-out"))
+        assert await subject.get_client(CIMD_ID) is not None
+
+    row = await store.load_client(CIMD_ID)
+    assert row is not None
+    assert row.client_secret_hash is None
+    assert '"client_secret":' not in row.metadata_json
+    assert "a-secret-nobody-ever-handed-out" not in row.metadata_json
+    assert json.loads(row.metadata_json)["token_endpoint_auth_method"] == "none"
+
+
+@pytest.mark.anyio
+async def test_a_row_that_is_still_fresh_answers_without_a_second_request(
+    tmp_path: Path,
+) -> None:
+    """The whole cache: a deadline in the future is one this server does not pay for again."""
+    subject, store = build(tmp_path)
+    moment = int(time.time())
+    await with_a_document_row(store, fetched_at=moment - 10, expires_at=moment + 200)
+
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.get(CIMD_FETCH_URL)
+        client = await subject.get_client(CIMD_ID)
+
+    assert route.called is False
+    assert client is not None
+    assert client.client_name == "The name of an earlier reading"
+
+
+@pytest.mark.anyio
+async def test_a_row_whose_freshness_ran_out_is_read_again(tmp_path: Path) -> None:
+    """T-06-32: the deadline of the freshness costs a fetch, and the fetch is what happens."""
+    subject, store = build(tmp_path)
+    moment = int(time.time())
+    await with_a_document_row(store, fetched_at=moment - 4_000, expires_at=moment - 1)
+
+    with respx.mock:
+        route = cimd_route()
+        client = await subject.get_client(CIMD_ID)
+
+    assert route.call_count == 1
+    assert client is not None
+    assert client.client_name == "Claude Code", "the new reading is what answers"
+    row = await store.load_client(CIMD_ID)
+    assert row is not None
+    assert row.cimd_expires_at is not None
+    assert row.cimd_expires_at > moment
+
+
+@pytest.mark.anyio
+async def test_a_reading_that_fails_is_a_refusal_and_not_a_walk_on_with_the_old_one(
+    tmp_path: Path,
+) -> None:
+    """T-06-32, the other half: fail closed, and the row is not destroyed by a bad answer."""
+    subject, store = build(tmp_path)
+    moment = int(time.time())
+    await with_a_document_row(store, fetched_at=moment - 4_000, expires_at=moment - 1)
+
+    with respx.mock:
+        route = cimd_route(status=500)
+        assert await subject.get_client(CIMD_ID) is None
+
+    assert route.call_count == 1
+    assert await store.load_client(CIMD_ID) is not None, "a refusal deletes nothing"
+
+
+@pytest.mark.anyio
+async def test_a_document_identity_keeps_its_row_and_its_connections_past_the_ttl(
+    tmp_path: Path,
+) -> None:
+    """Pitfall 4, T-06-31: the registration TTL must not end a connection nobody ended.
+
+    The row is older than the window that removes a registration nobody ever used, and it
+    carries a connection with an encrypted Nextcloud app password. Under the registration TTL
+    the lookup would hand that password back and delete the row, and through the cascade the
+    connection with it: a user disconnected by a deadline that describes something else.
+    """
+    subject, store = build(tmp_path)
+    moment = int(time.time())
+    await with_a_document_row(
+        store,
+        fetched_at=moment - 10,
+        expires_at=moment + 200,
+        registered_at=moment - UNUSED_CLIENT_TTL - 1,
+    )
+    await store.create_authorization(
+        CIMD_AUTH_ID,
+        client_id=CIMD_ID,
+        nc_user=CIMD_NC_USER,
+        app_password=CIMD_APP_PASSWORD,
+        scopes=metadata.TOOL_SCOPE,
+        resource=f"{PUBLIC_URL}/mcp",
+    )
+
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get(CIMD_FETCH_URL)
+        client = await subject.get_client(CIMD_ID)
+
+    assert client is not None
+    assert await store.load_client(CIMD_ID) is not None
+    assert await store.load_authorization(CIMD_AUTH_ID) is not None
+
+
+@pytest.mark.anyio
+async def test_the_sweep_of_expired_clients_leaves_a_document_identity_alone(
+    tmp_path: Path,
+) -> None:
+    """The second place a client row is deleted, and it has to make the same exception."""
+    subject, store = build(tmp_path)
+    long_ago = int(time.time()) - UNUSED_CLIENT_TTL - 1
+    await with_a_document_row(store, fetched_at=long_ago, expires_at=long_ago + 300)
+    await store.save_client("a-registration-that-ran-out", metadata_json="{}", now=long_ago)
+
+    swept = await subject.sweep_expired_clients()
+
+    assert swept == 1
+    assert await store.load_client("a-registration-that-ran-out") is None
+    assert await store.load_client(CIMD_ID) is not None
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("status", "body"),
+    [
+        (500, CIMD_DOCUMENT),
+        (404, CIMD_DOCUMENT),
+        (302, CIMD_DOCUMENT),
+        (200, {"client_id": CIMD_ID}),
+        (200, cimd_document(client_id="https://claude.ai/oauth/another-document")),
+        (200, cimd_document(token_endpoint_auth_method="client_secret_post")),
+        (200, cimd_document(redirect_uris=[])),
+        (200, cimd_document(redirect_uris=["cursor://anysphere.cursor-mcp/oauth/callback"])),
+    ],
+)
+async def test_every_refusal_of_this_path_is_one_answer_and_never_an_exception(
+    tmp_path: Path, status: int, body: dict[str, object]
+) -> None:
+    """T-06-33: unknown, unreachable, malformed and inadmissible look the same from outside."""
+    subject, store = build(tmp_path)
+
+    with respx.mock:
+        cimd_route(body, status=status)
+        assert await subject.get_client(CIMD_ID) is None
+
+    assert await store.load_client(CIMD_ID) is None, "and none of them leaves a row behind"
+
+
+@pytest.mark.anyio
+async def test_an_identifier_that_is_not_a_document_url_never_reaches_the_transport(
+    tmp_path: Path,
+) -> None:
+    """The form check is the first one that costs nothing, and an unknown client id is the
+    ordinary case of this branch: almost every call of it is one."""
+    subject, _ = build(tmp_path)
+
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.get(CIMD_FETCH_URL)
+        assert await subject.get_client("9d0f8f1a-not-a-url") is None
+        assert await subject.get_client("http://claude.ai/oauth/document") is None
+        assert await subject.get_client(f" {CIMD_ID}") is None
+
+    assert route.called is False
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("header", "window"),
+    [
+        (None, cimd.CACHE_MIN_SECONDS),
+        ("max-age=60", cimd.CACHE_MIN_SECONDS),
+        ("max-age=900", 900),
+        ("max-age=86400", cimd.CACHE_MAX_SECONDS),
+        ("no-store", cimd.CACHE_MIN_SECONDS),
+    ],
+)
+async def test_the_deadline_of_a_row_is_the_window_of_its_own_answer(
+    tmp_path: Path, header: str | None, window: int
+) -> None:
+    """The draft asks a server to respect the cache headers and lets it bound them itself."""
+    subject, store = build(tmp_path)
+
+    with respx.mock:
+        cimd_route(headers={"cache-control": header} if header else None)
+        assert await subject.get_client(CIMD_ID) is not None
+
+    row = await store.load_client(CIMD_ID)
+    assert row is not None
+    assert row.cimd_fetched_at is not None
+    assert row.cimd_expires_at is not None
+    assert row.cimd_expires_at - row.cimd_fetched_at == window
+
+
+def test_the_client_lookup_raises_no_registration_error_on_either_of_its_paths() -> None:
+    """D-37: an exception out of ``get_client`` would be a new failure shape in four endpoints.
+
+    ``register_client`` names its refusals with a ``RegistrationError``, because a developer
+    reads that answer at ``/register``. The lookup answers ``None`` instead, and the branch of
+    this plan does not get to be the exception.
+
+    The docstrings come off first, the way the throttle gate of this file does it: they name
+    what the code deliberately does not do, and a gate that cannot tell a mention from a use
+    would forbid the explanation instead of the thing.
+    """
+    tree = ast.parse(inspect.getsource(provider_module))
+    checked = set()
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.AsyncFunctionDef | ast.FunctionDef):
+            continue
+        if node.name not in ("get_client", "_resolve_cimd", "_cimd_client_information"):
+            continue
+        checked.add(node.name)
+        first = node.body[0] if node.body else None
+        if (
+            isinstance(first, ast.Expr)
+            and isinstance(first.value, ast.Constant)
+            and isinstance(first.value.value, str)
+        ):
+            node.body = node.body[1:] or [ast.Pass()]
+        assert "RegistrationError" not in ast.unparse(node), (
+            f"{node.name} refuses with a value, never with a registration error"
+        )
+
+    assert checked == {"get_client", "_resolve_cimd", "_cimd_client_information"}
 
 
 # --- the code exchange -------------------------------------------------------------------

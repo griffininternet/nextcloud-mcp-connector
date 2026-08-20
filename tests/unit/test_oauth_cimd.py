@@ -708,6 +708,84 @@ async def test_a_name_that_does_not_resolve_is_a_refusal_without_a_packet() -> N
     assert route.called is False
 
 
+# --- how long an answer may be reused ---------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("header", "window"),
+    [
+        (None, cimd.CACHE_MIN_SECONDS),
+        ("", cimd.CACHE_MIN_SECONDS),
+        ("max-age=60", cimd.CACHE_MIN_SECONDS),
+        ("max-age=300", 300),
+        ("max-age=900", 900),
+        ("public, max-age=1200", 1200),
+        ("MAX-AGE=1200", 1200),
+        ("max-age=86400", cimd.CACHE_MAX_SECONDS),
+        ("max-age=-1", cimd.CACHE_MIN_SECONDS),
+        ("max-age=", cimd.CACHE_MIN_SECONDS),
+        ("max-age=soon", cimd.CACHE_MIN_SECONDS),
+        ("s-maxage=1200", cimd.CACHE_MIN_SECONDS),
+        ("no-store", cimd.CACHE_MIN_SECONDS),
+        ("no-cache, max-age=1200", cimd.CACHE_MIN_SECONDS),
+        ("private", cimd.CACHE_MIN_SECONDS),
+        ("Thu, 01 Jan 2026 00:00:00 GMT", cimd.CACHE_MIN_SECONDS),
+    ],
+)
+def test_the_window_of_an_answer_is_its_own_header_inside_our_two_bounds(
+    header: str | None, window: int
+) -> None:
+    """The draft's SHOULD, with the MAY it hands out next to it (section 6.6).
+
+    Every value this cannot read ends at the floor, which is the end of the range that costs
+    a fetch rather than a stale identity. ``s-maxage`` is deliberately not read: it is the
+    directive for a shared proxy and this is not one.
+    """
+    assert cimd.cache_lifetime(header) == window
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_the_fetch_hands_out_the_window_of_the_answer_it_read() -> None:
+    """The window travels with the document, because only the fetch ever sees the header."""
+    respx.get(PINNED_URL).mock(
+        return_value=httpx.Response(200, json=document(), headers={"cache-control": "max-age=1800"})
+    )
+
+    found = await cimd.fetch_document_and_lifetime(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
+
+    assert found is not None
+    assert found[0] == document()
+    assert found[1] == 1800
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_the_two_views_of_the_boundary_answer_the_same_about_one_identifier() -> None:
+    """One implementation, two projections: a caller with nowhere to keep a deadline drops it."""
+    respx.get(PINNED_URL).mock(return_value=httpx.Response(200, json=document()))
+
+    pair = await cimd.fetch_document_and_lifetime(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
+    plain = await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
+
+    assert pair is not None
+    assert pair[0] == plain
+    assert pair[1] == cimd.CACHE_MIN_SECONDS, "no header at all is the floor"
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_refused_answer_carries_no_window_at_all() -> None:
+    """There is nothing to keep and therefore nothing to say for how long (T-06-10)."""
+    respx.get(PINNED_URL).mock(
+        return_value=httpx.Response(500, headers={"cache-control": "max-age=1800"})
+    )
+
+    assert (
+        await cimd.fetch_document_and_lifetime(DOCUMENT_URL, resolver=answering(PUBLIC_IP)) is None
+    )
+
+
 # --- the boundaries of the module itself ------------------------------------------------
 
 

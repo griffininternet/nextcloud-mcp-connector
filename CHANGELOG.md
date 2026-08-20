@@ -23,6 +23,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- An assistant can now connect by publishing its own metadata document instead of
+  registering with this app first. The address of that document is the name the client
+  goes by, the app reads it once and keeps the answer for as long as the answer asks for
+  and at least five minutes, and it reads it again when that window is over. Everything
+  that holds for a registration holds here too: only `https` return addresses and
+  loopback ones, an inadmissible address is dropped and the rest kept, the client list of
+  an administrator decides in exactly the same place, and a client of this kind never
+  holds a shared secret. The app reads such a document from public addresses only, never
+  follows a redirect on the way and never fetches an image from it. This is the way the
+  current specification prefers, and it is the way Claude Code identifies itself.
 - A new administrator switch, `NC_MCP_OAUTH_CIMD`, for the way a client identifies
   itself by the address of its own published metadata document instead of registering.
   It is on unless it is switched off, and switching off client registration switches
