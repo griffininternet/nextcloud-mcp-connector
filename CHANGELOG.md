@@ -11,6 +11,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-08-20
+
+A maintenance release with no new feature. It opens the app to clients that register a
+return address of their own scheme, which is what kept Cursor out, and it tightens four
+places where the app trusted what a request said about itself instead of what it sent.
+
 ### Changed
 
 - A client that registers several return addresses at once is no longer refused
@@ -147,6 +153,7 @@ First release, submitted to the Nextcloud App Store.
   never sees more than that user sees in the web interface.
 - A privacy and data flow description, see [docs/privacy.md](docs/privacy.md).
 
-[Unreleased]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/street1983nk/nextcloud-mcp-connector/releases/tag/v0.1.0

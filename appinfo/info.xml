@@ -56,14 +56,21 @@ Le connecteur lui-même n'envoie aucune télémétrie et n'appelle aucun tiers. 
 
 D'autres réponses, notamment sur la façon dont un administrateur supprime l'application et ses données : [questions fréquentes](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/faq.md) et [confidentialité et flux de données](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/privacy.md), les deux en anglais.
 	]]></description>
-	<version>0.1.1</version>
+	<version>0.1.2</version>
 	<licence>agpl</licence>
 	<author mail="k.cherif@outlook.de">street1983nk</author>
 	<namespace>McpConnector</namespace>
 	<category>integration</category>
 	<bugs>https://github.com/street1983nk/nextcloud-mcp-connector/issues</bugs>
 	<repository type="git">https://github.com/street1983nk/nextcloud-mcp-connector</repository>
+	<!--
+	  - The order is the order the store shows them in, so the first one is the picture the
+	  - listing leads with. Both answer 200 from raw.githubusercontent.com, measured by the
+	  - runbook in docs/store-submission.md at every release: the store stores the URL and
+	  - never a copy, so a moved file is a broken listing.
+	-->
 	<screenshot>https://raw.githubusercontent.com/street1983nk/nextcloud-mcp-connector/main/docs/screenshots/connections.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/street1983nk/nextcloud-mcp-connector/main/docs/screenshots/connections-page.png</screenshot>
 	<dependencies>
 		<!--
 		  - min 32: HaRP is the recommended deploy daemon from Nextcloud 32 on, and the
@@ -93,7 +100,7 @@ D'autres réponses, notamment sur la façon dont un administrateur supprime l'ap
 			-->
 			<registry>ghcr.io</registry>
 			<image>street1983nk/mcp_connector</image>
-			<image-tag>0.1.1</image-tag>
+			<image-tag>0.1.2</image-tag>
 		</docker-install>
 		<!--
 		  - Exactly thirteen routes, and they are the whole external attack surface of this app.
