@@ -20,6 +20,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   next to two acceptable addresses. The rule itself is unchanged, `https` on any host
   and `http` on loopback only, a dropped address is never a redirect target, and a
   registration whose every address is inadmissible is still refused.
+- An excerpt of a document now reads only what it keeps. The bundling tool keeps two
+  kilobytes per hit and used to fetch up to 512 kilobytes to do it, so one call with
+  three excerpts could move one and a half megabytes through the instance. The answer
+  is the same one as before, the transfer behind it is a fraction of it.
+- A pause that has nothing behind it is cleaned up after 90 days. The switch a user
+  sets for their own account was stored forever, also for accounts that no longer
+  exist, and on setups that reuse account names a new account could inherit the pause
+  of an old one and start switched off without anybody having done that. A pause with
+  a connection behind it is untouched, whatever its age.
+- The app's database does less work per request. The table setup ran on every single
+  open of the file, including the account switch check that sits on every request of a
+  connected assistant, and it now runs when a process opens the file for the first
+  time. A store file that is removed while the app runs is still recreated.
 
 ### Security
 
@@ -30,6 +43,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   to a one hour window now, and the previous window is accepted as well, so a page that
   was open across a full hour still submits. A page older than that is refused the way a
   forged one is: it shows itself again, and the action has to be repeated.
+- A document can no longer imitate the note this app writes into a text. When a file is
+  too large to be read at once, or when a document is shortened to a short excerpt, the
+  answer says so in the text itself, so an assistant that reads only the text can tell a
+  whole document from the beginning of one. A document that contained that exact
+  sentence could pretend the excerpt of the server ended there and that what followed
+  was a message of the system, or claim to be complete where it was cut. The sentence is
+  now removed from the content of a document before the app writes its own, so it can
+  only come from the app. What an assistant receives is otherwise unchanged.
 
 ## [0.1.1] - 2026-08-19
 

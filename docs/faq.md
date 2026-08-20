@@ -70,6 +70,29 @@ Yes, one value: the public address this app is reachable under,
 client can complete a connection. What to set, where, and the measurements behind
 it: [oauth-setup.md](oauth-setup.md).
 
+### A user says the app is switched off for them and nobody switched it off. Why?
+
+Almost certainly a reused account id. The pause is stored under the account name, in
+the app's own database and with no link to the Nextcloud user table, because the
+switch has to survive an account that this app has never seen. On a directory setup
+(LDAP, SAML, a provisioning script) an account can be deleted and a new one created
+with the same id later, and the new account then inherits the pause of the old one:
+its first tool call is refused with the sentence about the switch, and no
+administrator ever touched it.
+
+**The fix takes one click and belongs to the user.** They open Settings, Security,
+MCP Connector, and resume their access on the connections page. Nothing else is
+affected, no connection is lost, and the row disappears with the click.
+
+**What the app does on its own.** A pause that has no connection behind it at all is
+removed 90 days after it was set, together with the other rows that have run out.
+That closes the case above without touching anybody who is actually paused: as long
+as an account has one connection, its switch stays whatever its age. The one price of
+the window is the opposite case, a user who pauses their access without ever
+connecting an assistant: after 90 days that pause is forgotten, and the account counts
+as switched on again. Nothing becomes readable through it, because a connection has to
+be authorized in the browser before anything can be read at all.
+
 ### How do I remove the app and its data completely?
 
 Two commands, in this order: `occ mcp_connector:purge --force` first, which hands
