@@ -41,7 +41,7 @@ Audit: [milestones/v1.0-MILESTONE-AUDIT.md](milestones/v1.0-MILESTONE-AUDIT.md) 
   4. Auf einer auf 34.0.3 aktualisierten Instanz ist nachgewiesen, ob die Store-UI den Install- und Remove-Knopf für ExApps zeigt; docs/exapp-install.md und der Store-Text sagen danach genau das, was gemessen wurde, ohne Ein-Klick-Versprechen ohne Deckung.
   5. Ein Dritter kann die Demo nachfahren: eine reproduzierbare Strecke aus Verbindung, Tool-Aufrufen, Per-User-Verwaltung und Widerruf gegen eine laufende Instanz, mit Drehbuch, plus ein Lightning-Talk-Entwurf aus Folien und Sprechzettel (Einreichung bleibt Owner-Entscheid).
 
-**Plans**: 10 plans
+**Plans**: 11 plans
 
 Plans:
 **Wave 1**
@@ -77,6 +77,10 @@ Plans:
 **Wave 8** *(blocked on Wave 7 completion)*
 
 - [x] 06-10-PLAN.md , CONF-01 und CONF-02: Demo-Drehbuch und Lightning-Talk-Entwurf
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [ ] 06-11-PLAN.md , CLIENT-04 Gap-Closure: das Verworfene sichtbar machen, Wortlaut auf das Gemessene, BL-14 schliessen
 
 ### Phase 7: Verwaltungs-Clients live verprobt
 
