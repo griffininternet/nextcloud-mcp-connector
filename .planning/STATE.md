@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Plan 05-16 fertig: der MUCGPT-Abschnitt in docs/client-setup.md traegt ein abhakbares Verprobungsprotokoll (drei Pruefpunkte in Scheiterreihenfolge, je mit Notierpflicht, plus Gegenprobe und Identitaetsfrage). Die offene Verprobung ist in BL-12 und deferred-items.md gefuehrt, die Advisory-Funde IN-01 bis IN-06 als BL-13. Owner-Entscheidung 2026-08-20: option-b, EXAPP-05 wird mit der dokumentierten Luecke abgenommen (Truth 4). Naechster Schritt: Phasenabschluss 05 pruefen (Verifier)."
-last_updated: "2026-08-20T04:22:47.719Z"
+stopped_at: "Plan 05-13 fertig: der 401 des Fensters vor der Aktivierung ist eine ehrliche INFO-Zeile mit Ausweg statt einer ERROR-Zeile (Zweig N aus 05-12); Overlay-Cache, vierte Registrierung am enabled=1-Hook und Selbstneustart bewusst nicht gebaut. Die 401-Zeile in deferred-items.md ist geschlossen. Naechster Schritt: Phasenabschluss 05 pruefen (Verifier)."
+last_updated: "2026-08-20T04:33:48.105Z"
 last_activity: 2026-08-20
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 50
-  completed_plans: 48
+  completed_plans: 49
   percent: 80
 ---
 
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 
 Phase: 05 (hardening-und-store-einreichung) — EXECUTING
 Plan: 16 of 16
-Status: Plan 05-16 abgeschlossen
+Status: Plan 05-13 abgeschlossen (Gap Closure, nach 05-16 ausgefuehrt)
 Last activity: 2026-08-20
 
-Progress: [██████████] 96%
+Progress: [██████████] 98%
 
 ## Performance Metrics
 
@@ -101,6 +101,7 @@ Progress: [██████████] 96%
 | Phase 05 P12 | 20 min | 2 tasks tasks | 1 file files |
 | Phase 05 P15 | 30 min | 2 tasks tasks | 5 files files |
 | Phase 05-hardening-und-store-einreichung P16 | 20 | 2 tasks | 3 files |
+| Phase 05-hardening-und-store-einreichung P13 | 15 min | 2 tasks tasks | 4 files files |
 
 ## Accumulated Context
 
@@ -327,6 +328,7 @@ Recent decisions affecting current work:
 - [Phase 05-hardening-und-store-einreichung]: purge._is_set ist eine Positivliste (TRUE_WORDS) und der Query-Parameter-Zweig entfaellt (WR-02): die gemessene AppAPI-Form ist ein JSON-Boolean und bleibt per Regressionstest angenommen, ein unbekanntes Wort ist ein Tippfehler mit Logzeile
 - [Phase 05-hardening-und-store-einreichung]: require_url_shape pinnt NC_EXAPP_PUBLIC_URL vor json_info (WR-03) und laeuft mit grep -Eqz, weil ein Wert mit Zeilenumbruch sonst auf seiner ersten Zeile bestehen wuerde
 - [Phase ?]: 05-16: option-b, EXAPP-05 wird mit der dokumentierten, gefuehrten MUCGPT-Luecke abgenommen (2026-08-20); gefuehrt ueber BL-12 und deferred-items.md, einloesbar per Protokoll in docs/client-setup.md
+- [Phase 05]: Zweig N aus 05-12 ausgefuehrt: der 401 des Fensters vor der Aktivierung ist eine INFO-Zeile mit Ausweg, jeder andere Fehlschlag desselben Lesevorgangs bleibt ERROR; Overlay-Cache, vierte Registrierung am enabled=1-Hook und Selbstneustart wurden bewusst nicht gebaut, weil M1, M2 und M3 sie als wirkungslos belegen
 
 ### Pending Todos
 
@@ -357,6 +359,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T04:22:42.848Z
-Stopped at: Plan 05-15 fertig: WR-01, WR-02 und WR-03 aus 05-REVIEW.md sind geschlossen. Der Purge bricht bei null gelungenen Rueckgaben ehrlich ab (Tabellen und Datenschluessel bleiben, Lauf wiederholbar), die Flag-Erkennung ist eine Positivliste ohne Query-Parameter, und NC_EXAPP_PUBLIC_URL ist im Bootstrap gepinnt. Naechster Schritt: Plan 05-16 (Backlog-Eintrag fuer IN-01 bis IN-06).
+Last session: 2026-08-20T04:33:48.088Z
+Stopped at: Plan 05-13 fertig: der 401 des Fensters vor der Aktivierung ist eine ehrliche INFO-Zeile mit Ausweg statt einer ERROR-Zeile (Zweig N aus 05-12); Overlay-Cache, vierte Registrierung am enabled=1-Hook und Selbstneustart bewusst nicht gebaut. Die 401-Zeile in deferred-items.md ist geschlossen. Naechster Schritt: Phasenabschluss 05 pruefen (Verifier).
 Resume file: None

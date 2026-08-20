@@ -241,7 +241,7 @@ Plans:
 
 **Wave 7, Gap Closure** *(blocked on 05-11 und 05-12)*
 
-- [ ] 05-13-PLAN.md - Admin-Werte wirken trotz 401: Overlay-Cache und Erneuerung am enabled-Hook (Wave 2)
+- [x] 05-13-PLAN.md - Admin-Werte wirken trotz 401: ausgefuehrt als Zweig N aus 05-12 (ehrliche Logzeile plus dokumentierter Disable/Enable-Zyklus; Overlay-Cache und Erneuerung am enabled-Hook entfallen, weil gemessen wirkungslos) (Wave 2)
 
 **Wave 8, Gap Closure** *(blocked on 05-13)*
 
@@ -258,7 +258,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. ExApp-Shell | 7/7 | Complete    | 2026-08-15 |
 | 3. OAuth 2.1 | 8/9 | In Progress|  |
 | 4. Per-User-Verwaltung und prepare_context | 4/4 | Complete   | 2026-08-17 |
-| 5. Hardening und Store-Einreichung | 14/16 | In Progress|  |
+| 5. Hardening und Store-Einreichung | 15/16 | In Progress|  |
 
 ## Coverage
 
