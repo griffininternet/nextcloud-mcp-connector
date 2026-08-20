@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Verwaltungs-Clients und Härtungs-Reste
 status: executing
-stopped_at: "Plan 06-05 fertig: der CIMD-Zweig liegt in provider.get_client (ein Aufrufpunkt fuer keine Zeile, abgelaufene Frische und frische Zeile), schreibt eine echte clients-Zeile ohne Secret, filtert die Adressen des Dokuments durch redirect_uri_allowed und faellt danach in den gemeinsamen Rest (allowed, Allowlist); clients.cimd_fetched_at und clients.cimd_expires_at sind idempotent nachgezogen, die Registrierungs-TTL nimmt einer CIMD-Verbindung weder in get_client noch im Sweep die Zeile. 2162 Tests gruen, ruff/pyright/vulture sauber, pyproject und uv.lock unberuehrt. AUTH-08 bleibt Pending bis zum Live-Nachweis in 06-09. Naechster Schritt: 06-06 (Zustimmungsseite: Hostnamen und Loopback-Warnung)."
-last_updated: "2026-08-20T13:50:13.302Z"
-last_activity: 2026-08-20 -- Plan 06-05 fertig (CIMD-Zweig in provider.get_client, zwei Frische-Spalten auf clients)
+stopped_at: "Plan 06-06 fertig: die Zustimmungsseite nennt den Hostnamen einer Dokument-client_id und warnt bei ausschliesslich Loopback-Rueckadressen; beide Flags rechnet der Aufrufer ohne zusaetzlichen Roundtrip. docs/oauth-setup.md beschreibt den CIMD-Weg samt SSRF-Grenze, Pitfall 6 ist ersetzt (RFC 8252 7.3). 2183 Tests gruen, ruff/pyright/vulture sauber, READMEs und Version unberuehrt (06-07). Naechster Schritt: 06-07 (Dreisprachigkeit READMEs plus Store-Text)."
+last_updated: "2026-08-20T14:11:25.005Z"
+last_activity: 2026-08-20 -- Plan 06-06 fertig (Hostname und Loopback-Warnung auf der Zustimmungsseite, CIMD-Doku)
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 10
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 ---
 
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 6 (Härtung, Eigennachweise und Conference-Reife), EXECUTING
-Plan: 6 of 10
+Plan: 7 of 10
 Status: Ready to execute
 Milestone: v1.1 Verwaltungs-Clients und Härtungs-Reste (Phasen 6-7)
-Last activity: 2026-08-20 -- Plan 06-05 fertig (CIMD-Zweig in provider.get_client, zwei Frische-Spalten auf clients)
+Last activity: 2026-08-20 -- Plan 06-06 fertig (Hostname und Loopback-Warnung auf der Zustimmungsseite, CIMD-Doku)
 
 ## Performance Metrics
 
@@ -108,6 +108,7 @@ Last activity: 2026-08-20 -- Plan 06-05 fertig (CIMD-Zweig in provider.get_clien
 | Phase 06 P02 | 40 min | 3 tasks | 2 files |
 | Phase 06 P04 | 20 min | 2 tasks tasks | 6 files files |
 | Phase 06 P05 | 35 min | 2 tasks | 7 files |
+| Phase 06 P06 | 40 min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -351,6 +352,8 @@ Recent decisions affecting current work:
 - [Phase 06]: _has_expired gilt nicht fuer Zeilen mit gesetztem cimd_fetched_at, und store.expired_clients nimmt sie ebenfalls aus: die Registrierungs-TTL wuerde ueber die Kaskade eine Nutzerverbindung beenden, die niemand beendet hat (Pitfall 4, T-06-31); purge_expired bleibt der Backstop fuer Zeilen ohne Verbindung
 - [Phase 06]: Die Cache-Frist kommt aus dem Cache-Header der Antwort, gekappt auf 300 bis 3600 s; dafuer bekommt cimd.py fetch_document_and_lifetime als Grenze und fetch_document als Projektion davon, weil nur der Fetch den Header sieht
 - [Phase 06]: Aus einem fremden Dokument werden nur client_name, redirect_uris, grant_types und response_types uebernommen; logo_uri und jedes andere Feld landen nicht im Datensatz, token_endpoint_auth_method wird auf none gesetzt (T-06-13, T-06-30)
+- [Phase 06]: Die Herkunft eines Clients auf der Zustimmungsseite wird aus der Form der client_id erkannt (cimd.is_cimd_client_id) und nicht aus der Store-Spalte: ein zweiter Store-Zugriff haette den einen Nextcloud-Roundtrip pro Request gekostet (T-06-39)
+- [Phase 06]: Die Loopback-Warnung der Zustimmungsseite gilt auch fuer DCR-Clients: die Impersonationsgefahr haengt an der Rueckadresse und nicht am Registrierungsweg; eine leere Adressliste ist bewusst NICHT 'nur Loopback'
 
 ### Pending Todos
 
@@ -381,12 +384,12 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T13:50:13.285Z
-Stopped at: Plan 06-05 fertig: der CIMD-Zweig liegt in provider.get_client (ein Aufrufpunkt fuer keine Zeile, abgelaufene Frische und frische Zeile), schreibt eine echte clients-Zeile ohne Secret, filtert die Adressen des Dokuments durch redirect_uri_allowed und faellt danach in den gemeinsamen Rest (allowed, Allowlist); clients.cimd_fetched_at und clients.cimd_expires_at sind idempotent nachgezogen, die Registrierungs-TTL nimmt einer CIMD-Verbindung weder in get_client noch im Sweep die Zeile. 2162 Tests gruen, ruff/pyright/vulture sauber, pyproject und uv.lock unberuehrt. AUTH-08 bleibt Pending bis zum Live-Nachweis in 06-09. Naechster Schritt: 06-06 (Zustimmungsseite: Hostnamen und Loopback-Warnung).
-Naechster Schritt: /gsd:execute-phase 6 (Plan 06-03)
+Last session: 2026-08-20T14:11:24.987Z
+Stopped at: Plan 06-06 fertig: die Zustimmungsseite nennt den Hostnamen einer Dokument-client_id und warnt bei ausschliesslich Loopback-Rueckadressen; beide Flags rechnet der Aufrufer ohne zusaetzlichen Roundtrip. docs/oauth-setup.md beschreibt den CIMD-Weg samt SSRF-Grenze, Pitfall 6 ist ersetzt (RFC 8252 7.3). 2183 Tests gruen, ruff/pyright/vulture sauber, READMEs und Version unberuehrt (06-07). Naechster Schritt: 06-07 (Dreisprachigkeit READMEs plus Store-Text).
+Naechster Schritt: /gsd:execute-phase 6 (Plan 06-07)
 Resume file: None
 
 ## Operator Next Steps
 
-- Phase 6 weiter ausfuehren: `/gsd:execute-phase 6` (10 Plaene, 1 fertig)
+- Phase 6 weiter ausfuehren: `/gsd:execute-phase 6` (10 Plaene, 6 fertig)
 - Phase 7 haengt an fremden Zugaengen (it@M-Antwort fuer MUCGPT, Owner-Kontakte fuer F13 und BaerGPT); sie blockiert keinen Liefergegenstand aus Phase 6

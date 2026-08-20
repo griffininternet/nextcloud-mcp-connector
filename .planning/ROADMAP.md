@@ -60,7 +60,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 06-06-PLAN.md , AUTH-08: Consent-Anzeigepflichten und CIMD-Doku
+- [x] 06-06-PLAN.md , AUTH-08: Consent-Anzeigepflichten und CIMD-Doku
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -103,7 +103,7 @@ Plans:
 | 3. OAuth 2.1 | v1.0 | 9/9 | Complete | 2026-08-16 |
 | 4. Per-User-Verwaltung und prepare_context | v1.0 | 4/4 | Complete | 2026-08-17 |
 | 5. Hardening und Store-Einreichung | v1.0 | 16/16 | Complete | 2026-08-20 |
-| 6. Härtung, Eigennachweise und Conference-Reife | v1.1 | 5/10 | In Progress|  |
+| 6. Härtung, Eigennachweise und Conference-Reife | v1.1 | 6/10 | In Progress|  |
 | 7. Verwaltungs-Clients live verprobt | v1.1 | 0/TBD | Not started (extern getaktet) | - |
 
 ## Next
