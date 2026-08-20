@@ -297,3 +297,70 @@ $ docker inspect -f '{{.Name}} {{.State.Status}} {{.HostConfig.RestartPolicy.Nam
 $ git status --porcelain src tests scripts
 (leer)
 ```
+
+## 7. Ursache
+
+Genau eine Aussage, und jede ihrer Haelften haengt an einer Messnummer:
+
+**Der Lesekanal traegt. Der 401 haengt allein daran, dass die App im Moment des Lesens in
+Nextcloud noch nicht als aktiviert gilt.**
+
+* Der Kanal traegt: M1 antwortet 200, und ein zuvor gesetzter Wert kommt vollstaendig
+  zurueck (Abschnitt 2). Der Lesevorgang ist damit nicht nur erreichbar, sondern liefert
+  echte Daten.
+* Der Fehler liegt nicht am Startzeitpunkt an sich: M2 (blosser Container-Neustart) und M3
+  (Start nach `enable`) zeigen die 401-Zeile nicht, sondern die INFO-Zeile ueber den
+  gewonnenen Admin-Wert (Abschnitte 3 und 4). Der Lesevorgang gelingt also genau dort, wo
+  die Vermutung aus `deferred-items.md` ihn scheitern sah.
+* Der Fehler haengt am Aktivierungszustand: M3b startet denselben Container bei
+  `enabled=0` und bekommt die 401-Zeile zurueck, M3c misst dazu den Statuscode aus dem
+  laufenden Prozess, 401 mit `OCS 997, AppAPI authentication failed` (Abschnitte 4.1 und
+  4.2). Container, Secret, Adresse und Header sind in M1 und M3c identisch; der einzige
+  Unterschied ist das Flag.
+* Die Gegenprobe im Quelltext der Instanz nennt dieselbe Stelle: `validateExAppRequestToNC`
+  akzeptiert das Secret und faellt danach ueber `!$exApp->getEnabled()`, und der
+  Konfigurationspfad steht nicht in der Ausnahmeliste (Abschnitt 4.3).
+* Damit ist auch die Ausgangszeile erklaert: beim allerersten Start nach dem Deploy ist die
+  Zeile in `oc_ex_apps` noch `enabled=0`, denn `enable` kommt erst nach `init` (Abschnitt
+  1). Der Start faellt genau in dieses Fenster, und in diesem Fenster kann es noch gar
+  keinen Admin-Wert geben, weil die App bis dahin nicht existiert hat.
+
+**Die Vermutung aus `deferred-items.md` ist damit in ihrer Ursache bestaetigt und in ihrer
+Folgerung widerlegt.** Bestaetigt: zur Startzeit gilt die App noch nicht als aktiviert, und
+AppAPI weist die eigene App-Identitaet in diesem Fenster ab (M3b, M3c). Widerlegt ist der
+Satz "ein im Admin-Formular gesetzter Wert wirkt auf dieser Topologie nie": der
+Disable/Enable-Zyklus stoppt und startet denselben Container (M3), der Start danach liest
+sauber (M3), und ein blosser Neustart genuegt ebenfalls (M2). Der dokumentierte Preis aus
+`entry_exapp._resolved_env` (ein geaenderter Wert wirkt nach Deaktivieren und Aktivieren)
+ist also nicht nur Absicht, sondern gemessen wirksam.
+
+Was als Defekt uebrig bleibt, ist kleiner als gedacht und trotzdem nicht nichts: eine
+`ERROR`-Zeile im einzigen Zeitfenster, in dem dieser Fehlschlag der Normalfall ist. Wer sie
+liest, haelt eine funktionierende Installation fuer kaputt, und genau das ist in dieser
+Phase passiert.
+
+## 8. Was Plan 05-13 daraus macht
+
+**Gewaehlt ist Zweig N.** Kein Selbstneustart, sondern eine ehrliche Logzeile fuer das
+Fenster vor der Aktivierung plus der dokumentierte Disable/Enable-Zyklus als der Weg, auf
+dem ein gesetzter Wert wirksam wird.
+
+Begruendung aus den Messnummern: ein zweiter Lesevorgang am `enabled=1`-Hook samt Cache
+waere ohne Wirkung, weil jeder Start einer aktivierten App die Werte bereits vollstaendig
+liest (M1, M2, M3); und der Zyklus, der einen geaenderten Wert holt, ist gemessen genau der
+aus der Doku (M3). Der verbleibende Fehler ist eine Fehlklassifikation im Log: der 401
+waehrend `enabled=0` ist der erwartete Ausgang und keine Stoerung (M3b, M3c, Quelltext
+4.3), waehrend jeder andere Fehlschlag dieses Lesevorgangs weiter `ERROR` bleiben muss.
+
+Die Zuordnungsregel des Plans wurde vorher woertlich geprueft, und keine ihrer drei
+Vorbedingungen ist eingetreten: M1 ist nicht 401, M2 zeigt die 401-Zeile nicht, und M3
+zeigt beim Start nach `enable` ebenfalls keine. Die Messung liegt in einem vierten Fall,
+den die Regel nicht vorsah, deshalb entscheidet hier der Inhalt und nicht eine
+Vorbedingung. Die Zusatzfrage der Regel ist trotzdem beantwortet, weil Plan
+05-13 sie sonst raten muesste: die Restart-Policy des vom Deploy Daemon erzeugten
+Containers heisst woertlich `unless-stopped` (MaximumRetryCount 0), ein Prozessende von
+innen bringt den Container von allein zurueck (M4, RestartCount 0 nach 1), und ein von
+`disable` gestoppter Container bleibt liegen. Ein Selbstneustart waere hier also machbar
+(nach der Buchstabenregel haette diese Policy auf die Selbstneustart-Variante gezeigt), er
+loest aber nichts, was M2 und M3 nicht schon loesen, und ein Neustart mehr im
+Installationsweg ist ein Risiko ohne Gegenwert.
