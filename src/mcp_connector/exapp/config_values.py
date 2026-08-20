@@ -25,6 +25,18 @@ the administrator has not set anything. Falling back to the deploy environment i
 correct answer, and stopping an installation over an unreachable OCS call would be the
 wrong one. Every failure below is therefore an empty result plus exactly one log line.
 
+**Why a 401 is told and not reported as a fault.** Plan 05-12 measured this read against a
+running HaRP topology instead of guessing about it. The channel carries: with the app on
+``enabled`` the same call answers ``200`` and returns a value that was set in the form. The
+``401`` hangs on one thing only, the activation state, because
+``AppAPIService::validateExAppRequestToNC`` accepts the app secret and then refuses over
+``!$exApp->getEnabled()``, with ``ex-app/state`` as the only exempt path. The first start
+after a deployment is always inside that window (``enable`` comes after ``init``), and inside
+it there cannot be an admin value yet. So this one outcome is an INFO line that names the way
+out, and every other failure of this read stays an ERROR. What does make a value take effect
+is measured as well and unchanged: one disable and enable cycle, which stops and starts this
+container (05-12-MEASUREMENTS.md, M1, M2, M3, M3b, M3c).
+
 **Why ``config.normalize_base_url`` stays as it is.** The public address of this app is held
 to a harder rule here than that function applies (https, with the loopback exception of RFC
 8414), and the rule deliberately lives here instead of in it: the same function validates
@@ -153,6 +165,32 @@ async def read_values(
     except httpx.HTTPError:
         # No value of the request is repeated here: the headers carry the app secret.
         logger.error("the ExApp configuration at %s could not be read, the environment stays", url)
+        return {}
+
+    if response.status_code == httpx.codes.UNAUTHORIZED:
+        # The one failure of this read that is expected, and it is measured rather than
+        # assumed (05-12-MEASUREMENTS.md, M3b and M3c plus the source of AppAPI 34.0.0):
+        # `AppAPIService::validateExAppRequestToNC` accepts the app secret and then falls
+        # over `!$exApp->getEnabled()`, and only `ex-app/state` is exempt from that check
+        # (plus `ex-app/status` while an install or an update runs). The configuration path
+        # is not exempt and cannot become exempt without changing AppAPI. Every first start
+        # after a deployment sits inside that window, because `enable` comes after `init`,
+        # and inside it there cannot be an admin value yet, since the app did not exist
+        # before. An ERROR line for the normal course of an installation is what made a
+        # working installation look broken in this phase, so this one outcome is told and
+        # not reported as a fault. Every other failure of this read stays an ERROR: none of
+        # them is expected. Nothing else changes, the result stays empty and the deploy
+        # environment stays in force.
+        logger.info(
+            "the admin values were not read on this start: Nextcloud answered 401, which is "
+            "the expected answer while AppAPI does not have this app on enabled yet, and the "
+            "first start after an installation is always inside that window. The deploy "
+            "environment stays in force, and the values are read again on the next start of "
+            "this container. That is why a value entered in the administration settings takes "
+            "effect after this app has been disabled and enabled once. If this line appears on "
+            "a start that followed an enable, then the app secret of this container is not the "
+            "one Nextcloud stored for it."
+        )
         return {}
 
     if response.status_code // 100 != 2:
