@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Verwaltungs-Clients und Härtungs-Reste
-status: ready_to_plan
-stopped_at: Phase 6 complete (11/11) — ready to discuss Phase 7
-last_updated: 2026-08-20T18:34:30.755Z
-last_activity: 2026-08-20
+status: Awaiting next milestone
+stopped_at: "Plan 06-11 fertig: CLIENT-04-Gap geschlossen. E5 nennt den App-Passwort-Weg (ein neuer Test haelt Ausweg und Schweigepflicht), BL-14 mit Option, Datum, Messverweis und SDK-Rohbeleg geschlossen, CLIENT-04 und ROADMAP SC3 auf das Gemessene umformuliert (Owner-Freigabe 2026-08-20) und CLIENT-04 abgehakt, beide Doku-Sektionen mit D-35-Grund, Ausweg und getroffener Entscheidung. D-35, Auth-Pfad, READMEs, Store-Text und Abhaengigkeiten unveraendert. 2165 Unit-Tests gruen, Contract gruen, ruff sauber. Naechster Schritt: Re-Verifikation der Phase 6."
+last_updated: "2026-08-20T19:48:41.166Z"
+last_activity: 2026-08-20 — Milestone v1.1 completed and archived
 progress:
   total_phases: 2
   completed_phases: 1
@@ -25,11 +25,10 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 
 ## Current Position
 
-Phase: 7
-Plan: Not started
-Status: Ready to plan
-Milestone: v1.1 Verwaltungs-Clients und Härtungs-Reste (Phasen 6-7)
-Last activity: 2026-08-20
+Phase: Milestone v1.1 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-08-20 — Milestone v1.1 completed and archived
 
 ## Performance Metrics
 
@@ -420,5 +419,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Phase 6 weiter ausfuehren: `/gsd:execute-phase 6` (10 Plaene, 8 fertig)
-- Phase 7 haengt an fremden Zugaengen (it@M-Antwort fuer MUCGPT, Owner-Kontakte fuer F13 und BaerGPT); sie blockiert keinen Liefergegenstand aus Phase 6
+- Start the next milestone with /gsd-new-milestone

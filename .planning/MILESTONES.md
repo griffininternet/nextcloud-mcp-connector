@@ -1,5 +1,24 @@
 # Milestones
 
+## v1.1 Verwaltungs-Clients und Härtungs-Reste (Shipped: 2026-08-20)
+
+**Delivered:** Die letzten Auth-Reste geschlossen und die v1.0-Versprechen ohne fremden Zugang bewiesen: CIMD als DCR-Alternative live mit Claude Code, SSRF-gehärteter Dokumentabruf, RFC-8252-Loopback-Portregel, Ein-Klick-Story auf NC 34.0.3 wörtlich wahr, Conference-Material vorführbar.
+
+**Phases completed:** 1 Phase (6), 11 Pläne, 20 Tasks. Audit passed (7/7 Requirements), Verification 6/6, Security 74/74 Threats closed, Code-Review 0C/3W (alle gefixt).
+
+**Key accomplishments:**
+
+- Client ID Metadata Documents als DCR-Alternative live bewiesen: Claude Code 2.1.233 verbindet sich ohne Registrierung (client_id = https-URL seines Dokuments), die DCR-Kontrollen greifen wortgleich, und mit abgeschaltetem DCR verlässt kein einziges Paket die Instanz (gezählt gegen Positivkontrolle).
+- Der Dokumentabruf hat eine belegte SSRF-Grenze: IP-Pinning über sni_hostname (kein zweiter Resolver-Aufruf, Rebinding wirkungslos), is_private-UND-is_global-Konjunktion, 5120-Byte- und 5-Sekunden-Limits, kein Redirect-Follow, Fehler-Cache-Verbot; jede Grenze mit Negativtest, und nach dem Review-Fix passiert der Fetch nur noch am /authorize-Weg.
+- Die Loopback-Portfrage ist gemessen beantwortet (drei Läufe, drei Ports) und die RFC-8252-7.3-Regel eingebaut; der CIMD-Schalter ist fünfter Admin-Settings-Wert mit Ende-zu-Ende-Tests (Blocker B-1 des Milestone-Audits, inline geschlossen).
+- Cursor-Befund gemessen statt vermutet: die Teilregistrierung wirkt live (201 mit den zwei zulässigen Adressen), Cursor scheitert danach an seiner eigenen cursor://-Adresse an /authorize; Owner-Entscheid BL-14 "sichtbar machen plus Doku" (E5-Seite nennt den App-Passwort-Ausweg, D-35 unangetastet).
+- Die Ein-Klick-Story ist auf NC 34.0.3 wörtlich wahr: die Store-UI zeigt "Deploy and enable" und "Remove", gemessen auf der auf 34.0.3.2 gehobenen Instanz; Doku und Store-Text (EN/DE/FR) sagen das Gemessene.
+- Conference-Material steht: Demo-Runbook mit sechs Schritten, einmal komplett durchgefahren (82,2 s gemessen gegen 82 s behauptet), Per-User-Schalter und Widerruf erstmals in beiden Richtungen belegt; Lightning-Talk-Entwurf (8 Folien, 280/300 s), nichts eingereicht, niemand kontaktiert.
+
+**Deferred at close:** Phase 7 (CLIENT-01..03: MUCGPT/F13/BaerGPT-Live-Verprobung) per Owner-Entscheid 2026-08-20 in die Future Requirements verschoben — extern getaktet (it@M-Antwort, Owner-Kontakte), Protokoll in docs/client-setup.md bleibt einlösbar. Tech-Debt-Posten siehe milestones/v1.1-MILESTONE-AUDIT.md Frontmatter.
+
+---
+
 ## v1.0 MVP im Store (Shipped: 2026-08-20)
 
 **Phases completed:** 5 phases, 50 plans, 111 tasks

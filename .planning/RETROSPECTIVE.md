@@ -62,11 +62,50 @@ Store-Texte und siebenteilige Client-Doku.
   Session mit Sub-Agents (größte Läufe ~200-300k Tokens je Executor).
 - Sessions: im Kern 6 Arbeitstage (14.-20.08.), Abschlusstag mit ~20 Commits und Release.
 
+## Milestone: v1.1 — Verwaltungs-Clients und Härtungs-Reste
+
+**Shipped:** 2026-08-20
+**Phases:** 1 (Phase 6; Phase 7 deferred) | **Plans:** 11 (10 + 1 Gap-Closure)
+
+### What Was Built
+
+CIMD als DCR-Alternative (live mit Claude Code bewiesen), SSRF-gehärteter Dokumentabruf mit IP-Pinning und Negativkatalog, RFC-8252-7.3-Loopback-Portregel, CIMD als fünfter Admin-Settings-Wert, Cursor-Messbefund mit BL-14-Entscheid, Ein-Klick-Story auf NC 34.0.3 wörtlich wahr, Conference-Demo-Runbook plus Lightning-Talk-Entwurf.
+
+### What Worked
+
+- "Messen statt vermuten" als Phasen-Grundton: die Loopback-Regel wurde VOR dem CIMD-Zweig gebaut, weil die Recherche das echte CIMD-Dokument von Claude Code abgerufen hatte; ohne diese Reihenfolge wäre AUTH-08 unerreichbar gewesen.
+- Der Gap-Closure-Zyklus trug zweimal sauber: CLIENT-04 (Requirement ehrlich auf das Gemessene umformuliert statt D-35 aufzuweichen) und Milestone-Audit-Blocker B-1 (Admin-Schalter-Lücke, inline geschlossen).
+- Ein Enforcement-Punkt (provider.get_client) zahlte sich aus: die CIMD-Kontrollen mussten nirgends dupliziert werden, und der Integrations-Checker konnte genau das nachrechnen.
+
+### What Was Inefficient
+
+- tests/contract lief bei den Executoren nicht mit (nur tests/unit) — ein roter CI-Lauf (IN-04-Tool-Zahl-Regel), der lokal vermeidbar war. Merksatz: voller Lauf inkl. contract vor jedem Push.
+- Doku und Code drifteten am selben Tag: zwei oauth-setup.md-Aussagen wurden durch die eigenen Review-Fixes (a47bb57/bd75cd8) falsch und mussten im Audit nachgezogen werden. Review-Fixes brauchen einen Doku-Sweep im selben Commit-Zug.
+- Der einzige CIMD-E2E-Live-Beleg entstand vor den Review-Fixes (W-5) — Live-Rerun steht als Tech-Debt.
+
+### Patterns Established
+
+- MEASUREMENTS-Dateien als Beweisform auch für Fremd-Client-Verhalten (Cursor: drei Kontrollanfragen trennen Ursache von Verdacht).
+- Checkpoint-Disziplin bei Fremd-Software: nichts installieren/neustarten, was dem Owner gehört; die Abweisung selbst ist ein gültiger Messbefund.
+- Owner-genehmigte Requirement-Umformulierung mit Datum, Urheber, verworfenen Alternativen und Rohbeleg statt stiller Abschwächung.
+
+### Key Lessons
+
+- Ein Client, der die DCR-Antwort nicht zurückliest (Cursor), macht Teilregistrierung wirkungslos — der Fehlschlag wandert nur den Endpoint entlang. Sichtbarkeit + dokumentierter Ausweichweg ist die richtige Antwort, wenn die Sicherheitsentscheidung steht.
+- Store-Installationen haben keine Deploy-Env: jeder neue Schalter MUSS in die Admin-Settings-Kette (CONFIG_KEYS + Formular), sonst ist er für Ein-Klick-Nutzer nicht bedienbar (B-1).
+- Externe Taktung gehört in eine eigene Phase, die deferred werden kann, ohne den Milestone zu blockieren — genau so geschnitten, genau so gebraucht.
+
+### Cost Observations
+
+- Modell-Mix: Executor/Planner/Researcher/Auditoren opus, Checker/Verifier sonnet; größte Läufe ~200-350k Tokens je Agent.
+- Sessions: 1 Arbeitstag (20.08., Milestone-Init bis Abschluss inkl. Audit-Fixes).
+- Notable: 1 roter CI-Lauf, 1 API-Abbruch mit sauberem Retry (06-02), 2 menschliche Checkpoints (Cursor-Login, Owner-Entscheide).
+
 ## Cross-Milestone Trends
 
-| Metrik | v1.0 |
-|--------|------|
-| Phasen / Pläne / Tasks | 5 / 50 / 111 |
-| Kalenderzeit | 7 Tage |
-| Verifier-Gap-Runden | 1 (Phase 5) |
-| Live-Releases im Milestone | 3 (0.1.0, 0.1.1, 0.1.2) |
+| Metrik | v1.0 | v1.1 |
+|--------|------|------|
+| Phasen / Pläne / Tasks | 5 / 50 / 111 | 1 / 11 / 20 |
+| Kalenderzeit | 7 Tage | 1 Tag |
+| Verifier-Gap-Runden | 1 (Phase 5) | 1 (Phase 6, CLIENT-04) |
+| Live-Releases im Milestone | 3 (0.1.0, 0.1.1, 0.1.2) | 0 (0.1.3-Kandidat wartet auf Owner-Freigabe) |

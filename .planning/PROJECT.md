@@ -10,7 +10,7 @@ Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick install
 
 ## Current State
 
-**v1.1 Phase 6 complete 2026-08-20** (verified 6/6): CIMD als DCR-Alternative live bewiesen (Claude Code), SSRF-Grenze belegt, Loopback-Portregel eingebaut, Cursor-Befund gemessen und per BL-14 entschieden, Ein-Klick-Story auf 34.0.3 wörtlich wahr, Conference-Material vorführbar. Offen: Phase 7 (MUCGPT/F13/BaerGPT, extern getaktet).
+**v1.1 shipped 2026-08-20** (Audit passed 7/7, Verification 6/6, Security 74/74): CIMD als DCR-Alternative live bewiesen (Claude Code verbindet ohne Registrierung), SSRF-gehärteter Dokumentabruf, RFC-8252-Loopback-Portregel, CIMD als fünfter Admin-Settings-Wert, Cursor-Befund gemessen und per BL-14 entschieden ("sichtbar machen plus Doku", D-35 steht), Ein-Klick-Story auf NC 34.0.3 wörtlich wahr (Store-UI zeigt beide Knöpfe), Conference-Demo-Runbook (82 s, durchgefahren) plus Lightning-Talk-Entwurf. Phase 7 (MUCGPT/F13/BaerGPT) per Owner-Entscheid deferred, extern getaktet. Die Änderungen ab Phase 6 sind im Repo, aber noch nicht released (Kandidat 0.1.3, Owner-Freigabe nötig). Codebasis: ~2208 Unit-/Contract-Tests grün, ruff/pyright/vulture sauber.
 
 **v1.0 shipped 2026-08-20.** Release 0.1.2 ist live im Nextcloud App Store
 (apps.nextcloud.com/apps/mcp_connector), 16 Tools, OAuth 2.1 E2E gegen Claude.ai und
@@ -19,18 +19,16 @@ v1-Requirements erfüllt (Audit passed). Codebasis: Python 3.13, mcp 2.0, ~1800 
 Contract-Tests grün, ruff/pyright/vulture sauber. Offene Posten im BACKLOG (BL-01..05,
 BL-12 MUCGPT-Verprobung wartet auf it@M-Antwort).
 
-## Current Milestone: v1.1 Verwaltungs-Clients und Härtungs-Reste
+## Next Milestone Goals
 
-**Goal:** Die v1.0-Versprechen gegen echte Verwaltungs-Clients beweisen und die letzten Auth-Reste schließen, rechtzeitig zur Nextcloud Conference September 2026.
-
-**Target features:**
-- MUCGPT live verproben, sobald it@M antwortet (Protokoll in docs/client-setup.md), danach F13 und BaerGPT (beide MCP-fähig laut Dossier)
-- Cursor-Live-Nachweis nach der Teilregistrierung plus Klärung der Loopback-Portfrage (BL-04-Rest, F1 aus dem v1.0-Audit)
-- BL-05 Client ID Metadata Documents (DCR-Nachfolger der MCP-Spec) mit eigenem SSRF-Review, einziges größeres Technikstück
-- NC-34.0.3-UI-Smoke: Upstream-Fix prüfen (Install-/Remove-Knopf), bei Erfolg Ein-Klick-Story in Doku und Store-Text wörtlich einlösen
-- Conference-Vorbereitung: Demo-Material, ggf. Lightning-Talk
-
-**Bewusst klein (1-2 Phasen).** Vorgemerkt, nicht in diesem Milestone: v1.2 "Kuratierte Breite" (Talk/Tables/Mail, prepare_context-Ausbau, Q4 nach Store-Feedback) und v2.0 "openDesk/Behörden" (OpenProject/XWiki/Matrix/OX, Gruppen-Policies, Audit-Log, ZenDiS). Querschnitt: Prototype Fund Frist 1.10. bis 30.11.2026 liegt zwischen v1.1 und v1.2.
+Kandidaten, bei `/gsd:new-milestone` zu priorisieren:
+- Release 0.1.3 in den Store (trägt CIMD, Loopback-Portregel, Admin-CIMD-Schalter, E5-Ausweg, F2 serverInfo.version; Owner-Freigabe nötig)
+- MUCGPT/F13/BaerGPT live verproben, sobald externer Zugang besteht (deferred CLIENT-01..03, Protokoll in docs/client-setup.md)
+- Nextcloud Conference September 2026: Demo fahren, Talk-Entwurf verwenden (Contributor Week / Gespräche; CfP ist zu)
+- v1.2 "Kuratierte Breite": Talk/Tables/Mail, prepare_context-Ausbau (Q4, nach Store-Feedback)
+- Tech-Debt aus v1.1-Audit (uv.lock-Selbstangabe, acceptance_all_tools-Zählung, CIMD-E2E-Live-Rerun nach den Review-Fixes, E5-Wortlaut bei CIMD-off)
+- Querschnitt: Prototype Fund Frist 1.10. bis 30.11.2026 (Solo-Dev, 47,5k)
+- v2.0 "openDesk/Behörden" als Einzeiler (OpenProject/XWiki/Matrix/OX, Gruppen-Policies, Audit-Log, ZenDiS)
 
 ## Requirements
 
@@ -76,7 +74,7 @@ BL-12 MUCGPT-Verprobung wartet auf it@M-Antwort).
 
 **MCP-Spec-Lage (korrigiert 14.08. nach Stack-Research):** mcp 2.0.0 ist seit 28.07.2026 GA (stabil), 1.x ist Maintenance-only. Entscheidung: mcp>=2.0,<3 (bedient 2025er- und 2026er-Stateless-Clients aus demselben Endpoint), dokumentierter Fallback-Pin >=1.29,<2. Kein Session-State in Tools (Pagination über Handles).
 
-**Strategisches Umfeld:** Termin Dataport/Brandmann 21.08. (MCP-These), DFKI/Porta ab 25.08., MUCGPT 2.0 kann MCP (Abnehmer-Story München/Stuttgart), ZenDiS/openDesk als Phase-3-Ziel. Nextcloud Conference September 2026 = Launch-Anker.
+**Strategisches Umfeld:** Dataport/Brandmann-Termin 21.08. GESTRICHEN (keine Rückmeldung seit 13.07., Owner-Entscheid 20.08.), DFKI/Porta ab 25.08., MUCGPT 2.0 kann MCP (Abnehmer-Story München/Stuttgart, Verprobung deferred bis it@M antwortet), ZenDiS/openDesk als Phase-3-Ziel. Nextcloud Conference September 2026 = Launch-Anker (CfP zu; Demo + Talk-Entwurf liegen bereit).
 
 ## Constraints
 
@@ -121,4 +119,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-20 after phase 6 completion*
+*Last updated: 2026-08-20 after v1.1 milestone*
