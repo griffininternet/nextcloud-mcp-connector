@@ -2,13 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Verwaltungs-Clients und Härtungs-Reste
-status: ready_to_plan
-last_updated: "2026-08-20T11:40:00.000Z"
-last_activity: 2026-08-20
+status: executing
+stopped_at: "Roadmap v1.1 geschrieben (Phasen 6 und 7, 10/10 Requirements abgebildet). Vorher: Plan 05-14 fertig: der Rundlauf vom Admin-Formular ins Discovery-Dokument ist auf einer frisch aufgebauten Topologie ohne NC_MCP_PUBLIC_URL gemessen (Linie A issuer zeichengleich, Linie B kein Restart-Loop, Linie C Rueckweg allein ueber das Formular). Die 401-Zeile in deferred-items.md ist geschlossen. Naechster Schritt: Phasenabschluss 05 erneut pruefen (Verifier)."
+last_updated: "2026-08-20T11:10:55.318Z"
+last_activity: 2026-08-20 -- Phase 6 planning complete
 progress:
   total_phases: 2
   completed_phases: 0
-  total_plans: 0
+  total_plans: 10
   completed_plans: 0
   percent: 0
 ---
@@ -26,9 +27,9 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 
 Phase: 6 - Härtung, Eigennachweise und Conference-Reife
 Plan: —
-Status: Ready to plan
+Status: Ready to execute
 Milestone: v1.1 Verwaltungs-Clients und Härtungs-Reste (Phasen 6-7)
-Last activity: 2026-08-20, Roadmap v1.1 erstellt (Phase 6 eigenbeweisbar, Phase 7 extern getaktet)
+Last activity: 2026-08-20 -- Phase 6 planning complete
 
 ## Performance Metrics
 

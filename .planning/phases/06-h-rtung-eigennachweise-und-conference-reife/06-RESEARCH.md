@@ -934,9 +934,12 @@ Allowlist an, nicht gelistet    | Absage, und zwar mit derselben Seite wie bei D
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+Alle fuenf Fragen sind beim Planen operationalisiert worden (Vermerke je Frage):
 
 1. **Ist der 34.0.3-Fix wirklich wirksam, und wenn nein, was ist dann der Befund?**
+   RESOLVED: Plan 06-07 setzt EXAPP-06 als Zwei-Ausgaenge-Messung um (Knopf da / Knopf fehlt, mit md5-Gegenprobe und Upstream-Kommentar-Entwurf als Owner-Schritt).
    - Was wir wissen: `nextcloud/server#62881` `[stable34] fix(appstore): initialize the exApps store when enabled` ist am 04.08.2026 in `stable34` gemergt, Milestone "Nextcloud 34.0.3". 34.0.3 ist am 17.08. veroeffentlicht, das Image liegt lokal und traegt 34.0.3.2. Die Issues `app_api#971` und `server#61709` sind beide als `completed` geschlossen.
    - Was unklar ist: Ein Datei-fuer-Datei-Vergleich (md5) der `appstore`-App zwischen dem 34.0.2- und dem 34.0.3-Image zeigt **ausserhalb von `l10n/` keinen einzigen Unterschied**; die App-Version ist in beiden 1.0.0; der einzige geaenderte Frontend-Chunk (`dist/AppstoreBrowse-*.chunk.mjs`, 8721 -> 8707 Bytes) enthaelt in beiden Fassungen kein einziges `exapp`-Vorkommen; `dist/appstore-main.mjs` unterscheidet sich im Hash, nennt aber in beiden nur `exAppsCount`. Der Fix ist also nicht statisch belegbar.
    - Empfehlung: Genau so planen, wie EXAPP-06 formuliert ist, naemlich als Frage ("ist nachgewiesen, **ob** die Store-UI den Knopf zeigt"), nicht als Bestaetigung. Zwei Ausgaenge vorsehen: Knopf da -> Doku und Store-Text auf die woertlich wahre Ein-Klick-Story; Knopf fehlt -> negativer Befund mit md5-Gegenprobe in der Messdatei, Doku bleibt so vorsichtig wie heute, und ein Upstream-Kommentar an `app_api#971` ist der naechste Schritt (Owner).
@@ -945,21 +948,25 @@ Allowlist an, nicht gelistet    | Absage, und zwar mit derselben Seite wie bei D
    - Was wir wissen: Conference 19.-20.09.2026, CIC Berlin, Lohmuehlenstrasse 65. Lightning Talk = **5 Minuten**. Der CfP hatte eine verlaengerte Frist bis **03.08.2026** und ist geschlossen ("A big thank you to everyone who shared their ideas with us! The call for proposals closed on August 3"). Angenommene Sprecher liefern Foliendraft bis 09.09. Contributor Week 21.-25.09.
    - Was unklar ist: Ob der Owner bereits eingereicht hat (dann ist der Entwurf ein Pflicht-Liefergegenstand mit Frist 09.09.), ob es um die Contributor Week geht (anderes Format, anderer Ton), oder ob es reines Pitch-Material fuer Gespraeche vor Ort und den Prototype-Fund-Antrag ist.
    - Empfehlung: **Vor dem Planen fragen.** Bis dahin auf 5 Minuten und die vier Differenzierer auslegen, weil das in allen drei Faellen brauchbar ist. Und nicht auf 10 Minuten planen: das ist das Format, das es nicht gibt.
+   RESOLVED: Plan 06-10 liefert genau das in allen drei Faellen brauchbare Artefakt (5-Minuten-Entwurf, Englisch, vier Differenzierer); jede Einreichungs-/Kontaktaktion bleibt Owner-Entscheid und ist dem Owner als offene Frage vorgelegt.
 
 3. **Ist Cursor auf diesem Rechner verfuegbar?**
    - Was wir wissen: CLIENT-04 ist reine Messarbeit gegen einen echten Cursor. Der Code-Pfad (Teilregistrierung) steht seit a80af0a und ist unit-getestet.
    - Was unklar ist: ob Cursor installiert ist. Nicht geprueft, weil eine Suche nach fremden Installationen ausserhalb des Recherche-Auftrags liegt.
    - Empfehlung: Erste Aufgabe des CLIENT-04-Plans ist ein Verfuegbarkeits-Check mit Verzweigung, nicht ein Messschritt, der stillschweigend scheitert.
+   RESOLVED: Plan 06-08 beginnt mit genau diesem Verfuegbarkeits-Check und traegt einen Checkpoint (install/defer/skip) statt eines stillen Fehlschlags.
 
 4. **Cache: Store-Tabelle oder Closure?**
    - Was wir wissen: Modul-globaler veraenderlicher Zustand ist verboten (D-20, zwei namentlich gelistete Ausnahmen). Die `clients`-Zeile muss ohnehin geschrieben werden (FK-Zwang). Der Draft verlangt HTTP-Cache-Header-Respekt und verbietet das Cachen von Fehlern.
    - Was unklar ist: ob die Cache-Frist eine Spalte auf `clients` sein soll (billig, aber vermischt Identitaet und Frische) oder eine eigene Tabelle (saubere Trennung, ein `ALTER` mehr).
    - Empfehlung: Spalte auf `clients` (z.B. `cimd_fetched_at`, `cimd_expires_at`), weil die Zeile ohnehin existiert und weil Pitfall 4 verlangt, die Registrierungs-TTL und die Cache-Frist als zwei Werte zu fuehren, was mit zwei Spalten am selben Datensatz am ehrlichsten sichtbar ist. Ist Claude's Discretion.
+   RESOLVED: Plan 06-05 setzt die Empfehlung um (Spalten `cimd_fetched_at`/`cimd_expires_at` auf `clients`; `_has_expired` gilt nicht fuer CIMD-Zeilen).
 
 5. **Braucht die 5-KB-Grenze eine Ausnahme?**
    - Was wir wissen: Der Draft empfiehlt 5 KB. Claude Codes Dokument ist rund 350 Bytes.
    - Was unklar ist: nichts Belastbares. Ein Dokument mit `jwks` inline koennte groesser werden, aber `private_key_jwt` ist bewusst ausserhalb des Scope.
    - Empfehlung: 5120 Bytes fest, ohne Konfigurationsschalter. Ein Schalter waere eine Grenze, die ein Admin versehentlich aufweichen kann.
+   RESOLVED: Plan 06-01 setzt 5120 Bytes als feste Konstante ohne Schalter um.
 
 ---
 
