@@ -731,6 +731,42 @@ def test_a_decision_without_the_anti_forgery_token_changes_nothing(
     assert snapshot(store) == before
 
 
+def test_a_consent_form_of_the_previous_window_still_decides(store: OAuthStore) -> None:
+    """BL-08: a consent screen open across an hour boundary must still submit once."""
+    provider = make(store)
+    register(provider)
+    client, flow_id, _page = signed_in(provider)
+
+    previous = store.form_token(
+        flow_id,
+        purpose=crypto.PURPOSE_CONSENT,
+        now=time.time() - crypto.FORM_TOKEN_WINDOW,
+    )
+    response = decide(client, flow_id, ui_consent.DECISION_APPROVE, confirm=previous)
+
+    assert response.status_code == 200
+    assert query_of(response)["code"], "the decision went through"
+
+
+def test_a_consent_form_older_than_two_windows_decides_nothing(store: OAuthStore) -> None:
+    """The value expires, and an expired one is refused exactly like a forged one."""
+    provider = make(store)
+    register(provider)
+    client, flow_id, _page = signed_in(provider)
+    before = snapshot(store)
+
+    expired = store.form_token(
+        flow_id,
+        purpose=crypto.PURPOSE_CONSENT,
+        now=time.time() - 2 * crypto.FORM_TOKEN_WINDOW - 1,
+    )
+    response = decide(client, flow_id, ui_consent.DECISION_APPROVE, confirm=expired)
+
+    assert response.status_code == 400
+    assert "location" not in response.headers
+    assert snapshot(store) == before
+
+
 def test_the_value_of_a_disconnect_form_does_not_approve_a_consent(store: OAuthStore) -> None:
     """ME-01: an authorization is written under the id of its own flow, so ``auth_id`` and
     ``flow_id`` are the same string. Without a purpose in the derivation the value that says

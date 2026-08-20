@@ -21,6 +21,7 @@ import base64
 import calendar
 import re
 import sqlite3
+import time
 from collections.abc import Coroutine, Mapping
 from html.parser import HTMLParser
 from pathlib import Path
@@ -1000,6 +1001,65 @@ def test_a_disconnect_without_the_anti_forgery_value_changes_nothing(
     assert strings.DISCONNECT_GONE_TITLE in response.text, "no oracle, the same calm answer"
     assert live.rows_of() == [AUTH_ID]
     assert caplog.records, "a forged form is worth exactly one log line"
+
+
+def test_a_form_from_the_previous_window_still_disconnects(
+    live: Deployment, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """BL-08: the second accepted window is what a page open across an hour boundary needs.
+
+    The clock is monkeypatched and never slept on: the value is rendered as it would have
+    been an hour ago and submitted now.
+    """
+    with monkeypatch.context() as older:
+        older.setattr(crypto, "_unix_time", lambda: _seconds_ago(crypto.FORM_TOKEN_WINDOW))
+        presented = live.token_of(AUTH_ID)
+
+    response = live.post(
+        {
+            ui.ACTION_FIELD: ui.ACTION_DISCONNECT,
+            ui.AUTH_PARAM: AUTH_ID,
+            ui.CONFIRM_PARAM: presented,
+        }
+    )
+
+    assert response.status_code == 200
+    assert strings.DISCONNECT_DONE_TITLE in response.text
+    assert live.rows_of() == []
+
+
+def test_a_form_older_than_two_windows_is_refused_like_any_other_wrong_value(
+    live: Deployment, caplog: pytest.LogCaptureFixture
+) -> None:
+    """BL-08: the chosen behaviour for an expired value is the quiet refusal that exists.
+
+    No new screen and no error page: the page shows itself again, which is what a user who
+    left a tab open overnight sees, and the row is untouched.
+    """
+    presented = live.store.form_token(
+        AUTH_ID,
+        purpose=crypto.PURPOSE_DISCONNECT,
+        now=_seconds_ago(2 * crypto.FORM_TOKEN_WINDOW + 1),
+    )
+
+    with caplog.at_level("WARNING", logger="mcp_connector.oauth.connections"):
+        response = live.post(
+            {
+                ui.ACTION_FIELD: ui.ACTION_DISCONNECT,
+                ui.AUTH_PARAM: AUTH_ID,
+                ui.CONFIRM_PARAM: presented,
+            }
+        )
+
+    assert response.status_code == 200
+    assert strings.DISCONNECT_GONE_TITLE in response.text, "the same calm answer, no oracle"
+    assert live.rows_of() == [AUTH_ID], "nothing was disconnected"
+    assert caplog.records
+
+
+def _seconds_ago(seconds: float) -> float:
+    """A moment in the past of the real clock, so the windows around it are the real ones."""
+    return time.time() - seconds
 
 
 def test_the_row_value_of_one_connection_does_not_disconnect_another(live: Deployment) -> None:

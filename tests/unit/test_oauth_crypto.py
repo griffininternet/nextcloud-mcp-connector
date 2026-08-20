@@ -116,6 +116,14 @@ def test_the_ciphertext_never_contains_the_plaintext() -> None:
     assert PLAINTEXT not in blob
 
 
+#: The id both forms of one connection are about, which is the whole reason ME-01 exists.
+HANDLE = "the-one-id-both-forms-are-about"
+
+#: The start of a window, so no case below sits on a boundary by accident. The clock is a
+#: parameter of every function under test here, so nothing in this file waits for time.
+NOW = float((1_776_000_000 // 3600) * 3600)
+
+
 def test_one_handle_under_two_purposes_gives_two_different_values() -> None:
     """ME-01: two privileged actions of this app are about the same id.
 
@@ -124,18 +132,19 @@ def test_one_handle_under_two_purposes_gives_two_different_values() -> None:
     "approve this authorization request" and "end this connection". Domain separation is
     exactly what stops a stolen value from changing its meaning.
     """
-    handle = "the-one-id-both-forms-are-about"
     purposes = (crypto.PURPOSE_CONSENT, crypto.PURPOSE_DISCONNECT, crypto.PURPOSE_SWITCH)
 
-    values = {purpose: crypto.form_token(KEY, handle, purpose=purpose) for purpose in purposes}
+    values = {
+        purpose: crypto.form_token(KEY, HANDLE, purpose=purpose, now=NOW) for purpose in purposes
+    }
 
     assert len(set(values.values())) == len(purposes), "one value per purpose, never shared"
     assert (
-        crypto.form_token(KEY, handle, purpose=crypto.PURPOSE_CONSENT)
+        crypto.form_token(KEY, HANDLE, purpose=crypto.PURPOSE_CONSENT, now=NOW)
         == values[crypto.PURPOSE_CONSENT]
-    ), "derived and not stored: the same render gives the same value"
+    ), "derived and not stored: the same render in the same window gives the same value"
     assert (
-        crypto.form_token(OTHER_KEY, handle, purpose=crypto.PURPOSE_CONSENT)
+        crypto.form_token(OTHER_KEY, HANDLE, purpose=crypto.PURPOSE_CONSENT, now=NOW)
         != values[crypto.PURPOSE_CONSENT]
     ), "and another deployment cannot produce it"
 
@@ -147,7 +156,131 @@ def test_the_purpose_and_the_handle_cannot_be_shifted_into_each_other() -> None:
     stay that way: a purpose that ends in the start of a handle may not collide with the
     next pair.
     """
-    assert crypto.form_token(KEY, "b:c", purpose="a") != crypto.form_token(KEY, "c", purpose="a:b")
+    assert crypto.form_token(KEY, "b:c", purpose="a", now=NOW) != crypto.form_token(
+        KEY, "c", purpose="a:b", now=NOW
+    )
+
+
+# --- the time window of a form value (BL-08, ME-02) --------------------------------
+
+
+def test_the_window_is_an_hour_and_a_later_window_is_another_value() -> None:
+    """BL-08: without a window the value of an account never changes at all.
+
+    The only other rotation point would be the data key, and rotating that makes every
+    stored app password unreadable, so the window is the one that can move.
+    """
+    assert crypto.FORM_TOKEN_WINDOW == 3600
+
+    this_hour = crypto.form_token(KEY, HANDLE, purpose=crypto.PURPOSE_SWITCH, now=NOW)
+    still_this_hour = crypto.form_token(
+        KEY, HANDLE, purpose=crypto.PURPOSE_SWITCH, now=NOW + crypto.FORM_TOKEN_WINDOW - 1
+    )
+    next_hour = crypto.form_token(
+        KEY, HANDLE, purpose=crypto.PURPOSE_SWITCH, now=NOW + crypto.FORM_TOKEN_WINDOW
+    )
+
+    assert this_hour == still_this_hour, "a page rendered twice in one window carries one value"
+    assert this_hour != next_hour
+
+
+@pytest.mark.parametrize(
+    ("offset", "accepted"),
+    [
+        (0, True),
+        (crypto.FORM_TOKEN_WINDOW - 1, True),
+        (-1, True),
+        (-crypto.FORM_TOKEN_WINDOW, True),
+        (-crypto.FORM_TOKEN_WINDOW - 1, False),
+        (-2 * crypto.FORM_TOKEN_WINDOW, False),
+        (crypto.FORM_TOKEN_WINDOW, False),
+    ],
+    ids=[
+        "this window",
+        "the end of this window",
+        "the previous window, one second back",
+        "the start of the previous window",
+        "the window before that",
+        "two windows back",
+        "a window that has not started yet",
+    ],
+)
+def test_this_window_and_the_previous_one_are_accepted_and_nothing_else(
+    offset: int, accepted: bool
+) -> None:
+    """Two windows, so a form that was open across an hour boundary still submits once.
+
+    The price is written down and chosen (BL-08): a page left open for more than two
+    windows is refused, and the refusal is the quiet one every wrong value gets.
+    """
+    presented = crypto.form_token(KEY, HANDLE, purpose=crypto.PURPOSE_CONSENT, now=NOW + offset)
+
+    valid = crypto.form_token_valid(KEY, HANDLE, presented, purpose=crypto.PURPOSE_CONSENT, now=NOW)
+
+    assert valid is accepted
+
+
+def test_the_purpose_still_binds_in_both_accepted_windows() -> None:
+    """ME-01 does not weaken because a second window is accepted now."""
+    this_window = crypto.form_token(KEY, HANDLE, purpose=crypto.PURPOSE_DISCONNECT, now=NOW)
+    previous = crypto.form_token(
+        KEY, HANDLE, purpose=crypto.PURPOSE_DISCONNECT, now=NOW - crypto.FORM_TOKEN_WINDOW
+    )
+
+    for presented in (this_window, previous):
+        assert (
+            crypto.form_token_valid(
+                KEY, HANDLE, presented, purpose=crypto.PURPOSE_DISCONNECT, now=NOW
+            )
+            is True
+        )
+        assert (
+            crypto.form_token_valid(KEY, HANDLE, presented, purpose=crypto.PURPOSE_CONSENT, now=NOW)
+            is False
+        )
+
+
+def test_another_handle_and_another_deployment_are_refused_in_every_window() -> None:
+    other_handle = crypto.form_token(
+        KEY, "another-connection", purpose=crypto.PURPOSE_CONSENT, now=NOW
+    )
+    other_key = crypto.form_token(OTHER_KEY, HANDLE, purpose=crypto.PURPOSE_CONSENT, now=NOW)
+
+    assert (
+        crypto.form_token_valid(KEY, HANDLE, other_handle, purpose=crypto.PURPOSE_CONSENT, now=NOW)
+        is False
+    )
+    assert (
+        crypto.form_token_valid(KEY, HANDLE, other_key, purpose=crypto.PURPOSE_CONSENT, now=NOW)
+        is False
+    )
+
+
+@pytest.mark.parametrize("presented", ["", "   ", "not-a-value", "0" * 64])
+def test_a_value_that_is_not_one_is_refused_and_never_raises(presented: str) -> None:
+    """The value arrives from a request, so every shape of it has to be an answer."""
+    assert (
+        crypto.form_token_valid(KEY, HANDLE, presented, purpose=crypto.PURPOSE_SWITCH, now=NOW)
+        is False
+    )
+
+
+def test_without_a_time_both_halves_read_the_same_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The parameter is for tests; the callers pass none and must land in the same window."""
+    monkeypatch.setattr(crypto, "_unix_time", lambda: NOW)
+    stale = crypto.form_token(
+        KEY, HANDLE, purpose=crypto.PURPOSE_SWITCH, now=NOW - crypto.FORM_TOKEN_WINDOW
+    )
+    expired = crypto.form_token(
+        KEY, HANDLE, purpose=crypto.PURPOSE_SWITCH, now=NOW - 2 * crypto.FORM_TOKEN_WINDOW
+    )
+
+    rendered = crypto.form_token(KEY, HANDLE, purpose=crypto.PURPOSE_SWITCH)
+
+    assert rendered == crypto.form_token(KEY, HANDLE, purpose=crypto.PURPOSE_SWITCH, now=NOW)
+    assert crypto.form_token_valid(KEY, HANDLE, rendered, purpose=crypto.PURPOSE_SWITCH) is True
+    assert crypto.form_token_valid(KEY, HANDLE, stale, purpose=crypto.PURPOSE_SWITCH) is True
+    assert crypto.form_token_valid(KEY, HANDLE, expired, purpose=crypto.PURPOSE_SWITCH) is False
 
 
 @pytest.mark.parametrize("key", [b"", b"short", bytes(31), bytes(33)])
