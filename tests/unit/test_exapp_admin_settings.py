@@ -218,6 +218,29 @@ async def test_the_form_never_carries_an_internal_host_name() -> None:
 
 @pytest.mark.anyio
 @respx.mock
+async def test_a_fresh_installation_gets_a_link_that_leads_somewhere() -> None:
+    """IN-03 of 05-REVIEW.md, first pass: the form that fixes the state carried a dead link.
+
+    Before any address is set, ``config.public_url`` answers the loopback default, so the
+    ``doc_url`` of this form pointed at ``http://127.0.0.1:8765/connections``, which in a
+    browser on the administrator's machine is her own machine and not this container. The
+    form is exactly the place where that state is corrected, so the link goes to the public
+    documentation until the app knows its own address.
+    """
+    env = {name: value for name, value in ENV.items() if name != config.ENV_PUBLIC_URL}
+    route = respx.post(SETTINGS_URL).mock(return_value=httpx.Response(200, json={}))
+
+    await admin_settings.register_admin_form(env=env)
+
+    scheme = json.loads(route.calls.last.request.content)["formScheme"]
+    assert scheme["doc_url"] == admin_settings.PUBLIC_DOCS_URL
+    assert config.DEFAULT_PUBLIC_URL not in route.calls.last.request.content.decode(), (
+        "the default in code is no address to send an administrator to"
+    )
+
+
+@pytest.mark.anyio
+@respx.mock
 async def test_the_registration_runs_in_the_app_context() -> None:
     """The AppAPI headers with an empty user: the app speaks about itself."""
     route = respx.post(SETTINGS_URL).mock(return_value=httpx.Response(200, json={}))
