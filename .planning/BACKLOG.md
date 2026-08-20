@@ -278,3 +278,42 @@ connector is online. Question: does MUCGPT need an adapted version?
 - Stress the privacy advantage: EU/self-hosted, NO third-country flow (unlike
   Claude.ai). MUCGPT itself has inference_location/data residency (issue #1116), which
   matches docs/privacy.md exactly.
+
+**Verprobung offen (verification still open, plan 05-16):** The MUCGPT section of
+`docs/client-setup.md` is the only client section on that page without a measurement
+behind it; it is derived from the source of it-at-m/mucgpt (2026-08-18), not from a run.
+05-VERIFICATION.md carries this as truth 4, UNCERTAIN.
+
+- **Trigger:** access to a running MUCGPT instance together with its Keycloak, usually
+  via the it@M contact of the outreach line. The contact is the owner's to make (outreach
+  rule: drafts here, sending always by the owner). Nothing about this is automatable in
+  this repository.
+- **What to run:** the protocol at the end of the MUCGPT section in
+  `docs/client-setup.md` ("Closing the gap: the protocol, three checks in the order they
+  can fail"). The three check points are, in that order: (1) does the `Authorization`
+  header arrive at all, (2) does the tool list come back, (3) does a tool call answer
+  with content of the configured Nextcloud account, plus the counter check that a file
+  the account may not see stays invisible. Each check names what to note.
+- **Ask while you are there:** the identity question above (one `forward_auth_override`
+  per source means all MUCGPT users share one Nextcloud account). Is a team or service
+  account enough, or is per user fidelity needed? That answer decides whether token
+  exchange becomes a feature.
+- **Result:** a measurement file next to the other client proofs, then the gap paragraph
+  in `docs/client-setup.md` is replaced by a dated line and this section is closed.
+
+## BL-13: Six advisory findings from the phase 5 review (IN-01 to IN-06)
+
+**Trigger:** the next time one of the named files is opened anyway. None of the six is a
+blocker: 05-REVIEW.md (2026-08-19) classified them as info, the one critical (CR-01) and
+the three warnings (WR-01 to WR-03) were closed in plans 05-11 and 05-15. They touch
+files outside the remit of the gap closure plans, which is why they are carried here
+instead of being changed in passing.
+
+| Id | File | Finding | Proposed fix (from the review) |
+|----|------|---------|--------------------------------|
+| IN-01 | `src/mcp_connector/exapp/purge.py:283-306` | The body size limit of the purge handler only reads the announced `Content-Length`, so a chunked request (or a non numeric header) is read into memory unbounded; reachable only over the authenticated internal AppAPI path. | Read the stream with a limit (sum up `request.stream()` and stop at `MAX_BODY_BYTES`) instead of trusting the header, as `oauth/connections.py` does for its forms. |
+| IN-02 | `src/mcp_connector/oauth/connect.py:127-146` vs `src/mcp_connector/oauth/store.py:1275-1310` | `connect_routes` carries a word for word copy of the opener logic of `store.store_opener` (double checked locking, key first, `purge_expired` on first open); in the ExApp deployment the copy is dead code, so a change to one side silently misses the other. | `store_provider = store_provider or store_opener(env)` at the top of `connect_routes`, then delete the local copy. |
+| IN-03 | `src/mcp_connector/exapp/admin_settings.py:80-89` | On a fresh store installation with no value set, `doc_url` of the admin form is built from the loopback default, so the form that fixes the state contains a dead link to `http://127.0.0.1:8765/connections`. No security issue, T-04-40 holds. | Leave `doc_url` out when `config.public_url(env) == config.DEFAULT_PUBLIC_URL`, or point it at the repository FAQ. |
+| IN-04 | `docs/oauth-setup.md:263, 522` vs `docs/client-setup.md:11` and `docs/store-submission.md:90` | The dated evidence blocks say `tools=15` while the rest of the documentation says 16 (`prepare_context` arrived in phase 4). Formally correct as a literal record of a run, but nothing explains the difference to a reader who counts. | A bracketed note at one of the 15 places ("as of 0.1.0; 16 since ..."), or refresh the evidence on the next run. |
+| IN-05 | `docs/privacy.md:38` | The row "Client registrations \| clients \| the assistant apps, their redirect targets and issued secrets" reads as if client secrets were stored in the clear; `clients.client_secret_hash` holds only a SHA-256 digest. Imprecise in the wrong direction for a document aimed at data protection officers. | "issued secrets (stored as a hash only, never in the clear)", or fold the row into the hash row of the tokens. |
+| IN-06 | `src/mcp_connector/oauth/consent.py:302-304` | `_screen` jumps straight to `_decision` when an authorization row already exists, without reading the account switch, so a consent screen reloaded after the account was paused in another tab still shows approve and deny. No grant is possible (enforcement point 3 answers the click with E9), so this is a UX inconsistency against the three documented enforcement points. | Read `_access_disabled` in the `signed_in is not None` branch and answer with the `_refuse_paused` path, as after the poll. |

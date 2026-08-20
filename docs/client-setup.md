@@ -535,7 +535,8 @@ without a measurement behind it. What a proof would need is small and named, so 
 in one sitting by anybody who has the access: an instance with its Keycloak, one account on it,
 and a `config.yaml` carrying the MCP source below. The three things to check are that the
 `Authorization` header arrives at all, that the tool list comes back, and that a tool call
-answers with content of the configured Nextcloud account.
+answers with content of the configured Nextcloud account. They are written out as a protocol at
+the end of this section, in the order in which they can fail and with what to note for each.
 
 **What works**
 
@@ -581,6 +582,63 @@ alone: either MUCGPT forwards a credential per person, or its own per user OIDC 
 exchanged for a Nextcloud identity, which needs a trust anchor (which issuer may do this) and an
 identity mapping (the same accounts on both sides, so SSO or LDAP). That is a feature and not a
 repair, and it is not part of v1.
+
+**Closing the gap: the protocol, three checks in the order they can fail**
+
+Nothing on this page is harder to close than this gap, and nothing is smaller: the run below fits
+into one sitting. It is written so that the result has the same shape as the proof behind the
+other client sections of this page. The model is the Open WebUI run recorded in
+`.planning/phases/05-hardening-und-store-einreichung/05-07-MEASUREMENTS.md`: a table of the
+topology first, then one numbered check per step, each with the literal line that was observed
+and a counter check where one is possible.
+
+What you need before you start:
+
+* A running MUCGPT instance together with the Keycloak it authenticates against, and one account
+  on it. Neither of the two lives in this repository, which is the whole reason this check cannot
+  be automated here.
+* This connector reachable from that instance over https, and the address of its `/mcp` endpoint,
+  for example `https://<nextcloud>/exapps/mcp_connector/mcp`.
+* A Nextcloud account for the source with an app password of its own, not a person's account (see
+  "The price" above), and the two `config.yaml` keys from this section: `forward_token: true`
+  together with `forward_auth_override`.
+* Access to the log of this connector's container (`docker logs nc_app_mcp_connector`), because
+  two of the three checks are answered there and not in MUCGPT.
+
+Note the topology before the first request, in the shape of the table in the measurement file
+named above: MUCGPT version and image digest, the version of this connector, the value of
+`NC_MCP_PUBLIC_URL`, and the date and time of the run. Without those four values the result
+proves nothing a year from now.
+
+1. **Does the `Authorization` header arrive at all?** Start MUCGPT with the source configured and
+   let it connect once. Note two things: the header names MUCGPT logs for that source, where
+   `Authorization` has to appear (the silent drop described above is the trap), and the status of
+   the first `POST /mcp` line in this connector's log. A `401` means the credential never arrived,
+   and the cause is almost always a `headers` block instead of the two keys. A `200` means it
+   arrived and was accepted.
+2. **Does the tool list come back?** Ask MUCGPT for the tools of that source. Note the number of
+   tools it lists, 16 at the time of writing, which is the number
+   `tests/contract/test_tool_surface.py` holds, and whether the names match the ones this page
+   lists. A source that authenticates and lists nothing points at the transport, not at the
+   credential.
+3. **Does a tool call answer with content of the configured account?** Ask for something that
+   needs exactly one tool, for example the files in the root of that Nextcloud. Note the tool that
+   was called, the `POST /mcp 200` line in the log, and one detail of the answer that can only
+   come from that account, such as a folder that exists there and nowhere else. Then the counter
+   check that carries the weight: ask for a file the configured account may not see, and note that
+   the answer is empty or refused. That is the difference between "a call went through" and "the
+   permission promise holds".
+
+While you are there, ask the question BL-12 leaves open, because whoever has the access is the
+only person who can answer it: `forward_auth_override` is one value per source, so every MUCGPT
+user of that source runs under one Nextcloud account, and that is the single place where this
+project's core promise (every request under the identity of the person asking) does not hold. Is
+a team or service account enough for that deployment, or does it need per user fidelity? The
+answer decides whether the token exchange sketched above is a feature worth building or a thing
+nobody asked for.
+
+Write the result into a measurement file next to the others and replace the gap paragraph at the
+top of this section with a dated line. Until that has happened, the paragraph stands as it is.
 
 **The one advantage over a hosted assistant**
 
