@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: "Plan 05-14 fertig: der Rundlauf vom Admin-Formular ins Discovery-Dokument ist auf einer frisch aufgebauten Topologie ohne NC_MCP_PUBLIC_URL gemessen (Linie A issuer zeichengleich, Linie B kein Restart-Loop, Linie C Rueckweg allein ueber das Formular). Die 401-Zeile in deferred-items.md ist geschlossen. Naechster Schritt: Phasenabschluss 05 erneut pruefen (Verifier)."
-last_updated: "2026-08-20T05:02:51.642Z"
+status: milestone_complete
+stopped_at: Milestone complete (Phase 05 was final phase)
+last_updated: 2026-08-20T05:28:47.542Z
 last_activity: 2026-08-20
 progress:
   total_phases: 5
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-14)
 
 **Core value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Current focus:** Phase 05 — hardening-und-store-einreichung
+**Current focus:** Milestone complete
 
 ## Current Position
 
-Phase: 05 (hardening-und-store-einreichung) — EXECUTING
-Plan: 16 of 16
-Status: Phase complete — ready for verification
+Phase: 05
+Plan: Not started
+Status: Milestone complete
 Last activity: 2026-08-20
 
 Progress: [██████████] 100%
@@ -36,7 +36,7 @@ Progress: [██████████] 100%
 
 **Velocity:**
 
-- Total plans completed: 32
+- Total plans completed: 48
 - Average duration: 35 min
 - Total execution time: 15.2 hours
 
@@ -48,6 +48,7 @@ Progress: [██████████] 100%
 | 2 | 7 | 254 min | 36 min |
 | 3 | 8 | 400 min | 50 min |
 | 4 | 2 | 85 min | 43 min |
+| 05 | 16 | - | - |
 
 **Recent Trend:**
 

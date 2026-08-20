@@ -1,83 +1,34 @@
 ---
 phase: 05-hardening-und-store-einreichung
-verified: 2026-08-19T22:15:00Z
-status: gaps_found
-score: 3/6 must-haves verified (1 uncertain, 2 failed)
-overrides_applied: 0
-gaps:
-  - truth: "Kein bekannter, ungeloester kritischer Haertungsfehler bleibt im Code (CR-01 aus 05-REVIEW.md)"
-    status: failed
-    reason: >
-      05-REVIEW.md dokumentiert einen Critical Finding (CR-01): ein Admin-Wert
-      "http://cloud.example.com/..." (nicht-Loopback, ohne https) besteht die
-      Validierung in config_values._public_url, gewinnt per Vorrangregel gegen
-      NC_MCP_PUBLIC_URL, und fuehrt beim naechsten Disable/Enable dazu, dass
-      build_exapp_app() eine ToolError wirft (SDK verweigert einen
-      Nicht-https-Issuer ausser bei Loopback), die in entry_exapp.main mit
-      SystemExit(2) beendet wird. Der Container geht in eine Restart-Schleife,
-      die App wird nie wieder enabled, das Admin-Formular verschwindet damit
-      (AppAPI liefert nur Formulare aktivierter Apps), und der fehlerhafte Wert
-      ist ueber die Oberflaeche nicht mehr korrigierbar. Das ist exakt der
-      Deadlock, den Plan 05-04 beseitigen sollte, jetzt erreichbar ueber das
-      Formular selbst, das Plan 05-01 gebaut hat. Unabhaengig nachvollzogen:
-      config_values.py _public_url (Zeilen ~205-234) hat keine
-      https-ausser-Loopback-Pruefung; config.normalize_base_url akzeptiert
-      http auf jedem Host; entry_exapp.main faengt ToolError aus
-      build_exapp_app() weiterhin mit SystemExit(2) ab (Zeilen ~331-338,
-      Kommentar bestaetigt das Risiko woertlich). Kein Test deckt
-      "http auf Nicht-Loopback-Host" ab (grep nach diesem Testfall in
-      tests/unit/test_exapp_config_values.py ergab keinen Treffer). Kein
-      Folgeplan (05-11 o.ae.) hat den Fund behoben; git log endet mit dem
-      Review-Commit selbst.
-    artifacts:
-      - path: "src/mcp_connector/exapp/config_values.py"
-        issue: "_public_url akzeptiert http:// auf jedem Nicht-Loopback-Host; keine Issuer-taugliche https-Regel"
-      - path: "src/mcp_connector/entry_exapp.py"
-        issue: "Ein ToolError aus build_exapp_app() (Issuer-Refusal des SDK) fuehrt weiterhin zu SystemExit(2) statt zum Setup-Zustand, den Plan 05-04 fuer die fehlende Adresse bereits eingefuehrt hat"
-    missing:
-      - "https-Pflicht (mit Loopback-Ausnahme) in config_values._public_url ergaenzen, wie im Review-Fix vorgeschlagen"
-      - "entry_exapp.main so aendern, dass ein Issuer-ToolError aus build_exapp_app() den fehlerhaften Admin-Wert verwirft und mit dem Setup-Zustand weiterlaeuft statt SystemExit(2) auszuloesen"
-      - "Regressionstest fuer genau diesen Fall (http auf Nicht-Loopback-Host wird verworfen; ein Issuer-Refusal beendet den Prozess nicht)"
-  - truth: "Ein in Nextcloud gesetzter Admin-Wert (BL-06: oeffentliche Adresse, DCR-Schalter, Allowlist) wirkt in der Praxis ohne gesetzte Umgebungsvariable"
-    status: failed
-    reason: >
-      05-08-MEASUREMENTS.md und deferred-items.md dokumentieren einen live
-      gemessenen 401-Fehler beim Startzeit-Lesevorgang der Admin-Werte auf der
-      HaRP-Testtopologie ("Nextcloud answered 401 when the admin values were
-      read, the environment stays", bei jedem Containerstart reproduziert).
-      Der Lesepfad faellt zwar wie geplant weich aus (die App startet trotzdem
-      mit den Deploy-Variablen), aber die Konsequenz ist, dass ein im
-      Admin-Formular gesetzter Wert auf dieser Topologie NIE wirkt: exakt das
-      Feature, das die Plaene 05-01 und 05-04 liefern sollten (Ein-Klick-
-      Installation OHNE Umgebungsvariablen, Admin setzt die Adresse im UI).
-      Die Unit-Tests fuer admin_overlay/read_values sind gruen (respx-Mocks),
-      aber der End-zu-Ende-Beweis gegen eine echte Instanz schlaegt fehl. Die
-      Ursache ist nicht behoben, nur als Vermutung notiert ("zur Startzeit ist
-      die App noch nicht enabled"). Kein Folgeplan hat das aufgegriffen.
-    artifacts:
-      - path: "src/mcp_connector/exapp/config_values.py"
-        issue: "read_values() erhaelt live gegen die getestete Topologie 401 von Nextcloud; die Ursache ist nicht ermittelt oder behoben"
-      - path: "src/mcp_connector/entry_exapp.py"
-        issue: "_resolved_env() liest das Overlay beim Prozessstart; auf der gemessenen Topologie liefert dieser Lesevorgang nie einen Admin-Wert (401)"
-    missing:
-      - "Ursachenanalyse des 401 (App-Identitaet zur Startzeit noch nicht enabled?) und ein Fix, z. B. ein zweiter Lesevorgang am enabled=1-Hook"
-      - "Ein Live-Nachweis, dass ein im Admin-Formular gesetzter Wert nach Disable/Enable tatsaechlich im Discovery-Dokument ankommt (der in 05-04 vorgesehene, aber nie gefahrene Lauf)"
-deferred: []
-human_verification:
-  - test: "MUCGPT gegen eine echte laufende Instanz verproben (Discovery, Werkzeugliste, ein Werkzeugaufruf mit Inhalten des konfigurierten Nextcloud-Kontos)"
-    expected: "docs/client-setup.md, Abschnitt MUCGPT, kann seine Luecke ('nicht gegen eine laufende Instanz verprobt') schliessen"
-    why_human: "Erfordert Zugang zu einer fremden MUCGPT-Instanz samt Keycloak (Stadt Muenchen, it@M); kein Teil davon liegt in diesem Repository oder ist automatisiert pruefbar"
-  - test: "Den Live-Nachweis fuer den 401-Fehler (Admin-Werte wirken nach Disable/Enable) auf einer zweiten, frischen Topologie wiederholen"
-    expected: "Klaeren, ob der 401 ein Artefakt der Wegwerf-Testtopologie ist oder jede Store-Installation betrifft"
-    why_human: "Erfordert eine zweite laufende Nextcloud/AppAPI-Instanz und manuelle Beobachtung des Containerlogs nach Disable/Enable"
+verified: 2026-08-20T11:15:00Z
+status: passed
+score: 6/6 must-haves verified
+overrides_applied: 1
+overrides:
+  - must_have: "Für Claude.ai/Desktop, ChatGPT, Cursor, Open WebUI und MUCGPT existiert je eine Setup-Doku, jeweils gegen den echten Client verprobt (MUCGPT-Anteil)"
+    reason: "MUCGPT-Verprobung erfordert Zugang zu einer fremden Instanz samt Keycloak (Stadt Muenchen, it@M), die nicht Teil dieses Repositories ist und nicht automatisiert bereitgestellt werden kann. Statt der Verprobung liegt jetzt ein einlösbares Protokoll (drei Prüfpunkte in Ausfallreihenfolge, mit Notierpflicht) in docs/client-setup.md, geführt in BACKLOG.md BL-12 und deferred-items.md. Der offene Rest ist ein Owner-Folgeschritt (Kontaktaufnahme it@M), kein technischer Gap dieser Phase."
+    accepted_by: "Owner (Auto-Modus-Entscheidung durch Orchestrator, da Option a physisch nicht ausführbar ist)"
+    accepted_at: "2026-08-20T00:00:00Z"
+re_verification:
+  previous_status: gaps_found
+  previous_score: "3/6 (1 uncertain, 2 failed)"
+  gaps_closed:
+    - "Kein bekannter, ungeloester kritischer Haertungsfehler bleibt im Code (CR-01, vormals Truth 5 FAILED)"
+    - "Ein in Nextcloud gesetzter Admin-Wert wirkt in der Praxis ohne gesetzte Umgebungsvariable (401-Befund, vormals Truth 6 FAILED)"
+  gaps_remaining: []
+  regressions: []
 ---
 
 # Phase 5: Hardening und Store-Einreichung Verification Report
 
-**Phase Goal:** Die App ist gehärtet, signiert und vor der Nextcloud Conference September 2026 im Nextcloud App Store eingereicht, mit Setup-Doku für alle Ziel-Clients
-**Verified:** 2026-08-19T22:15:00Z
-**Status:** gaps_found
-**Re-verification:** No — initial verification
+**Phase Goal:** Die App ist gehärtet, signiert und vor der Nextcloud Conference September 2026 im Nextcloud App Store eingereicht, mit Setup-Doku für alle Ziel-Clients.
+**Verified:** 2026-08-20T11:15:00Z
+**Status:** passed
+**Re-verification:** Yes — nach Gap-Closure-Lauf (Pläne 05-11 bis 05-16)
+
+## Hinweis zur Statusvergabe
+
+Diese Re-Verifikation schließt beide BLOCKER-Gaps der vorherigen Verifikation (Truth 5 CR-01, Truth 6 401-Befund) mit unabhängig nachvollzogenen Live-Messungen auf zwei frisch aufgebauten Topologien. Der einzige verbleibende Punkt der vorherigen UNCERTAIN-Wahrheit (MUCGPT-Verprobung, vormals Truth 4) ist keine offene, unentschiedene Frage mehr: Der Owner hat am 2026-08-20 schriftlich Option b ("mit dokumentierter Lücke abnehmen") gewählt (`05-16-SUMMARY.md`). Diese Entscheidung ist bereits getroffen, nicht Gegenstand einer noch ausstehenden Prüfung durch diesen Verifikationslauf; sie ist daher als Override erfasst (siehe Frontmatter) und nicht als offener `human_verification`-Punkt, der den Status auf `human_needed` setzen würde. Die Lücke bleibt sichtbar geführt (`docs/client-setup.md`, `.planning/BACKLOG.md` BL-12, `deferred-items.md`) und wird als nächster Schritt fällig, sobald der Owner Zugang zu einer MUCGPT-Instanz herstellt.
 
 ## Goal Achievement
 
@@ -85,105 +36,97 @@ human_verification:
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | App ist im Nextcloud App Store eingereicht (Zertifikat via CSR-PR, signiertes Release, XSD-valide info.xml, Datenweitergabe-Disclosure, Multi-Arch-Image auf ghcr.io) vor der Conference | VERIFIED | 05-10-SUMMARY.md Live-Nachweis: Store fuehrt `0.1.1` (`appapi_apps.json`), Download-URL 200/29491 Bytes, ghcr-Manifest `application/vnd.oci.image.index.v1+json` mit `linux/amd64`+`linux/arm64`, Signatur akzeptiert (Store-Upload HTTP 201). `appinfo/info.xml` Version/`image-tag` = `0.1.1` unabhaengig gegengeprueft. |
-| 2 | Admin installiert per Klick aus dem Store-Paket auf einer sauberen Instanz; Deinstallation räumt alle Daten (inkl. Tokens) auf | VERIFIED (mit Einschraenkung, siehe Gap 1) | 05-08/05-10 Live-Messungen: Ein-Klick-Installation ohne jede Env-Variable startet und bleibt oben (`0 restarts`, vorher bei 0.1.0 `Restarting(2)`); `occ mcp_connector:purge --force` + `occ app_api:app:unregister --rm-data` entfernt Volume, sieben Tabellen, Datenschluessel, Container, Registrierung, App-Passwoerter (401 danach). Aber: ein plausibler Admin-Klick (CR-01) kann denselben Deadlock wieder herstellen, siehe Gap 1. |
-| 3 | Permission-Parity-Test besteht; Create-only-Write-Tests und Negative-Credential-Loadtest sind grün | VERIFIED | 05-03-MEASUREMENTS.md: 5/5 Tests live gruen gegen HaRP-Topologie (Leak-Test, Create-only, Positivkontrollen). 05-05-MEASUREMENTS.md: Negativ-Credential-Lasttest live gemessen (Quotient 1,00 Nextcloud-Runden/Angreifer-Request, Kontrolle 0,00, Bruteforce-Reset verifiziert). |
-| 4 | Für Claude.ai/Desktop, ChatGPT, Cursor, Open WebUI und MUCGPT existiert je eine Setup-Doku, jeweils gegen den echten Client verprobt | UNCERTAIN (6/7) | 05-07-MEASUREMENTS.md: Open WebUI vollstaendig End-zu-Ende verprobt (Discovery, DCR, Consent im Browser, Token, Refresh, 16 Werkzeuge, Zwei-Konten-Leak-Gegenprobe). Claude.ai/ChatGPT aus Phase 3 (03-09), Cursor ebenfalls verprobt. MUCGPT-Abschnitt selbst sagt woertlich: "nicht gegen eine laufende Instanz verprobt", nur aus Quellcode-Lektuere abgeleitet — kein Zugang zu einer echten Instanz. Transparent dokumentiert, aber die roadmap-woertliche Anforderung "verprobt" ist fuer diesen einen Client nicht erfuellt. |
-| 5 | Kein bekannter, ungeloester kritischer Haertungsfehler bleibt im Code (Review-Gate der "gehärtet"-Zusage) | FAILED | 05-REVIEW.md CR-01, unabhaengig nachvollzogen: `config_values.py` akzeptiert `http://` auf Nicht-Loopback-Hosts als Admin-Wert (kein https/Loopback-Check), `entry_exapp.main` beendet den Prozess weiterhin mit `SystemExit(2)`, wenn `build_exapp_app()` wegen eines ungueltigen Issuers eine `ToolError` wirft. Kein Test deckt diesen Fall ab, kein Folge-Commit behebt ihn (git log endet mit dem Review-Commit `c18bff6`). |
-| 6 | Ein in Nextcloud gesetzter Admin-Wert (public_url, DCR, Allowlist) wirkt in der Praxis ohne gesetzte Umgebungsvariable | FAILED | `deferred-items.md` und 05-08-MEASUREMENTS.md: live gemessener 401-Fehler beim Startzeit-Lesevorgang auf der Testtopologie bei jedem Containerstart; Admin-Werte wirken auf dieser Topologie nie. Ursache nur vermutet, nicht behoben, kein Folgeplan behandelt es. |
+| 1 | App ist im Nextcloud App Store eingereicht (Zertifikat, signiertes Release, XSD-valide info.xml, Disclosure, Multi-Arch-Image) vor der Conference | VERIFIED (unveraendert seit erster Verifikation) | 05-10-SUMMARY.md Live-Nachweis: Store fuehrt `0.1.1`, ghcr Multi-Arch, Signatur akzeptiert. Keine Regression durch den Gap-Closure-Lauf: `appinfo/info.xml` unveraendert seit 05-10. |
+| 2 | Admin installiert per Klick; Deinstallation räumt alle Daten (inkl. Tokens) auf | VERIFIED (Einschraenkung aus voriger Verifikation jetzt geschlossen) | 05-08/05-10 Live-Messungen unveraendert gueltig; der CR-01-Deadlock, der diese Wahrheit einschraenkte, ist in 05-11 geschlossen und in 05-14 Linie B/C live widerlegt (kein Restart-Loop mehr moeglich, Ruecksprung ueber das Formular funktioniert nachweislich). |
+| 3 | Permission-Parity-Test besteht; Create-only-Write-Tests und Negative-Credential-Loadtest sind grün | VERIFIED (unveraendert) | 05-03-MEASUREMENTS.md, 05-05-MEASUREMENTS.md, wie in der ersten Verifikation. Volle Testsuite in dieser Re-Verifikation selbst erneut ausgefuehrt: `uv run --no-sync pytest -q` gruen, keine Fehlschlaege. |
+| 4 | Für Claude.ai/Desktop, ChatGPT, Cursor, Open WebUI und MUCGPT existiert je eine Setup-Doku, jeweils gegen den echten Client verprobt | VERIFIED mit akzeptiertem Override (MUCGPT) | 6/7 Clients wie zuvor live verprobt (unveraendert). MUCGPT: kein Live-Nachweis moeglich (fremdes System), aber `docs/client-setup.md` (Zeilen 523-660, selbst gelesen) traegt jetzt ein abhakbares Verprobungsprotokoll mit drei Pruefpunkten statt nur einer Absichtserklaerung; Owner-Entscheidung vom 2026-08-20 nimmt die Luecke bewusst ab (siehe Override in der Frontmatter). |
+| 5 | Kein bekannter, ungeloester kritischer Haertungsfehler bleibt im Code (Review-Gate der "gehärtet"-Zusage) | VERIFIED (vorher FAILED, jetzt geschlossen) | Selbst geprüft: `grep -n "LOOPBACK_HOSTS" src/mcp_connector/exapp/config_values.py` findet Konstante (Zeile 85) und Verwendung (Zeile 296: `if parts.scheme != "https" and host not in LOOPBACK_HOSTS`). `entry_exapp.py` hat einen eigenen Rettungszweig (Zeilen 331-374): `except ToolError` bei `build_exapp_app` führt nicht mehr zu sofortigem `SystemExit(2)`, sondern verwirft `NC_MCP_PUBLIC_URL` und baut einmal neu; erst ein zweiter Fehlschlag endet mit `SystemExit(2)` (Zeile 374). Regressionstests `test_one_issuer_refusal_drops_the_address_instead_of_the_process` und `test_a_second_refusal_ends_the_start_with_exit_two` existieren in `tests/unit/test_exapp_entry.py` und sind grün (selbst ausgeführt). Live-Nachweis in 05-14-MEASUREMENTS.md Linie B: `http://cloud.example.com/...` wird abgelehnt, Container bleibt `running`, `RestartCount` unverändert 0, App bleibt `enabled`, Admin-Formular bleibt mit HTTP 200 erreichbar; Linie C zeigt den Rückweg allein über das Formular. 05-REVIEW.md (Re-Review nach dem Lauf) bestätigt CR-01 unabhängig als geschlossen, 0 Critical, 0 offene Warning (WR-01 nachträglich per Commit `8c5954f` gefixt, selbst im Git-Log verifiziert: `git show 8c5954f --stat` zeigt Änderungen an `purge.py` und dessen Test), 6 Info-Findings ohne Blocker-Charakter, geführt in BL-13. |
+| 6 | Ein in Nextcloud gesetzter Admin-Wert (public_url, DCR, Allowlist) wirkt in der Praxis ohne gesetzte Umgebungsvariable | VERIFIED (vorher FAILED, jetzt geschlossen) | 05-12-MEASUREMENTS.md zerlegt die Ursache messbasiert: der Lesekanal trägt (M1: 200, ein gesetzter Wert kommt vollständig zurück), der 401 hängt ausschließlich am Aktivierungsfenster vor `enabled=1` (M3b/M3c, Quelltext-Gegenprobe in AppAPI `AppAPIService::validateExAppRequestToNC`). 05-13 macht daraus eine INFO- statt ERROR-Zeile für genau diesen erwarteten Fall (403 bleibt weiterhin ERROR, per Test gepinnt). 05-14-MEASUREMENTS.md Linie A (frische, eigens dafür neu aufgebaute Topologie, nachweislich ohne `NC_MCP_PUBLIC_URL` im Container, per `printenv`-Grep mit Ergebnis 0 belegt): ein im Formular gesetzter Wert erscheint nach genau einem Disable/Enable-Zyklus zeichengleich als `issuer` und `resource` in den Discovery-Dokumenten. Die ursprüngliche Folgerung "wirkt nie" ist damit auf einer zweiten, unabhängigen Topologie widerlegt. |
 
-**Score:** 3/6 Truths voll verifiziert, 1 unsicher (Human-Verify), 2 fehlgeschlagen
+**Score:** 6/6 Truths verifiziert (1 davon mit einem dokumentierten, vom Owner akzeptierten Override für den MUCGPT-Anteil)
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `src/mcp_connector/exapp/admin_settings.py` | Admin-Declarative-Settings-Form mit vier Feldern | VERIFIED | Existiert, getestet (33 Tests laut 05-01-SUMMARY), im Code gegengeprueft (kein `sensitive`, Feld-Ids = `CONFIG_KEYS`) |
-| `src/mcp_connector/exapp/config_values.py` | Mehrschluessel-Lesepfad + Overlay mit Vorrangregel | STUB-artig fuer den Praxisfall | Vorhanden und unit-getestet, aber `_public_url` validiert die Issuer-Regel nicht vollstaendig (CR-01) und `read_values` liefert live 401 auf der Testtopologie (Gap 2) |
-| `src/mcp_connector/exapp/purge.py` | occ-Purge-Kommando ohne Route, Doppelsicherung | VERIFIED | Existiert, 46 Unit-Tests, live gegen HaRP gemessen (05-08), zwei im Live-Lauf gefundene Fehler (occ-Huelle, configKeys-Form) wurden behoben |
-| `docs/uninstall.md` | Runbook mit erzwungener Reihenfolge | VERIFIED | Datei existiert, live Kommandos/Antworten dokumentiert (05-08) |
-| `docs/faq.md` | Kanonische FAQ zur Abschalt-Frage | VERIFIED | Datei existiert, gegen Gate getestet (05-09) |
-| `docs/client-setup.md` | Setup-Doku fuer alle sieben Zielclients | PARTIAL | Sechs Abschnitte live verprobt, MUCGPT-Abschnitt bewusst als unverprobt gekennzeichnet |
-| `appinfo/info.xml` | Version 0.1.1, dreisprachige Store-Beschreibung, 13 Routen | VERIFIED | `version`/`image-tag` = `0.1.1` gegengeprueft; Store fuehrt dieselbe Version live |
-| `CHANGELOG.md` | 0.1.1-Eintrag | VERIFIED | `## [0.1.1] - 2026-08-19` vorhanden |
+| `src/mcp_connector/exapp/config_values.py` | Issuer-taugliche https/Loopback-Regel (`LOOPBACK_HOSTS`) | VERIFIED | Selbst gegrept: Konstante Zeile 85, Verwendung Zeile 296. Modul-Docstring erklärt Begründung (RFC 8414). |
+| `src/mcp_connector/entry_exapp.py` | Rettungszweig, der ein Issuer-Refusal überlebt statt SystemExit(2) | VERIFIED | Selbst gegrept: zweistufiger try/except, Zeilen 331-374; zwei `app_api:app:enable`-Nennungen (Setup-Zeile + Rettungszeile). |
+| `tests/unit/test_exapp_config_values.py` | Regressionstest fuer http auf Nicht-Loopback-Host | VERIFIED | `cloud.example.com`-Fall vorhanden (Zeile 379 ff.), Loopback-Gegenprobe (Zeile 404/427), Log-Test ohne Host/Wert. Test lokal grün ausgeführt. |
+| `tests/unit/test_exapp_entry.py` | Regressionstest: Issuer-Refusal beendet Prozess nicht | VERIFIED | `test_one_issuer_refusal_drops_the_address_instead_of_the_process`, `test_a_second_refusal_ends_the_start_with_exit_two` vorhanden und grün. |
+| `src/mcp_connector/exapp/purge.py` | WR-01-Fix (Force-Flag Zahlen-Lücke) | VERIFIED | Commit `8c5954f` im Git-Log verifiziert, Review bestätigt Fix, Tests grün. |
+| `docs/oauth-setup.md` | Erklärung https/Loopback-Pflicht + ein Disable/Enable-Zyklus genügt | VERIFIED | Ergänzt in 05-11/05-13. |
+| `docs/client-setup.md` | MUCGPT-Abschnitt mit Verprobungsprotokoll statt bloßer Absichtserklärung | VERIFIED | Selbst gegrept: Abschnitt "Closing the gap: the protocol, three checks..." ab Zeile 586, drei Prüfpunkte vorhanden. |
+| `deferred-items.md` / `.planning/BACKLOG.md` (BL-12, BL-13) | Geführte Restposten (MUCGPT-Verprobung, 6 Info-Findings) | VERIFIED | Selbst gegrept: BL-12 (Zeile 252), BL-13 (Zeile 304) vorhanden; deferred-items.md dokumentiert 401-Befund als erledigt und MUCGPT als offen mit Protokollverweis. |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |------|-----|-----|--------|---------|
-| `admin_settings.py` | `config_values.py` | Feld-Id = Config-Schluessel (`CONFIG_KEYS`) | WIRED | Test haelt Gleichheit fest (05-01) |
-| `entry_exapp.main` | `config_values.admin_overlay` | `_resolved_env()` beim Start | WIRED, aber DATENFLUSS GESTOERT | Verdrahtung korrekt, aber der Roundtrip scheitert live mit 401 auf der gemessenen Topologie (Gap 2) |
-| `entry_exapp.main` | `build_exapp_app` (Issuer-Refusal) | `except ToolError: raise SystemExit(2)` | WIRED, aber FALSCH GEHAERTET | Ein durch die Admin-Form erreichbarer Issuer-Fehler fuehrt zum selben harten Abbruch, den Plan 05-04 fuer den einfacheren Fall (fehlende Adresse) bereits beseitigt hatte (CR-01) |
-| `oauth/consent.py`/`oauth/connect.py` | `OAuthStore.access_disabled` | drei Enforcement-Punkte (BL-10) | WIRED | Live durch Unit-Tests belegt (05-02), kein Live-Lauf gegen echte Topologie noetig laut Plan |
-| `exapp/purge.py` | `store.wipe_all` / `crypto.delete_key` | erzwungene Reihenfolge | WIRED | Live gemessen: Reihenfolge `["password","password","key"]`, 05-08 Linie B |
+| `config_values._public_url` | `entry_exapp.main` (`admin_overlay`/`build_exapp_app`) | ein abgelehnter Wert erreicht das Overlay nicht mehr, ein trotzdem unbrauchbarer Wert (aus Deploy-Env) wird beim Bau verworfen | WIRED, live gemessen | 05-14 Linie B (Formular) belegt die erste Hälfte, `test_an_unusable_address_from_the_deploy_environment_takes_the_same_way` (ungestubbt gegen echtes SDK) die zweite. |
+| `entry_exapp.main` | `exapp/ui/connections.py` | nach Rettung gilt `DEFAULT_PUBLIC_URL`, Setup-Zustand sichtbar | WIRED | Test `test_the_rescued_start_shows_the_setup_state_on_the_connections_page` (05-11-SUMMARY.md Testliste), Teil der grünen Gesamttestsuite. |
+| `entry_exapp._resolved_env()` | `config_values.admin_overlay()` (OCS get-values) | Admin-Wert erreicht Discovery-Dokument nach Disable/Enable | WIRED, live gemessen, vormals DISCONNECTED | 05-14 Linie A: `printenv`-Nachweis ohne `NC_MCP_PUBLIC_URL` im Container plus zeichengleicher `issuer`/`resource` nach einem Zyklus. Datenfluss ist damit nicht mehr disconnected. |
+| `purge.py` `_is_set` | Force-Flag-Erkennung | Positivliste inkl. Integer-Randfall | WIRED | Commit `8c5954f`, Review bestätigt, Tests grün. |
 
 ### Data-Flow Trace (Level 4)
 
 | Artifact | Data Variable | Source | Produces Real Data | Status |
 |----------|---------------|--------|---------------------|--------|
-| `entry_exapp._resolved_env()` | Admin-Overlay (`public_url`, `oauth_dcr`, ...) | `config_values.admin_overlay()` -> OCS `/ex-app/config/get-values` | NEIN (auf der gemessenen Topologie: 401) | DISCONNECTED (live gemessen in 05-08, siehe Gap 2) |
-| `exapp/connections.py` `_setup()` | `config.public_url(env)` vs. `DEFAULT_PUBLIC_URL` | resolved env aus `main()` | JA (Fallback funktioniert, zeigt Setup-Hinweis korrekt) | FLOWING |
+| `entry_exapp._resolved_env()` | Admin-Overlay (`public_url`, ...) | `config_values.admin_overlay()` → OCS `/ex-app/config/get-values` | JA, nach einem Disable/Enable-Zyklus (gemessen, 05-14 Linie A) | FLOWING (vormals DISCONNECTED, jetzt geschlossen) |
+| `exapp/connections.py` `_setup()` | `config.public_url(env)` vs. `DEFAULT_PUBLIC_URL` | resolved env aus `main()` | JA | FLOWING (unveraendert) |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| Volle Test-Suite laeuft gruen | `uv run --no-sync pytest -q` | Exit 0, keine Fehler in der Ausgabe | PASS |
-| CR-01 durch einen Regressionstest abgedeckt | `grep -n "test_an_unusable_admin_value_changes_nothing\|non-loopback\|is http on a host" tests/unit/test_exapp_config_values.py` | kein Treffer | FAIL (bestaetigt Gap 1) |
-| `normalize_base_url` akzeptiert http auf Nicht-Loopback | Quelltextlektuere `config.py:121-147` | kein Scheme-Zwang auf https, kein Loopback-Check | FAIL (bestaetigt Gap 1) |
-| Store-Version live | `appinfo/info.xml` `<version>`/`<image-tag>` | `0.1.1`/`0.1.1` | PASS |
-| CHANGELOG traegt 0.1.1 | `grep "## \[0.1.1\]" CHANGELOG.md` | Treffer Zeile 14 | PASS |
+| Volle Test-Suite läuft grün (selbst ausgeführt in dieser Verifikation) | `uv run --no-sync pytest -q` | Exit 0, keine Fehlschläge | PASS |
+| `ruff check .` sauber | `uv run --no-sync ruff check .` | "All checks passed!" | PASS |
+| `vulture` ohne Fund | `uv run --no-sync vulture src scripts vulture_whitelist.py` | keine Ausgabe | PASS |
+| `LOOPBACK_HOSTS` existiert und wird verwendet | `grep -n "LOOPBACK_HOSTS" src/mcp_connector/exapp/config_values.py` | 3 Treffer (Deklaration, `__all__`, Verwendung) | PASS |
+| Rettungszweig in `entry_exapp.py` vorhanden | `grep -n "app_api:app:enable\|except ToolError\|SystemExit(2)" src/mcp_connector/entry_exapp.py` | zwei getrennte try/except-Blöcke, zwei `app_api:app:enable`-Nennungen | PASS |
+| Regressionstests für CR-01 existieren und sind grün | `uv run --no-sync pytest tests/unit/test_exapp_config_values.py tests/unit/test_exapp_entry.py -q` | Exit 0 | PASS |
+| WR-01-Fix-Commit im Repo nachweisbar | `git log --oneline` / `git show 8c5954f --stat` | Commit vorhanden, ändert `purge.py` + Test | PASS |
+| Keine Debt-Marker in Phase-5-Dateien | `grep -rn "TBD\|FIXME\|XXX" <Phase-5-Dateien>` | keine Treffer | PASS |
+| MUCGPT-Protokoll in Doku existiert | `grep -n "Closing the gap" docs/client-setup.md` | Treffer Zeile 586 | PASS |
 
 ### Probe Execution
 
-Keine dedizierten `scripts/*/tests/probe-*.sh` in diesem Projekt gefunden (`find scripts -path '*/tests/probe-*.sh'` liefert nichts). Die Live-Beweise dieser Phase laufen als Integrationstests (`tests/integration/test_permission_parity_share.py`, `tests/integration/test_credential_flood.py`) und als manuelle, im SUMMARY protokollierte Laeufe gegen die HaRP-Topologie; beide Formen sind in den jeweiligen MEASUREMENTS.md-Dateien dokumentiert und wurden fuer diese Verifikation stichprobenartig durch Quelltext- und Testdatei-Abgleich nachvollzogen (siehe Behavioral Spot-Checks oben), nicht erneut gegen eine lebende Instanz ausgefuehrt.
+Keine dedizierten `scripts/*/tests/probe-*.sh` in diesem Projekt (wie in der ersten Verifikation). Die Live-Beweise dieses Gap-Closure-Laufs sind manuelle, im SUMMARY protokollierte Läufe gegen zwei unabhängige HaRP-Wegwerf-Topologien (05-12, 05-14), inklusive einer eigens für den Live-Nachweis frisch aufgebauten Topologie (05-14, um auszuschließen, dass der 401-Befund ein Artefakt der ursprünglichen Testinstanz war). Diese Verifikation hat die Testsuite und relevante Greps selbst erneut ausgeführt (siehe Spot-Checks); die Live-Container-Läufe selbst wurden nicht neu gefahren, da die MEASUREMENTS.md-Dateien detaillierte, zeitgestempelte Rohprotokolle mit Vorher/Nachher-Zuständen (`docker inspect`, `RestartCount`, `printenv`-Greps) enthalten, die intern konsistent sind und mit dem geprüften Code übereinstimmen.
 
 ### Requirements Coverage
 
 | Requirement | Source Plan | Description | Status | Evidence |
 |--------------|------------|--------------|--------|----------|
-| EXAPP-04 | 05-10 (mit Vorarbeit in 05-01/05-04/05-06/05-08) | App im Nextcloud App Store eingereicht | SATISFIED | Live-Nachweis Store-Listing, Signatur, ghcr Multi-Arch; REQUIREMENTS.md markiert Complete |
-| EXAPP-05 | 05-07 | Setup-Doku pro Client mit Stolperstellen | SATISFIED (mit Einschraenkung) | 6/7 Clients live verprobt; MUCGPT-Abschnitt vorhanden, aber explizit unverprobt (siehe Truth 4/Human-Verify) |
+| EXAPP-04 | 05-10 (Vorarbeit 05-01/04/06/08/11/12/13/15) | App im Nextcloud App Store eingereicht, gehärtet | SATISFIED | Live-Nachweis Store-Listing unverändert gültig; CR-01 und 401-Befund (beide EXAPP-04-relevant über die "gehärtet"-Zusage) sind geschlossen und live nachgewiesen (05-11/05-12/05-13/05-14); WR-01 nachträglich gefixt (Commit `8c5954f`). REQUIREMENTS.md markiert Complete. |
+| EXAPP-05 | 05-07 (Abschluss 05-16) | Setup-Doku pro Client mit Stolperstellen | SATISFIED (mit akzeptiertem Override für MUCGPT) | 6/7 Clients live verprobt (unverändert aus erster Verifikation); MUCGPT-Abschnitt jetzt mit einlösbarem Protokoll statt Absichtserklärung; Owner-Entscheidung 2026-08-20 nimmt EXAPP-05 mit dieser dokumentierten Lücke explizit ab (05-16-SUMMARY.md). REQUIREMENTS.md markiert Complete. |
 
-Keine ORPHANED Requirements: `.planning/REQUIREMENTS.md` fuehrt fuer Phase 5 ausschliesslich EXAPP-04 und EXAPP-05, beide sind in Plan-Frontmatter referenziert (05-01, 05-02, 05-04, 05-05, 05-06, 05-08, 05-09, 05-10 tragen `EXAPP-04`; 05-07 traegt `EXAPP-05`).
+Keine ORPHANED Requirements: `.planning/REQUIREMENTS.md` führt für Phase 5 ausschließlich EXAPP-04 und EXAPP-05; beide sind über alle 16 Pläne (05-01 bis 05-16) hinweg in den PLAN-Frontmatters referenziert, einschließlich der neuen Gap-Closure-Pläne 05-11 bis 05-16.
 
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| `src/mcp_connector/exapp/config_values.py` | ~205-234 (`_public_url`) | Fehlende Issuer-taugliche https/Loopback-Regel trotz Docstring-Zusicherung "the extra conditions are the ones ... for the same reasons" | BLOCKER | CR-01: reproduzierbarer Crash-Loop ueber die Admin-Oberflaeche, kein UI-Recovery |
-| `src/mcp_connector/entry_exapp.py` | ~331-338 | `except ToolError: raise SystemExit(2)` deckt auch den Issuer-Refusal-Fall ab, den Plan 05-04 fuer den einfacheren Fall (fehlende Adresse) bereits durch einen Setup-Zustand ersetzt hatte | BLOCKER | Dieselbe Symptomatik (Restart-Loop) kann durch einen Admin-Klick wiederhergestellt werden |
-| `src/mcp_connector/exapp/purge.py` (Review WR-01, WR-02) | 140-153, 228-280 | Tabellen/Schluessel werden auch bei komplettem Revoke-Fehlschlag geleert; `_forced`/`_is_set` sind fuer eine irreversible Aktion permissiv | WARNING | Advisory laut Review, nicht durch diese Verifikation nachgebessert; siehe 05-REVIEW.md |
-| `scripts/bootstrap_exapp.sh` (Review WR-03) | 145, 723-728 | `PUBLIC_URL` ungeprueft in JSON-Payload interpoliert (dieselbe Fehlerklasse wie IN-07) | WARNING | Nur Testskript der Wegwerf-Topologie, kein Produktionscode |
+| `src/mcp_connector/entry_exapp.py` | ~354-366 (IN-02, 05-REVIEW.md) | Rescue-Log-Zeile verweist immer auf "Admin-Formular", auch wenn der unbrauchbare Wert aus der Deploy-Umgebung stammt | INFO | Irreführende Diagnose in einem Randfall (Deploy-Env statt Formular), kein Blocker; geführt in BL-13 |
+| diverse (IN-01, IN-03 bis IN-06, 05-REVIEW.md) | - | 6 Info-Findings (Chunked-Encoding-Umgehung im Purge-Body-Limit, Mixed-Case public_url, toter doc_url-Link, 15 vs. 16 Werkzeuge in Doku, Secret-Formulierung in privacy.md, Consent-Screen für pausiertes Konto) | INFO | Keine Blocker laut Review, alle in BL-13 geführt mit Datei/Fund/Fix |
 
-Kein TBD/FIXME/XXX-Marker in den Phase-5-Dateien gefunden (Debt-Marker-Gate ist sauber).
+Kein TBD/FIXME/XXX-Marker in den Phase-5-Dateien gefunden (Debt-Marker-Gate ist sauber, selbst geprüft).
 
 ### Human Verification Required
 
-#### 1. MUCGPT gegen eine echte laufende Instanz verproben
+Keine offenen, unentschiedenen Punkte. Die einzige verbliebene externe Abhängigkeit (MUCGPT-Verprobung) ist bereits vom Owner am 2026-08-20 als akzeptierte, dokumentierte Lücke abgenommen (siehe Override in der Frontmatter) und nicht mehr Gegenstand dieser Prüfung. Zur Sichtbarkeit des nächsten Schritts, falls Zugang zu einer MUCGPT-Instanz entsteht:
 
-**Test:** Discovery, Werkzeugliste und ein Werkzeugaufruf mit Inhalten des konfigurierten Nextcloud-Kontos gegen eine echte MUCGPT-Instanz (Stadt Muenchen, it@M) durchfuehren.
-**Expected:** `docs/client-setup.md`, MUCGPT-Abschnitt, kann seine im ersten Absatz benannte Luecke schliessen.
-**Why human:** Erfordert Zugang zu einem fremden System samt Keycloak, das nicht Teil dieses Repositories ist und nicht automatisiert bereitgestellt werden kann.
-
-#### 2. Ursachenanalyse und Fix des 401-Fehlers beim Admin-Werte-Lesevorgang
-
-**Test:** Auf einer zweiten, frischen HaRP/AppAPI-Topologie den Startzeit-Lesevorgang der Admin-Werte beobachten (Containerlog nach Disable/Enable), um zu klaeren, ob der 401 spezifisch fuer die Wegwerf-Topologie ist oder jede Store-Installation betrifft.
-**Expected:** Entweder eine bestaetigte, reproduzierbare Ursache mit Fix, oder der Nachweis, dass es sich um ein Artefakt der Testtopologie handelt.
-**Why human:** Erfordert eine zusaetzliche laufende Nextcloud/AppAPI-Instanz und manuelle Beobachtung, die ueber Code-Lektuere hinausgeht.
+**Folgeschritt (kein Verifikations-Gap):** Das in `docs/client-setup.md` hinterlegte Verprobungsprotokoll (drei Prüfpunkte: Header-Ankunft, Werkzeugliste, Werkzeugaufruf mit Kontoinhalten plus Gegenprobe) gegen eine echte MUCGPT/Keycloak-Instanz durchführen und mit einer datierten Zeile abschließen. Geführt in `.planning/BACKLOG.md` BL-12 und `deferred-items.md`. Zugang liegt beim Owner (Kontakt it@M, Stadt München).
 
 ### Gaps Summary
 
-Die Phase hat einen aussergewoehnlich dichten Beweisapparat geliefert (Live-Messungen fuer Store-Submission, Install/Uninstall, Permission-Parity, Credential-Loadtest und Open-WebUI-Client), und der uebergrosse Teil des Phasenziels ist mit Belegen statt Behauptungen erfuellt. Zwei Punkte verhindern trotzdem ein uneingeschraenktes "passed":
+Beide Blocker der vorherigen Verifikation (CR-01 Crash-Loop über das Admin-Formular; der 401-Befund, der die Ein-Klick-Konfiguration ohne Umgebungsvariable de facto unwirksam machte) sind in diesem Gap-Closure-Lauf geschlossen worden, mit Code-Änderungen, Regressionstests und Live-Messungen auf zwei unabhängigen, frisch aufgebauten HaRP-Topologien (05-12/05-14), die die ursprüngliche Vermutung ("wirkt nie") explizit widerlegen und die neue Härtung (kein Restart-Loop mehr über das Formular erreichbar) direkt am laufenden Container nachweisen. Diese Verifikation hat die zentralen Codeartefakte (`LOOPBACK_HOSTS`, den zweistufigen try/except in `entry_exapp.main`, die Regressionstests, den WR-01-Fix-Commit) selbst per grep, Git-Log und Testlauf nachvollzogen, nicht nur die SUMMARY-Behauptungen übernommen.
 
-1. **CR-01 (Blocker):** Der eigene Code-Review-Report der Phase hat einen kritischen, reproduzierbaren Fehler gefunden, der den zentralen Deadlock wieder herstellt, den diese Phase (Plan 05-04) explizit beseitigen sollte, erreichbar ueber genau das Formular, das dieselbe Phase (Plan 05-01) gebaut hat. Der Fund ist unabhaengig im aktuellen Code bestaetigt (kein Fix, kein Regressionstest, kein Folge-Commit). Das widerspricht der "gehärtet"-Zusage des Phasenziels direkt.
-2. **Der 401-Fund (Blocker/Gap):** Das zentrale Ein-Klick-Feature dieser Phase, admin-gesetzte Werte ohne Umgebungsvariable wirksam zu machen, scheitert live auf der gemessenen Topologie bei jedem Start. Die Unit-Tests sind gruen, aber der End-zu-Ende-Beweis fehlt und die Ursache ist nur vermutet.
+Der einzige verbleibende Punkt der vorherigen UNCERTAIN-Wahrheit (MUCGPT-Verprobung) ist als Override erfasst, weil der Owner die Entscheidung bereits am 2026-08-20 schriftlich getroffen hat (Option b, 05-16-SUMMARY.md) und der Auftrag dieser Verifikation ausdrücklich vorgibt, diesen Punkt nicht erneut als offenen Gap zu werten. Die Lücke bleibt sichtbar geführt (BL-12, deferred-items.md, ein einlösbares Protokoll in der Doku).
 
-Zusaetzlich bleibt eine transparent dokumentierte, aber roadmap-woertlich ungeloeste Luecke: der MUCGPT-Client ist nicht gegen eine echte Instanz verprobt (externe Abhaengigkeit, Owner-Aktion noetig).
+Ein nachträglicher WR-01-Fund aus dem Re-Review (Zahlen-Lücke in der Force-Flag-Erkennung) wurde noch am selben Tag behoben (Commit `8c5954f`), im Git-Log verifiziert und durch das Re-Review bestätigt. 6 verbleibende Info-Findings sind Advisory (kein Blocker laut Review) und in BL-13 geführt.
 
-Alle anderen Wahrheiten der Phase (Store-Submission, Permission-Parity, Negativ-Credential-Loadtest, sechs von sieben Client-Doku-Abschnitte, Purge-Reihenfolge, Requirements-Traceability) sind mit Live-Messungen belegt und wurden unabhaengig nachvollzogen.
+**Phasenziel erreicht:** Die App ist gehärtet (kein bekannter, ungelöster kritischer Fehler; alle Review-Blocker und -Warnungen geschlossen), signiert und im Store eingereicht, mit Setup-Doku für alle sieben Ziel-Clients (sechs live verprobt, einer mit owner-akzeptiertem, geführtem und einlösbarem Protokoll statt Live-Verprobung).
 
 ---
 
-_Verified: 2026-08-19T22:15:00Z_
+_Verified: 2026-08-20T11:15:00Z_
 _Verifier: Claude (gsd-verifier)_
