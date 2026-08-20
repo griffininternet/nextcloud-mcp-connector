@@ -57,6 +57,29 @@ Einstellungen, Sicherheit, Geräte und Sitzungen und kann dort beendet werden.
 Was eine Administratorin einstellen muss, was ein Nutzer eingibt und die Messungen hinter beidem:
 **[docs/oauth-setup.md](docs/oauth-setup.md)**.
 
+## Im Nextcloud App Store
+
+Die App ist als **MCP Connector** gelistet:
+**[apps.nextcloud.com/apps/mcp_connector](https://apps.nextcloud.com/apps/mcp_connector)**
+
+[![MCP Connector im Nextcloud App Store](docs/screenshots/app-store.png)](https://apps.nextcloud.com/apps/mcp_connector)
+
+Die Installation läuft als Nextcloud ExApp: AppAPI aktivieren, einen Deploy-Daemon
+registrieren, dann die App deployen und aktivieren. Der vollständige Weg mit den exakten
+occ-Kommandos und den Stolperstellen, die wirklich auftreten (unter Nextcloud 34 listet die
+Apps-Verwaltung keine ExApps, occ ist der verlässliche Weg), steht in
+**[docs/exapp-install.md](docs/exapp-install.md)** (auf Englisch).
+
+Nach der Installation registriert die App ihre Einstellungen unter Einstellungen,
+Verwaltung, Sicherheit:
+
+![Admin-Einstellungen des MCP Connectors](docs/screenshots/admin-settings.png)
+
+Jedes Konto verwaltet seine eigenen Verbindungen auf der Verbindungsseite der App, die
+Nextcloud unter Einstellungen, Sicherheit, MCP Connector verlinkt:
+
+![Verbindungsseite mit zwei verbundenen Assistenten](docs/screenshots/connections-page.png)
+
 ## FAQ
 
 **Mein Administrator hat diese App installiert. Kann ich sie für mich abschalten?**

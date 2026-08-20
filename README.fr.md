@@ -60,6 +60,29 @@ close.
 Ce qu'un administrateur doit régler, ce qu'un utilisateur saisit, et les mesures qui étayent les
 deux : **[docs/oauth-setup.md](docs/oauth-setup.md)**.
 
+## Dans l'App Store de Nextcloud
+
+L'application est référencée sous le nom **MCP Connector** :
+**[apps.nextcloud.com/apps/mcp_connector](https://apps.nextcloud.com/apps/mcp_connector)**
+
+[![MCP Connector dans l'App Store de Nextcloud](docs/screenshots/app-store.png)](https://apps.nextcloud.com/apps/mcp_connector)
+
+Elle s'installe comme ExApp Nextcloud : activer AppAPI, enregistrer un démon de déploiement,
+puis déployer et activer l'application. Le parcours complet, avec les commandes occ exactes et
+les pièges réellement rencontrés (sous Nextcloud 34, la gestion des applications n'affiche pas
+les ExApps, occ est la voie fiable), se trouve dans
+**[docs/exapp-install.md](docs/exapp-install.md)** (en anglais).
+
+Après l'installation, l'application enregistre ses réglages sous Paramètres, Administration,
+Sécurité :
+
+![Réglages d'administration du MCP Connector](docs/screenshots/admin-settings.png)
+
+Chaque compte gère ses propres connexions sur la page des connexions de l'application, que
+Nextcloud référence sous Paramètres, Sécurité, MCP Connector :
+
+![Page des connexions avec deux assistants connectés](docs/screenshots/connections-page.png)
+
 ## FAQ
 
 **Mon administrateur a installé cette application. Puis-je la désactiver pour moi ?**
