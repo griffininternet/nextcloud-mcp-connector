@@ -1,13 +1,15 @@
-"""The two boundaries of a client id metadata document fetch that need no network at all:
-the form of the identifier, and the class of the address it resolves to.
+"""The fetch of a client id metadata document, and the boundaries that hold around it.
 
 This module is the first place in this project where a request chooses the target of an
 outbound request of ours. Every other call goes to the configured Nextcloud, because the
 base URL comes from ``NC_MCP_URL`` and never from a request (phase 01 decision, T-01-08).
 A client identifier URL is different by design: the draft makes the identifier itself the
 address of the document, so the value that arrives at ``/authorize`` decides where this
-process connects to. That is the reason this file is a module of its own and not three
+process connects to. That is the reason this file is a module of its own and not four
 helpers inside the provider.
+
+:func:`fetch_document` is the one boundary this module offers outwards. Everything else is
+a step of it that is public only so a test can hold that step on its own.
 
 Three deliberate settings, each with the reason it exists:
 
@@ -31,15 +33,23 @@ an attacker's choice.
 
 import asyncio
 import ipaddress
+import json
 import logging
 import socket
 from collections.abc import Awaitable, Callable, Sequence
+from typing import Any
 from urllib.parse import urlsplit
+
+import httpx
+
+from mcp_connector.exapp.responses import BodyTooLarge, BodyUnreadable, bounded_response
+from mcp_connector.nextcloud.http import USER_AGENT, NoCookieJar
 
 __all__ = [
     "FETCH_TIMEOUT_SECONDS",
     "MAX_DOCUMENT_BYTES",
     "AddressLookup",
+    "fetch_document",
     "is_cimd_client_id",
     "resolve_addresses",
     "target_allowed",
@@ -63,6 +73,18 @@ logger = logging.getLogger("mcp_connector.oauth.cimd")
 #: rebinding test is a value a test passes in rather than a patched library function
 #: (the injection form of ``tests/unit/test_oauth_provider.py:91-107``).
 type AddressLookup = Callable[[str, int], Awaitable[Sequence[str]]]
+
+
+class _Refused(Exception):
+    """One of the refusals of the fetch, raised inside this module and never outside it.
+
+    The shape exists because the fetch has seven ways to say no and they all mean the same
+    thing to the caller, so a chain of return values would either lose the distinction
+    anyway or spread it over five levels of ``if``. It stays private and it stops at
+    :func:`fetch_document`, which turns it into ``None``: fail closed is a return value on a
+    request path here and never an exception (D-37, shared pattern A of 06-PATTERNS.md),
+    because the callers are request handlers in four endpoints.
+    """
 
 
 def is_cimd_client_id(value: str) -> bool:
@@ -217,3 +239,129 @@ async def resolve_addresses(
             return None
         literals.append(str(parsed))
     return literals
+
+
+async def _fetch_pinned(url: httpx.URL, ip: str) -> bytes:
+    """The document, fetched from this address with the original name in TLS and ``Host``.
+
+    **Why the address and not the name** (T-06-07). The address is the one
+    :func:`resolve_addresses` checked, and handing ``httpx`` the host name instead would let
+    it resolve a second time: between the check and the connection there would be a window
+    in which the name means something else, which is what a rebinding attack is. That window
+    is the documented bypass class of 2026 and it closed four Python projects' SSRF checks
+    (CVE-2026-55391 in datamodel-code-generator, plus mlflow issue 24179, crewAI issue 6520
+    and Prefect pull request 21591). The rejected alternative is therefore literally
+    ``client.get(url)`` with the original host name: it passes every negative test that uses
+    a static name and none that uses a resolver answering twice.
+
+    ``sni_hostname`` is what makes the pinning free of a second cost: ``httpcore`` 1.0.9
+    hands it to the TLS handshake as ``server_hostname``
+    (``httpcore/_async/connection.py:107,151``), so certificate validation stays on the real
+    name. A hand written socket or a custom resolver hook is exactly what loses that.
+
+    The client is built here and shared with nothing. The process wide client of
+    ``nextcloud/http.py`` carries the pool, the timeouts and the purpose of the way to our
+    own Nextcloud, and a fetch into a foreign trust domain shares no connection pool with a
+    path that carries credentials (T-06-14). What it does copy from that module is the
+    posture: ``follow_redirects=False``, the timeout style, ``NoCookieJar`` and the one
+    ``USER_AGENT`` of this project. What it does not copy is the per loop cache: this is one
+    fetch per call and no process state (D-20).
+
+    Every refusal is a :class:`_Refused`, including a status that is not 200: a 3xx is a
+    second target nobody checked, so not following a redirect and refusing it are the same
+    decision (T-06-08).
+    """
+    literal = f"[{ip}]" if ":" in ip else ip
+    pinned = url.copy_with(host=literal)
+    name = url.raw_host.decode("ascii")
+    async with httpx.AsyncClient(
+        timeout=httpx.Timeout(FETCH_TIMEOUT_SECONDS, connect=FETCH_TIMEOUT_SECONDS),
+        follow_redirects=False,
+        limits=httpx.Limits(max_connections=1, max_keepalive_connections=0),
+        headers={"User-Agent": USER_AGENT},
+        cookies=NoCookieJar(),
+    ) as client:
+        request = client.build_request(
+            "GET",
+            pinned,
+            headers={"Host": url.netloc.decode("ascii"), "Accept": "application/json"},
+            extensions={"sni_hostname": name},
+        )
+        try:
+            response = await client.send(request, stream=True)
+        except Exception as exc:
+            # A timeout, a refused connection, a certificate that does not match the name.
+            # The kind is logged, no value of the request is.
+            logger.warning("a document could not be fetched: %s", type(exc).__name__)
+            raise _Refused from exc
+        try:
+            if response.status_code != 200:
+                logger.warning("a document was refused: status %s", response.status_code)
+                raise _Refused
+            return await bounded_response(response, MAX_DOCUMENT_BYTES)
+        except BodyTooLarge as exc:
+            logger.warning("a document was refused: it is larger than the limit")
+            raise _Refused from exc
+        except BodyUnreadable as exc:
+            logger.warning("a document was refused: its body could not be read")
+            raise _Refused from exc
+        finally:
+            await response.aclose()
+
+
+async def fetch_document(
+    client_id: str, *, resolver: AddressLookup = _system_addresses
+) -> dict[str, Any] | None:
+    """The document behind a client identifier URL, or ``None``. The one boundary outwards.
+
+    The order is the one the diagram of 06-RESEARCH.md draws, and each step is where it is
+    for a reason:
+
+    1. the form of the identifier, because a refusal here costs no packet at all (T-06-03);
+    2. the resolution, exactly once, and one refused address discards the whole name;
+    3. the fetch, pinned to the first checked address;
+    4. the document's own rules.
+
+    **Exactly one resolution per call.** The checked address is the connected address, which
+    is the whole content of the rebinding defence and the reason the literals travel from
+    step 2 into step 3 instead of the name travelling into ``httpx``.
+
+    **No negative cache.** The draft is literal about it: an authorization server "MUST NOT
+    cache error responses" and "MUST NOT cache documents which are invalid or malformed". So
+    a second call after a 500 or after a broken document really goes out again, and the
+    throttling that a flood of unknown URL identifiers needs lives where throttling already
+    lives: ``oauth/throttle.py`` limits ``CLASS_AUTHORIZE_START``, which is the route this
+    fetch hangs from. Whether that class is enough or a ninth one is needed is a question
+    for a measurement, and this plan does not invent one on a guess (T-06-10).
+
+    The resolver travels on as a keyword so a test can hand in one that answers twice
+    differently; no library function is patched anywhere.
+    """
+    identifier = (client_id or "").strip()
+    if not is_cimd_client_id(identifier):
+        return None
+    try:
+        url = httpx.URL(identifier)
+        name = url.raw_host.decode("ascii")
+        port = url.port or 443
+    except Exception as exc:
+        # The form check passed on ``urlsplit`` and this library disagrees about the same
+        # string. Two libraries that do not agree about a target is a refusal, not a choice.
+        logger.warning("a document target could not be taken apart: %s", type(exc).__name__)
+        return None
+    addresses = await resolve_addresses(name, port, resolver=resolver)
+    if not addresses:
+        return None
+    try:
+        raw = await _fetch_pinned(url, addresses[0])
+    except _Refused:
+        return None
+    try:
+        document = json.loads(raw)
+    except (json.JSONDecodeError, ValueError, UnicodeDecodeError):
+        logger.warning("a document was refused: it is not valid JSON")
+        return None
+    if not isinstance(document, dict):
+        logger.warning("a document was refused: its top level is not an object")
+        return None
+    return document

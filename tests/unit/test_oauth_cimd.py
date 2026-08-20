@@ -1,9 +1,9 @@
-"""The two boundaries of the document fetch that hold without a network.
+"""The boundaries of the client id metadata document fetch, every one with its negative.
 
-Nothing here goes to the net, and this file does not even mock one: the three functions
-under test are pure calls plus one resolver that is a parameter, so the negative catalogue
-of AUTH-09 runs as fast as a lint. That is the point of splitting them out of the fetch
-(plan 06-01): a refusal that needs no packet is a refusal that stands before the first one.
+No packet leaves this machine. The first half of the file needs no network at all and does
+not even mock one, because the form of an identifier and the class of an address are pure
+calls plus a resolver that is a parameter; the second half mocks the transport with
+``respx`` and hands in a resolver, so the fetch is exercised end to end without a socket.
 
 The address catalogue is the measurement of 06-RESEARCH.md, pattern 3, against the Python
 3.13.13 of this project. Three of its rows exist to hold a specific mistake, and one test
@@ -15,14 +15,50 @@ and 224.0.0.1 is ``is_global``.
 import ast
 import inspect
 import ipaddress
+import json
 import logging
+from typing import Any
 
+import httpx
 import pytest
+import respx
 
 from mcp_connector.oauth import cimd
 
 HOST = "metadata.attacker.example"
 PORT = 443
+
+#: The name and the address the fetch tests use. The name never resolves anywhere: every
+#: test hands in the resolver, so what ``respx`` sees is the pinned literal.
+NAME = "metadata.client.example"
+PUBLIC_IP = "93.184.216.34"
+PUBLIC_IPV6 = "2606:4700:4700::1111"
+DOCUMENT_URL = f"https://{NAME}/c.json"
+PINNED_URL = f"https://{PUBLIC_IP}/c.json"
+PINNED_URL_V6 = f"https://[{PUBLIC_IPV6}]/c.json"
+
+
+def document(**overrides: Any) -> dict[str, Any]:
+    """The smallest document the rules admit for :data:`DOCUMENT_URL`, plus overrides."""
+    return {
+        "client_id": DOCUMENT_URL,
+        "client_name": "A client that names itself",
+        "redirect_uris": ["http://127.0.0.1/callback"],
+    } | overrides
+
+
+def sized_document(size: int) -> bytes:
+    """An admissible document padded to exactly ``size`` bytes.
+
+    The padding is one string property, so every character added to it adds exactly one
+    byte to the encoded document and the size is the number it says it is.
+    """
+    body = document(padding="")
+    raw = json.dumps(body, separators=(",", ":")).encode()
+    body["padding"] = "x" * (size - len(raw))
+    raw = json.dumps(body, separators=(",", ":")).encode()
+    assert len(raw) == size, "the padding arithmetic of this helper is off"
+    return raw
 
 
 def answering(*addresses: str, calls: list[tuple[str, int]] | None = None) -> cimd.AddressLookup:
@@ -236,6 +272,145 @@ async def test_the_default_resolver_is_wired_and_answers_into_the_same_rule() ->
     what it returns is judged by :func:`target_allowed` and not waved through.
     """
     assert await cimd.resolve_addresses("localhost", PORT) is None
+
+
+# --- the pinned fetch: where the request goes, and what stops it ------------------------
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_the_request_goes_to_the_checked_address_with_the_original_name_in_tls() -> None:
+    """T-06-07: the checked address is the connected address, and TLS keeps the real name.
+
+    All three assertions on the sent request belong together. The address in the URL is
+    what closes the rebinding window; the ``Host`` header is what makes a virtual host
+    answer for the right site; and ``sni_hostname`` is what keeps the handshake and the
+    certificate check on the name, so the pinning costs no certificate validation.
+    """
+    body = document()
+    route = respx.get(PINNED_URL).mock(return_value=httpx.Response(200, json=body))
+
+    result = await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
+
+    assert result == body
+    sent = route.calls.last.request
+    assert sent.url.host == PUBLIC_IP
+    assert sent.headers["host"] == NAME
+    assert sent.extensions["sni_hostname"] == NAME
+    assert sent.headers["accept"] == "application/json"
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_an_ipv6_address_is_pinned_in_brackets_and_the_name_still_travels() -> None:
+    """The bracket form is the one thing about v6 a URL cannot get wrong twice."""
+    route = respx.get(PINNED_URL_V6).mock(return_value=httpx.Response(200, json=document()))
+
+    result = await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IPV6))
+
+    assert result is not None
+    sent = route.calls.last.request
+    assert sent.url.host == PUBLIC_IPV6
+    assert sent.headers["host"] == NAME
+    assert sent.extensions["sni_hostname"] == NAME
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_one_fetch_resolves_the_name_exactly_once() -> None:
+    """The half of the rebinding claim that a counter can state on its own."""
+    calls: list[tuple[str, int]] = []
+    respx.get(PINNED_URL).mock(return_value=httpx.Response(200, json=document()))
+
+    await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP, calls=calls))
+
+    assert calls == [(NAME, PORT)]
+
+
+@pytest.mark.anyio
+async def test_a_redirect_is_a_refusal_and_its_target_is_never_asked() -> None:
+    """T-06-08: a 3xx is a second target nobody checked, so it is not a detour but a no."""
+    with respx.mock(assert_all_called=False) as mock:
+        first = mock.get(PINNED_URL).mock(
+            return_value=httpx.Response(302, headers={"Location": "http://127.0.0.1/c.json"})
+        )
+        second = mock.get("http://127.0.0.1/c.json")
+
+        result = await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
+
+    assert result is None
+    assert first.called is True
+    assert second.called is False, "the redirect target was fetched, which is the whole hole"
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_document_of_exactly_the_limit_is_still_a_document() -> None:
+    """The boundary is inclusive, and the number in the assertion is the draft's own."""
+    respx.get(PINNED_URL).mock(
+        return_value=httpx.Response(200, content=sized_document(cimd.MAX_DOCUMENT_BYTES))
+    )
+
+    result = await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP))
+
+    assert result is not None
+    assert result["client_name"] == "A client that names itself"
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_one_byte_over_the_limit_is_a_refusal() -> None:
+    """T-06-09: 5121 bytes, and the read stops inside the chunk loop of bounded_response."""
+    respx.get(PINNED_URL).mock(
+        return_value=httpx.Response(200, content=sized_document(cimd.MAX_DOCUMENT_BYTES + 1))
+    )
+
+    assert await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP)) is None
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_target_that_never_answers_is_a_refusal_and_not_an_exception() -> None:
+    """A timeout is the failure this fetch has to survive silently: it sits in a page."""
+    respx.get(PINNED_URL).mock(side_effect=httpx.ReadTimeout("the target did not answer"))
+
+    assert await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP)) is None
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_transport_error_is_the_same_refusal() -> None:
+    """A refused connection, a broken certificate: one shape of no for all of them."""
+    respx.get(PINNED_URL).mock(side_effect=httpx.ConnectError("connection refused"))
+
+    assert await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP)) is None
+
+
+@pytest.mark.parametrize("status", [302, 400, 401, 403, 404, 500, 503])
+@pytest.mark.anyio
+@respx.mock
+async def test_no_answer_but_200_produces_a_document_and_none_of_them_raises(status: int) -> None:
+    """D-37: ``fetch_document`` answers ``None`` on every one of these, never an exception."""
+    respx.get(PINNED_URL).mock(return_value=httpx.Response(status, json=document()))
+
+    assert await cimd.fetch_document(DOCUMENT_URL, resolver=answering(PUBLIC_IP)) is None
+
+
+@pytest.mark.anyio
+async def test_a_client_id_that_is_not_https_costs_no_packet_and_no_resolution() -> None:
+    """The first check of the chain is the one that is free (T-06-03)."""
+    calls: list[tuple[str, int]] = []
+
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.get(PINNED_URL)
+
+        result = await cimd.fetch_document(
+            "http://example.com/c.json", resolver=answering(PUBLIC_IP, calls=calls)
+        )
+
+    assert result is None
+    assert route.called is False
+    assert calls == []
 
 
 # --- the boundaries of the module itself ------------------------------------------------
