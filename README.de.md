@@ -65,10 +65,13 @@ Die App ist als **MCP Connector** gelistet:
 [![MCP Connector im Nextcloud App Store](docs/screenshots/app-store.png)](https://apps.nextcloud.com/apps/mcp_connector)
 
 Die Installation läuft als Nextcloud ExApp: AppAPI aktivieren, einen Deploy-Daemon
-registrieren, dann die App deployen und aktivieren. Der vollständige Weg mit den exakten
-occ-Kommandos und den Stolperstellen, die wirklich auftreten (unter Nextcloud 34 listet die
-Apps-Verwaltung keine ExApps, occ ist der verlässliche Weg), steht in
-**[docs/exapp-install.md](docs/exapp-install.md)** (auf Englisch).
+registrieren, dann die App deployen und aktivieren. Unter **Nextcloud 34.0.3** nimmt die
+Apps-Verwaltung einem das ab: die App-Liste zeigt die ExApp samt ihrem Deploy-Daemon, der
+Installationsknopf einer ExApp heißt "Deploy and enable", und "Remove" steht im Aktionsmenü
+einer abgeschalteten ExApp (gemessen auf 34.0.3.2 am 2026-08-20). Unter 34.0.2 und älter
+listet die Verwaltung gar keine ExApp, und occ ist auf jeder Version der verlässliche Weg. Der
+vollständige Weg mit den exakten occ-Kommandos und den Stolperstellen, die wirklich auftreten,
+steht in **[docs/exapp-install.md](docs/exapp-install.md)** (auf Englisch).
 
 Nach der Installation registriert die App ihre Einstellungen unter Einstellungen,
 Verwaltung, Sicherheit:

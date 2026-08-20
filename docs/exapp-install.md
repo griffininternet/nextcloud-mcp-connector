@@ -473,15 +473,61 @@ precondition, which is a different thing from a forgotten one: the work is descr
 blocker is a host property and not a code property, and nothing in the project claims the
 result. It is recorded in the plan summary of 05-08 and in the project state, not only here.
 
-## Nextcloud 34 has no interface for installing or removing an ExApp
+## Nextcloud 34.0.2 has no interface for installing or removing an ExApp, 34.0.3 has
 
-**Fixed upstream in Nextcloud 34.0.3** (verified 2026-08-20: the finding below is
-[nextcloud/app_api#971](https://github.com/nextcloud/app_api/issues/971) and
+**Fixed upstream in Nextcloud 34.0.3, and measured here on 34.0.3.2 on 2026-08-20.** The
+finding below is [nextcloud/app_api#971](https://github.com/nextcloud/app_api/issues/971) and
 [nextcloud/server#61709](https://github.com/nextcloud/server/issues/61709), resolved by
-[server PR 62276](https://github.com/nextcloud/server/pull/62276), backported to 34.0.3 and
-confirmed by the original reporter). On 34.0.2 and earlier everything below still applies,
-and occ remains the reliable path on every version.
+[server PR 62276](https://github.com/nextcloud/server/pull/62276) and backported to 34.0.3.
+On 34.0.2 and earlier everything below still applies, and occ remains the reliable path on
+every version, which is why this page keeps describing it first.
 
+What the interface does on **34.0.3.2** (`occ status`, not a Docker tag), signed in as an
+account in the `admin` group, after the app store cache was invalidated by overwriting its
+`timestamp` with `0`:
+
+```
+Your apps, one table row:   MCP Connector   0.1.2   Harp Proxy (Docker)   [Disable]  [...]
+A not installed ExApp:      Context Chat Backend   5.4.1                  [Deploy and enable]
+Row actions while enabled:  Limit to groups, Rate the app, Report a bug, Show details
+Row actions while disabled: Limit to groups, Remove, Rate the app, Report a bug, Show details
+```
+
+![The Remove entry in the row actions of a disabled ExApp](screenshots/exapp-remove-button.png)
+
+Three details are worth knowing before looking for the buttons:
+
+- The **install button of an ExApp reads "Deploy and enable"**, next to the "Download and
+  enable" of a PHP app. Where a normal app shows the "Featured" badge, an ExApp row shows the
+  name of its deploy daemon.
+- The **remove entry lives in the row actions and only while the app is disabled**. AppAPI
+  computes it as `canUnInstall = !active && removable && ...`
+  (`apps/app_api/lib/Controller/ExAppsPageController.php:213`), so an enabled ExApp offers
+  Disable and no Remove. That is not a missing button, it is a two step removal.
+- The `appstore` app itself still does not know about ExApps: its OCS route
+  `/ocs/v2.php/apps/appstore/api/v1/apps` answers 2 650 705 bytes without a single
+  `mcp_connector` in them, and `apps/appstore/lib/Controller/ApiController.php` still carries
+  `'app_api' => false`. The page pulls the ExApps in itself over
+  `/apps/app_api/apps/list`, and that request is exactly what 34.0.2 never made.
+
+The fix is not visible as a new word in the bundle, which is why a file by file comparison of
+the `appstore` app between the two images looks empty at first sight. Both images ship app
+version 1.0.0 and, outside `l10n/`, only five files differ, of which one is the interesting
+one:
+
+```
+dist/appstore-main.mjs   95762 bytes (34.0.2)  ->  95841 bytes (34.0.3)
+34.0.2: no match for Promise.allSettled([ ... initialize ... ])
+34.0.3: Promise.allSettled([V(),Y(),e.isEnabled?e.initialize():Promise.resolve()])
+"exapp" in dist/AppstoreBrowse-*.chunk.mjs: 0 occurrences in both
+```
+
+`e` is the minified name of the `external-apps` store, so the merge title
+`fix(appstore): initialize the exApps store when enabled` is literally what changed.
+Full protocol, including the account, the cache step and the counter checks:
+[06-07-MEASUREMENTS.md](../.planning/phases/06-h-rtung-eigennachweise-und-conference-reife/06-07-MEASUREMENTS.md).
+
+The history below stays because it is what an administrator on 34.0.2 and earlier still sees.
 Measured on **2026-08-19** against Nextcloud 34.0.2 with AppAPI 34.0.0, while looking for the
 Install button of this app:
 
@@ -507,10 +553,11 @@ answers `500 Method ExAppsPageController::viewApps() does not exist`. An install
 invisible to the list as well, because the core app manager never learns about it
 (`occ app:list | grep -c mcp_connector` is `0` while the app is enabled and healthy).
 
-**What that means for an administrator on 34:** install with `occ` as described above, and
-remove with `occ` as described in [uninstall.md](./uninstall.md). Both are the documented
-paths of AppAPI and work on 32, 33 and 34 alike; the interface is the part that is missing,
-not the mechanism.
+**What that means for an administrator on 34.0.2 and earlier:** install with `occ` as
+described above, and remove with `occ` as described in [uninstall.md](./uninstall.md). Both
+are the documented paths of AppAPI and work on 32, 33 and 34 alike; on those versions the
+interface is the part that is missing, not the mechanism. Nothing about that changed on
+34.0.3: the interface arrived, `occ` stayed the path that works on every version.
 
 **And one thing to know before trying the store path anyway.** The wire call the Install
 button would make was run by hand for the measurement:

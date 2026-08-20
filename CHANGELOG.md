@@ -13,6 +13,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The documentation now says what Nextcloud 34.0.3 really does with an external app,
+  because it was measured there: the apps management lists it with its deploy daemon, its
+  install button reads "Deploy and enable", and "Remove" appears in the row actions once
+  the app is disabled. On 34.0.2 and earlier the apps management lists no external app at
+  all, and the occ commands stay the path that works on every version. No promise of a one
+  click install without the version it was measured on.
 - A locally running assistant may now come back on the port it actually got. A native
   client publishes a return address without a port and takes whatever free port the
   operating system hands it at the moment of the request, and the app used to refuse

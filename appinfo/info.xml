@@ -28,6 +28,8 @@ Connect your Nextcloud to AI assistants that speak the Model Context Protocol, s
 
 The connector exposes a curated, read first set of tools for files, calendar, notes, deck and contacts instead of a raw API surface. Every request runs under the identity of the signed in user, so an assistant never sees more than that user sees in the web interface.
 
+**Installing it.** On Nextcloud 34.0.3 an administrator installs it from the apps management: the app list shows an external app with its deploy daemon, its install button reads Deploy and enable, and Remove sits in the row actions once the app is disabled. On 34.0.2 and earlier the apps management lists no external app at all, so the occ commands in the installation guide are the way there, and they work on every version.
+
 **Can I switch it off for myself?** Yes, and you do not need your administrator for it. Nothing runs in the background: there is no scheduled job, no indexing and no telemetry, and the connector acts only when an assistant you connected yourself sends a request. Your own account has a switch on this app's connections page, which Nextcloud links under Settings, Security, MCP Connector, and every connected assistant can be disconnected on its own, which hands its Nextcloud app password back to Nextcloud.
 
 The connector itself sends no telemetry and calls no third party. Because an assistant reads your Nextcloud content, the data it reads is transmitted to the assistant you connect, in most cases a hosted provider. Choose your assistant accordingly.
@@ -39,6 +41,8 @@ Verbindet Ihre Nextcloud mit KI-Assistenten, die das Model Context Protocol spre
 
 Der Connector stellt einen kuratierten, auf Lesen ausgelegten Satz von Werkzeugen für Dateien, Kalender, Notizen, Deck und Kontakte bereit statt einer rohen API-Oberfläche. Jede Anfrage läuft unter der Identität des angemeldeten Nutzers, ein Assistent sieht also nie mehr, als dieser Nutzer in der Weboberfläche sieht.
 
+**Installation.** Unter Nextcloud 34.0.3 installiert eine Administratorin die App aus der Apps-Verwaltung: die App-Liste zeigt eine externe App samt ihrem Deploy-Daemon, ihr Installationsknopf heißt Deploy and enable, und Remove steht im Aktionsmenü, sobald die App abgeschaltet ist. Unter 34.0.2 und älter listet die Apps-Verwaltung gar keine externe App, dort führen die occ-Kommandos der Installationsanleitung hin, und die funktionieren auf jeder Version.
+
 **Kann ich die App für mich abschalten?** Ja, und Sie brauchen Ihren Administrator dafür nicht. Im Hintergrund läuft nichts: es gibt keine geplante Aufgabe, keine Indizierung und keine Telemetrie, und der Connector handelt nur dann, wenn eine von Ihnen selbst verbundene Assistenz eine Anfrage stellt. Ihr eigenes Konto hat einen Schalter auf der Verbindungsseite dieser App, die Nextcloud unter Einstellungen, Sicherheit, MCP Connector verlinkt, und jede verbundene Assistenz lässt sich einzeln trennen, wobei ihr Nextcloud-App-Passwort an Nextcloud zurückgegeben wird.
 
 Der Connector selbst sendet keine Telemetrie und ruft keinen Dritten auf. Da ein Assistent Ihre Nextcloud-Inhalte liest, werden die gelesenen Daten an den von Ihnen verbundenen Assistenten übertragen, in den meisten Fällen an einen gehosteten Anbieter. Wählen Sie Ihren Assistenten entsprechend.
@@ -49,6 +53,8 @@ Weitere Antworten, auch dazu, wie eine Administratorin die App samt ihren Daten 
 Connecte votre Nextcloud aux assistants IA qui parlent le Model Context Protocol, comme Claude, Cursor ou votre propre agent.
 
 Le connecteur expose un ensemble d'outils sélectionnés et axés sur la lecture pour les fichiers, l'agenda, les notes, Deck et les contacts, au lieu d'une API brute. Chaque requête s'exécute sous l'identité de l'utilisateur connecté, de sorte qu'un assistant ne voit jamais plus que ce que cet utilisateur voit dans l'interface web.
+
+**Installation.** Sous Nextcloud 34.0.3, un administrateur l'installe depuis la gestion des applications : la liste affiche une application externe avec son démon de déploiement, son bouton d'installation s'appelle Deploy and enable, et Remove figure dans le menu d'actions dès que l'application est désactivée. Sous 34.0.2 et antérieur, la gestion n'affiche aucune application externe : ce sont alors les commandes occ du guide d'installation qui y mènent, et elles fonctionnent sur toutes les versions.
 
 **Puis-je la désactiver pour moi ?** Oui, et vous n'avez pas besoin de votre administrateur pour cela. Rien ne tourne en arrière-plan : il n'y a ni tâche planifiée, ni indexation, ni télémétrie, et le connecteur n'agit que lorsqu'un assistant que vous avez connecté vous-même envoie une requête. Votre propre compte dispose d'un interrupteur sur la page des connexions de cette application, que Nextcloud référence sous Paramètres, Sécurité, MCP Connector, et chaque assistant connecté peut être déconnecté séparément, ce qui rend son mot de passe d'application Nextcloud à Nextcloud.
 
