@@ -1,4 +1,4 @@
-"""The three admin switches of AUTH-07, read once into one object every check asks.
+"""The admin switches of AUTH-07, read once into one object every check asks.
 
 **Why a policy object and not a condition.** The trap of this requirement has a number in
 the research (pitfall 9): whoever checks the allowlist at ``/register`` only has built a
@@ -12,6 +12,17 @@ four places where the same question is asked, and this module is the answer all 
 3. ``exchange_authorization_code`` and ``exchange_refresh_token`` refuse a client that was
    blocked in the middle of a running flow (plan 03-06 and 03-07),
 4. ``verify_token`` refuses an access token that was issued before the block (plan 03-06).
+
+**Why ``cimd_enabled`` is derived and not only read.** The fourth switch decides whether a
+client may identify itself with the URL of its own metadata document instead of registering
+(CIMD, plan 06-05). It is a switch of its own because the MCP specification 2026-07-28 makes
+that the preferred way and dynamic registration the legacy one, so an administrator whose
+network forbids outbound requests must be able to close the new way without losing the old
+one. But it is derived with ``and`` from the registration switch, because the owner
+directive of this phase is that a disabled dynamic registration must not be circumventable
+through CIMD: whoever switches registration off meant "no clients that sign themselves up",
+not "no RFC 7591 clients". Both ways therefore pass the same four enforcement points, and
+the CIMD way cannot outlive the switch that closed the other one.
 
 **Why the allowlist mode with an empty list closes everything.** An administrator who
 switches the mode on and forgets the list did not mean "allow everyone"; they meant to
@@ -40,6 +51,7 @@ from .store import IDLE_CLIENT_TTL, UNUSED_CLIENT_TTL
 __all__ = [
     "ENV_ALLOWED_CLIENTS",
     "ENV_ALLOWLIST_ONLY",
+    "ENV_CIMD",
     "ENV_DCR",
     "IDLE_REGISTRATION_TTL",
     "LOOPBACK_HOSTS",
@@ -58,6 +70,13 @@ ENV_ALLOWLIST_ONLY = "NC_MCP_OAUTH_ALLOWLIST_ONLY"
 
 #: The list itself: client ids or redirect URIs, separated by commas.
 ENV_ALLOWED_CLIENTS = "NC_MCP_OAUTH_ALLOWED_CLIENTS"
+
+#: Client id metadata documents, the way a client identifies itself by the URL of its own
+#: published document instead of registering. On in the shipped state, because the MCP
+#: specification 2026-07-28 makes this the preferred way and dynamic registration the legacy
+#: one. Switching it off does not switch registration off; switching registration off does
+#: switch this off, which is the fail closed direction of the owner directive.
+ENV_CIMD = "NC_MCP_OAUTH_CIMD"
 
 #: The values of ``config.py``, in both directions. The negative list exists because
 #: ``NC_MCP_OAUTH_DCR`` is the first switch of this project whose default is on: the other
@@ -95,11 +114,13 @@ class ClientPolicy:
     dcr_enabled: bool
     allowlist_only: bool
     allowed: tuple[str, ...]
+    cimd_enabled: bool
 
     def __repr__(self) -> str:
         return (
             f"ClientPolicy(dcr_enabled={self.dcr_enabled!r}, "
-            f"allowlist_only={self.allowlist_only!r}, allowed={len(self.allowed)} entries)"
+            f"allowlist_only={self.allowlist_only!r}, allowed={len(self.allowed)} entries, "
+            f"cimd_enabled={self.cimd_enabled!r})"
         )
 
     def listed(self, client_id: str, redirect_uris: Sequence[str] = ()) -> bool:
@@ -127,11 +148,26 @@ class ClientPolicy:
 
 
 def client_policy(env: Mapping[str, str] | None = None) -> ClientPolicy:
-    """Read the three switches. The environment is a parameter, as everywhere here."""
+    """Read the switches. The environment is a parameter, as everywhere here.
+
+    Three of the four are read, the fourth is derived. ``cimd_enabled`` is the CIMD switch
+    **and** the registration switch, because the locked decision of this phase reads "a
+    disabled dynamic registration must not be circumventable through CIMD". An
+    administrator who closed the door for clients that sign themselves up closed it for
+    both spellings of that, and the explicit ``on`` of the newer switch does not reopen it.
+    The other direction stays open: CIMD alone can be switched off, for instance on an
+    instance whose network forbids the outbound request the document fetch needs.
+
+    ``_switch`` does the parsing for all of them, unchanged. It already knows the switch
+    whose default is on, the blank value that counts as unset and the typo that keeps the
+    default and says so; a second parser would be a second truth.
+    """
+    dcr = _switch(env, ENV_DCR, default=True)
     return ClientPolicy(
-        dcr_enabled=_switch(env, ENV_DCR, default=True),
+        dcr_enabled=dcr,
         allowlist_only=_switch(env, ENV_ALLOWLIST_ONLY, default=False),
         allowed=_entries(env, ENV_ALLOWED_CLIENTS),
+        cimd_enabled=_switch(env, ENV_CIMD, default=True) and dcr,
     )
 
 

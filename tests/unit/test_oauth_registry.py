@@ -1,7 +1,7 @@
-"""The three admin switches of AUTH-07 and the redirect rule of D-35.
+"""The admin switches of AUTH-07 and the redirect rule of D-35.
 
 This is the policy half of the enforcement point. It decides nothing about a concrete
-client on its own: it reads three environment variables into one immutable object that the
+client on its own: it reads environment variables into one immutable object that the
 provider asks at every point where a client could get in (registration, authorization,
 token issuance, token verification). Pitfall 9 of 03-RESEARCH.md is the reason for that
 shape: a check that only runs at registration lets a client that was blocked afterwards
@@ -38,6 +38,7 @@ def test_without_any_variable_registration_is_on_and_the_allowlist_is_off() -> N
     assert result.dcr_enabled is True
     assert result.allowlist_only is False
     assert result.allowed == ()
+    assert result.cimd_enabled is True
 
 
 @pytest.mark.parametrize("blank", ["", " ", "\t", "\n  "])
@@ -48,12 +49,14 @@ def test_a_blank_value_counts_as_unset_for_every_switch(blank: str) -> None:
             registry.ENV_DCR: blank,
             registry.ENV_ALLOWLIST_ONLY: blank,
             registry.ENV_ALLOWED_CLIENTS: blank,
+            registry.ENV_CIMD: blank,
         }
     )
 
     assert result.dcr_enabled is True
     assert result.allowlist_only is False
     assert result.allowed == ()
+    assert result.cimd_enabled is True
 
 
 # --- the boolean switches --------------------------------------------------------------
@@ -93,6 +96,49 @@ def test_the_allowlist_mode_is_off_until_it_is_switched_on(value: str) -> None:
 @pytest.mark.parametrize("value", ["0", "false", "no", "off", "perhaps"])
 def test_anything_but_an_on_value_leaves_the_allowlist_mode_off(value: str) -> None:
     assert policy(**{registry.ENV_ALLOWLIST_ONLY: value}).allowlist_only is False
+
+
+# --- the fourth switch and its coupling ------------------------------------------------
+
+
+@pytest.mark.parametrize("value", ["0", "false", "FALSE", "no", "off", " Off "])
+def test_cimd_can_be_switched_off_on_its_own_and_registration_stays_on(value: str) -> None:
+    """An instance without outbound access closes the document fetch, not registration."""
+    result = policy(**{registry.ENV_CIMD: value})
+
+    assert result.cimd_enabled is False
+    assert result.dcr_enabled is True
+
+
+def test_switching_registration_off_switches_cimd_off_with_it() -> None:
+    """A disabled dynamic registration must not be circumventable through CIMD."""
+    result = policy(**{registry.ENV_DCR: "off"})
+
+    assert result.dcr_enabled is False
+    assert result.cimd_enabled is False
+
+
+@pytest.mark.parametrize("value", ["1", "true", "yes", "on"])
+def test_the_coupling_beats_an_explicitly_switched_on_cimd(value: str) -> None:
+    """T-06-15: the newer switch is not a way around the older one, in any spelling.
+
+    An administrator who switched registration off meant "no clients that sign themselves
+    up", and CIMD is the other spelling of that, not an exception to it.
+    """
+    result = policy(**{registry.ENV_DCR: "off", registry.ENV_CIMD: value})
+
+    assert result.cimd_enabled is False
+
+
+def test_a_typo_in_the_cimd_switch_keeps_the_default_and_says_so(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The same reading as the three switches before it: a typo decides nothing."""
+    with caplog.at_level(logging.WARNING):
+        result = policy(**{registry.ENV_CIMD: "vielleicht"})
+
+    assert result.cimd_enabled is True
+    assert registry.ENV_CIMD in caplog.text
 
 
 # --- the list ---------------------------------------------------------------------------
@@ -193,6 +239,15 @@ def test_the_policy_is_immutable() -> None:
         result.dcr_enabled = False  # type: ignore[misc]
 
 
+def test_the_derived_field_is_immutable_too() -> None:
+    """A policy a request handler could reopen is one bug away from being reopened."""
+    result = policy(**{registry.ENV_DCR: "off"})
+
+    with pytest.raises(Exception):  # noqa: B017, PT011 - frozen dataclass, any refusal counts
+        result.cimd_enabled = True  # type: ignore[misc]
+    assert result.cimd_enabled is False
+
+
 def test_the_repr_counts_the_entries_instead_of_printing_them() -> None:
     """The list is customer data: which apps an institution connects is not log material."""
     result = policy(**{registry.ENV_ALLOWED_CLIENTS: f"{CLIENT_ID},{REDIRECT}"})
@@ -217,4 +272,20 @@ def test_the_variable_names_live_in_the_constant_block_and_nowhere_else() -> Non
         line for line in source.splitlines() if not line.lstrip().startswith(("#", "*"))
     )
 
-    assert body.count('"NC_MCP_OAUTH') == 3
+    assert body.count('"NC_MCP_OAUTH') == 4
+
+
+def test_the_public_names_are_exported_and_sorted() -> None:
+    """``__all__`` is what vulture reads and what a reader scans, so it stays ordered.
+
+    The order is the one ruff's RUF022 enforces on this repository: the constants first,
+    then the class, then the functions, alphabetically within each group. Asserting a plain
+    ``sorted()`` would demand the opposite of what the formatter writes, so the assertion
+    is made per group.
+    """
+    assert "ENV_CIMD" in registry.__all__
+    constants = [name for name in registry.__all__ if name.isupper()]
+    others = [name for name in registry.__all__ if not name.isupper()]
+    assert constants == sorted(constants)
+    assert others == sorted(others)
+    assert list(registry.__all__) == constants + others
