@@ -217,7 +217,7 @@ async def test_a_json_boolean_is_read_as_a_switch_value() -> None:
         "unreachable",
         "timeout",
         "status_500",
-        "status_401",
+        "status_403",
         "not_json",
         "no_envelope",
         "wrong_types",
@@ -226,7 +226,13 @@ async def test_a_json_boolean_is_read_as_a_switch_value() -> None:
 async def test_a_failed_read_is_an_empty_result_and_never_an_exception(
     caplog: pytest.LogCaptureFixture, outcome: str
 ) -> None:
-    """The whole difference to ``crypto._read_key``: this path must not stop an install."""
+    """The whole difference to ``crypto._read_key``: this path must not stop an install.
+
+    The one answer that is not in this list is ``401``: plan 05-12 measured it as the
+    expected outcome of a window every installation passes through, and it has its own test
+    below. Every other failure stays an ``ERROR``, and ``403`` stands here to hold that
+    line: only ``401`` is the measured expectation, not "any 4xx".
+    """
     route = respx.post(READ_URL)
     if outcome == "unreachable":
         route.mock(side_effect=httpx.ConnectError("no route to nextcloud"))
@@ -234,8 +240,8 @@ async def test_a_failed_read_is_an_empty_result_and_never_an_exception(
         route.mock(side_effect=httpx.ReadTimeout("nextcloud is slow"))
     elif outcome == "status_500":
         route.mock(return_value=httpx.Response(500, json={}))
-    elif outcome == "status_401":
-        route.mock(return_value=httpx.Response(401, json={}))
+    elif outcome == "status_403":
+        route.mock(return_value=httpx.Response(403, json={}))
     elif outcome == "not_json":
         route.mock(return_value=httpx.Response(200, content=b"<html>login</html>"))
     elif outcome == "no_envelope":
@@ -249,6 +255,44 @@ async def test_a_failed_read_is_an_empty_result_and_never_an_exception(
     assert [record for record in caplog.records if record.levelno >= logging.ERROR], (
         "a silent empty result would look like an administrator who set nothing"
     )
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_401_is_told_as_the_expected_answer_before_this_app_is_activated(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The measured window of plan 05-12, and the only failure of this read that is expected.
+
+    ``AppAPIService::validateExAppRequestToNC`` accepts the app secret and then falls over
+    ``!$exApp->getEnabled()``; only ``ex-app/state`` is exempt, the configuration path is
+    not (measurements M3b and M3c plus the source of AppAPI 34.0.0). Every first start after
+    a deployment sits inside that window, because ``enable`` comes after ``init``, and in
+    that window there cannot be an admin value yet.
+
+    The read keeps failing soft, so the result is empty and the deploy environment stays in
+    force. What this test holds is the level: an ``ERROR`` line for the normal course of an
+    installation made a working installation look broken, which is exactly what happened in
+    this phase.
+    """
+    respx.post(READ_URL).mock(return_value=httpx.Response(401, json={}))
+
+    with caplog.at_level(logging.DEBUG):
+        assert await config_values.read_values(env=ENV) == {}
+
+    # Only the records of this module: httpx logs every request it makes at INFO as well,
+    # and that line is not the one under test here.
+    ours = [record for record in caplog.records if record.name == config_values.logger.name]
+    assert not [record for record in ours if record.levelno >= logging.WARNING], (
+        "the expected answer of a window every installation passes through is not a fault"
+    )
+    told = [record for record in ours if record.levelno == logging.INFO]
+    assert len(told) == 1, "one line, like every other outcome of this read"
+    message = told[0].getMessage()
+    assert "401" in message
+    # The line has to carry the way out, or it is only a friendlier dead end: a value set in
+    # the form takes effect after one disable and enable cycle (measurement M3).
+    assert "disabled and enabled" in message
 
 
 @pytest.mark.anyio
