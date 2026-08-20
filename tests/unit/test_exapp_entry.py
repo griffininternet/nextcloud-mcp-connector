@@ -18,6 +18,7 @@ import logging
 from collections.abc import Awaitable, Callable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 
 import httpx
@@ -38,13 +39,13 @@ from mcp_connector.exapp.ui import connections as ui_connections
 from mcp_connector.exapp.ui import strings
 from mcp_connector.nextcloud import http as nc_http
 from mcp_connector.oauth import connections, crypto, registry, store
-from mcp_connector.oauth.provider import auth_routes
 from mcp_connector.oauth.metadata import (
     AS_METADATA_SUFFIX,
     PRM_SUFFIX,
     RESOURCE_SUFFIX,
     TOOL_SCOPE,
 )
+from mcp_connector.oauth.provider import auth_routes
 from mcp_connector.oauth.verifier import OAUTH_STATE_ATTR, OAuthIdentity, StoreTokenVerifier
 
 APP_ID = "mcp_connector"
@@ -1326,9 +1327,11 @@ def test_a_build_failure_that_is_not_the_issuer_is_not_rescued(
     monkeypatch.setattr(entry_exapp, "build_exapp_app", build)
     deployed(monkeypatch, tmp_path)
 
-    with caplog.at_level("ERROR", logger="mcp_connector.entry_exapp"):
-        with pytest.raises(SystemExit) as excinfo:
-            entry_exapp.main()
+    with (
+        caplog.at_level("ERROR", logger="mcp_connector.entry_exapp"),
+        pytest.raises(SystemExit) as excinfo,
+    ):
+        entry_exapp.main()
 
     assert excinfo.value.code == 2
     assert len(build.seen) == 1, "no second build, because dropping the address fixes nothing"
@@ -1343,10 +1346,12 @@ def test_the_issuer_refusal_of_the_provider_is_the_type_the_rescue_catches() -> 
     A rescue narrowed to a type that nothing raises would be a rescue that never runs, and
     CR-01 would be open again with nothing to show for it.
     """
+    stub = SimpleNamespace(policy=SimpleNamespace(dcr_enabled=True))
+
     with pytest.raises(IssuerRefused):
         auth_routes(
             {**EXAPP_ENV, config.ENV_PUBLIC_URL: "http://tls-is-missing.example.org"},
-            provider=cast(Any, object()),
+            provider=cast(Any, stub),
         )
 
 

@@ -26,7 +26,7 @@ from starlette.applications import Starlette
 from starlette.routing import Route
 
 from . import config
-from .errors import ToolError
+from .errors import IssuerRefused, ToolError
 from .exapp import config_values
 from .exapp.lifecycle import lifecycle_routes
 from .exapp.middleware import RequireAppApi
@@ -352,11 +352,19 @@ def main() -> None:
         raise SystemExit(2) from None
 
     # The public URL is what the authorization server calls itself, and the SDK refuses an
-    # issuer that is not https unless it is loopback. This build stands in a try of its own,
-    # because its failure is the only one of this function that is recoverable.
+    # issuer that is not https unless it is loopback. That refusal is the one failure of this
+    # function that is recoverable, so this build stands in a try of its own and catches the
+    # type that means exactly it.
+    #
+    # It used to catch every ToolError of the build, which was true about today (the issuer
+    # refusal in `provider.auth_routes` was the only one raised at build time) and an
+    # assumption about tomorrow: a second source would have been logged as an address
+    # problem, would have had a possibly good address dropped and would have ended in a
+    # second build with a confusing double message. `IssuerRefused` is the marker instead of
+    # that assumption (IN-06); everything else falls through to the SystemExit below.
     try:
         app = build_exapp_app(resolved)
-    except ToolError as exc:
+    except IssuerRefused as exc:
         # CR-01 of 05-REVIEW.md, gap 1 of 05-VERIFICATION.md. An exit here is the same
         # deadlock plan 05-04 removed, only reachable through the form of plan 05-01: an app
         # that never becomes `enabled` again gets no admin form served by AppAPI, so the wrong
@@ -403,6 +411,12 @@ def main() -> None:
         except ToolError as second:
             logger.error("%s %s", second.message, second.hint)
             raise SystemExit(2) from None
+    except ToolError as other:
+        # Any other build time failure: reported as itself and ended, exactly like the
+        # checks above it. Dropping the public address would fix none of them and would
+        # hide what really happened behind a second, wrong message (IN-06).
+        logger.error("%s %s", other.message, other.hint)
+        raise SystemExit(2) from None
 
     if (resolved.get(config.ENV_HP_SHARED_KEY) or "").strip():
         # HaRP with the FRP tunnel: the unix socket is the transport, frpc runs beside us.

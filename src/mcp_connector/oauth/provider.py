@@ -87,7 +87,7 @@ from starlette.routing import Route
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from .. import config
-from ..errors import ToolError
+from ..errors import IssuerRefused
 from ..exapp.auth import is_user
 from ..exapp.responses import NO_STORE, form_or_none, json_response
 from ..exapp.ui.consent import consent_url
@@ -1130,7 +1130,11 @@ def auth_routes(
             revocation_options=RevocationOptions(enabled=True),
         )
     except ValueError as exc:
-        raise ToolError(
+        # A type of its own, not a bare ToolError: ``entry_exapp.main`` rescues exactly this
+        # failure by dropping the address and building once more, and a second build time
+        # failure caught by the same clause would be reported as an address problem it is
+        # not (IN-06). The wording stays what it was.
+        raise IssuerRefused(
             message=f"{config.ENV_PUBLIC_URL} is not a usable issuer: {exc}", hint=_HINT_ISSUER
         ) from None
 
