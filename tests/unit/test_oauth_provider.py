@@ -34,7 +34,8 @@ from mcp.server.auth.provider import (
     RegistrationError,
     TokenError,
 )
-from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
+from mcp.shared.auth import InvalidRedirectUriError, OAuthClientInformationFull, OAuthToken
+from pydantic import AnyUrl
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import Response
@@ -75,6 +76,16 @@ ENV = {
 }
 
 AS_PATHS = ("/authorize", "/token", "/register", "/revoke")
+
+#: What Cursor sends to ``/register`` in one body, measured against staging on 2026-08-16
+#: (03-09-MEASUREMENTS.md, run 4). The first entry is a private-use URI scheme, which D-35
+#: refuses and BL-04 keeps refusing; the other two are registrable.
+CURSOR_URIS = [
+    "cursor://anysphere.cursor-mcp/oauth/callback",
+    "https://www.cursor.com/agents/mcp/oauth/callback",
+    "http://localhost:8787/callback",
+]
+CURSOR_REGISTRABLE = CURSOR_URIS[1:]
 
 
 def opener(subject: OAuthStore) -> Callable[[], Awaitable[OAuthStore]]:
@@ -152,17 +163,86 @@ async def test_a_registration_is_refused_with_its_reason_while_the_switch_is_off
     "uri",
     ["http://claude.ai/callback", "http://192.168.1.10/cb", "myapp://cb", "https://a@b.example/cb"],
 )
-async def test_a_redirect_address_that_is_not_https_or_loopback_is_refused(
+async def test_a_redirect_address_that_is_not_https_or_loopback_is_dropped(
     tmp_path: Path, uri: str
 ) -> None:
-    """T-03-41: the SDK matches the address exactly, but accepts any address at all."""
+    """T-03-41 and BL-04: the address is refused, the registration around it is not.
+
+    The rule of D-35 is unchanged, only its blast radius is: an entry this server would
+    never redirect to is dropped, and a client that sent one allowed address next to it is
+    registered with that one address.
+    """
+    subject, store = build(tmp_path)
+
+    await subject.register_client(registration(redirect_uris=[REDIRECT, uri]))
+
+    row = await store.load_client(CLIENT_ID)
+    assert row is not None
+    assert json.loads(row.metadata_json)["redirect_uris"] == [REDIRECT]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "uri",
+    ["http://claude.ai/callback", "http://192.168.1.10/cb", "myapp://cb", "https://a@b.example/cb"],
+)
+async def test_a_registration_of_nothing_but_forbidden_addresses_is_still_refused(
+    tmp_path: Path, uri: str
+) -> None:
+    """The other half of BL-04: dropping every entry leaves no client, so it is a refusal.
+
+    A registration with an empty ``redirect_uris`` would be a client that can never be sent
+    anywhere, and the SDK would hand it the single registered address it does not have.
+    """
     subject, store = build(tmp_path)
 
     with pytest.raises(RegistrationError) as raised:
-        await subject.register_client(registration(redirect_uris=[REDIRECT, uri]))
+        await subject.register_client(registration(redirect_uris=[uri]))
 
     assert raised.value.error == "invalid_redirect_uri"
     assert await store.load_client(CLIENT_ID) is None
+
+
+@pytest.mark.anyio
+async def test_the_three_addresses_of_cursor_register_as_the_two_that_are_allowed(
+    tmp_path: Path,
+) -> None:
+    """BL-04, measured against staging on 2026-08-16 (03-09-MEASUREMENTS.md, run 4).
+
+    Cursor sends a private-use scheme next to two registrable addresses and used to be
+    refused as a whole, error message and all. The answer names what was registered and not
+    what was sent, which RFC 7591 section 3.2.1 asks for and which is the only way the
+    client can pick a target it will get through ``/authorize`` with.
+    """
+    subject, store = build(tmp_path)
+    info = registration(redirect_uris=CURSOR_URIS)
+
+    await subject.register_client(info)
+
+    row = await store.load_client(CLIENT_ID)
+    assert row is not None
+    assert json.loads(row.metadata_json)["redirect_uris"] == CURSOR_REGISTRABLE
+    assert [str(uri) for uri in info.redirect_uris or []] == CURSOR_REGISTRABLE
+
+
+@pytest.mark.anyio
+async def test_an_address_that_was_dropped_is_no_target_of_the_registration(
+    tmp_path: Path,
+) -> None:
+    """Dropping is not quiet acceptance: the exact matching refuses the dropped entry.
+
+    D-35 stands (private-use schemes belong to nobody exclusively), so the value Cursor
+    would like best is the one value it cannot authorize with.
+    """
+    subject, _ = build(tmp_path)
+    await subject.register_client(registration(redirect_uris=CURSOR_URIS))
+
+    client = await subject.get_client(CLIENT_ID)
+
+    assert client is not None
+    with pytest.raises(InvalidRedirectUriError):
+        client.validate_redirect_uri(AnyUrl(CURSOR_URIS[0]))
+    assert str(client.validate_redirect_uri(AnyUrl(CURSOR_REGISTRABLE[0]))) == CURSOR_REGISTRABLE[0]
 
 
 @pytest.mark.anyio
@@ -172,6 +252,23 @@ async def test_a_loopback_address_stays_registrable(tmp_path: Path) -> None:
     await subject.register_client(registration(redirect_uris=["http://127.0.0.1:41234/cb"]))
 
     assert await store.load_client(CLIENT_ID) is not None
+
+
+@pytest.mark.anyio
+async def test_in_the_allowlist_mode_only_a_registered_address_can_carry_the_listing(
+    tmp_path: Path,
+) -> None:
+    """A dropped entry must not let a client in: it is not a target of this registration."""
+    subject, store = build(
+        tmp_path,
+        **{registry.ENV_ALLOWLIST_ONLY: "1", registry.ENV_ALLOWED_CLIENTS: CURSOR_URIS[0]},
+    )
+
+    await subject.register_client(registration(redirect_uris=CURSOR_URIS))
+
+    row = await store.load_client(CLIENT_ID)
+    assert row is not None
+    assert row.allowed is False
 
 
 @pytest.mark.anyio
@@ -711,7 +808,7 @@ def test_with_the_switch_off_a_registration_reaches_no_route_at_all(tmp_path: Pa
     assert response.status_code == 404, "the route does not exist while the switch is off"
 
 
-def test_a_forbidden_return_address_is_refused_over_http(tmp_path: Path) -> None:
+def test_a_registration_of_forbidden_addresses_alone_is_refused_over_http(tmp_path: Path) -> None:
     with client(tmp_path) as http:
         response = http.post(
             "/register",
@@ -724,6 +821,22 @@ def test_a_forbidden_return_address_is_refused_over_http(tmp_path: Path) -> None
     assert response.status_code == 400
     assert response.json()["error"] == "invalid_redirect_uri"
     assert response.headers["cache-control"] == "no-store"
+
+
+def test_the_registration_answer_names_the_addresses_that_were_registered(tmp_path: Path) -> None:
+    """BL-04 over the wire: 201 for Cursor, with the private-use scheme gone from the echo."""
+    with client(tmp_path) as http:
+        response = http.post(
+            "/register",
+            json={
+                "redirect_uris": CURSOR_URIS,
+                "client_name": "Cursor",
+                "token_endpoint_auth_method": "none",
+            },
+        )
+
+    assert response.status_code == 201
+    assert response.json()["redirect_uris"] == CURSOR_REGISTRABLE
 
 
 def client(tmp_path: Path, **env: str) -> TestClient:
