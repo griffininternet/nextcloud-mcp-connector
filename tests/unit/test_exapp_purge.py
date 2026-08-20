@@ -31,6 +31,7 @@ import base64
 import json
 import logging
 import sqlite3
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -495,6 +496,152 @@ def test_the_flag_in_the_query_string_runs_nothing(live: Deployment, query: str)
         wire = Wire()
         wire.install()
         response = live.client.post(f"{purge.PURGE_PATH}{query}", json={}, headers=appapi_headers())
+
+    assert response.json()["purged"] is False
+    assert wire.seen == []
+    assert live.counts() == before
+
+
+# --- the body this handler is willing to read (IN-01) ------------------------------
+
+
+def test_an_announced_body_above_the_limit_is_not_parsed(
+    live: Deployment, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The header half of the schranke: a length nobody needs is not an occ invocation."""
+    before = live.counts()
+    padded = {"options": {purge.FORCE_OPTION: True}, "pad": "a" * (purge.MAX_BODY_BYTES + 1)}
+    with respx.mock:
+        wire = Wire()
+        wire.install()
+        with caplog.at_level(logging.DEBUG):
+            response = call(live, body=padded)
+
+    assert response.json()["purged"] is False
+    assert wire.seen == []
+    assert live.counts() == before
+    logged = "\n".join(record.getMessage() for record in caplog.records)
+    assert "aaaa" not in logged, "the body itself stays out of the log"
+
+
+def test_a_chunked_body_above_the_limit_is_not_read_to_its_end(
+    live: Deployment, caplog: pytest.LogCaptureFixture
+) -> None:
+    """IN-01: the schranke holds without a ``Content-Length`` to trust.
+
+    A request with ``Transfer-Encoding: chunked`` announces no length at all, so a handler
+    that reads the header and then calls ``request.body()`` reads whatever arrives into
+    memory, and the flag hidden in that body arms the one action of this app that cannot be
+    undone. The counter here is the proof: the sender offers half a megabyte around a valid
+    ``force`` flag, and no more than one chunk beyond the limit may be taken off the wire.
+    """
+    handed_over: list[int] = []
+
+    def in_chunks() -> Iterator[bytes]:
+        head = b'{"options": {"' + purge.FORCE_OPTION.encode() + b'": true}, "pad": "'
+        handed_over.append(len(head))
+        yield head
+        for _ in range(512):
+            chunk = b"a" * 1024
+            handed_over.append(len(chunk))
+            yield chunk
+        tail = b'"}'
+        handed_over.append(len(tail))
+        yield tail
+
+    before = live.counts()
+    with respx.mock:
+        wire = Wire()
+        wire.install()
+        with caplog.at_level(logging.DEBUG):
+            response = live.client.post(
+                purge.PURGE_PATH,
+                content=in_chunks(),
+                headers=appapi_headers() | {"content-type": "application/json"},
+            )
+
+    assert response.status_code == 200
+    assert response.json()["purged"] is False, "a body this handler does not read is no flag"
+    assert wire.seen == []
+    assert live.counts() == before
+    assert sum(handed_over) <= purge.MAX_BODY_BYTES + 1024, (
+        "the reader stops at the limit instead of taking the whole stream into memory"
+    )
+    warnings = [record for record in caplog.records if record.levelno >= logging.WARNING]
+    assert len(warnings) == 1, "exactly one line, the same shape the announced case leaves"
+    logged = "\n".join(record.getMessage() for record in caplog.records)
+    assert "aaaa" not in logged, "the body itself stays out of the log"
+
+
+def test_a_chunked_body_below_the_limit_still_arms_the_purge(live: Deployment) -> None:
+    """The counter check: the schranke bounds the read, it does not refuse chunked bodies.
+
+    Nothing measured says AppAPI sends the invocation in one piece, so a small body that
+    arrives in several chunks has to keep working exactly as the announced one does.
+    """
+
+    def in_chunks() -> Iterator[bytes]:
+        yield b'{"occ": {"arguments": null, "options": {"'
+        yield purge.FORCE_OPTION.encode() + b'": true'
+        yield b"}}}"
+
+    with respx.mock:
+        wire = Wire()
+        wire.install()
+        response = live.client.post(
+            purge.PURGE_PATH,
+            content=in_chunks(),
+            headers=appapi_headers() | {"content-type": "application/json"},
+        )
+
+    assert response.json()["purged"] is True
+    assert wire.seen.count("password") == len(CONNECTIONS)
+
+
+def test_a_chunked_body_at_the_limit_is_still_read(live: Deployment) -> None:
+    """The edge of the schranke: exactly ``MAX_BODY_BYTES`` is inside, not outside."""
+    body = json.dumps({"options": {purge.FORCE_OPTION: True}, "pad": ""}).encode()
+    padding = purge.MAX_BODY_BYTES - len(body)
+    assert padding > 0
+    exact = json.dumps({"options": {purge.FORCE_OPTION: True}, "pad": "a" * padding}).encode()
+    assert len(exact) == purge.MAX_BODY_BYTES
+
+    def in_chunks() -> Iterator[bytes]:
+        for start in range(0, len(exact), 1024):
+            yield exact[start : start + 1024]
+
+    with respx.mock:
+        wire = Wire()
+        wire.install()
+        response = live.client.post(
+            purge.PURGE_PATH,
+            content=in_chunks(),
+            headers=appapi_headers() | {"content-type": "application/json"},
+        )
+
+    assert response.json()["purged"] is True
+    assert wire.seen.count("password") == len(CONNECTIONS)
+
+
+def test_a_body_that_cannot_be_read_is_no_flag(live: Deployment) -> None:
+    """A stream that breaks mid body is not an occ invocation either."""
+
+    def breaks() -> Iterator[bytes]:
+        yield b'{"options": {"force": true'
+        raise RuntimeError("the connection went away")
+
+    before = live.counts()
+    with respx.mock:
+        wire = Wire()
+        wire.install()
+        try:
+            response = live.client.post(
+                purge.PURGE_PATH,
+                content=breaks(),
+                headers=appapi_headers() | {"content-type": "application/json"},
+            )
+        except RuntimeError:  # pragma: no cover - the test client may surface it here
+            pytest.skip("the test client raises the sender error instead of delivering it")
 
     assert response.json()["purged"] is False
     assert wire.seen == []
