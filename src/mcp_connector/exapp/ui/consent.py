@@ -189,13 +189,36 @@ def consent_page(
     confirm: str,
     *,
     unverified: bool,
+    client_host: str | None = None,
+    loopback_only: bool = False,
     env: Mapping[str, str] | None = None,
 ) -> Response:
     """S3: everything a person needs to decide, and the two buttons that decide it.
 
-    The three details are a definition list and the return address is never shortened: a
-    redirect target cut off in the middle hides exactly the part an attacker would have
-    changed (03-UI-SPEC.md, S3).
+    The details are a definition list and the return address is never shortened: a redirect
+    target cut off in the middle hides exactly the part an attacker would have changed
+    (03-UI-SPEC.md, S3).
+
+    Two of them are the display duties the MCP specification puts on a client that
+    identifies itself with a metadata document, and both are values this function only
+    renders: the caller decides what they are (``oauth/consent.py``, the mechanism of
+    ``unverified``).
+
+    * ``client_host`` is the host of the client identifier, which is a URL for such a
+      client and a random identifier for one that registered. It becomes a fourth entry of
+      the same list rather than a paragraph of its own, next to the identifier it comes out
+      of. A client that registered has no host to name, and then the list is the same three
+      entries it was before.
+    * ``loopback_only`` says that every registered return address of this client is on the
+      computer the reader is sitting at. It renders a second warning next to the one about
+      an unregistered client, with :func:`layout.callout` and no new primitive, because the
+      specification asks for a warning and not for a new kind of surface.
+
+    Nothing of a client's document is fetched to build this page, and no image out of it is
+    shown. A logo address from a foreign domain would be a request of the reader's browser
+    to whoever wrote that document, and cross domain tracking is not something this screen
+    hands out in exchange for a picture. The field carrying such an address is therefore not
+    named anywhere in this module, and a test greps for it (T-06-37).
 
     Four properties of the decision itself are built here and are the reason this page has
     no JavaScript at all:
@@ -219,15 +242,20 @@ def consent_page(
         blocks.append(
             layout.callout("warning", strings.CONSENT_WARNING_TITLE, strings.CONSENT_WARNING_BODY)
         )
+    if loopback_only:
+        blocks.append(
+            layout.callout("warning", strings.CONSENT_LOOPBACK_TITLE, strings.CONSENT_LOOPBACK_BODY)
+        )
+    details = [
+        (strings.CONSENT_DETAIL_APP_NAME, name),
+        (strings.CONSENT_DETAIL_REDIRECT, redirect_uri),
+        (strings.CONSENT_DETAIL_CLIENT_ID, client_id),
+    ]
+    if client_host:
+        details.append((strings.CONSENT_DETAIL_CLIENT_HOST, client_host))
     blocks.extend(
         [
-            layout.detail_list(
-                [
-                    (strings.CONSENT_DETAIL_APP_NAME, name),
-                    (strings.CONSENT_DETAIL_REDIRECT, redirect_uri),
-                    (strings.CONSENT_DETAIL_CLIENT_ID, client_id),
-                ]
-            ),
+            layout.detail_list(details),
             layout.section_heading(strings.CONSENT_GRANT_TITLE),
             layout.unordered_list(
                 [

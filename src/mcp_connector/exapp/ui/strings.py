@@ -72,6 +72,7 @@ __all__ = [
     "CONSENT_APPROVE",
     "CONSENT_DENY",
     "CONSENT_DETAIL_APP_NAME",
+    "CONSENT_DETAIL_CLIENT_HOST",
     "CONSENT_DETAIL_CLIENT_ID",
     "CONSENT_DETAIL_REDIRECT",
     "CONSENT_FOOTER",
@@ -81,6 +82,8 @@ __all__ = [
     "CONSENT_GRANT_TITLE",
     "CONSENT_GRANT_WRITE",
     "CONSENT_IDENTITY",
+    "CONSENT_LOOPBACK_BODY",
+    "CONSENT_LOOPBACK_TITLE",
     "CONSENT_TITLE",
     "CONSENT_WARNING_BODY",
     "CONSENT_WARNING_TITLE",
@@ -254,11 +257,35 @@ CONSENT_WARNING_BODY = (
     "it if you started this connection yourself."
 )
 
+#: The second warning of this screen, for a client whose return addresses are all on the
+#: computer the reader is sitting at. The MCP specification asks for it in those words
+#: ("SHOULD display additional warnings for localhost-only redirect URIs") and says in the
+#: line above why: "Client ID Metadata Documents cannot prevent localhost URL impersonation
+#: by themselves." So the body names what is known and what is not, and it stays away from
+#: the word the neighbouring warning uses as a negation: nothing here is confirmed by
+#: anybody, and a sentence that sounded like it was would be the one lie this screen cannot
+#: afford (T-06-38).
+CONSENT_LOOPBACK_TITLE = "Comes back to this computer"
+
+CONSENT_LOOPBACK_BODY = (
+    "This app is sent back to a port on the computer you are using. The address its client "
+    "information is published at is known, but which program answers on that port is not. "
+    "Only approve it if you just started this connection in the app you meant to connect."
+)
+
 CONSENT_DETAIL_APP_NAME = "App name"
 
 CONSENT_DETAIL_REDIRECT = "Sends you back to"
 
 CONSENT_DETAIL_CLIENT_ID = "Client ID"
+
+#: The host of the client identifier, shown next to the identifier itself and never instead
+#: of it. The specification's word for this one is MUST ("clearly display the redirect URI
+#: hostname during authorization"), and the draft asks for the same in section 6.4. It is a
+#: line of its own in the same list because the identifier of such a client is a URL, and a
+#: reader who is deciding whether to trust an app should not have to take a URL apart to see
+#: whose it is.
+CONSENT_DETAIL_CLIENT_HOST = "Client ID host"
 
 CONSENT_GRANT_TITLE = "What this allows"
 

@@ -28,6 +28,7 @@ from starlette.testclient import TestClient
 
 from mcp_connector import config
 from mcp_connector.exapp.ui import connections, errors, icons, layout, strings
+from mcp_connector.exapp.ui import consent as ui_consent
 
 ENV = {config.ENV_PUBLIC_URL: "https://cloud.example.com/exapps/mcp_connector"}
 HOST = "cloud.example.com"
@@ -391,6 +392,127 @@ def test_a_callout_escapes_its_own_input() -> None:
     assert "<b>" not in rendered
     assert "<i>" not in rendered
     assert "&lt;b&gt;t&lt;/b&gt;" in rendered
+
+
+# --- S3, the two display duties of a document identity (AUTH-08, plan 06-06) -----------
+#
+# The MCP specification asks for both in normative words: the hostname of the identifier
+# "MUST" be displayed, and a client whose return addresses are all loopback "SHOULD" carry
+# an additional warning. Both are rendered here and decided by the caller, which is the
+# mechanism ``unverified`` already used, so these checks ask the page and nothing else.
+
+#: The candidate client of AUTH-08, measured on 2026-08-20 (06-RESEARCH.md, pattern 4). Its
+#: identifier is a URL, which is what gives the page a host to name at all.
+CIMD_CLIENT_ID = "https://claude.ai/oauth/claude-code-client-metadata"
+CIMD_HOST = "claude.ai"
+
+#: A random identifier, as a client that registered itself carries one: there is no host in
+#: it, so there is nothing to show and the page has to stay what it was.
+DCR_CLIENT_ID = "9d0f8f1a-0b3c-4a0e-9f4c-000000000001"
+
+#: A host as a hostile document could publish it. It reaches the page through the same
+#: single escaping point every other value does, and the check below is the element count of
+#: the escaping tests above and not a substring.
+HOSTILE_HOST = '<script>alert("h")</script>evil.example'
+
+#: The marker of one rendered warning box, which is how these checks count them: two of them
+#: on one page is the point of the loopback warning, and a substring of the copy would pass
+#: happily while the second box never appeared.
+CALLOUT_MARK = "callout callout-warning"
+
+
+def consent(
+    *,
+    name: str = BENIGN_NAME,
+    client_id: str = CIMD_CLIENT_ID,
+    unverified: bool = True,
+    client_host: str | None = None,
+    loopback_only: bool = False,
+) -> Response:
+    """The decision screen with the values a caller of ``oauth/consent.py`` would compute."""
+    return ui_consent.consent_page(
+        name,
+        client_id,
+        REDIRECT_URI,
+        "alice",
+        "flow-id-of-this-request",
+        "confirm-token-of-this-flow",
+        unverified=unverified,
+        client_host=client_host,
+        loopback_only=loopback_only,
+        env=ENV,
+    )
+
+
+def test_the_client_id_host_is_a_fourth_entry_of_the_same_list() -> None:
+    """The MUST of the specification, and it stands next to the identifier it comes from."""
+    without = parse(consent())
+    with_host = parse(consent(client_host=CIMD_HOST))
+
+    assert without.tags.count("dt") == 3
+    assert with_host.tags.count("dt") == 4
+    assert with_host.tags.count("dd") == 4
+    assert strings.CONSENT_DETAIL_CLIENT_HOST in with_host.text
+    assert CIMD_HOST in with_host.text
+    assert CIMD_CLIENT_ID in with_host.text, "the host is shown next to the identifier, not for it"
+
+
+def test_a_registered_client_renders_the_page_it_rendered_before() -> None:
+    """No host and no loopback: a client that registered sees the three entries of phase 3
+    and the one warning of phase 3, so this change costs that client nothing."""
+    document = parse(consent(client_id=DCR_CLIENT_ID))
+    rendered = body(consent(client_id=DCR_CLIENT_ID))
+
+    assert document.tags.count("dt") == 3
+    assert strings.CONSENT_DETAIL_CLIENT_HOST not in rendered
+    assert rendered.count(CALLOUT_MARK) == 1
+    assert strings.CONSENT_LOOPBACK_TITLE not in rendered
+
+
+def test_a_loopback_only_client_carries_a_second_warning() -> None:
+    """The SHOULD of the specification: the existing warning plus this one, two boxes."""
+    one = body(consent())
+    two = body(consent(loopback_only=True))
+
+    assert one.count(CALLOUT_MARK) == 1
+    assert two.count(CALLOUT_MARK) == 2
+    assert strings.CONSENT_WARNING_TITLE in two
+    assert strings.CONSENT_LOOPBACK_TITLE in two
+    assert strings.CONSENT_LOOPBACK_BODY in two
+
+
+def test_the_loopback_warning_stands_on_its_own_for_a_listed_client() -> None:
+    """An administrator's listing answers "who is this app", not "who holds that port"."""
+    rendered = body(consent(unverified=False, loopback_only=True))
+
+    assert rendered.count(CALLOUT_MARK) == 1
+    assert strings.CONSENT_WARNING_TITLE not in rendered
+    assert strings.CONSENT_LOOPBACK_TITLE in rendered
+
+
+def test_a_hostile_host_and_a_hostile_name_add_no_element_to_the_page() -> None:
+    """T-06-36: every value of a foreign document goes through the one escaping point."""
+    benign = parse(consent(client_host=CIMD_HOST, loopback_only=True))
+    hostile = parse(consent(name=HOSTILE_NAME, client_host=HOSTILE_HOST, loopback_only=True))
+    rendered = body(consent(name=HOSTILE_NAME, client_host=HOSTILE_HOST, loopback_only=True))
+
+    assert hostile.tags == benign.tags
+    assert "script" not in hostile.tags
+    assert "<script" not in rendered
+    assert "evil.example" in hostile.text, "escaped and readable, never swallowed"
+    assert "Bad Client" in hostile.text
+
+
+def test_the_decision_screen_shows_no_image_at_all() -> None:
+    """T-06-37: a ``logo_uri`` of a foreign domain would be a tracking channel of the
+    reader's browser, and this screen has never shown a logo."""
+    document = parse(consent(client_host=CIMD_HOST, loopback_only=True))
+    source = inspect.getsource(ui_consent)
+
+    assert "img" not in document.tags
+    assert document.values_of("src") == []
+    assert "logo_uri" not in source
+    assert "<img" not in source
 
 
 # --- icons -----------------------------------------------------------------------------
