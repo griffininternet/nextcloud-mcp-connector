@@ -46,7 +46,7 @@ Audit: [milestones/v1.0-MILESTONE-AUDIT.md](milestones/v1.0-MILESTONE-AUDIT.md) 
 Plans:
 **Wave 1**
 
-- [ ] 06-01-PLAN.md , AUTH-09: Groessenlimit-Zwilling und CIMD-Zielpruefung (ohne Netzwerk)
+- [x] 06-01-PLAN.md , AUTH-09: Groessenlimit-Zwilling und CIMD-Zielpruefung (ohne Netzwerk)
 - [ ] 06-03-PLAN.md , CLIENT-05 und AUTH-08: RFC-8252-7.3-Loopback-Regel und CIMD-Schalter
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -103,7 +103,7 @@ Plans:
 | 3. OAuth 2.1 | v1.0 | 9/9 | Complete | 2026-08-16 |
 | 4. Per-User-Verwaltung und prepare_context | v1.0 | 4/4 | Complete | 2026-08-17 |
 | 5. Hardening und Store-Einreichung | v1.0 | 16/16 | Complete | 2026-08-20 |
-| 6. Härtung, Eigennachweise und Conference-Reife | v1.1 | 0/10 | Planned | - |
+| 6. Härtung, Eigennachweise und Conference-Reife | v1.1 | 1/10 | In Progress | - |
 | 7. Verwaltungs-Clients live verprobt | v1.1 | 0/TBD | Not started (extern getaktet) | - |
 
 ## Next

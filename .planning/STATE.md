@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Verwaltungs-Clients und Härtungs-Reste
 status: executing
-stopped_at: "Roadmap v1.1 geschrieben (Phasen 6 und 7, 10/10 Requirements abgebildet). Vorher: Plan 05-14 fertig: der Rundlauf vom Admin-Formular ins Discovery-Dokument ist auf einer frisch aufgebauten Topologie ohne NC_MCP_PUBLIC_URL gemessen (Linie A issuer zeichengleich, Linie B kein Restart-Loop, Linie C Rueckweg allein ueber das Formular). Die 401-Zeile in deferred-items.md ist geschlossen. Naechster Schritt: Phasenabschluss 05 erneut pruefen (Verifier)."
-last_updated: "2026-08-20T11:10:55.318Z"
-last_activity: 2026-08-20 -- Phase 6 planning complete
+stopped_at: "Plan 06-01 fertig: die zwei Grenzen des CIMD-Abrufs, die ohne Netzwerk halten, stehen als reine Funktionen (bounded_response neben bounded_body, oauth/cimd.py mit is_cimd_client_id, target_allowed, resolve_addresses). 1983 Tests gruen, ruff/pyright/vulture sauber, pyproject und uv.lock unberuehrt. Naechster Schritt: Wave 1 weiter mit Plan 06-03, danach Wave 2 (06-02 gepinnter Abruf, 06-04 Advertising)."
+last_updated: "2026-08-20T11:29:55.931Z"
+last_activity: 2026-08-20 -- Plan 06-01 fertig (CIMD-Grenzen ohne Netzwerk)
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 10
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -25,11 +25,11 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 
 ## Current Position
 
-Phase: 6 - Härtung, Eigennachweise und Conference-Reife
-Plan: —
+Phase: 6 (Härtung, Eigennachweise und Conference-Reife), EXECUTING
+Plan: 2 of 10
 Status: Ready to execute
 Milestone: v1.1 Verwaltungs-Clients und Härtungs-Reste (Phasen 6-7)
-Last activity: 2026-08-20 -- Phase 6 planning complete
+Last activity: 2026-08-20 -- Plan 06-01 fertig (CIMD-Grenzen ohne Netzwerk)
 
 ## Performance Metrics
 
@@ -103,6 +103,7 @@ Last activity: 2026-08-20 -- Phase 6 planning complete
 | Phase 05-hardening-und-store-einreichung P16 | 20 | 2 tasks | 3 files |
 | Phase 05-hardening-und-store-einreichung P13 | 15 min | 2 tasks tasks | 4 files files |
 | Phase 05-hardening-und-store-einreichung P14 | 25 min | 2 tasks | 2 files |
+| Phase 06 P01 | 30 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -331,6 +332,11 @@ Recent decisions affecting current work:
 - [Phase ?]: 05-16: option-b, EXAPP-05 wird mit der dokumentierten, gefuehrten MUCGPT-Luecke abgenommen (2026-08-20); gefuehrt ueber BL-12 und deferred-items.md, einloesbar per Protokoll in docs/client-setup.md
 - [Phase 05]: Zweig N aus 05-12 ausgefuehrt: der 401 des Fensters vor der Aktivierung ist eine INFO-Zeile mit Ausweg, jeder andere Fehlschlag desselben Lesevorgangs bleibt ERROR; Overlay-Cache, vierte Registrierung am enabled=1-Hook und Selbstneustart wurden bewusst nicht gebaut, weil M1, M2 und M3 sie als wirkungslos belegen
 - [Phase ?]: 05-14: Der Live-Nachweis fuer admin-gesetzte Werte braucht eine Registrierung ohne NC_MCP_PUBLIC_URL; AppAPI 34 kennt kein occ-Kommando dafuer, also unregister plus register ohne environment-variables-Block
+- [Phase 06]: Der Default-Resolver von cimd.resolve_addresses ruft loop.getaddrinfo aus der Standardbibliothek statt anyio.getaddrinfo: docs/dependency-audit.md verlangt, dass ein direkt importiertes Paket direkt deklariert wird, und anyio liegt nur transitiv im Lock; der Plan-Wortlaut haette pyproject.toml und uv.lock geaendert, was T-06-SC ausschliesst
+- [Phase 06]: Der Typalias des injizierbaren Resolvers heisst AddressLookup und nicht Resolver: das Contract-Gate test_no_destructive_calls.py verbietet die Zeichenkette Resolve in src (MCP-Reference-Resolution haelt Zustand ueber einen Aufruf hinaus); der Parametername resolver bleibt klein, das Gate bleibt unangetastet
+- [Phase 06]: Das Groessenlimit des CIMD-Abrufs bleibt in exapp/responses.py (bounded_response neben bounded_body) und wird von oauth/cimd.py importiert: zwei Groessenlimits in zwei Modulen sind genau die Kopie, die dieses Modul einmal abgeschafft hat
+- [Phase 06]: MAX_DOCUMENT_BYTES (5120) und FETCH_TIMEOUT_SECONDS (5.0) sind Modulkonstanten ohne Env-Schalter: ein Schalter waere eine Grenze, die ein Admin versehentlich aufweichen kann (T-06-06); ein Test haelt fest, dass os.environ im Modul nicht vorkommt
+- [Phase 06]: resolve_addresses verwirft den ganzen Namen, sobald EINE Adresse durchfaellt, und lehnt zusaetzlich eine Antwort ab, die keine Adresse ist, sowie einen leeren Hostnamen ohne den Resolver zu fragen: waehlte die Funktion die gute Adresse, waere die Regel per DNS-Antwort umschaltbar (T-06-02)
 
 ### Pending Todos
 
@@ -361,12 +367,12 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T05:02:38.257Z
-Stopped at: Roadmap v1.1 geschrieben (Phasen 6 und 7, 10/10 Requirements abgebildet). Vorher: Plan 05-14 fertig: der Rundlauf vom Admin-Formular ins Discovery-Dokument ist auf einer frisch aufgebauten Topologie ohne NC_MCP_PUBLIC_URL gemessen (Linie A issuer zeichengleich, Linie B kein Restart-Loop, Linie C Rueckweg allein ueber das Formular). Die 401-Zeile in deferred-items.md ist geschlossen. Naechster Schritt: Phasenabschluss 05 erneut pruefen (Verifier).
-Naechster Schritt: /gsd:plan-phase 6
+Last session: 2026-08-20T11:28:40.575Z
+Stopped at: Plan 06-01 fertig: die zwei Grenzen des CIMD-Abrufs, die ohne Netzwerk halten, stehen als reine Funktionen (bounded_response neben bounded_body, oauth/cimd.py mit is_cimd_client_id, target_allowed, resolve_addresses). 1983 Tests gruen, ruff/pyright/vulture sauber, pyproject und uv.lock unberuehrt. Naechster Schritt: Wave 1 weiter mit Plan 06-03, danach Wave 2 (06-02 gepinnter Abruf, 06-04 Advertising).
+Naechster Schritt: /gsd:execute-phase 6 (Plan 06-03)
 Resume file: None
 
 ## Operator Next Steps
 
-- Phase 6 planen: `/gsd:plan-phase 6`
+- Phase 6 weiter ausfuehren: `/gsd:execute-phase 6` (10 Plaene, 1 fertig)
 - Phase 7 haengt an fremden Zugaengen (it@M-Antwort fuer MUCGPT, Owner-Kontakte fuer F13 und BaerGPT); sie blockiert keinen Liefergegenstand aus Phase 6
