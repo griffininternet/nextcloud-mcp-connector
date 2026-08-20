@@ -652,16 +652,16 @@ async def _app_password(store: OAuthStore, auth_id: str) -> str:
 
 
 def _confirmed(store: OAuthStore, flow_id: str, presented: str) -> bool:
-    """Whether this decision came from the form this server rendered for this flow.
+    """Whether this decision came from the form this server rendered for this flow, recently.
 
-    ``compare_digest`` on bytes and not ``==``: the value arrives from a request, and a
-    comparison that stops at the first different character leaks its prefix over enough
-    attempts (the rule of ``exapp/auth.py``).
+    The comparison lives in the store and is the constant time one: the value arrives from a
+    request, and a comparison that stops at the first different character leaks its prefix
+    over enough attempts (the rule of ``exapp/auth.py``). It accepts the current window and
+    the one before it, so a consent screen that was opened just before a full hour can still
+    be decided; an older one is refused like a forged one, which is the answer below
+    (BL-08, ME-02).
     """
-    expected = store.form_token(flow_id, purpose=crypto.PURPOSE_CONSENT)
-    return bool(presented) and secrets.compare_digest(
-        expected.encode("utf-8"), presented.encode("utf-8")
-    )
+    return store.form_token_valid(flow_id, presented, purpose=crypto.PURPOSE_CONSENT)
 
 
 def _sign_in_link(candidate: str, env: Mapping[str, str] | None) -> str:

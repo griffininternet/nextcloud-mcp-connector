@@ -374,19 +374,36 @@ class OAuthStore:
     def path(self) -> Path:
         return self._path
 
-    def form_token(self, handle: str, *, purpose: str) -> str:
-        """The anti forgery value of one form: this handle, this purpose (T-03-50, ME-01).
+    def form_token(self, handle: str, *, purpose: str, now: float | None = None) -> str:
+        """The anti forgery value of one form: this handle, this purpose, this hour.
 
-        It lives on this object because the data key does, and nowhere else in the process
-        holds that key. Nothing is read or written: the value is derived, which is why it
-        is the same for every render of the same form and different for every deployment.
+        T-03-50, ME-01 and ME-02. It lives on this object because the data key does, and
+        nowhere else in the process holds that key. Nothing is read or written: the value is
+        derived, which is why it is the same for every render of the same form inside one
+        window and different for every deployment.
 
         ``purpose`` is one of the constants of :mod:`.crypto` and is required, because the
         handles of two different actions can be the same string: an authorization carries
         the id of the flow it was born in, so the consent form and the disconnect form of
         one connection would otherwise be authorised by one value.
+
+        ``now`` is for tests, which is why the callers never pass it: it is what lets a
+        check name an expired form without waiting an hour for one.
         """
-        return crypto.form_token(self._key, handle, purpose=purpose)
+        return crypto.form_token(self._key, handle, purpose=purpose, now=now)
+
+    def form_token_valid(
+        self, handle: str, presented: str, *, purpose: str, now: float | None = None
+    ) -> bool:
+        """Whether this value belongs to this form and is still inside its window (BL-08).
+
+        The counterpart of :meth:`form_token` and the only way a caller should compare one:
+        the current window and the previous one are accepted, and both comparisons are the
+        constant time one. A caller that recomputed a value and compared it itself would
+        accept exactly one window and would refuse every form that was open across an hour
+        boundary.
+        """
+        return crypto.form_token_valid(self._key, handle, presented, purpose=purpose, now=now)
 
     # --- clients --------------------------------------------------------------------
 

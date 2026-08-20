@@ -29,6 +29,7 @@ import hashlib
 import hmac
 import logging
 import secrets
+import time
 from collections.abc import Mapping
 from typing import Any
 
@@ -47,6 +48,7 @@ __all__ = [
     "CONFIG_READ_FIELD",
     "CONFIG_READ_SUFFIX",
     "EXAPP_CONFIG_PATH",
+    "FORM_TOKEN_WINDOW",
     "KEY_BYTES",
     "NONCE_BYTES",
     "DecryptionRejected",
@@ -55,6 +57,7 @@ __all__ = [
     "delete_key",
     "encrypt",
     "form_token",
+    "form_token_valid",
 ]
 
 #: AES-256. The size is fixed here instead of being inferred from the stored value, so a
@@ -72,6 +75,14 @@ CONFIG_KEY = "oauth_data_key"
 #: values that mean different things. Versioned, so a later change is a new value and not a
 #: silent reinterpretation of an old one.
 _FORM_TOKEN_LABEL = b"consent-form-v1:"
+
+#: How long one form value lives, in seconds, and the unit the derivation counts in
+#: (BL-08, ME-02). An hour is the compromise this application can afford: a consent screen
+#: or a connections page that a person leaves open for two windows is refused and shows
+#: itself again, which costs one click, while a value that leaked stops acting after two
+#: hours instead of never. Changing this number invalidates every form that is open at the
+#: moment of the restart and nothing else: no value of it is stored anywhere.
+FORM_TOKEN_WINDOW = 3600
 
 #: The three purposes a form value of this application can have, and the whole point of the
 #: parameter (ME-01). ``consent.py`` writes an authorization under the id of its own flow,
@@ -148,16 +159,16 @@ def decrypt(key: bytes, blob: bytes, *, aad: str) -> bytes:
         raise DecryptionRejected from None
 
 
-def form_token(key: bytes, handle: str, *, purpose: str) -> str:
-    """The anti forgery value of one form, for one handle and one purpose (T-03-50, ME-01).
+def form_token(key: bytes, handle: str, *, purpose: str, now: float | None = None) -> str:
+    """The anti forgery value of one form, for one handle, one purpose and one hour.
 
-    A hidden field that binds a form to one action has to be three things: impossible to
-    produce without being this deployment, impossible to reuse for another handle, and
-    impossible to reuse for another action on the same handle. An HMAC over the purpose and
-    the handle with the data key is all three, and it is the one shape that needs no column:
-    a value that can be recomputed at every render is a migration for nothing. It also
-    survives a restart and a second worker process, which a token kept in a dictionary would
-    not.
+    T-03-50, ME-01 and ME-02. A hidden field that binds a form to one action has to be four
+    things: impossible to produce without being this deployment, impossible to reuse for
+    another handle, impossible to reuse for another action on the same handle, and finite.
+    An HMAC over the window number, the purpose and the handle with the data key is all
+    four, and it is the one shape that needs no column: a value that can be recomputed at
+    every render is a migration for nothing. It also survives a restart and a second worker
+    process, which a token kept in a dictionary would not.
 
     ``purpose`` is not decoration. It closes the case where two different privileged actions
     are about the same string, which is exactly what this application has: an authorization
@@ -165,15 +176,74 @@ def form_token(key: bytes, handle: str, *, purpose: str) -> str:
     function apart from anything else the same key might ever authenticate; the purpose keeps
     them apart from each other.
 
-    The two fields are joined with the length of the first in front of them, so the split
-    between them is unambiguous whatever either of them contains. ``"a"`` plus ``"b:c"`` and
-    ``"a:b"`` plus ``"c"`` would otherwise be the same material and therefore the same value,
-    which is the classic way a domain separation stops separating. Neither field is attacker
-    controlled today, and this is what lets that stay a property rather than a coincidence.
+    **What the window is worth, and what it is not (BL-08).** Without it this value was a
+    pure function of key, purpose and handle, so the switch value of an account stayed the
+    same for the whole lifetime of the installation and whoever saw it once could pause and
+    resume that account for good. That is what the window ends, and it ends nothing else:
+    the value is still not a nonce, it is not consumed by being used, it is not bound to a
+    session, and inside its window it can be replayed as often as anybody likes. What it
+    buys is an expiry the deployment can afford, because the only other rotation point is
+    the data key and rotating that makes every stored app password unreadable.
+
+    The three fields are joined so that no two of them can be shifted into each other: the
+    window number carries no colon and comes first, and the purpose is preceded by its own
+    length. ``"a"`` plus ``"b:c"`` and ``"a:b"`` plus ``"c"`` would otherwise be the same
+    material and therefore the same value, which is the classic way a domain separation
+    stops separating. No field is attacker controlled today, and this is what lets that stay
+    a property rather than a coincidence.
+
+    ``now`` exists so a caller can name the moment; every caller in this application passes
+    none and gets the current window. :func:`form_token_valid` is the one that reads it
+    back, and it accepts one window more than this function ever writes.
     """
     _check_key(key)
-    material = f"{len(purpose)}:{purpose}:{handle}".encode()
+    return _derive_form_token(key, handle, purpose=purpose, window=_window(now))
+
+
+def form_token_valid(
+    key: bytes, handle: str, presented: str, *, purpose: str, now: float | None = None
+) -> bool:
+    """Whether ``presented`` is a value this deployment rendered for this form, recently.
+
+    The current window and the one before it, so a form that was opened at 10:59 and
+    submitted at 11:01 still works. Two is the smallest number that makes the boundary
+    survivable at all, and every window more is another hour in which a value that leaked
+    still acts. A page older than that is refused exactly like a forged one: the callers of
+    this function answer both with the page the user came from, and nothing tells them
+    apart, because an answer that did would say whether a value used to be real.
+
+    ``compare_digest`` and never ``==``: the value arrives from a request, and a comparison
+    that stops at the first differing character leaks its prefix over enough attempts. Both
+    windows are compared before this returns for the same reason, rather than stopping at
+    the first match.
+    """
+    _check_key(key)
+    if not presented:
+        return False
+    current = _window(now)
+    candidate = presented.encode("utf-8")
+    accepted = False
+    for window in (current, current - 1):
+        expected = _derive_form_token(key, handle, purpose=purpose, window=window)
+        if hmac.compare_digest(expected.encode("utf-8"), candidate):
+            accepted = True
+    return accepted
+
+
+def _derive_form_token(key: bytes, handle: str, *, purpose: str, window: int) -> str:
+    """The one derivation both halves use, so they can never drift apart."""
+    material = f"{window}:{len(purpose)}:{purpose}:{handle}".encode()
     return hmac.new(key, _FORM_TOKEN_LABEL + material, hashlib.sha256).hexdigest()
+
+
+def _window(now: float | None) -> int:
+    """The number of the hour this moment falls into. One integer, no colon, no locale."""
+    return int((_unix_time() if now is None else now) // FORM_TOKEN_WINDOW)
+
+
+def _unix_time() -> float:
+    """The one clock this module reads, so a test can name a moment without sleeping."""
+    return time.time()
 
 
 async def data_key(env: Mapping[str, str] | None = None) -> bytes:

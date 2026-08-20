@@ -41,7 +41,6 @@ not by the framework with a traceback (HI-02).
 
 import json
 import logging
-import secrets
 from collections.abc import Awaitable, Callable, Mapping
 
 from starlette.datastructures import FormData
@@ -411,17 +410,17 @@ def _oversized(request: Request) -> bool:
 def _confirmed(store: OAuthStore, handle: str, presented: str, *, purpose: str) -> bool:
     """Whether this form came from a page this server rendered for this handle and purpose.
 
-    ``compare_digest`` on bytes and not ``==``: the value arrives from a request, and a
-    comparison that stops at the first different character leaks its prefix over enough
-    attempts (the rule of ``exapp/auth.py`` and of the consent decision).
+    The comparison lives in the store and is the constant time one: the value arrives from a
+    request, and a comparison that stops at the first different character leaks its prefix
+    over enough attempts (the rule of ``exapp/auth.py`` and of the consent decision).
 
     ``purpose`` is what keeps the value of the consent form of a connection from ending that
-    connection: both forms are about the same id (ME-01).
+    connection: both forms are about the same id (ME-01). The window is what keeps a value
+    that leaked from acting for the lifetime of the installation: the current one and the
+    previous one are accepted, and a page older than that gets the calm answer every wrong
+    value gets, which is this page again (BL-08, ME-02).
     """
-    expected = store.form_token(handle, purpose=purpose)
-    return bool(presented) and secrets.compare_digest(
-        expected.encode("utf-8"), presented.encode("utf-8")
-    )
+    return store.form_token_valid(handle, presented, purpose=purpose)
 
 
 async def _store_or_page(
