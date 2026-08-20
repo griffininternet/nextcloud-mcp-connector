@@ -229,6 +229,104 @@ def test_everything_else_is_refused(uri: str) -> None:
     assert registry.redirect_uri_allowed(uri) is False
 
 
+# --- the loopback port rule (RFC 8252 7.3, CLIENT-05) ------------------------------------
+
+#: What Claude Code publishes in its client id metadata document, fetched on 2026-08-20
+#: (06-RESEARCH.md, Pattern 4). Both entries are portless; at runtime the client arrives
+#: with ``http://localhost:3118/callback``.
+CLAUDE_CODE_URIS = ["http://localhost/callback", "http://127.0.0.1/callback"]
+
+
+@pytest.mark.parametrize(
+    ("requested", "registered", "expected"),
+    [
+        # The measured case this rule exists for.
+        ("http://localhost:3118/callback", CLAUDE_CODE_URIS, "http://localhost/callback"),
+        (
+            "http://127.0.0.1:54321/callback",
+            ["http://127.0.0.1/callback"],
+            "http://127.0.0.1/callback",
+        ),
+        ("http://[::1]:9000/cb", ["http://[::1]/cb"], "http://[::1]/cb"),
+        # A registration that already carries a port is matched with another one, which is
+        # the ephemeral case: the client kept its published path and took a free port.
+        (
+            "http://localhost:41234/callback",
+            ["http://localhost:8787/callback"],
+            "http://localhost:8787/callback",
+        ),
+        # Same path and query, and the query is part of the exact half.
+        (
+            "http://127.0.0.1:7000/cb?state=keep",
+            ["http://127.0.0.1/cb?state=keep"],
+            "http://127.0.0.1/cb?state=keep",
+        ),
+        # The first entry that matches is the answer, and the other host is not touched.
+        (
+            "http://127.0.0.1:3118/callback",
+            CLAUDE_CODE_URIS,
+            "http://127.0.0.1/callback",
+        ),
+    ],
+)
+def test_a_loopback_request_matches_its_registration_with_another_port(
+    requested: str, registered: list[str], expected: str
+) -> None:
+    """RFC 8252 7.3 is a MUST: the port is the one property the client cannot control."""
+    assert registry.loopback_match(requested, registered) == expected
+
+
+@pytest.mark.parametrize(
+    ("requested", "registered"),
+    [
+        # A host change is not a port change (RFC 8252 8.3: the name and the literal do not
+        # resolve through the same mechanism).
+        ("http://localhost:3118/callback", ["http://127.0.0.1/callback"]),
+        ("http://127.0.0.1:3118/callback", ["http://localhost/callback"]),
+        ("http://[::1]:3118/callback", ["http://127.0.0.1/callback"]),
+        # Path exactly.
+        ("http://localhost:3118/other", ["http://localhost/callback"]),
+        ("http://localhost:3118/callback/sub", ["http://localhost/callback"]),
+        # Query exactly.
+        ("http://localhost:3118/callback?x=1", ["http://localhost/callback"]),
+        ("http://localhost:3118/callback", ["http://localhost/callback?x=1"]),
+        # Scheme exactly.
+        ("https://localhost:3118/callback", ["http://localhost/callback"]),
+        # Not loopback, so not this function's business: the exact comparison of the SDK
+        # stands and a hosted connector gains nothing here.
+        ("https://claude.ai/cb", ["https://claude.ai/cb"]),
+        ("http://127.0.0.1.evil.example:80/cb", ["http://127.0.0.1/cb"]),
+        # A fragment or user info is a refusal, on either side of the comparison.
+        ("http://localhost:3118/callback#frag", CLAUDE_CODE_URIS),
+        ("http://user:secret@localhost:3118/callback", CLAUDE_CODE_URIS),
+        ("http://localhost:3118/callback", ["http://user:secret@localhost/callback"]),
+        ("http://localhost:3118/callback", ["http://localhost/callback#frag"]),
+        # An address this library cannot take apart, and a port outside the range.
+        ("http://localhost:99999/cb", ["http://localhost/cb"]),
+        ("http://localhost:0/cb", ["http://localhost/cb"]),
+        ("http://localhost:notaport/cb", ["http://localhost/cb"]),
+        ("not a url", CLAUDE_CODE_URIS),
+        ("", []),
+        # Nothing registered, and an entry that is not an address.
+        ("http://localhost:3118/callback", []),
+        ("http://localhost:3118/callback", ["", "myapp://callback"]),
+    ],
+)
+def test_everything_but_the_port_is_compared_exactly(requested: str, registered: list[str]) -> None:
+    """The one relaxation is the port, and a refusal never says which half fell."""
+    assert registry.loopback_match(requested, registered) is None
+
+
+def test_the_match_returns_the_registration_and_writes_nothing() -> None:
+    """The anti pattern is to register the requested address on a match (T-06-19)."""
+    registered = list(CLAUDE_CODE_URIS)
+
+    result = registry.loopback_match("http://localhost:3118/callback", registered)
+
+    assert result == "http://localhost/callback"
+    assert registered == CLAUDE_CODE_URIS
+
+
 # --- the object itself -------------------------------------------------------------------
 
 

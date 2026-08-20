@@ -44,7 +44,7 @@ default nobody wrote down.
 import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from urllib.parse import urlsplit
+from urllib.parse import SplitResult, urlsplit
 
 from .store import IDLE_CLIENT_TTL, UNUSED_CLIENT_TTL
 
@@ -58,6 +58,7 @@ __all__ = [
     "UNUSED_REGISTRATION_TTL",
     "ClientPolicy",
     "client_policy",
+    "loopback_match",
     "redirect_uri_allowed",
 ]
 
@@ -205,6 +206,79 @@ def redirect_uri_allowed(value: str) -> bool:
     if parts.scheme == "https":
         return True
     return host.lower() in LOOPBACK_HOSTS
+
+
+def loopback_match(requested: str, registered: Sequence[str]) -> str | None:
+    """The registered address this loopback request matches, port aside (RFC 8252 7.3).
+
+    The specification's word is MUST, not MAY: "The authorization server MUST allow any
+    port to be specified at the time of the request for loopback IP redirect URIs, to
+    accommodate clients that obtain an available ephemeral port from the operating system at
+    the time of the request." A native client takes whatever port the operating system hands
+    it, so a server that compares the port refuses the client over a property the client
+    cannot control.
+
+    Measured reason this exists: Claude Code publishes ``http://localhost/callback`` and
+    ``http://127.0.0.1/callback`` in its client id metadata document, both without a port,
+    and arrives with ``http://localhost:3118/callback``.
+
+    Every relaxation is named, and there is exactly one:
+
+    * **Only the port is free.** Scheme, host, path and query are compared exactly, the host
+      case insensitively as in :func:`redirect_uri_allowed`. A host change is not a port
+      change: ``localhost`` against ``127.0.0.1`` stays a refusal, because the two names
+      resolve through different mechanisms and a client that publishes both can send either.
+    * **Only loopback is this function's business.** A request whose host is not in
+      :data:`LOOPBACK_HOSTS` gets ``None``, and the exact comparison of the SDK stands. That
+      set is the consistent one because D-35 already lets those three hosts be registered;
+      section 7.3 names only the IP literals and section 8.3 advises against the name, but
+      the client this rule exists for sends the name, so a literal reading would leave it
+      out.
+    * **A fragment, user info or an address this library cannot take apart is a refusal**,
+      on both sides of the comparison, with the same ``try/except ValueError`` around
+      ``hostname`` and ``port`` as the neighbour above. The scheme is compared and not
+      restricted: which schemes may be registered at all is D-35's question, asked in
+      :func:`redirect_uri_allowed`, and this function does not become a second gate for it.
+
+    Nothing of the checked value is logged, and nothing is written: the anti pattern here is
+    to put the requested address into the client's ``redirect_uris`` on a match. That turns
+    a comparison into a registration, grows the row on every run, and hands whoever holds a
+    loopback port a permanent entry.
+    """
+    asked = urlsplit((requested or "").strip())
+    host = _comparable_host(asked)
+    if host is None or host not in LOOPBACK_HOSTS:
+        return None
+    for candidate in registered:
+        known = urlsplit((candidate or "").strip())
+        known_host = _comparable_host(known)
+        if known_host is None or known_host != host:
+            continue
+        exact = (known.scheme, known.path, known.query)
+        if exact == (asked.scheme, asked.path, asked.query):
+            return candidate
+    return None
+
+
+def _comparable_host(parts: SplitResult) -> str | None:
+    """The lower case host of an address that may be compared at all, or ``None``.
+
+    One helper for both sides of :func:`loopback_match`, so that a refusal cannot be
+    forgotten on the registered side: an entry written with user info or a fragment is
+    refused there for the same reason it is refused for a request.
+    """
+    try:
+        host = parts.hostname
+        port = parts.port
+    except ValueError:
+        # A malformed host or port, the reading of ``redirect_uri_allowed``: an address this
+        # library cannot take apart is not one a browser and this server would agree about.
+        return None
+    if not host or parts.fragment or parts.username or parts.password:
+        return None
+    if port is not None and not 0 < port <= 65535:
+        return None
+    return host.lower()
 
 
 def _switch(env: Mapping[str, str] | None, name: str, *, default: bool) -> bool:
