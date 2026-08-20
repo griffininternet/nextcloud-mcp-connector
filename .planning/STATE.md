@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Verwaltungs-Clients und Härtungs-Reste
 status: executing
-stopped_at: "Plan 06-08 fertig, mit negativem Messbefund: Cursor 3.2.16 registriert sich live gegen 0.1.2 mit 201 und den zwei zulaessigen Adressen (cursor:// verworfen, wie a80af0a vorsieht), besteht danach aber an /authorize auf genau dieser cursor://-Adresse und wird mit 400 und der Seite E5 abgewiesen. Kein Token, kein Werkzeugaufruf. Drei Gegenproben schliessen Instanz, Loopback-Portregel und Teilregistrierung als Ursache aus; die Ursache ist, dass Cursor die registrierten Adressen nicht aus der Antwort zuruecklieset. docs/oauth-setup.md und docs/client-setup.md sagen jetzt genau das, BL-14 traegt die offene Entscheidung, CLIENT-04 bleibt unangehakt. mcp.json und Store sind im Vorzustand, 2155 Unit-Tests mit Rueckgabewert 0, ruff sauber. Naechster Schritt: 06-09."
-last_updated: "2026-08-20T15:40:05.661Z"
+stopped_at: "Plan 06-09 fertig: AUTH-08 und CLIENT-05 sind live belegt. Claude Code 2.1.233 weist sich per Metadatendokument aus, verbindet sich gegen 0.1.2 auf 34.0.3.2 und ruft files_list mit Inhalt auf; die clients-Zeile traegt ein leeres Secret und die zwei portlosen Rueckadressen. Der Loopback-Port wechselte ueber drei Laeufe (45157, 47608, 41977), plus ein Override-Lauf mit 34567; der Entscheid ist die umgesetzte RFC-8252-7.3-Ausnahme mit benanntem Restrisiko Port-Squatting. Die drei Kontrollproben greifen live, und mit abgeschaltetem DCR verlaesst kein Paket die Instanz (0 Sockets auf Port 443 gegen 4 in der Positivkontrolle). Schalter, Client-Konfiguration und Store sind belegt im Vorzustand, 2155 Unit-Tests gruen, ruff sauber. Naechster Schritt: 06-10."
+last_updated: "2026-08-20T16:38:39.920Z"
 last_activity: 2026-08-20
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 10
-  completed_plans: 8
+  completed_plans: 9
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 6 (Härtung, Eigennachweise und Conference-Reife), EXECUTING
-Plan: 9 of 10
+Plan: 10 of 10
 Status: Ready to execute
 Milestone: v1.1 Verwaltungs-Clients und Härtungs-Reste (Phasen 6-7)
 Last activity: 2026-08-20
@@ -111,6 +111,7 @@ Last activity: 2026-08-20
 | Phase 06 P06 | 40 min | 3 tasks | 7 files |
 | Phase 06 P07 | 45 min | 3 tasks tasks | 9 files files |
 | Phase 06 P08 | 35 min | 2 tasks | 6 files |
+| Phase 06 P09 | 50 min | 3 tasks tasks | 6 files files |
 
 ## Accumulated Context
 
@@ -368,6 +369,9 @@ Recent decisions affecting current work:
 - [Phase ?]: 06-08: Kein Fix in diesem Plan, die Entscheidung steht in BL-14 (Schema doch registrieren gegen D-35, wieder ganz abweisen wie 0.1.1, das Verworfene fuer den Client sichtbar machen, oder so lassen und auf das App-Passwort verweisen). CLIENT-04 bleibt in REQUIREMENTS.md unangehakt, weil sein Wortlaut eine durchlaufende Autorisierung verlangt
 - [Phase ?]: 06-08: Fremde GUI-Software des Owners wird fuer eine Messung nicht neu gestartet und nicht mit Debug-Port angefahren: der Lauf hat bei needsAuth gehalten und gefragt, statt Cursor zu beenden (dasselbe Prinzip wie T-06-52)
 - [Phase ?]: 06-08: jane's Passwort steht nirgends im Repository und occ user:resetpassword wurde NICHT benutzt, weil es die App-Passwoerter ihrer zwei OAuth-Verbindungen entwertet haette (Demo-Substanz fuer CONF-01); die Frage wurde gegenstandslos, weil die Abweisung vor jeder Anmeldeseite liegt
+- [Phase ?]: 06-09: Der CIMD-Live-Nachweis laeuft mit dem echten claude mcp login ueber eine Pseudo-Konsole (CreatePseudoConsole per ctypes): der Client verlangt ein Terminal, winpty lehnt ohne eigenes tty ab und ein Paket-Install ist ausgeschlossen (T-06-SC)
+- [Phase ?]: 06-09: Der Beleg fuer ein AUSBLEIBEN braucht eine Positivkontrolle mit demselben Messwerkzeug: 0 Sockets auf Port 443 bei abgeschaltetem DCR gegen 4 Socket-Zustaende im identischen Lauf mit Schalter an, /proc-Zaehlung im Container
+- [Phase ?]: 06-09: Drei der vier OAuth-Schalter sind Admin-Werte und brauchen nur occ app_api:app:config:set plus disable/enable; nur NC_MCP_OAUTH_CIMD steht nicht in CONFIG_KEYS und verlangt unregister (ohne --rm-data) plus register mit der Variable im json-info
 
 ### Pending Todos
 
@@ -399,8 +403,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T14:58:56.399Z
-Stopped at: Plan 06-08 fertig, mit negativem Messbefund: Cursor 3.2.16 registriert sich live gegen 0.1.2 mit 201 und den zwei zulaessigen Adressen (cursor:// verworfen, wie a80af0a vorsieht), besteht danach aber an /authorize auf genau dieser cursor://-Adresse und wird mit 400 und der Seite E5 abgewiesen. Kein Token, kein Werkzeugaufruf. Drei Gegenproben schliessen Instanz, Loopback-Portregel und Teilregistrierung als Ursache aus; die Ursache ist, dass Cursor die registrierten Adressen nicht aus der Antwort zuruecklieset. docs/oauth-setup.md und docs/client-setup.md sagen jetzt genau das, BL-14 traegt die offene Entscheidung, CLIENT-04 bleibt unangehakt. mcp.json und Store sind im Vorzustand, 2155 Unit-Tests mit Rueckgabewert 0, ruff sauber. Naechster Schritt: 06-09.
+Last session: 2026-08-20T16:38:39.903Z
+Stopped at: Plan 06-09 fertig: AUTH-08 und CLIENT-05 sind live belegt. Claude Code 2.1.233 weist sich per Metadatendokument aus, verbindet sich gegen 0.1.2 auf 34.0.3.2 und ruft files_list mit Inhalt auf; die clients-Zeile traegt ein leeres Secret und die zwei portlosen Rueckadressen. Der Loopback-Port wechselte ueber drei Laeufe (45157, 47608, 41977), plus ein Override-Lauf mit 34567; der Entscheid ist die umgesetzte RFC-8252-7.3-Ausnahme mit benanntem Restrisiko Port-Squatting. Die drei Kontrollproben greifen live, und mit abgeschaltetem DCR verlaesst kein Paket die Instanz (0 Sockets auf Port 443 gegen 4 in der Positivkontrolle). Schalter, Client-Konfiguration und Store sind belegt im Vorzustand, 2155 Unit-Tests gruen, ruff sauber. Naechster Schritt: 06-10.
 Naechster Schritt: /gsd:execute-phase 6 (Plan 06-09)
 Resume file: None
 
