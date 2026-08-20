@@ -256,7 +256,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Server-Kern | 14/14 | Complete    | 2026-08-14 |
 | 2. ExApp-Shell | 7/7 | Complete    | 2026-08-15 |
-| 3. OAuth 2.1 | 8/9 | In Progress|  |
+| 3. OAuth 2.1 | 9/9 | Complete    | 2026-08-16 |
 | 4. Per-User-Verwaltung und prepare_context | 4/4 | Complete   | 2026-08-17 |
 | 5. Hardening und Store-Einreichung | 16/16 | Complete   | 2026-08-20 |
 
