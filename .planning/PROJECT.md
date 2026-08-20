@@ -17,14 +17,18 @@ v1-Requirements erfüllt (Audit passed). Codebasis: Python 3.13, mcp 2.0, ~1800 
 Contract-Tests grün, ruff/pyright/vulture sauber. Offene Posten im BACKLOG (BL-01..05,
 BL-12 MUCGPT-Verprobung wartet auf it@M-Antwort).
 
-## Next Milestone Goals
+## Current Milestone: v1.1 Verwaltungs-Clients und Härtungs-Reste
 
-Kandidaten, bei `/gsd:new-milestone` zu priorisieren:
-- MUCGPT/F13/BaerGPT-Anbindungen live verproben (Outreach läuft, BL-12)
-- BL-05 Client ID Metadata Documents (DCR-Nachfolger der MCP-Spec, eigener SSRF-Review)
-- Cursor-Live-Nachweis nach der Teilregistrierung (BL-04-Rest, F1 aus dem v1.0-Audit)
-- Findling-Synergie BL-01..03 (nach Findling v1.0)
-- v2-Tool-Kandidaten aus Out of Scope neu bewerten (Talk/Tables/Mail)
+**Goal:** Die v1.0-Versprechen gegen echte Verwaltungs-Clients beweisen und die letzten Auth-Reste schließen, rechtzeitig zur Nextcloud Conference September 2026.
+
+**Target features:**
+- MUCGPT live verproben, sobald it@M antwortet (Protokoll in docs/client-setup.md), danach F13 und BaerGPT (beide MCP-fähig laut Dossier)
+- Cursor-Live-Nachweis nach der Teilregistrierung plus Klärung der Loopback-Portfrage (BL-04-Rest, F1 aus dem v1.0-Audit)
+- BL-05 Client ID Metadata Documents (DCR-Nachfolger der MCP-Spec) mit eigenem SSRF-Review, einziges größeres Technikstück
+- NC-34.0.3-UI-Smoke: Upstream-Fix prüfen (Install-/Remove-Knopf), bei Erfolg Ein-Klick-Story in Doku und Store-Text wörtlich einlösen
+- Conference-Vorbereitung: Demo-Material, ggf. Lightning-Talk
+
+**Bewusst klein (1-2 Phasen).** Vorgemerkt, nicht in diesem Milestone: v1.2 "Kuratierte Breite" (Talk/Tables/Mail, prepare_context-Ausbau, Q4 nach Store-Feedback) und v2.0 "openDesk/Behörden" (OpenProject/XWiki/Matrix/OX, Gruppen-Policies, Audit-Log, ZenDiS). Querschnitt: Prototype Fund Frist 1.10. bis 30.11.2026 liegt zwischen v1.1 und v1.2.
 
 ## Requirements
 
@@ -42,7 +46,12 @@ Kandidaten, bei `/gsd:new-milestone` zu priorisieren:
 
 ### Active
 
-(Leer bis zum nächsten Milestone; Kandidaten siehe "Next Milestone Goals")
+- MUCGPT verbindet sich live nach dem dokumentierten Protokoll (BL-12; wartet auf it@M-Antwort)
+- F13 und BaerGPT verbinden sich live (Dossier: beide MCP-fähig)
+- Cursor verbindet sich live nach der Teilregistrierung; Loopback-Portfrage geklärt (BL-04-Rest)
+- Client ID Metadata Documents als DCR-Alternative, SSRF-geprüft (BL-05)
+- NC-34.0.3-UI-Smoke: Ein-Klick-Installation über die Store-UI nachgewiesen, Doku/Store-Text angepasst
+- Conference-Demo-Material steht
 
 ### Out of Scope
 
@@ -110,4 +119,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-20 after v1.0 milestone*
+*Last updated: 2026-08-20 at start of milestone v1.1*
