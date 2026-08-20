@@ -8,23 +8,41 @@ Ein schlankes MCP-only-ExApp für Nextcloud: Nutzer installieren es per Klick au
 
 Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
 
+## Current State
+
+**v1.0 shipped 2026-08-20.** Release 0.1.2 ist live im Nextcloud App Store
+(apps.nextcloud.com/apps/mcp_connector), 16 Tools, OAuth 2.1 E2E gegen Claude.ai und
+ChatGPT bewiesen, Per-User-Verwaltung live, Purge/Deinstallation live bewiesen, alle 27
+v1-Requirements erfüllt (Audit passed). Codebasis: Python 3.13, mcp 2.0, ~1800 Unit-/
+Contract-Tests grün, ruff/pyright/vulture sauber. Offene Posten im BACKLOG (BL-01..05,
+BL-12 MUCGPT-Verprobung wartet auf it@M-Antwort).
+
+## Next Milestone Goals
+
+Kandidaten, bei `/gsd:new-milestone` zu priorisieren:
+- MUCGPT/F13/BaerGPT-Anbindungen live verproben (Outreach läuft, BL-12)
+- BL-05 Client ID Metadata Documents (DCR-Nachfolger der MCP-Spec, eigener SSRF-Review)
+- Cursor-Live-Nachweis nach der Teilregistrierung (BL-04-Rest, F1 aus dem v1.0-Audit)
+- Findling-Synergie BL-01..03 (nach Findling v1.0)
+- v2-Tool-Kandidaten aus Out of Scope neu bewerten (Talk/Tables/Mail)
+
 ## Requirements
 
 ### Validated
 
-(None yet - ship to validate)
+- ✓ Als ExApp per Klick aus dem Nextcloud App Store installierbar (AppAPI/Deploy Daemon) — v1.0 (Store-Release 0.1.0..0.1.2; Ein-Klick-Lücke via Declarative Admin-Settings geschlossen)
+- ✓ MCP-Spec-konformes OAuth 2.1 — v1.0 (Claude.ai und ChatGPT verbinden sich nur mit der Resource-URL; DCR, PKCE, Rotation mit Reuse-Detection)
+- ✓ Per-User-Verwaltung in den Nextcloud-Settings — v1.0 (Verbindungsseite unter Settings/Security, Pause wirkt an allen 4 Autorisierungspunkten)
+- ✓ Kuratierte Tool-Basis — v1.0 (16 Tools, Budget-Gate 12500 Bytes, Contract-Test gegen die aktive Registry)
+- ✓ prepare_context — v1.0 (Suche + Terminwoche in einem Aufruf, Marker-Filter gegen Text-Fälschung)
+- ✓ Risikoarme Writes, destruktive Ops konstruktionsbedingt ausgeschlossen — v1.0 (AST-Grep-Gate, Zwei-Konten-Negativbeweis)
+- ✓ Transport stdio + Streamable HTTP, App-Passwort + Login Flow v2 — v1.0
+- ✓ App-Store-Einreichung vor der Nextcloud Conference September 2026 — v1.0 (eingereicht 2026-08-19, fünf Wochen vor Termin)
+- ✓ Contribution-Fix an nextcloud/context_agent#227 — v1.0 (Fork + DCO-signierter Fix, Disclosure in #203)
 
 ### Active
 
-- [ ] Als ExApp per Klick aus dem Nextcloud App Store installierbar (AppAPI/Deploy Daemon)
-- [ ] MCP-Spec-konformes OAuth 2.1 (Authorization-Spec: Protected Resource Metadata, Client-Registrierung), damit Claude.ai/ChatGPT-Connectoren plug-and-play funktionieren
-- [ ] Per-User-Verwaltung in den Nextcloud-Settings (Zugriff aktivieren/deaktivieren, Tokens einsehen/widerrufen)
-- [ ] Kuratierte Tool-Basis (~15-20 Tools): Dateien (WebDAV suchen/lesen/hochladen), Kalender (CalDAV), Notes (REST), Deck (REST), Kontakte (CardDAV), Unified Search (OCS, berechtigungstreu)
-- [ ] Gamechanger-Tool prepare_context: bündelt zu einer Anfrage selbstständig relevante Dateien, Termine, Notizen und Karten in einer token-effizienten Antwort
-- [ ] Risikoarme Writes (Notiz/Karte/Termin anlegen, Datei hochladen); destruktive Operationen konstruktionsbedingt ausgeschlossen; sichtbares Permission-Level pro Tool
-- [ ] Transport: Streamable HTTP (remote, stateless-ready) und stdio (lokal); Auth-Fallback App-Passwort + Login Flow v2 (Browser-Onboarding)
-- [ ] App-Store-Einreichung (Zertifikat, Signatur, Listing) vor der Nextcloud Conference im September 2026
-- [ ] Flanke: gezielter Contribution-Fix an nextcloud/context_agent (Issue #227, MCP-SDK >= 1.28 Inkompatibilität) als Türöffner beim Nextcloud-Team
+(Leer bis zum nächsten Milestone; Kandidaten siehe "Next Milestone Goals")
 
 ### Out of Scope
 
@@ -64,13 +82,15 @@ Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick install
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| MCP-only-ExApp statt Standalone-Server oder context_agent-Konkurrenz | Explizit nachgefragte, unbesetzte Nische (context_agent#203); Store-Distribution = Zugänglichkeits-Vorsprung | - Pending |
-| OAuth 2.1 nach MCP-Authorization-Spec als Kern-Differenzierer | Meistgefordertes Feature im Ökosystem (context_agent#74); niemand hat es | - Pending |
-| Kuratiert schlank (~15-20 Tools) statt Tool-Flut | Client-Tool-Limits real; Platzhirsch hat Breite schon; Schema-Diät-Patterns vorhanden | - Pending |
-| mcp>=2.0,<3 statt 1.x (revidiert 14.08., vorher "1.27 statt 2.0-Beta") | 2.0.0 ist seit 28.07. GA, 1.x Maintenance-only; v2 bedient alte und neue Clients; Fallback-Pin >=1.29,<2 dokumentiert | - Pending |
-| Contribution-Fix an context_agent#227 als Flanke | Sichtbarkeit + Goodwill beim Nextcloud-Team vor der Conference | - Pending |
-| AGPL-3.0 | Ökosystem-Kultur; Übernahme-Chance durch Nextcloud wichtiger als maximale Wiederverwendbarkeit | - Pending |
-| Risikoarme Writes, destruktive Ops ausgeschlossen | "Kann nichts zerstören" ist Verkaufsargument, kein Mangel | - Pending |
+| MCP-only-ExApp statt Standalone-Server oder context_agent-Konkurrenz | Explizit nachgefragte, unbesetzte Nische (context_agent#203); Store-Distribution = Zugänglichkeits-Vorsprung | ✓ Good — im Store gelandet, Nische bestätigt (Release-Ankündigung in #203 positiv aufgenommen) |
+| OAuth 2.1 nach MCP-Authorization-Spec als Kern-Differenzierer | Meistgefordertes Feature im Ökosystem (context_agent#74); niemand hat es | ✓ Good — Claude.ai und ChatGPT verbinden plug-and-play, E2E gemessen |
+| Kuratiert schlank (~15-20 Tools) statt Tool-Flut | Client-Tool-Limits real; Platzhirsch hat Breite schon; Schema-Diät-Patterns vorhanden | ✓ Good — 16 Tools bei 11268/12500 Bytes Budget |
+| mcp>=2.0,<3 statt 1.x (revidiert 14.08.) | 2.0.0 seit 28.07. GA; v2 bedient alte und neue Clients aus einem Endpoint | ✓ Good — Matrix-Test SDK 1.29 + 2.x gegen dieselbe URL grün |
+| Contribution-Fix an context_agent#227 als Flanke | Sichtbarkeit + Goodwill beim Nextcloud-Team vor der Conference | ✓ Good — Fix eingereicht, Disclosure platziert |
+| AGPL-3.0 | Ökosystem-Kultur; Übernahme-Chance wichtiger als maximale Wiederverwendbarkeit | ✓ Good |
+| Risikoarme Writes, destruktive Ops ausgeschlossen | "Kann nichts zerstören" ist Verkaufsargument, kein Mangel | ✓ Good — als Gate implementiert (AST-Grep), Kern der Store-Beschreibung und des LinkedIn-Narrativs |
+| Fail-closed bei DCR-redirect_uris revidiert zu Teilregistrierung (20.08.) | Cursor registriert 3 URIs auf einmal, eine unzulässige sperrte den ganzen Client aus | — Pending (Live-Nachweis mit Cursor steht aus) |
+| MUCGPT-Verprobung als geführte Lücke abgenommen (Owner, 20.08.) | Braucht fremde Instanz (it@M); Protokoll einlösbar dokumentiert | — Pending (Mail gesendet, Antwort ausstehend) |
 
 ## Evolution
 
@@ -90,4 +110,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-14 after initialization*
+*Last updated: 2026-08-20 after v1.0 milestone*
