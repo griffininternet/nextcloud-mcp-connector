@@ -513,12 +513,22 @@ Cursor is configured by writing `~/.cursor/mcp.json`, no button involved:
 { "mcpServers": { "nextcloud": { "url": "https://<nextcloud>/exapps/mcp_connector/mcp" } } }
 ```
 
-It will not connect. Cursor's log says
+Up to and including 0.1.1 it would not connect. Cursor's log said
 `redirect_uris must use https, except loopback addresses of native clients`, and that
-sentence is this server's. Cursor registers a private-use URI scheme
+sentence is this server's: Cursor registers a private-use URI scheme
 (`cursor://anysphere.cursor-mcp/oauth/callback`) alongside two acceptable addresses, and
-this server refuses a registration that contains an address it does not admit. There is no
-setting that changes this today. Use the app password way above for such clients.
+this server refused a registration that contained an address it does not admit.
+
+**Since 0.1.2 the inadmissible address is dropped and the registration goes through** with
+the two acceptable ones, so a client of this shape is no longer kept out by an address it
+does not have to use. The rule itself is unchanged: the private-use address is not
+registered, so this server never sends anybody there. A client that offers nothing but
+inadmissible addresses is still refused with the same sentence, and for those the app
+password way above stays the answer.
+
+Cursor's own behaviour after the registration is not measured yet. If it insists on its
+`cursor://` callback at sign in, the request is refused by the exact matching of the
+registered addresses, and the app password way applies as before.
 
 ### MUCGPT
 

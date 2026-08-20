@@ -592,14 +592,14 @@ the run completed.
 Custom MCP servers need developer mode in ChatGPT: Settings, Security and sign in,
 "Developer mode", which carries an "increased risk" badge.
 
-### Cursor: refused, and the refusal is ours
+### Cursor: refused until 0.1.2, registrable since
 
-Cursor 3.2.16 needs no button either, it picks up `~/.cursor/mcp.json` on its own. Its
-registration is refused with `400 invalid_redirect_uri`, and Cursor prints our sentence
-verbatim in its log: `redirect_uris must use https, except loopback addresses of native
-clients`.
+Cursor 3.2.16 needs no button either, it picks up `~/.cursor/mcp.json` on its own. Up to
+and including 0.1.1 its registration was refused with `400 invalid_redirect_uri`, and
+Cursor printed our sentence verbatim in its log: `redirect_uris must use https, except
+loopback addresses of native clients`.
 
-The reason is not the loopback address. Cursor registers three return addresses at once:
+The reason was never the loopback address. Cursor registers three return addresses at once:
 
 ```
 cursor://anysphere.cursor-mcp/oauth/callback
@@ -608,17 +608,26 @@ http://localhost:8787/callback
 ```
 
 The first is a private-use URI scheme. This server admits https and loopback only, and it
-reads the whole field: one inadmissible entry refuses a registration that also carries two
-admissible ones. Measured against the live instance: the payload above is refused, the same
-payload without the first entry is accepted, and `http://127.0.0.1:49731/callback` on its
-own is accepted as well.
+used to read the whole field: one inadmissible entry refused a registration that also
+carried two admissible ones. Measured against the live instance on 2026-08-16: the payload
+above was refused, the same payload without the first entry was accepted, and
+`http://127.0.0.1:49731/callback` on its own was accepted as well.
 
-That is a deliberate rule, not an oversight. RFC 8252 lists private-use schemes as one of
-three legitimate forms for native clients, but on a desktop no application owns a scheme
-exclusively, so another program can claim it and receive the authorization code. The price
-of the rule is now measured: a whole client class stays out. If you need those clients, the
-question to decide is whether to drop inadmissible entries instead of refusing the whole
-registration; it is written up in the project backlog.
+**Since 0.1.2 an inadmissible entry is dropped instead of refusing the registration.** The
+body above is answered with `201`, and the answer names the two addresses that were
+actually registered, which is what RFC 7591 section 3.2.1 asks of a registration response.
+Nothing about the rule itself moved: the private-use address is not in the record, so a
+later `/authorize` naming it is refused by the exact matching, and in the allowlist mode it
+cannot carry a listing either. A body whose every address is inadmissible is still refused
+with the same `400 invalid_redirect_uri`, because a client with no return target has
+nowhere to be sent.
+
+The rule stays deliberate. RFC 8252 lists private-use schemes as one of three legitimate
+forms for native clients, but on a desktop no application owns a scheme exclusively, so
+another program can claim it and receive the authorization code. What changed is only that
+a client which also offers an admissible address no longer pays for the one it does not
+need to use. The change is covered by unit tests; a live run against Cursor 3.2.16 is
+still open.
 
 ### Are the two reverse proxy rules required?
 

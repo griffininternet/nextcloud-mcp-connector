@@ -11,6 +11,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- A client that registers several return addresses at once is no longer refused
+  because one of them is inadmissible. The inadmissible entries are dropped and the
+  registration keeps the allowed ones, and the answer names the addresses that were
+  actually registered. This is what kept Cursor out: it registers a `cursor://` scheme
+  next to two acceptable addresses. The rule itself is unchanged, `https` on any host
+  and `http` on loopback only, a dropped address is never a redirect target, and a
+  registration whose every address is inadmissible is still refused.
+
 ## [0.1.1] - 2026-08-19
 
 A maintenance release that makes the listed version installable with one click, and
