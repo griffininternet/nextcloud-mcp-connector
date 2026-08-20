@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
+status: executing
 stopped_at: "Plan 05-10 fertig: Release 0.1.1 ist live im Store (HTTP 201, Workflow-Lauf 32299836095 gruen). Vier Live-Nachweise geprueft: Store fuehrt 0.1.1 mit >=32.0.0 <35.0.0, Asset 200 mit 29491 Bytes, Manifest anonym als OCI-Index mit amd64 und arm64, Tagliste [0.1.0, 0.1.1]. Ein-Klick-Installation ohne jede Variable kommt mit 0 restarts hoch und nennt ihren Setup-Zustand (0.1.0 crash-loopte hier mit Exit 2). Update-Nachweis: ein Zugriffstoken aus 0.1.0 bediente nach dem Update auf 0.1.1 weiter 16 Werkzeuge und einen echten files_list-Aufruf. Store-Cache nur durch Ueberschreiben verwerfen, nie loeschen (GenericFileException). EXAPP-04 Complete. Phase 05 bereit zur Verifikation."
-last_updated: "2026-08-19T20:59:41.074Z"
-last_activity: 2026-08-19
+last_updated: "2026-08-20T03:29:14.181Z"
+last_activity: 2026-08-20 -- Phase 05 planning complete
 progress:
   total_phases: 5
-  completed_phases: 5
-  total_plans: 44
+  completed_phases: 4
+  total_plans: 50
   completed_plans: 44
-  percent: 100
+  percent: 80
 ---
 
 # Project State
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 
 Phase: 05 (hardening-und-store-einreichung) — EXECUTING
 Plan: 10 of 10
-Status: Phase complete — ready for verification
-Last activity: 2026-08-19
+Status: Ready to execute
+Last activity: 2026-08-20 -- Phase 05 planning complete
 
 Progress: [██████████] 100%
 
