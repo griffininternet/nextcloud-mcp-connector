@@ -111,8 +111,14 @@ async def test_the_admin_form_sits_in_the_admin_section() -> None:
 
 @pytest.mark.anyio
 @respx.mock
-async def test_the_four_fields_are_the_four_config_keys_in_order() -> None:
-    """The field id IS the configuration key, so form and read path cannot drift apart."""
+async def test_the_five_fields_are_the_five_config_keys_in_order() -> None:
+    """The field id IS the configuration key, so form and read path cannot drift apart.
+
+    Five since the audit of the v1.0 milestone: ``NC_MCP_OAUTH_CIMD`` existed as a deploy
+    variable, as a manifest declaration and as a documented sentence, and in no part of this
+    chain. An installation from the app store never gets a deploy variable, so that switch
+    was one no store installation could reach at all (finding B-1).
+    """
     route = respx.post(SETTINGS_URL).mock(return_value=httpx.Response(200, json={}))
 
     await admin_settings.register_admin_form(env=ENV)
@@ -121,11 +127,18 @@ async def test_the_four_fields_are_the_four_config_keys_in_order() -> None:
     assert [field["id"] for field in fields] == [
         "public_url",
         "oauth_dcr",
+        "oauth_cimd",
         "oauth_allowlist_only",
         "oauth_allowed_clients",
     ]
     assert tuple(field["id"] for field in fields) == config_values.CONFIG_KEYS
-    assert [field["type"] for field in fields] == ["url", "checkbox", "checkbox", "text"]
+    assert [field["type"] for field in fields] == [
+        "url",
+        "checkbox",
+        "checkbox",
+        "checkbox",
+        "text",
+    ]
 
 
 @pytest.mark.anyio
@@ -187,6 +200,53 @@ async def test_the_dcr_field_carries_the_security_hint_of_bl_06() -> None:
     lowered = dcr["description"].lower()
     assert "public" in lowered
     assert "allow list" in lowered or "allowlist" in lowered
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_the_cimd_field_is_a_checkbox_that_ships_on() -> None:
+    """B-1: the fifth field, and the state it shows is the one the code runs on.
+
+    ``registry.client_policy`` reads ``NC_MCP_OAUTH_CIMD`` with ``default=True``, so a form
+    that showed this box unticked would tell an administrator the opposite of what is in
+    force before she has touched anything.
+    """
+    route = respx.post(SETTINGS_URL).mock(return_value=httpx.Response(200, json={}))
+
+    await admin_settings.register_admin_form(env=ENV)
+
+    fields = json.loads(route.calls.last.request.content)["formScheme"]["fields"]
+    cimd = next(field for field in fields if field["id"] == "oauth_cimd")
+    assert cimd["type"] == "checkbox"
+    assert cimd["default"] is True
+    assert cimd["title"] == strings.ADMIN_FIELD_CIMD_LABEL
+    assert cimd["description"] == strings.ADMIN_FIELD_CIMD_DESCRIPTION
+    assert "sensitive" not in cimd
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_both_switch_descriptions_name_the_coupling_between_them() -> None:
+    """W-9: the policy is one derived answer, so neither field may read as independent.
+
+    ``cimd_enabled = this switch AND the DCR switch``, and a checkbox has no third position
+    for "on but closed by the other one". An administrator who reads two independent
+    switches turns this one on while self registration is off and then measures a state the
+    code never produces, with no line anywhere explaining it.
+    """
+    route = respx.post(SETTINGS_URL).mock(return_value=httpx.Response(200, json={}))
+
+    await admin_settings.register_admin_form(env=ENV)
+
+    fields = json.loads(route.calls.last.request.content)["formScheme"]["fields"]
+    cimd = next(field for field in fields if field["id"] == "oauth_cimd")
+    dcr = next(field for field in fields if field["id"] == "oauth_dcr")
+    assert "switch above" in cimd["description"], "the coupling, from the CIMD side"
+    assert "both ways are closed" in cimd["description"].lower()
+    assert "leaves self registration exactly as it is" in cimd["description"], (
+        "and the direction that does not hold"
+    )
+    assert "document" in dcr["description"].lower(), "the coupling, from the DCR side"
 
 
 @pytest.mark.anyio
@@ -418,6 +478,8 @@ def test_the_new_texts_are_published_in_all() -> None:
         "ADMIN_FIELD_PUBLIC_URL_DESCRIPTION",
         "ADMIN_FIELD_DCR_LABEL",
         "ADMIN_FIELD_DCR_DESCRIPTION",
+        "ADMIN_FIELD_CIMD_LABEL",
+        "ADMIN_FIELD_CIMD_DESCRIPTION",
         "ADMIN_FIELD_ALLOWLIST_LABEL",
         "ADMIN_FIELD_ALLOWLIST_DESCRIPTION",
         "ADMIN_FIELD_ALLOWED_CLIENTS_LABEL",
@@ -443,6 +505,7 @@ def test_the_setup_copy_names_the_place_and_the_restart_step() -> None:
         "ADMIN_SETTINGS_DESCRIPTION",
         "ADMIN_FIELD_PUBLIC_URL_DESCRIPTION",
         "ADMIN_FIELD_DCR_DESCRIPTION",
+        "ADMIN_FIELD_CIMD_DESCRIPTION",
         "ADMIN_FIELD_ALLOWLIST_DESCRIPTION",
         "ADMIN_FIELD_ALLOWED_CLIENTS_DESCRIPTION",
         "SETUP_PUBLIC_URL_TITLE",

@@ -1,4 +1,4 @@
-"""The administration form of BL-06: four values a store installation needs.
+"""The administration form of BL-06: five values a store installation needs.
 
 Built like :mod:`mcp_connector.exapp.settings_form`, which is the one to one model for the
 transport, the app context and the error model. Four things differ, and they are the whole
@@ -18,7 +18,7 @@ that equality: a form whose ids drift from the read path is a form whose values 
 * ``sensitive: true`` at a field makes the ``SetValueListener`` encrypt the value with
   ``ICrypto`` before storing it, using the server secret. The ExApp then reads back a blob it
   cannot open, so a value it needs at runtime would be lost behind a flag that looks like
-  hardening (T-05-05). None of the four fields carries it, in any spelling.
+  hardening (T-05-05). None of the five fields carries it, in any spelling.
 * Declarative Settings have no button type. The complete list is ``text``, ``password``,
   ``email``, ``tel``, ``url``, ``number``, ``checkbox``, ``multi-checkbox``, ``radio``,
   ``select`` and ``multi-select`` (nextcloud/server stable34,
@@ -27,7 +27,10 @@ that equality: a form whose ids drift from the read path is a form whose values 
 
 The security hint of BL-06 lives in the description of the ``oauth_dcr`` field itself, not
 only in ``docs/oauth-setup.md``: an administrator reading a switch is the one person who can
-act on it (security domain V14, T-05-06).
+act on it (security domain V14, T-05-06). The same rule is why both switch descriptions name
+the coupling between them: ``registry.client_policy`` reads the metadata document way as
+"this switch AND the registration switch", and a form that shows two independent checkboxes
+for one derived answer is a form that produces a state the code never has.
 """
 
 import logging
@@ -57,7 +60,7 @@ ADMIN_FORM_ID = "mcp_connector_admin"
 ADMIN_SECTION_TYPE = "admin"
 
 #: Where the entry sits. ``security`` is where an administrator already manages the sign in
-#: and the app passwords of the instance, which is the same subject as these four values.
+#: and the app passwords of the instance, which is the same subject as these five values.
 ADMIN_SECTION_ID = "security"
 
 ADMIN_FORM_PRIORITY = 10
@@ -79,9 +82,9 @@ def form_scheme(env: Mapping[str, str] | None = None) -> dict[str, Any]:
     documentation address in it comes from the public URL of this deployment, which is
     configuration and not a compile time fact.
 
-    The four fields are built from :data:`CONFIG_KEYS`, in that order, so the form and the
+    The five fields are built from :data:`CONFIG_KEYS`, in that order, so the form and the
     read path cannot drift apart. Every field carries a ``default``, which is what the shape
-    documented for Declarative Settings looks like; the two switches show the state this app
+    documented for Declarative Settings looks like; the three switches show the state this app
     ships with, so an administrator sees what is in force before touching anything.
     """
     configured = config.public_url(env)
@@ -94,7 +97,7 @@ def form_scheme(env: Mapping[str, str] | None = None) -> dict[str, Any]:
         if configured == config.DEFAULT_PUBLIC_URL
         else f"{configured}{CONNECTIONS_PATH}"
     )
-    public_url_field, dcr_field, allowlist_field, allowed_field = CONFIG_KEYS
+    public_url_field, dcr_field, cimd_field, allowlist_field, allowed_field = CONFIG_KEYS
     return {
         "id": ADMIN_FORM_ID,
         "priority": ADMIN_FORM_PRIORITY,
@@ -119,6 +122,18 @@ def form_scheme(env: Mapping[str, str] | None = None) -> dict[str, Any]:
                 "type": "checkbox",
                 # The state this app ships with (D-35): success criteria 1 and 2 are about
                 # connecting a hosted assistant without an administrator in the loop.
+                "default": True,
+            },
+            {
+                "id": cimd_field,
+                "title": strings.ADMIN_FIELD_CIMD_LABEL,
+                "description": strings.ADMIN_FIELD_CIMD_DESCRIPTION,
+                "type": "checkbox",
+                # The state this app ships with, and the same one the deploy variable
+                # defaults to (``registry.client_policy``). What this checkbox cannot show
+                # is the coupling: the policy is this value AND the switch above, and a
+                # checkbox has no third position for "on but closed by the other one", so
+                # the description says it in words rather than in the widget.
                 "default": True,
             },
             {

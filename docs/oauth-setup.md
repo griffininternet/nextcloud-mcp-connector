@@ -97,27 +97,35 @@ guessing.
 
 There is a fourth switch, `NC_MCP_OAUTH_CIMD`, for the second way a client can identify
 itself. It is documented in "Client ID Metadata Documents" below, together with the way
-itself and with what the two switches do to each other.
+itself and with what the two switches do to each other. It is a field of the administration
+form as well, from release 0.1.3 on.
 
 ### 3. Administrator settings in Nextcloud
 
-Since version 0.1.1 the four values above can also be set inside Nextcloud, without any
-deploy variable. A store installation needs this: with a single Docker daemon, Nextcloud 34
-enables an ExApp without asking for deploy options, so `--env` never happens and every
-declared variable arrives empty.
+Since version 0.1.1 the values above can also be set inside Nextcloud, without any deploy
+variable. A store installation needs this: with a single Docker daemon, Nextcloud 34 enables
+an ExApp without asking for deploy options, so `--env` never happens and every declared
+variable arrives empty.
 
-The form sits in **Administration settings, Security, MCP Connector** and carries four
+The form sits in **Administration settings, Security, MCP Connector** and carries five
 fields:
 
 | Field | Config key | What it sets |
 |-------|------------|--------------|
 | Public address of this connector | `public_url` | `NC_MCP_PUBLIC_URL` |
 | Allow apps to register themselves | `oauth_dcr` | `NC_MCP_OAUTH_DCR` |
+| Let apps identify themselves by their own document | `oauth_cimd` | `NC_MCP_OAUTH_CIMD` |
 | Only allow the clients listed below | `oauth_allowlist_only` | `NC_MCP_OAUTH_ALLOWLIST_ONLY` |
 | Allowed clients | `oauth_allowed_clients` | `NC_MCP_OAUTH_ALLOWED_CLIENTS` |
 
+**The fifth field is new and takes effect with the next release, 0.1.3.** In 0.1.2 the form
+carries four fields and `NC_MCP_OAUTH_CIMD` can only be set as a deploy variable, which a
+store installation never receives: on such an installation that switch could not be set at
+all. The document way itself is not in 0.1.2 either, so nothing was reachable and unswitchable
+in a released version.
+
 The config key of a field is the id of the field itself, without a prefix: AppAPI stores a
-declarative settings value under that id, and the app reads the same four keys back over the
+declarative settings value under that id, and the app reads the same five keys back over the
 ExApp configuration channel.
 
 **Precedence: the value stored in Nextcloud wins, then the `NC_MCP_*` variable of the deploy
@@ -148,12 +156,12 @@ in the process would be state that outlives a request. The reactivation is the p
 is the only step of this form that is not obvious.
 
 **One cycle is enough, and it is measured.** The cycle above stops and starts the same
-container, and the start after it reads the four values, so a change needs exactly one
+container, and the start after it reads those values, so a change needs exactly one
 disable and enable, never two. That was measured against Nextcloud 34.0.2 with AppAPI 34.0.0
 behind HaRP, together with the log line described next, instead of being assumed.
 
 **What the container log says on the very first start.** Before Nextcloud has this app on
-`enabled`, the read of these four values answers `401`, and the container says so in one
+`enabled`, the read of these values answers `401`, and the container says so in one
 information line. That is the expected answer and not a failure of the installation: AppAPI
 accepts the app secret and then refuses the call because the app is not activated yet, and
 `enable` happens after `init`, so every first start after an installation sits inside that
@@ -317,8 +325,8 @@ the draft.
 **Switching registration off switches this off with it.** `NC_MCP_OAUTH_DCR=0` closes both
 ways, because a closed door that can be walked around through the other spelling is not a
 closed door. The other direction does not hold: `NC_MCP_OAUTH_CIMD=0` leaves registration
-exactly as it was. Both switches can also be set in the administration form of section 3,
-where the same precedence applies.
+exactly as it was. Both switches are fields of the administration form of section 3 as
+well, the second one from release 0.1.3 on, and the same precedence applies there.
 
 ### The allowlist is more useful with this way than with registration
 

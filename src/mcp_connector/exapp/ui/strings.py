@@ -38,6 +38,8 @@ __all__ = [
     "ADMIN_FIELD_ALLOWED_CLIENTS_LABEL",
     "ADMIN_FIELD_ALLOWLIST_DESCRIPTION",
     "ADMIN_FIELD_ALLOWLIST_LABEL",
+    "ADMIN_FIELD_CIMD_DESCRIPTION",
+    "ADMIN_FIELD_CIMD_LABEL",
     "ADMIN_FIELD_DCR_DESCRIPTION",
     "ADMIN_FIELD_DCR_LABEL",
     "ADMIN_FIELD_PUBLIC_URL_DESCRIPTION",
@@ -579,7 +581,25 @@ ADMIN_FIELD_DCR_DESCRIPTION = (
     "Hosted assistants such as Claude or ChatGPT register themselves when a user connects "
     "them, which is what makes a connection work without an administrator. On a public "
     "instance, either switch the allow list below on or switch this off, so that only apps "
-    "you named can connect."
+    "you named can connect. Switching this off also closes the next switch, the one about a "
+    "document an app publishes itself: a closed door cannot be walked around through the "
+    "other way in."
+)
+
+ADMIN_FIELD_CIMD_LABEL = "Let assistant apps identify themselves by their own document"
+
+#: The form half of ``NC_MCP_OAUTH_CIMD``, and the one field whose state is not its own: the
+#: code derives the answer as "this switch AND the switch above" (``oauth/registry.py``), so
+#: the description has to name that coupling in both directions. Without that sentence an
+#: administrator reads two independent switches, turns this one on while self registration is
+#: off, and measures a state the code never produces (the reason the manifest description of
+#: the same variable carries the same sentence).
+ADMIN_FIELD_CIMD_DESCRIPTION = (
+    "Some assistants, Claude Code among them, do not register here at all: they name the "
+    "address of a small document they publish themselves, and this connector reads it. This "
+    "switch only applies while the switch above is on. With self registration off, both ways "
+    "are closed, whatever this switch says. Switching this one off leaves self registration "
+    "exactly as it is."
 )
 
 ADMIN_FIELD_ALLOWLIST_LABEL = "Allow only the apps listed below"

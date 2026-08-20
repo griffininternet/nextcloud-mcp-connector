@@ -11,6 +11,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- The switch for the way an app identifies itself by its own published document can now be
+  set in the administration settings of this app, next to the switch for self registration.
+  It was only ever a deploy variable, and an installation from the app store never receives
+  one, so on exactly that kind of installation the switch could not be reached at all. Both
+  switch descriptions now say what they do to each other: with self registration off, both
+  ways are closed whatever the second switch says, while switching the second one off leaves
+  self registration exactly as it is.
+
 ### Changed
 
 - The page a user sees when an assistant app asks to be returned to an address it did not

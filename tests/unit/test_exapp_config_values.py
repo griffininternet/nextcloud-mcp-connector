@@ -1,4 +1,4 @@
-"""The four admin values of BL-06, read out of the ExApp configuration (EXAPP-04).
+"""The five admin values of BL-06, read out of the ExApp configuration (EXAPP-04).
 
 Nothing here opens a socket: the one outgoing OCS call is answered by respx, exactly as in
 ``test_oauth_crypto.py``, whose read path this module reuses.
@@ -70,14 +70,21 @@ def answer(values: dict[str, Any], *, camel: bool = False) -> respx.Route:
     )
 
 
-# --- the contract of the four keys -------------------------------------------------
+# --- the contract of the five keys -------------------------------------------------
 
 
-def test_the_four_keys_are_the_field_ids_of_the_admin_form() -> None:
-    """Pattern 1 of the research: the config key IS the field id, without a prefix."""
+def test_the_five_keys_are_the_field_ids_of_the_admin_form() -> None:
+    """Pattern 1 of the research: the config key IS the field id, without a prefix.
+
+    Five since finding B-1 of the v1.0 milestone audit: ``NC_MCP_OAUTH_CIMD`` was a deploy
+    variable and a manifest declaration and nothing in this chain, so on the one kind of
+    installation this chain exists for, the one from the app store, that switch could not be
+    set at all.
+    """
     assert config_values.CONFIG_KEYS == (
         "public_url",
         "oauth_dcr",
+        "oauth_cimd",
         "oauth_allowlist_only",
         "oauth_allowed_clients",
     )
@@ -88,6 +95,7 @@ def test_every_key_maps_to_the_variable_the_existing_code_already_reads() -> Non
     assert config_values.KEY_TO_ENV == {
         "public_url": config.ENV_PUBLIC_URL,
         "oauth_dcr": registry.ENV_DCR,
+        "oauth_cimd": registry.ENV_CIMD,
         "oauth_allowlist_only": registry.ENV_ALLOWLIST_ONLY,
         "oauth_allowed_clients": registry.ENV_ALLOWED_CLIENTS,
     }
@@ -112,8 +120,8 @@ def test_only_one_place_in_this_module_reaches_the_network() -> None:
 
 @pytest.mark.anyio
 @respx.mock
-async def test_one_request_asks_for_all_four_keys() -> None:
-    """Four values, one round trip: the read takes a list and there is nothing to loop."""
+async def test_one_request_asks_for_all_five_keys() -> None:
+    """Five values, one round trip: the read takes a list and there is nothing to loop."""
     route = answer({"public_url": ADMIN_URL})
 
     values = await config_values.read_values(env=ENV)
@@ -125,6 +133,7 @@ async def test_one_request_asks_for_all_four_keys() -> None:
         crypto.CONFIG_READ_FIELD: [
             "public_url",
             "oauth_dcr",
+            "oauth_cimd",
             "oauth_allowlist_only",
             "oauth_allowed_clients",
         ]
@@ -628,10 +637,11 @@ async def test_every_understood_switch_spelling_becomes_on_or_off(
     raw: object, normalised: str
 ) -> None:
     """One spelling reaches the reader, whatever Nextcloud stored for the checkbox."""
-    answer({"oauth_dcr": raw, "oauth_allowlist_only": raw})
+    answer({"oauth_dcr": raw, "oauth_cimd": raw, "oauth_allowlist_only": raw})
 
     assert await config_values.admin_overlay(env=ENV) == {
         registry.ENV_DCR: normalised,
+        registry.ENV_CIMD: normalised,
         registry.ENV_ALLOWLIST_ONLY: normalised,
     }
 
@@ -677,12 +687,13 @@ async def test_the_client_list_passes_through_unchanged() -> None:
 
 @pytest.mark.anyio
 @respx.mock
-async def test_all_four_values_travel_together() -> None:
+async def test_all_five_values_travel_together() -> None:
     """The whole overlay of a fully configured instance, in the spelling of the env."""
     answer(
         {
             "public_url": ADMIN_URL,
             "oauth_dcr": "false",
+            "oauth_cimd": "false",
             "oauth_allowlist_only": "true",
             "oauth_allowed_clients": "claude-desktop",
         }
@@ -691,6 +702,7 @@ async def test_all_four_values_travel_together() -> None:
     assert await config_values.admin_overlay(env=ENV) == {
         config.ENV_PUBLIC_URL: ADMIN_URL,
         registry.ENV_DCR: "off",
+        registry.ENV_CIMD: "off",
         registry.ENV_ALLOWLIST_ONLY: "on",
         registry.ENV_ALLOWED_CLIENTS: "claude-desktop",
     }
@@ -699,7 +711,7 @@ async def test_all_four_values_travel_together() -> None:
 @pytest.mark.anyio
 @respx.mock
 async def test_one_unusable_value_never_drops_the_others() -> None:
-    """Per key validation: a typo in one field is not an outage of the other three."""
+    """Per key validation: a typo in one field is not an outage of the other four."""
     answer(
         {
             "public_url": "https://cloud.example.test/x#frag",

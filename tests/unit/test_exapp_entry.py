@@ -97,7 +97,7 @@ MCP_HEADERS = {
 #: :data:`PUBLIC_URL`, so a check can tell which of the two sources won.
 ADMIN_URL = "https://admin.example.com/exapps/mcp_connector"
 
-#: The one outgoing call this file allows: the start time read of the four admin values, on
+#: The one outgoing call this file allows: the start time read of the five admin values, on
 #: the route plan 03-08 measured. The constants come from ``crypto`` rather than being spelled
 #: a second time here.
 READ_URL = (
@@ -135,7 +135,7 @@ class AdminConfig:
 def admin_config() -> Iterator[AdminConfig]:
     """Answer the start time read locally, for every check of this file.
 
-    Autouse on purpose: since plan 05-04 ``main`` reads the four admin values once before it
+    Autouse on purpose: since plan 05-04 ``main`` reads the five admin values once before it
     serves, so every check that starts the process would otherwise open a socket against
     ``nc.test``. An empty dictionary is an installation whose administrator has configured
     nothing, which is the state every older check of this file was written under.
@@ -1187,6 +1187,87 @@ def test_the_shipped_state_still_advertises_the_registration_endpoint(
     app = start(monkeypatch, tmp_path)
 
     assert "registration_endpoint" in document_of(app, AS_METADATA_SUFFIX)
+
+
+def test_the_cimd_admin_value_reaches_the_document_of_the_started_app(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, admin_config: AdminConfig
+) -> None:
+    """Finding B-1 of the v1.0 milestone audit, held where the switch becomes visible.
+
+    ``NC_MCP_OAUTH_CIMD`` was a deploy variable, a manifest declaration and a documented
+    sentence, and it was in no part of the admin value chain. An installation from the app
+    store never receives a deploy variable (05-RESEARCH, pitfall 2), so on exactly the kind
+    of installation this chain exists for, that switch could not be set at all. The document
+    is where a client reads the answer, so it is where this check looks.
+    """
+    admin_config.values.update({"public_url": ADMIN_URL, "oauth_cimd": "0"})
+
+    app = start(monkeypatch, tmp_path)
+
+    document = document_of(app, AS_METADATA_SUFFIX)
+    assert CIMD_FIELD not in document
+    assert "registration_endpoint" in document, "and this switch closes nothing else"
+
+
+def test_the_cimd_admin_value_wins_over_the_deploy_variable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, admin_config: AdminConfig
+) -> None:
+    """The precedence rule of 05-01 for the fifth value: admin value, variable, default."""
+    admin_config.values.update({"public_url": ADMIN_URL, "oauth_cimd": "0"})
+
+    app = start(monkeypatch, tmp_path, env={registry.ENV_CIMD: "1"})
+
+    assert CIMD_FIELD not in document_of(app, AS_METADATA_SUFFIX)
+
+
+def test_an_unusable_cimd_admin_value_leaves_the_deploy_variable_in_force(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, admin_config: AdminConfig
+) -> None:
+    """A value that is neither on nor off is not a value, so it never becomes the default.
+
+    The dangerous shape of a refusal is the one that falls back to the shipped state and
+    quietly opens a way an administrator closed with a variable.
+    """
+    admin_config.values.update({"public_url": ADMIN_URL, "oauth_cimd": "vielleicht"})
+
+    app = start(monkeypatch, tmp_path, env={registry.ENV_CIMD: "off"})
+
+    assert CIMD_FIELD not in document_of(app, AS_METADATA_SUFFIX)
+
+
+def test_a_stored_cimd_value_of_on_announces_the_way(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, admin_config: AdminConfig
+) -> None:
+    """The happy half: a checkbox an administrator ticked reaches the document as well.
+
+    Nextcloud stores a checkbox as a JSON boolean, which is the shape ``_as_text`` turns
+    into a spelling the switch reader understands, so it is the shape this check stores.
+    """
+    admin_config.values.update({"public_url": ADMIN_URL})
+    admin_config.values["oauth_cimd"] = "true"
+
+    app = start(monkeypatch, tmp_path)
+
+    assert document_of(app, AS_METADATA_SUFFIX)[CIMD_FIELD] is True
+
+
+def test_a_stored_cimd_value_cannot_reopen_a_closed_registration(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, admin_config: AdminConfig
+) -> None:
+    """The locked decision of phase 6, now reachable from the form (W-9 is its copy).
+
+    ``cimd_enabled`` is derived as "this switch AND the DCR switch", and the derivation is
+    untouched by finding B-1: an administrator who ticks this box while self registration is
+    off has closed both ways, and the document says so. This is the state the field
+    description has to name in words, because a checkbox has no third position for it.
+    """
+    admin_config.values.update({"public_url": ADMIN_URL, "oauth_dcr": "0", "oauth_cimd": "1"})
+
+    app = start(monkeypatch, tmp_path)
+
+    document = document_of(app, AS_METADATA_SUFFIX)
+    assert CIMD_FIELD not in document
+    assert "registration_endpoint" not in document
 
 
 def test_the_cimd_switch_reaches_the_document_of_the_built_application() -> None:

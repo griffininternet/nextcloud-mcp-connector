@@ -1,4 +1,9 @@
-"""The four admin values of BL-06, read out of the ExApp configuration of Nextcloud.
+"""The five admin values of BL-06, read out of the ExApp configuration of Nextcloud.
+
+The fifth one joined in phase 6 with ``NC_MCP_OAUTH_CIMD``: a switch that exists as a deploy
+variable and as a documented sentence, but not in this chain, is a switch an installation
+from the app store cannot reach at all, because such an installation never gets a deploy
+variable (the whole reason this module exists).
 
 Three facts carry this module, and each of them is measured rather than assumed:
 
@@ -11,7 +16,7 @@ Three facts carry this module, and each of them is measured rather than assumed:
 * **The config key IS the field id of the Declarative Settings form.** AppAPI's
   ``SetValueListener`` stores an admin value with
   ``ExAppConfigService::setAppConfigValue($app, $fieldId, $value)``, without a prefix, so
-  the four ids of ``exapp/admin_settings.py`` are exactly :data:`CONFIG_KEYS`
+  the five ids of ``exapp/admin_settings.py`` are exactly :data:`CONFIG_KEYS`
   (nextcloud/app_api v34.0.3, ``lib/Listener/DeclarativeSettings/SetValueListener.php``).
 * **AppAPI 34 answers in lower case.** The entries carry ``configkey`` and ``configvalue``,
   the column names of ``ex_apps_config`` serialised straight out of the entity. The camel
@@ -71,6 +76,7 @@ __all__ = [
     "KEY_TO_ENV",
     "LOOPBACK_HOSTS",
     "PUBLIC_URL_KEY",
+    "SWITCH_KEYS",
     "SWITCH_OFF",
     "SWITCH_ON",
     "TRUE_VALUES",
@@ -92,11 +98,15 @@ LOOPBACK_HOSTS: frozenset[str] = frozenset({"127.0.0.1", "::1", "localhost"})
 #: is looking at, and a second spelling there would be a string that drifts silently.
 PUBLIC_URL_KEY = "public_url"
 
-#: The four keys, in the order the form declares its fields. They are the field ids of the
+#: The five keys, in the order the form declares its fields. They are the field ids of the
 #: admin form and the configuration keys at the same time (see the module docstring).
+#: ``oauth_cimd`` stands next to ``oauth_dcr`` because the code reads the two as one answer
+#: (``registry.client_policy``: this switch AND the DCR switch), and two coupled switches
+#: that sit apart in a form are two switches an administrator reads as independent.
 CONFIG_KEYS: tuple[str, ...] = (
     PUBLIC_URL_KEY,
     "oauth_dcr",
+    "oauth_cimd",
     "oauth_allowlist_only",
     "oauth_allowed_clients",
 )
@@ -106,9 +116,15 @@ CONFIG_KEYS: tuple[str, ...] = (
 KEY_TO_ENV: Mapping[str, str] = {
     PUBLIC_URL_KEY: config.ENV_PUBLIC_URL,
     "oauth_dcr": registry.ENV_DCR,
+    "oauth_cimd": registry.ENV_CIMD,
     "oauth_allowlist_only": registry.ENV_ALLOWLIST_ONLY,
     "oauth_allowed_clients": registry.ENV_ALLOWED_CLIENTS,
 }
+
+#: The keys that carry a checkbox, named once so the validation cannot drift from the form.
+#: Every one of them goes through :func:`_switch`, which refuses a value that is neither on
+#: nor off instead of guessing a default.
+SWITCH_KEYS: frozenset[str] = frozenset({"oauth_dcr", "oauth_cimd", "oauth_allowlist_only"})
 
 #: The spellings a switch may arrive in. Aligned with the two sets of ``oauth/registry.py``
 #: on purpose and held equal by a test: a value that arms a switch in the environment has to
@@ -118,7 +134,7 @@ KEY_TO_ENV: Mapping[str, str] = {
 TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 FALSE_VALUES = frozenset({"0", "false", "no", "off"})
 
-#: What the two switches become. One spelling leaves this module, whatever came in.
+#: What the three switches become. One spelling leaves this module, whatever came in.
 SWITCH_ON = "on"
 SWITCH_OFF = "off"
 
@@ -251,7 +267,7 @@ async def admin_values(
     counts as unset and is refused by nobody, which is what makes the precedence rule work:
     the deploy environment wins whenever the administrator left a field empty.
 
-    Validation is per key, so a typo in one field is never an outage of the other three, and
+    Validation is per key, so a typo in one field is never an outage of the other four, and
     the refusals are per key for the same reason.
 
     ``client`` is passed straight through to :func:`read_values`, where the one reason it
@@ -288,7 +304,7 @@ def _usable_value(key: str, raw: str) -> str | None:
     """The validated form of one admin value, or ``None`` when it is not usable."""
     if key == PUBLIC_URL_KEY:
         return _public_url(raw)
-    if key in ("oauth_dcr", "oauth_allowlist_only"):
+    if key in SWITCH_KEYS:
         return _switch(key, raw)
     # oauth_allowed_clients travels unchanged: registry._entries splits, strips and
     # deduplicates it already, and a second implementation of that would be a second
@@ -299,7 +315,7 @@ def _usable_value(key: str, raw: str) -> str | None:
 def _public_url(raw: str) -> str | None:
     """The public base URL, or ``None`` plus a warning that never quotes the value.
 
-    This is the most dangerous of the four values and the reason the rule here is harder
+    This is the most dangerous of the five values and the reason the rule here is harder
     than :func:`config.normalize_base_url` alone: it becomes the ``issuer`` of the
     authorization server metadata and the ``resource`` of the protected resource metadata
     (security domain V5, T-05-01).
@@ -415,7 +431,7 @@ def _headers(settings: config.ExAppSettings) -> dict[str, str]:
 
 
 def _config_values(payload: Any) -> dict[str, str] | None:
-    """Pull our four values out of the OCS envelope, or refuse to guess.
+    """Pull our five values out of the OCS envelope, or refuse to guess.
 
     ``None`` means the answer could not be read and is therefore not an empty one. The three
     accepted shapes are the ones ``crypto._config_value`` accepts: a list of entries with
