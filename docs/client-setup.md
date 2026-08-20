@@ -505,6 +505,62 @@ app password is involved.
    every client whose sign in runs in a browser you are already using; it is worth knowing here
    because an administrator testing the setup is usually signed in as the administrator.
 
+### Claude Code over OAuth: refused until 0.1.2, connects since, without registering at all
+
+Claude Code needs no button and no app password for this way. One command, and the OAuth
+sign in is a second one:
+
+```bash
+claude mcp add --transport http nextcloud https://<nextcloud>/exapps/mcp_connector/mcp
+claude mcp login nextcloud
+```
+
+Up to and including 0.1.2 this could not work, and the section that used to stand here said
+so: Claude Code does not register itself at all. Its client id **is** the https address of a
+small JSON document it publishes, and a server that only knows dynamic registration has
+nothing to look up. The document, unchanged when it was read on 2026-08-20:
+
+```json
+{"client_id":"https://claude.ai/oauth/claude-code-client-metadata","client_name":"Claude Code",
+ "redirect_uris":["http://localhost/callback","http://127.0.0.1/callback"],
+ "grant_types":["authorization_code","refresh_token"],"response_types":["code"],
+ "token_endpoint_auth_method":"none"}
+```
+
+**Measured against Claude Code 2.1.233 on 2026-08-20, and it connects and calls a tool.**
+Four full runs against a Nextcloud 34.0.3 instance: the discovery chain, the authorization
+request with the metadata document address as the client id, the consent screen with
+`claude.ai` shown as the host of that id, the code exchange, and `files_list` answering with
+the real content of the signed in account. `claude mcp logout` ends the connection over
+`/revoke`, twice, once per token.
+
+Two things about it are worth knowing before anybody configures anything.
+
+**The callback port changes on every run.** The document publishes two return addresses
+without a port, and the client arrives with one. Not with the documented default 3118, and
+not with the same port twice:
+
+```
+run 1  16:06:38Z   redirect_uri=http://localhost:45157/callback
+run 2  16:08:44Z   redirect_uri=http://localhost:47608/callback
+run 3  16:09:11Z   redirect_uri=http://localhost:41977/callback
+run 4  16:09:27Z   redirect_uri=http://localhost:34567/callback   (MCP_OAUTH_CALLBACK_PORT=34567)
+```
+
+That is the reason the port of a loopback address is no longer compared here, and **nothing
+else about the address rule moved**: scheme, host, path and query are still compared
+character for character, and D-35 still admits `https` anywhere and `http` on loopback only.
+The rule and its residual risk are in
+[oauth-setup.md](./oauth-setup.md), pitfall 6. If you would rather pin the port, set
+`MCP_OAUTH_CALLBACK_PORT` in the client's environment; run 4 above is that case.
+
+**`claude mcp login` needs a terminal.** Without one it prints the authorization URL and
+then stops with `stdin isn't a terminal`. That is a property of the client and not of this
+server, and it only matters if you were going to script the sign in.
+
+The raw numbers, including the refusals that show the boundary still holds, are in
+[06-09-MEASUREMENTS.md](../.planning/phases/06-h-rtung-eigennachweise-und-conference-reife/06-09-MEASUREMENTS.md).
+
 ### Cursor and other clients with a `cursor://` style callback: registration goes through, sign in does not
 
 Cursor is configured by writing `~/.cursor/mcp.json`, no button involved:
@@ -693,10 +749,10 @@ Claude.ai turned out **not** to be in this group: measured with both rules switc
 falls back to the path below the app's own prefix and connects anyway. Keep the rules for
 clients that give up earlier.
 
-**Claude Code is a separate case.** It identifies itself with a client id metadata document
-instead of registering, which this server does not accept yet. A loopback callback as such
-is fine here (`http://127.0.0.1:<port>` registers without complaint), but the port is
-matched exactly, so a client that picks a new port per run needs the app password way above.
+**Claude Code is not in this group either.** It never asks the domain root: it follows the
+`resource_metadata` pointer of the 401 and reads both documents below the app's own prefix.
+It is a separate case for another reason, its client id metadata document, and that case is
+measured in its own section above.
 
 ## Three things that will go wrong
 

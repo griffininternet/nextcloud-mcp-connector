@@ -12,11 +12,11 @@
 - [ ] **CLIENT-02**: F13 verbindet sich live gegen den Connector; Messdatei neben den anderen Client-Nachweisen, docs/client-setup.md erhält eine belegte F13-Sektion. *Laut Outreach-Dossier MCP-fähig; Zugang läuft über Owner-Kontakt.*
 - [ ] **CLIENT-03**: BaerGPT verbindet sich live gegen den Connector; Messdatei und belegte Doku-Sektion wie bei CLIENT-02. *Laut Outreach-Dossier MCP-fähig; Zugang läuft über Owner-Kontakt.*
 - [ ] **CLIENT-04**: Cursor verbindet sich live nach der Teilregistrierung (Commit a80af0a): DCR mit Cursors Drei-URI-Body wird 201, Autorisierung und Tool-Aufruf laufen durch (BL-04-Rest, F1 aus dem v1.0-Audit).
-- [ ] **CLIENT-05**: Die Loopback-Portfrage ist beantwortet: gemessen, ob ein Client mit wechselndem 127.0.0.1-Port (Kandidat: Claude Code) am exakten Redirect-Matching scheitert; falls ja, Entscheid über die RFC-8252-7.3-Ausnahme (beliebiger Port auf Loopback) dokumentiert und umgesetzt oder als akzeptiertes Risiko festgehalten.
+- [x] **CLIENT-05**: Die Loopback-Portfrage ist beantwortet: gemessen, ob ein Client mit wechselndem 127.0.0.1-Port (Kandidat: Claude Code) am exakten Redirect-Matching scheitert; falls ja, Entscheid über die RFC-8252-7.3-Ausnahme (beliebiger Port auf Loopback) dokumentiert und umgesetzt oder als akzeptiertes Risiko festgehalten.
 
 ### Auth-Härtung (AUTH)
 
-- [ ] **AUTH-08**: Ein Client, der sich per Client ID Metadata Document ausweist (CIMD, DCR-Nachfolger der MCP-Spec; Kandidat: Claude Code), kann sich verbinden; die DCR-Kontrollen gelten unverändert (Redirect-URI-Prüfung, Allowlist-Modus AUTH-07 greift, ein abgeschaltetes DCR ist über CIMD nicht umgehbar) (BL-05).
+- [x] **AUTH-08**: Ein Client, der sich per Client ID Metadata Document ausweist (CIMD, DCR-Nachfolger der MCP-Spec; Kandidat: Claude Code), kann sich verbinden; die DCR-Kontrollen gelten unverändert (Redirect-URI-Prüfung, Allowlist-Modus AUTH-07 greift, ein abgeschaltetes DCR ist über CIMD nicht umgehbar) (BL-05).
 - [x] **AUTH-09**: Der CIMD-Dokumentabruf ist als Outbound-Request SSRF-geprüft und fail-closed: keine privaten/link-lokalen Ziele, nur https, Größen- und Zeitlimit, kontrolliertes Caching; Negativtests belegen jede Grenze.
 
 ### Store und Installation (EXAPP)
@@ -57,8 +57,8 @@ Vorgemerkt, nicht in v1.1:
 | CLIENT-02 | Phase 7 | Pending |
 | CLIENT-03 | Phase 7 | Pending |
 | CLIENT-04 | Phase 6 | Pending |
-| CLIENT-05 | Phase 6 | Pending |
-| AUTH-08 | Phase 6 | Pending |
+| CLIENT-05 | Phase 6 | Complete |
+| AUTH-08 | Phase 6 | Complete |
 | AUTH-09 | Phase 6 | Complete |
 | EXAPP-06 | Phase 6 | Complete |
 | CONF-01 | Phase 6 | Pending |

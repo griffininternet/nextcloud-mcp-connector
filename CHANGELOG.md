@@ -13,6 +13,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The documentation now says what a real Claude Code does with this server, because it was
+  measured against Claude Code 2.1.233: it connects without registering, by publishing its
+  own metadata document, and it calls tools with the account that signed in. The port it
+  comes back on was measured too, over four runs, and it was a different one every time,
+  which is why this app no longer compares that port. What is not new: an administrator who
+  switches client registration off closes this way with it, and an administrator who keeps a
+  list of allowed clients keeps it for this way as well. Both were measured on a running
+  instance, and with registration off the app makes no outbound request at all.
+
 - The documentation now says what a real Cursor does with this server, because it was
   measured against Cursor 3.2.16: the registration goes through since 0.1.2, and the sign
   in is still refused, because Cursor asks to be returned to its `cursor://` address, which

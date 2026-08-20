@@ -261,8 +261,34 @@ pitfall 7.
 ## Client ID Metadata Documents: accepted since this build, next to registration
 
 In the repository since **2026-08-20** and not in 0.1.2, so an installation running 0.1.2
-behaves the way the sections above describe and nothing else. The live proof with a client
-that uses this way is still open and follows in this phase.
+behaves the way the sections above describe and nothing else.
+
+**Measured live on 2026-08-20 against Claude Code 2.1.233**, on a Nextcloud 34.0.3 instance
+running this build: the client identifies itself with the document address alone, no row is
+ever registered by a `/register` call, the consent screen names `claude.ai` as the host of
+that client id, the code exchange answers `200`, and `files_list` comes back with the real
+content of the signed in account. The written row carries an empty secret and the two
+portless return addresses of the document, with a freshness window of five minutes taken
+from the `Cache-Control` of the answer.
+
+The three controls were measured on the same instance in the same session, each with the
+outbound socket counted rather than blocked:
+
+- **Registration off closes this way with it.** With `NC_MCP_OAUTH_DCR=0` the document
+  address is answered `400 Automatic registration is off`, `/register` is `404`, the metadata
+  document no longer advertises either way, and **no packet left the instance**: zero sockets
+  to port 443 over twelve seconds, against four socket states in the identical run with the
+  switch on.
+- **This switch alone does not touch registration.** With `NC_MCP_OAUTH_CIMD=0` the document
+  address is refused and no request goes out, while `/register` still answers `201` and the
+  client it mints reaches the consent screen.
+- **The allowlist applies to this way exactly as it applies to registration.** Armed with an
+  empty list it refuses the document address and a registered, unlisted client with the same
+  page, `This app is not allowed`; with the document address on the list that client passes
+  and the unlisted one still does not.
+
+The raw numbers are in
+[06-09-MEASUREMENTS.md](../.planning/phases/06-h-rtung-eigennachweise-und-conference-reife/06-09-MEASUREMENTS.md).
 
 A client of this kind does not register here at all. Its client id **is** the https address
 of a small JSON document it publishes itself, this server reads that document once and takes
@@ -843,8 +869,51 @@ does not stand in for `127.0.0.1`, and a hosted client on `https` gains no freed
 D-35 is unchanged too: which addresses may be registered in the first place is still `https`
 anywhere and `http` on loopback only, and the requested address is checked against that rule
 again where it is used. The relaxed address is never written into the registration; it is a
-comparison and not a second registration. The live proof with a client whose port really
-changes is still open and follows in this phase.
+comparison and not a second registration.
+
+**Measured on 2026-08-20 against Claude Code 2.1.233, and the port really does change.** Four
+runs, each started from a connection that had been fully given up, on a Nextcloud 34.0.3
+instance:
+
+```
+run 1  16:06:38Z   redirect_uri=http://localhost:45157/callback   -> POST /token 200
+run 2  16:08:44Z   redirect_uri=http://localhost:47608/callback   -> POST /token 200
+run 3  16:09:11Z   redirect_uri=http://localhost:41977/callback   -> POST /token 200
+run 4  16:09:27Z   redirect_uri=http://localhost:34567/callback   -> POST /token 200   (MCP_OAUTH_CALLBACK_PORT=34567)
+```
+
+The client's document publishes `http://localhost/callback` and `http://127.0.0.1/callback`,
+both without a port. Three consecutive runs, three different ports, and the documented
+default 3118 was not among them: a server that compares the port would have refused this
+client three times out of four over a property it does not choose. Run 4 stands apart on
+purpose, because one fixed value proves that an environment variable works and nothing about
+whether a port changes.
+
+**The decision, and the risk that is accepted with it.** The measurement confirms the
+problem, so the RFC 8252 section 7.3 exception is implemented rather than noted as a risk.
+What is accepted with it is port squatting on loopback: any program on that machine can hold
+a port, so the port no longer distinguishes one local program from another. Three reasons
+that is the smaller risk. The specification says MUST, so refusing it is not an option a
+conforming server has. Scheme, host, path and query stay exact, so nothing but the port is
+free. And a program that catches the redirect gains an authorization code it cannot redeem:
+the code is bound to the PKCE verifier of the client that started the flow, `S256` is the
+only method this server accepts, and the exchange without the verifier is refused.
+
+**The rule is applied to the three hosts of `LOOPBACK_HOSTS`,** `127.0.0.1`, `::1` and
+`localhost`, and the last of those is the one worth explaining. Section 7.3 names the IP
+literals, and section 8.3 advises a client against the name. But D-35 already lets all three
+be registered, and the client this rule exists for arrives with the name and not with the
+literal (`http://localhost:45157/callback` in every run above). A literal reading of 7.3
+would therefore have left exactly the measured client out. The relaxation stops at the host:
+`127.0.0.1` against a registered `localhost` is a refusal, measured on the running instance,
+because the two names resolve through different mechanisms and a client that publishes both
+can send either.
+
+Three counter checks on the same instance say the boundary holds: a registered path swapped
+for another one (`/other`) is `400`, a loopback host the document does not carry (`[::1]`) is
+`400`, and a public host that only looks like loopback (`localhost.example.com`) is `400`, all
+three with the same page and no redirect. The raw numbers are in
+[06-09-MEASUREMENTS.md](../.planning/phases/06-h-rtung-eigennachweise-und-conference-reife/06-09-MEASUREMENTS.md).
 
 **7. What the metadata advertises is what a registration has to get.** A client reads
 `scopes_supported` and asks for what it finds there, and the authorization endpoint compares
