@@ -24,7 +24,7 @@ Audit: [milestones/v1.0-MILESTONE-AUDIT.md](milestones/v1.0-MILESTONE-AUDIT.md) 
 ### v1.1 Verwaltungs-Clients und Härtungs-Reste (Phasen 6-7)
 
 - [x] **Phase 6: Härtung, Eigennachweise und Conference-Reife** - Alles, was ohne fremde Instanz beweisbar ist: CIMD mit SSRF-Grenze, Cursor und Loopback-Port gemessen, Ein-Klick-Story wörtlich wahr, Conference-Material steht (completed 2026-08-20)
-- [ ] **Phase 7: Verwaltungs-Clients live verprobt** - MUCGPT, F13 und BaerGPT verbinden sich gegen den Connector, jeder Nachweis mit Messdatei und Berechtigungs-Gegenprobe (extern getaktet)
+- [ ] **Phase 7: Verwaltungs-Clients live verprobt** - DEFERRED per Owner-Entscheid 2026-08-20 (extern getaktet; CLIENT-01..03 als Future Requirements vorgemerkt)
 
 ## Phase Details
 
@@ -82,7 +82,9 @@ Plans:
 
 - [x] 06-11-PLAN.md , CLIENT-04 Gap-Closure: das Verworfene sichtbar machen, Wortlaut auf das Gemessene, BL-14 schliessen
 
-### Phase 7: Verwaltungs-Clients live verprobt
+### Phase 7: Verwaltungs-Clients live verprobt (DEFERRED 2026-08-20)
+
+**Owner-Entscheid 2026-08-20:** Phase 7 wird nicht in v1.1 ausgeführt. Die externen Zugänge (it@M-Antwort, Owner-Kontakte zu F13/BaerGPT) lassen lange auf sich warten und sollen den Milestone nicht offen halten. CLIENT-01..03 stehen als Future Requirements in REQUIREMENTS.md; die Verprobung läuft, sobald Zugang besteht, als Einschub oder im nächsten Milestone. Das Protokoll in docs/client-setup.md bleibt einlösbar.
 
 **Goal**: Die drei deutschen Verwaltungs-Assistenten sind vom Dossier-Zitat zum gelaufenen Fall geworden: MUCGPT, F13 und BaerGPT verbinden sich gegen den Connector, jeder Nachweis liegt als Messdatei neben den bestehenden Client-Belegen, und docs/client-setup.md enthält keine unverprobte Sektion mehr.
 **Depends on**: Phase 6 (fachlich unabhängig; extern getaktet, startet je Client sobald Zugang besteht)
@@ -108,11 +110,11 @@ Plans:
 | 4. Per-User-Verwaltung und prepare_context | v1.0 | 4/4 | Complete | 2026-08-17 |
 | 5. Hardening und Store-Einreichung | v1.0 | 16/16 | Complete | 2026-08-20 |
 | 6. Härtung, Eigennachweise und Conference-Reife | v1.1 | 11/11 | Complete    | 2026-08-20 |
-| 7. Verwaltungs-Clients live verprobt | v1.1 | 0/TBD | Not started (extern getaktet) | - |
+| 7. Verwaltungs-Clients live verprobt | v1.1 | 0/0 | Deferred (Owner-Entscheid 2026-08-20, extern getaktet) | - |
 
 ## Next
 
-`/gsd:execute-phase 6`
+`/gsd:complete-milestone`
 
 ---
 *Roadmap created: 2026-08-14 (granularity: coarse, mode: mvp); v1.0 archived: 2026-08-20; v1.1 Phasen 6-7 ergänzt: 2026-08-20*

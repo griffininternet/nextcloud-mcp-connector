@@ -52,8 +52,7 @@ BL-12 MUCGPT-Verprobung wartet auf it@M-Antwort).
 
 ### Active
 
-- MUCGPT verbindet sich live nach dem dokumentierten Protokoll (BL-12; wartet auf it@M-Antwort)
-- F13 und BaerGPT verbinden sich live (Dossier: beide MCP-fähig)
+(Leer. MUCGPT/F13/BaerGPT-Verprobungen am 2026-08-20 per Owner-Entscheid deferred: extern getaktet, Trigger it@M-Antwort bzw. Owner-Kontakte; siehe Future Requirements in REQUIREMENTS.md und BL-12.)
 
 ### Out of Scope
 

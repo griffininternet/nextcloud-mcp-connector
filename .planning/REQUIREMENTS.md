@@ -8,9 +8,8 @@
 
 ### Verwaltungs-Clients (CLIENT)
 
-- [ ] **CLIENT-01**: MUCGPT verbindet sich live nach dem Protokoll in docs/client-setup.md (drei Checks in Ausfallreihenfolge plus Berechtigungs-Gegenprobe); die Messdatei ersetzt den Lücken-Absatz, BL-12 wird geschlossen. *Externer Blocker: it@M-Antwort (Mail gesendet 20.08.); die Identitätsfrage (Service-Konto vs. Per-User) wird beim Termin gestellt und entscheidet über einen künftigen Token-Exchange.*
-- [ ] **CLIENT-02**: F13 verbindet sich live gegen den Connector; Messdatei neben den anderen Client-Nachweisen, docs/client-setup.md erhält eine belegte F13-Sektion. *Laut Outreach-Dossier MCP-fähig; Zugang läuft über Owner-Kontakt.*
-- [ ] **CLIENT-03**: BaerGPT verbindet sich live gegen den Connector; Messdatei und belegte Doku-Sektion wie bei CLIENT-02. *Laut Outreach-Dossier MCP-fähig; Zugang läuft über Owner-Kontakt.*
+*CLIENT-01..03 am 2026-08-20 per Owner-Entscheid in die Future Requirements verschoben: die externen Zugänge (it@M-Antwort, Owner-Kontakte) lassen lange auf sich warten und sollen den Milestone nicht offen halten. Die Verprobungen laufen, sobald Zugang besteht, als eigener Einschub oder im nächsten Milestone.*
+
 - [x] **CLIENT-04**: Cursors Verhalten gegen den Connector ist gemessen statt vermutet: DCR mit Cursors Drei-URI-Body wird 201 mit den zwei zulässigen Adressen (Teilregistrierung, Commit a80af0a); die Anmeldung scheitert danach an Cursors eigener private-use-Adresse, und die Ursache ist clientseitig belegt (Cursor 3.2.16 liest die Registrierungsantwort nicht zurück, drei Gegenproben in 06-08-MEASUREMENTS.md); der funktionierende Ausweichweg (App-Passwort über stdio) ist in docs/client-setup.md dokumentiert und wird auf der Absageseite in Worten genannt (BL-04-Rest, F1 aus dem v1.0-Audit). *Wortlaut am 2026-08-20 mit Owner-Freigabe auf das Gemessene umformuliert, BL-14 Option "sichtbar machen plus Doku"; die ursprüngliche Fassung verlangte eine durchlaufende Autorisierung samt Werkzeugaufruf, was D-35 für eine private-use-Adresse konstruktionsbedingt ausschließt; D-35 unverändert.*
 - [x] **CLIENT-05**: Die Loopback-Portfrage ist beantwortet: gemessen, ob ein Client mit wechselndem 127.0.0.1-Port (Kandidat: Claude Code) am exakten Redirect-Matching scheitert; falls ja, Entscheid über die RFC-8252-7.3-Ausnahme (beliebiger Port auf Loopback) dokumentiert und umgesetzt oder als akzeptiertes Risiko festgehalten.
 
@@ -32,6 +31,9 @@
 
 Vorgemerkt, nicht in v1.1:
 
+- CLIENT-01 (war v1.1): MUCGPT verbindet sich live nach dem Protokoll in docs/client-setup.md (drei Checks plus Berechtigungs-Gegenprobe); Messdatei ersetzt den Lücken-Absatz, BL-12 wird geschlossen. Trigger: it@M-Antwort (Mail gesendet 20.08.); die Identitätsfrage (Service-Konto vs. Per-User) entscheidet über einen künftigen Token-Exchange. *Am 2026-08-20 per Owner-Entscheid deferred (externer Zugang dauert).*
+- CLIENT-02 (war v1.1): F13 verbindet sich live; Messdatei plus belegte Doku-Sektion. Trigger: Owner-Kontakt. *Deferred wie CLIENT-01.*
+- CLIENT-03 (war v1.1): BaerGPT verbindet sich live; Messdatei plus belegte Doku-Sektion. Trigger: Owner-Kontakt. *Deferred wie CLIENT-01.*
 - v1.2 "Kuratierte Breite": Talk-, Tables- und Mail-Tools, prepare_context-Ausbau (Q4 2026, nach Store-Feedback)
 - v2.0 "openDesk/Behörden": OpenProject, XWiki, Matrix, OX, Gruppen-Policies, Audit-Log, ZenDiS-Kontakt
 - Token Exchange für MUCGPT-Per-User-Identität (nur falls die it@M-Antwort Per-User-Treue fordert; Ergebnis von CLIENT-01)
@@ -53,9 +55,9 @@ Vorgemerkt, nicht in v1.1:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CLIENT-01 | Phase 7 | Pending |
-| CLIENT-02 | Phase 7 | Pending |
-| CLIENT-03 | Phase 7 | Pending |
+| CLIENT-01 | Deferred (war Phase 7) | Future |
+| CLIENT-02 | Deferred (war Phase 7) | Future |
+| CLIENT-03 | Deferred (war Phase 7) | Future |
 | CLIENT-04 | Phase 6 | Complete |
 | CLIENT-05 | Phase 6 | Complete |
 | AUTH-08 | Phase 6 | Complete |
@@ -64,8 +66,8 @@ Vorgemerkt, nicht in v1.1:
 | CONF-01 | Phase 6 | Complete |
 | CONF-02 | Phase 6 | Complete |
 
-**Coverage:** 10/10 v1.1-Requirements auf genau eine Phase abgebildet, keine Waisen, keine Dubletten. 7 abgehakt (alle Requirements der Phase 6), 3 offen in Phase 7 (extern getaktet).
+**Coverage:** 7/7 aktive v1.1-Requirements abgehakt (alle in Phase 6). CLIENT-01..03 am 2026-08-20 per Owner-Entscheid deferred (extern getaktet, siehe Future Requirements).
 
 ---
 *Requirements defined: 2026-08-20*
-*Last updated: 2026-08-20 (CLIENT-04 mit Owner-Freigabe auf das Gemessene umformuliert und abgehakt, BL-14 geschlossen)*
+*Last updated: 2026-08-20 (CLIENT-01..03 per Owner-Entscheid deferred; CLIENT-04 zuvor auf das Gemessene umformuliert, BL-14 geschlossen)*
