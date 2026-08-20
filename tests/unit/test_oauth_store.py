@@ -1317,6 +1317,28 @@ def test_the_store_holds_no_module_global_mutable_state() -> None:
     assert offenders == []
 
 
+def test_the_privacy_doc_describes_the_clients_table_as_it_is() -> None:
+    """IN-05 of 05-REVIEW.md: a data protection document may not read worse than the truth.
+
+    The row used to end in "and issued secrets", which reads as if a client secret were
+    stored in the clear next to the redirect targets. What the schema holds is
+    ``client_secret_hash``, a SHA-256 digest, and a data protection officer reading this
+    page has to be able to see that without opening the schema.
+    """
+    privacy = (Path(__file__).resolve().parents[2] / "docs" / "privacy.md").read_text(
+        encoding="utf-8"
+    )
+    rows = [line for line in privacy.splitlines() if line.startswith("| Client registrations")]
+
+    assert len(rows) == 1, "one row about the clients table"
+    assert "hash" in rows[0], "and it says the secret is a hash"
+    assert "never in the clear" in rows[0]
+
+    source = inspect.getsource(store)
+    assert "client_secret_hash TEXT" in source, "which is what the schema really holds"
+    assert "client_secret TEXT" not in source, "and there is no column beside it"
+
+
 def test_every_lifetime_is_a_named_constant() -> None:
     """No number of seconds at a call site, so a change is one line and a review is one
     diff (03-RESEARCH.md lifetimes, made binding by the plan)."""

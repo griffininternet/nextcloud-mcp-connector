@@ -35,7 +35,7 @@ It holds these personal data:
 | Nextcloud user id | `authorizations.nc_user`, `user_access.nc_user` | plain, it is the account name the request runs as |
 | Nextcloud app password | `authorizations.app_password_enc` | encrypted at rest, AES-GCM with a fresh nonce per record, bound to its authorization id as additional authenticated data |
 | OAuth authorization codes, refresh and access tokens | `auth_codes`, `refresh_tokens`, `access_tokens` | stored only as a hash, never in the clear |
-| Client registrations | `clients` | the assistant apps, their redirect targets and issued secrets |
+| Client registrations | `clients` | the assistant apps and their redirect targets; the secret issued to a client is stored as a hash only, never in the clear |
 | Access switch state | `user_access` | one row per paused account, a timestamp |
 | Timestamps | across the tables | created, revoked, cleanup and expiry times |
 
