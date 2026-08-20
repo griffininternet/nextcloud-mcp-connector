@@ -14,6 +14,7 @@ bearer check or leave with a 401 that points at the metadata (pitfall 6, T-03-01
 import asyncio
 import base64
 import json
+import logging
 from collections.abc import Awaitable, Callable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -1072,8 +1073,63 @@ def test_an_installation_without_any_public_address_serves_and_says_where_to_set
     assert config.ENV_PUBLIC_URL in messages
     assert strings.ADMIN_SETTINGS_PLACE in messages, "the line names where the value is set"
     assert "disable and enable" in messages.lower(), "and the step that makes it take effect"
+    assert "no public address is stored in Nextcloud either" in messages, (
+        "this is the empty case, and the line says exactly that"
+    )
     default = f"{config.DEFAULT_PUBLIC_URL}{RESOURCE_SUFFIX}"
     assert document_of(app, PRM_SUFFIX)["resource"] == default, "and it serves the documents"
+
+
+def test_a_stored_but_refused_address_is_not_reported_as_no_address_at_all(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    admin_config: AdminConfig,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The deferred find of plan 05-14, measured there as line B of the run.
+
+    Both cases end in the same setup state, and until now they ended in the same sentence:
+    "no public address is stored in Nextcloud either". For an administrator who did store one
+    and had it refused, that sentence is untrue, and it sends her looking for an empty field
+    instead of at the value she typed. The two cases are told apart here, and the refused one
+    still never carries the value into the log (T-05-03, T-05-21).
+    """
+    admin_config.values["public_url"] = UNUSABLE_URL
+
+    with caplog.at_level("DEBUG"):
+        app = start(monkeypatch, tmp_path)
+
+    messages = " ".join(record.getMessage() for record in caplog.records)
+    errors = " ".join(
+        record.getMessage() for record in caplog.records if record.levelno >= logging.ERROR
+    )
+    assert "no public address is stored in Nextcloud either" not in messages, (
+        "an address was stored, it was only refused"
+    )
+    assert "refused" in errors, "the setup line says which of the two cases this is"
+    assert config.ENV_PUBLIC_URL in errors
+    assert strings.ADMIN_SETTINGS_PLACE in errors, "and where a usable one is entered"
+    assert "disable and enable" in errors.lower()
+    assert UNUSABLE_URL not in messages, "the value stays out of the log"
+    assert "tls-is-missing.example.org" not in messages, "not even its host"
+    default = f"{config.DEFAULT_PUBLIC_URL}{RESOURCE_SUFFIX}"
+    assert document_of(app, PRM_SUFFIX)["resource"] == default, "and it serves the documents"
+
+
+def test_a_refused_switch_does_not_make_the_missing_address_a_refused_one(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    admin_config: AdminConfig,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The refusal is read per field: a typo in a checkbox says nothing about the address."""
+    admin_config.values["oauth_dcr"] = "vielleicht"
+
+    with caplog.at_level("DEBUG"):
+        start(monkeypatch, tmp_path)
+
+    messages = " ".join(record.getMessage() for record in caplog.records)
+    assert "no public address is stored in Nextcloud either" in messages
 
 
 def test_a_blank_public_url_is_the_same_setup_state(
