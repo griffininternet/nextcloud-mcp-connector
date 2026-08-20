@@ -21,7 +21,7 @@
 
 ### Store und Installation (EXAPP)
 
-- [ ] **EXAPP-06**: NC-34.0.3-UI-Smoke: auf einer auf 34.0.3 aktualisierten Instanz ist nachgewiesen, ob die Store-UI den Install-/Remove-Knopf für ExApps zeigt (Upstream-Fix app_api#971/server#61709); bei Erfolg werden docs/exapp-install.md und der Store-Text auf die wörtlich wahre Ein-Klick-Story angepasst.
+- [x] **EXAPP-06**: NC-34.0.3-UI-Smoke: auf einer auf 34.0.3 aktualisierten Instanz ist nachgewiesen, ob die Store-UI den Install-/Remove-Knopf für ExApps zeigt (Upstream-Fix app_api#971/server#61709); bei Erfolg werden docs/exapp-install.md und der Store-Text auf die wörtlich wahre Ein-Klick-Story angepasst.
 
 ### Conference (CONF)
 
@@ -60,7 +60,7 @@ Vorgemerkt, nicht in v1.1:
 | CLIENT-05 | Phase 6 | Pending |
 | AUTH-08 | Phase 6 | Pending |
 | AUTH-09 | Phase 6 | Complete |
-| EXAPP-06 | Phase 6 | Pending |
+| EXAPP-06 | Phase 6 | Complete |
 | CONF-01 | Phase 6 | Pending |
 | CONF-02 | Phase 6 | Pending |
 

@@ -64,7 +64,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 06-07-PLAN.md , EXAPP-06: Topologie auf 34.0.3 und HEAD, Store-UI-Smoke, Doku und Store-Text
+- [x] 06-07-PLAN.md , EXAPP-06: Topologie auf 34.0.3 und HEAD, Store-UI-Smoke, Doku und Store-Text
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -103,7 +103,7 @@ Plans:
 | 3. OAuth 2.1 | v1.0 | 9/9 | Complete | 2026-08-16 |
 | 4. Per-User-Verwaltung und prepare_context | v1.0 | 4/4 | Complete | 2026-08-17 |
 | 5. Hardening und Store-Einreichung | v1.0 | 16/16 | Complete | 2026-08-20 |
-| 6. Härtung, Eigennachweise und Conference-Reife | v1.1 | 6/10 | In Progress|  |
+| 6. Härtung, Eigennachweise und Conference-Reife | v1.1 | 7/10 | In Progress|  |
 | 7. Verwaltungs-Clients live verprobt | v1.1 | 0/TBD | Not started (extern getaktet) | - |
 
 ## Next

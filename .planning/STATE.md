@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Verwaltungs-Clients und Härtungs-Reste
 status: executing
-stopped_at: "Plan 06-06 fertig: die Zustimmungsseite nennt den Hostnamen einer Dokument-client_id und warnt bei ausschliesslich Loopback-Rueckadressen; beide Flags rechnet der Aufrufer ohne zusaetzlichen Roundtrip. docs/oauth-setup.md beschreibt den CIMD-Weg samt SSRF-Grenze, Pitfall 6 ist ersetzt (RFC 8252 7.3). 2183 Tests gruen, ruff/pyright/vulture sauber, READMEs und Version unberuehrt (06-07). Naechster Schritt: 06-07 (Dreisprachigkeit READMEs plus Store-Text)."
-last_updated: "2026-08-20T14:11:25.005Z"
-last_activity: 2026-08-20 -- Plan 06-06 fertig (Hostname und Loopback-Warnung auf der Zustimmungsseite, CIMD-Doku)
+stopped_at: "Plan 06-07 fertig: die Messtopologie laeuft auf 34.0.3.2 mit dem Connector aus dem Arbeitsbaum (0.1.2, neuer Image-Digest), jane und ihre zwei gueltigen Verbindungen haben Upgrade und Neuregistrierung ueberlebt. EXAPP-06 ist positiv beantwortet: die Store-Oberflaeche zeigt die ExApp mit ihrem Deploy-Daemon, der Installationsknopf heisst Deploy and enable, Remove steht im Aktionsmenue einer abgeschalteten ExApp. Doku, drei READMEs und die drei Store-Beschreibungen sagen genau das, mit der gemessenen Version als Bedingung. 2155 Unit-Tests gruen, ruff sauber, Version unveraendert. Naechster Schritt: 06-08 (Cursor-Live-Nachweis, CLIENT-04)."
+last_updated: "2026-08-20T14:58:56.412Z"
+last_activity: 2026-08-20 -- Plan 06-07 fertig (Messtopologie auf 34.0.3, EXAPP-06 positiv beantwortet)
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 10
-  completed_plans: 6
+  completed_plans: 7
   percent: 0
 ---
 
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 6 (Härtung, Eigennachweise und Conference-Reife), EXECUTING
-Plan: 7 of 10
+Plan: 8 of 10
 Status: Ready to execute
 Milestone: v1.1 Verwaltungs-Clients und Härtungs-Reste (Phasen 6-7)
-Last activity: 2026-08-20 -- Plan 06-06 fertig (Hostname und Loopback-Warnung auf der Zustimmungsseite, CIMD-Doku)
+Last activity: 2026-08-20 -- Plan 06-07 fertig (Messtopologie auf 34.0.3, EXAPP-06 positiv beantwortet)
 
 ## Performance Metrics
 
@@ -109,6 +109,7 @@ Last activity: 2026-08-20 -- Plan 06-06 fertig (Hostname und Loopback-Warnung au
 | Phase 06 P04 | 20 min | 2 tasks tasks | 6 files files |
 | Phase 06 P05 | 35 min | 2 tasks | 7 files |
 | Phase 06 P06 | 40 min | 3 tasks | 7 files |
+| Phase 06 P07 | 45 min | 3 tasks tasks | 9 files files |
 
 ## Accumulated Context
 
@@ -354,6 +355,11 @@ Recent decisions affecting current work:
 - [Phase 06]: Aus einem fremden Dokument werden nur client_name, redirect_uris, grant_types und response_types uebernommen; logo_uri und jedes andere Feld landen nicht im Datensatz, token_endpoint_auth_method wird auf none gesetzt (T-06-13, T-06-30)
 - [Phase 06]: Die Herkunft eines Clients auf der Zustimmungsseite wird aus der Form der client_id erkannt (cimd.is_cimd_client_id) und nicht aus der Store-Spalte: ein zweiter Store-Zugriff haette den einen Nextcloud-Roundtrip pro Request gekostet (T-06-39)
 - [Phase 06]: Die Loopback-Warnung der Zustimmungsseite gilt auch fuer DCR-Clients: die Impersonationsgefahr haengt an der Rueckadresse und nicht am Registrierungsweg; eine leere Adressliste ist bewusst NICHT 'nur Loopback'
+- [Phase ?]: 06-07: Die Messtopologie laeuft auf nextcloud:34.0.3-apache (occ status 34.0.3.2) und dem Connector aus dem Arbeitsbaum; der gleitende Tag 34-apache trug lokal 34.0.2.1, also nennt die Topologie-Tabelle Versionen und Digests statt Tags
+- [Phase ?]: 06-07: Der Repository-Stand kommt nur durch Abmelden und Neuregistrieren in den Container: bootstrap_exapp.sh ueberspringt die Registrierung fuer eine bekannte App und haette 0.1.1 weiterlaufen lassen; unregister ohne --rm-data laesst Volume und oc_appconfig_ex stehen, also ueberleben jane und die zwei Verbindungen
+- [Phase ?]: 06-07: EXAPP-06 positiv beantwortet: auf 34.0.3 zeigt die Store-Oberflaeche die ExApp mit ihrem Deploy-Daemon, der Installationsknopf heisst Deploy and enable, und Remove steht im Aktionsmenue nur solange die App abgeschaltet ist (AppAPI: canUnInstall = !active && removable)
+- [Phase ?]: 06-07: Der 34.0.3-Fix ist statisch nur als Aufruf sichtbar (Promise.allSettled mit e.isEnabled ? e.initialize() in dist/appstore-main.mjs, 95762 -> 95841 Bytes), nicht als neues exapp-Vorkommen; darum war die Gegenprobe der Recherche ergebnislos
+- [Phase ?]: 06-07: Ein Browser-Schritt ohne Playwright-Werkzeug laeuft ueber das DevTools-Protokoll gegen das installierte Chrome, mit einem WebSocket-Client aus der Standardbibliothek: ein Paket zu installieren ist ausgeschlossen (T-06-SC)
 
 ### Pending Todos
 
@@ -364,6 +370,7 @@ Recent decisions affecting current work:
 - **Nextcloud-AIO-Smoke (D-31): in 05-08 bewusst DESCOPED, nicht offen und nicht erledigt.** Die fehlende Voraussetzung ist eine Host-Eigenschaft (oeffentlich aufloesbare Domain, gueltiges oeffentliches TLS, eingehend 80 und 443), die der AIO-Mastercontainer prueft, bevor er einen Container startet; dazu kommt der Docker-Socket neben der taeglich genutzten Owner-Instanz. Der Punkt geht als descopte Zeile in die Phasen-Verifikation, mit den sechs offenen Schritten in docs/exapp-install.md. Kein Teil des Projekts behauptet AIO-Abdeckung. Historischer Wortlaut der Uebergabe aus Phase 2: Er scheitert auf diesem Rechner an AIOs Domain-Validierung (oeffentliche Domain plus gueltiges TLS). Die fehlenden Schritte stehen in docs/exapp-install.md, Abschnitt Nextcloud AIO: Host mit oeffentlicher Domain und Zertifikat, AIO-Mastercontainer starten, optionalen HaRP-Container aktivieren (Annahme A6 unverifiziert), App als ExApp installieren, den Permission-Fidelity-Smoke wiederholen und occ app_api:app:list festhalten.
 - **WR-12 Linux-socat-Loop (Phase 5):** Die Linux-Variante des --manual-Entwicklungsloops (socat auf das Compose-Gateway) ist dokumentiert, aber auf diesem Windows-Host nicht durchgespielt; Entwicklungs-Komfort, nicht der ausgelieferte Pfad.
 - **Browser-Blick auf /settings/user/security (Assumption A1, Phase-4-Verifikation):** Gemessen ist, dass Nextcloud die Link-only-Form ausliefert (forms-Endpoint, Initial-State der Seite, Mount-Punkt `<div id="mcp_connector_mcp_connector_settings">`). Der gerenderte Pixel ist nicht gemessen, im Live-Lauf war kein Browser beteiligt. Schadensfall waere ein fehlender Wegweiser, keine Funktionsstoerung. Details in 04-04-MEASUREMENTS.md, Beweis 1.
+- **ExApp-Topologie: Stand nach 06-07 (dies ist der gueltige Stand; die zwei Absaetze darunter sind Geschichte).** Die Topologie LAEUFT: Compose-Projekt `nc-mcp-exapp`, `compose.exapp.yml` jetzt auf `nextcloud:34.0.3-apache` gepinnt, `occ status` meldet 34.0.3.2, `app_api` 34.0.0, `appstore` 1.0.0. Der ExApp-Container `nc_app_mcp_connector` faehrt `127.0.0.1:5000/mcp_connector:0.1.2` (Digest `sha256:3ba4a2ce1921`), also den Arbeitsbaum-Stand nach 06-06, `RestartCount` 0, `NC_MCP_PUBLIC_URL` gesetzt. Nutzer `jane` und ihre ZWEI nicht widerrufenen OAuth-Verbindungen leben, dazu alice, bob und die 05-03-Fixture (Suffix `04d2eb7d6d`). `.env.exapp` ist von diesem Lauf neu geschrieben (frische App-Passwoerter fuer alice und bob, `APP_SECRET` und Suffix wiederverwendet). Wieder anfahren nach einem `down`: `HP_SHARED_KEY` aus dem HaRP-Container ZURUECKLESEN, solange die Container laufen, sonst neu erzeugen; `up -d --wait`; und wenn der Container den Repository-Stand tragen soll, `occ app_api:app:unregister mcp_connector` **ohne** `--rm-data` und danach `bash scripts/bootstrap_exapp.sh`, weil `ensure_exapp` die Registrierung fuer eine bekannte App ueberspringt und sonst das alte Image weiterlaeuft (gemessen in 06-07). Volume-Sicherung des Laufs: `C:/Users/Student/nc-mcp-exapp-backup-20260820/` (zwei tar-Dateien plus die zwei `oc_appconfig_ex`-Zeilen dieser App).
 - **ExApp-Topologie: Stand nach 05-08.** Die Topologie ist heruntergefahren (`down` mit erhaltenen Volumes), das Netz ist weg, und die App ist **vollstaendig entfernt**: 05-08 hat den Beweislauf mit `occ mcp_connector:purge --force` und `occ app_api:app:unregister mcp_connector --rm-data` beendet, also gibt es kein `nc_app_mcp_connector_data`, keine Registrierung, keinen ExApp-Container und keine Config-Zeile mehr. `.env.exapp` beschreibt damit eine Installation, die nicht mehr existiert; APP_SECRET und der Fixture-Suffix darin werden beim naechsten Bootstrap wiederverwendet. Die Volumes `nc-mcp-exapp_nextcloud-exapp-data` und `nc-mcp-exapp_registry-exapp-data` tragen die Instanz mit alice, bob, der 05-03-Fixture (Suffix `04d2eb7d6d`, in 05-08 neu erzeugt, weil Task 1 eine Instanz ohne Vorgeschichte verlangte) und deaktiviertem Bruteforce-Waechter. Wieder anfahren: `HP_SHARED_KEY` erzeugen (die Container sind weg, es gibt nichts zurueckzulesen), `up -d --wait`, dann `bash scripts/bootstrap_exapp.sh` ohne vorheriges Abmelden, weil nichts registriert ist. Die zwei Images `127.0.0.1:5000/mcp_connector:0.1.0` und `ghcr.io/street1983nk/mcp_connector:0.1.0` (je 330 MB) liegen absichtlich noch da; AppAPI loescht ein gezogenes Image nie.
 - **ExApp-Topologie (Stand vor 05-08, historisch):** Nach 05-07 wieder heruntergefahren (`down` mit erhaltenen Volumes, danach `docker stop`/`docker rm nc_app_mcp_connector` und `docker network rm nc-mcp-exapp-net`); der Wegwerf-Container `nc-mcp-owui-probe` ist entfernt, das Image `ghcr.io/open-webui/open-webui:main` (7,16 GB) liegt absichtlich noch da. Zuvor nach 05-05 ebenso heruntergefahren (`down` mit erhaltenen Volumes, danach `docker stop`/`docker rm nc_app_mcp_connector` und `docker network rm nc-mcp-exapp-net`). Die Volumes tragen die Fixture von 05-03 (read-only geteilter Ordner plus ungeteilte Datei); die zugehoerigen vier Werte stehen in `.env.exapp` und werden beim naechsten Bootstrap wiederverwendet, nicht neu erzeugt. `auth.bruteforce.protection.enabled` steht auf `false` und alle Bruteforce-Zaehler auf 0, also im Zustand, den der Bootstrap herstellt (05-05). Wieder anfahren: `export HP_SHARED_KEY=$(openssl rand -hex 32)` und in DERSELBEN Zeile weiterarbeiten (die Shell-Env ueberlebt einen Aufruf nicht, und jedes `docker compose` gegen diese Datei braucht die Variable), `up -d --wait`, `occ app_api:app:unregister mcp_connector --silent --force`, `occ app_api:daemon:unregister harp_proxy_docker`, dann `bash scripts/bootstrap_exapp.sh` (baut das Image neu und setzt NC_MCP_PUBLIC_URL). Ohne das Neubauen laeuft ein veraltetes Image. **Ab dem zweiten Aufruf gegen bereits laufende Container den Schluessel zurueckLESEN statt neu erzeugen** (gemessen in 05-05): `export HP_SHARED_KEY=$(docker inspect nc-mcp-exapp-harp --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^HP_SHARED_KEY=' | cut -d= -f2)`. Fehlt die Variable, scheitert JEDER compose-Aufruf an der Interpolation, und im Bootstrap sieht das wegen `2>/dev/null` in der Warteschleife wie "Nextcloud is still not installed" aus, obwohl `occ status` `installed: true` meldet.
 - **Aufraeumen (optional):** Die Docker-Testinstanz traegt jetzt zusaetzlich die Calendar-App 6.5.3 und die Abnahme-Artefakte. Fuer einen sauberen Stand: `docker compose -f compose.test.yml down -v` und danach `bash scripts/bootstrap_test_nc.sh`.
@@ -384,12 +391,12 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T14:11:24.987Z
-Stopped at: Plan 06-06 fertig: die Zustimmungsseite nennt den Hostnamen einer Dokument-client_id und warnt bei ausschliesslich Loopback-Rueckadressen; beide Flags rechnet der Aufrufer ohne zusaetzlichen Roundtrip. docs/oauth-setup.md beschreibt den CIMD-Weg samt SSRF-Grenze, Pitfall 6 ist ersetzt (RFC 8252 7.3). 2183 Tests gruen, ruff/pyright/vulture sauber, READMEs und Version unberuehrt (06-07). Naechster Schritt: 06-07 (Dreisprachigkeit READMEs plus Store-Text).
-Naechster Schritt: /gsd:execute-phase 6 (Plan 06-07)
+Last session: 2026-08-20T14:58:56.399Z
+Stopped at: Plan 06-07 fertig: die Messtopologie laeuft auf 34.0.3.2 mit dem Connector aus dem Arbeitsbaum (0.1.2, neuer Image-Digest), jane und ihre zwei gueltigen Verbindungen haben Upgrade und Neuregistrierung ueberlebt. EXAPP-06 ist positiv beantwortet: die Store-Oberflaeche zeigt die ExApp mit ihrem Deploy-Daemon, der Installationsknopf heisst Deploy and enable, Remove steht im Aktionsmenue einer abgeschalteten ExApp. Doku, drei READMEs und die drei Store-Beschreibungen sagen genau das, mit der gemessenen Version als Bedingung. 2155 Unit-Tests gruen, ruff sauber, Version unveraendert. Naechster Schritt: 06-08 (Cursor-Live-Nachweis, CLIENT-04).
+Naechster Schritt: /gsd:execute-phase 6 (Plan 06-08)
 Resume file: None
 
 ## Operator Next Steps
 
-- Phase 6 weiter ausfuehren: `/gsd:execute-phase 6` (10 Plaene, 6 fertig)
+- Phase 6 weiter ausfuehren: `/gsd:execute-phase 6` (10 Plaene, 7 fertig)
 - Phase 7 haengt an fremden Zugaengen (it@M-Antwort fuer MUCGPT, Owner-Kontakte fuer F13 und BaerGPT); sie blockiert keinen Liefergegenstand aus Phase 6
