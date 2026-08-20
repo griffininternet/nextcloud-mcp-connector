@@ -32,6 +32,7 @@ import mcp_connector
 from mcp_connector import config
 from mcp_connector.entry_exapp import build_exapp_app
 from mcp_connector.nextcloud.clients.xml import hardened_parser
+from mcp_connector.oauth import registry
 
 ROOT = Path(__file__).resolve().parents[2]
 ENV_EXAMPLE = ROOT / ".env.exapp.example"
@@ -1907,8 +1908,61 @@ def test_the_text_gate_rejects_the_forbidden_vocabulary(manifest_root: etree._El
 
 
 def test_no_declared_variable_carries_an_empty_default(manifest_root: etree._Element) -> None:
-    """The shipped state: four variables, not one default among them."""
+    """The shipped state: five variables, not one default among them."""
     assert variable_problems(manifest_root) == []
+
+
+def test_every_variable_the_code_reads_is_declared_in_the_manifest(
+    manifest_root: etree._Element,
+) -> None:
+    """The most expensive silent mistake of this package, held as set equality.
+
+    The deploy daemon injects a variable into the container if, and only if, the manifest
+    declares it (AppAPI ``ExAppService::getAppInfo``, measured against 34.0.0 in plan 03-08).
+    An undeclared one is accepted by ``occ app_api:app:register --env`` and dropped without a
+    word, so the switch stands on its code default forever and the administrator has no way
+    to see why. Set equality rather than a subset: a variable declared here and read nowhere
+    is an offer this app does not keep either.
+    """
+    declared = {
+        (variable.findtext("name") or "").strip()
+        for variable in manifest_root.findall(".//environment-variables/variable")
+    }
+
+    assert declared == {
+        config.ENV_PUBLIC_URL,
+        registry.ENV_DCR,
+        registry.ENV_CIMD,
+        registry.ENV_ALLOWLIST_ONLY,
+        registry.ENV_ALLOWED_CLIENTS,
+    }
+
+
+def test_every_declared_variable_carries_the_three_elements_an_admin_reads(
+    manifest_root: etree._Element,
+) -> None:
+    """A declaration without a label is a nameless input field in the deploy dialogue."""
+    for variable in manifest_root.findall(".//environment-variables/variable"):
+        name = (variable.findtext("name") or "").strip()
+        assert name, "a declared variable has no name"
+        for element in ("display-name", "description"):
+            assert (variable.findtext(element) or "").strip(), f"{name} has no {element}"
+
+
+def test_the_cimd_declaration_names_the_switch_it_is_coupled_to(
+    manifest_root: etree._Element,
+) -> None:
+    """``cimd_enabled`` is derived from both switches, so the text has to say the other name.
+
+    An administrator who switches self registration off switches the metadata document way
+    off with it. Without that sentence in the description she reads two independent switches,
+    turns the second one on, and measures a state the code never produces.
+    """
+    for variable in manifest_root.findall(".//environment-variables/variable"):
+        if (variable.findtext("name") or "").strip() == registry.ENV_CIMD:
+            assert registry.ENV_DCR in (variable.findtext("description") or "")
+            return
+    pytest.fail(f"{registry.ENV_CIMD} is not declared in the manifest")
 
 
 def test_the_variable_gate_rejects_an_empty_default(manifest_root: etree._Element) -> None:

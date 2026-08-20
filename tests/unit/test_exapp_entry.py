@@ -68,6 +68,11 @@ OAUTH_ENV = {**SERVED_ENV, config.ENV_PUBLIC_URL: PUBLIC_URL}
 
 LIFECYCLE_PATHS = {"/heartbeat", "/init", "/enabled"}
 
+#: The capability field of AUTH-08 in the authorization server document. Absence and presence
+#: are the two states that matter here, which is why the name is a constant and not a literal
+#: repeated in three checks.
+CIMD_FIELD = "client_id_metadata_document_supported"
+
 #: The registration behind the connection the end to end guard of this phase acts on, and
 #: the bearer that connection was issued. Both are values of this file and of nothing else.
 CONNECTED_CLIENT_ID = "9d0f8f1a-0b3c-4a0e-9f4c-000000000001"
@@ -938,6 +943,7 @@ def deployed(
         config.ENV_APP_PASSWORD,
         config.ENV_PUBLIC_URL,
         registry.ENV_DCR,
+        registry.ENV_CIMD,
         registry.ENV_ALLOWLIST_ONLY,
         registry.ENV_ALLOWED_CLIENTS,
     ):
@@ -1181,6 +1187,65 @@ def test_the_shipped_state_still_advertises_the_registration_endpoint(
     app = start(monkeypatch, tmp_path)
 
     assert "registration_endpoint" in document_of(app, AS_METADATA_SUFFIX)
+
+
+def test_the_cimd_switch_reaches_the_document_of_the_built_application() -> None:
+    """AUTH-08 through the wired application, not through a parameter (pitfall 5).
+
+    The switch is read once, in ``build_exapp_app``, and the same policy object answers the
+    document and ``provider.get_client``. So a deployment that switched the way off says
+    nothing about it here, which is precisely the shape that lets a client fall back to
+    dynamic registration: the specification offers that fallback only while the capability is
+    absent, never when it is announced and then refused.
+    """
+    app = entry_exapp.build_exapp_app({**OAUTH_ENV, registry.ENV_CIMD: "off"})
+
+    assert CIMD_FIELD not in document_of(app, AS_METADATA_SUFFIX)
+
+
+def test_the_shipped_state_announces_the_metadata_document_way() -> None:
+    """The counter probe: with nobody switching anything, the capability is announced."""
+    document = document_of(entry_exapp.build_exapp_app(OAUTH_ENV), AS_METADATA_SUFFIX)
+
+    assert document[CIMD_FIELD] is True
+
+
+def test_a_closed_registration_closes_the_announcement_as_well() -> None:
+    """The coupling of plan 06-03, measured where a client actually reads it.
+
+    ``cimd_enabled`` is derived from both switches, so an administrator who closed self
+    registration has closed both ways with one variable. If only the endpoint disappeared
+    while the capability stayed, that administrator would have shut a door and left the other
+    spelling of the same door open.
+    """
+    document = document_of(
+        entry_exapp.build_exapp_app({**OAUTH_ENV, registry.ENV_DCR: "off"}), AS_METADATA_SUFFIX
+    )
+
+    assert CIMD_FIELD not in document
+    assert "registration_endpoint" not in document
+
+
+def test_the_two_switches_are_read_from_one_policy_per_application() -> None:
+    """One policy per application, and the document is what proves the wire exists.
+
+    A second ``client_policy`` call for the document would be a second answer to one
+    question, and the two could then disagree after an administrator changed a value: the
+    document is the half a client believes, and it is the half that cannot refuse.
+    """
+    both_off = document_of(
+        entry_exapp.build_exapp_app(
+            {**OAUTH_ENV, registry.ENV_CIMD: "off", registry.ENV_DCR: "off"}
+        ),
+        AS_METADATA_SUFFIX,
+    )
+    cimd_only = document_of(
+        entry_exapp.build_exapp_app({**OAUTH_ENV, registry.ENV_DCR: "off"}), AS_METADATA_SUFFIX
+    )
+
+    assert CIMD_FIELD not in both_off
+    assert "registration_endpoint" not in both_off
+    assert both_off == cimd_only
 
 
 def test_the_admin_values_are_read_once_per_start_and_never_per_request(

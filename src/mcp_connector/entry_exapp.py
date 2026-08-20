@@ -158,9 +158,16 @@ def build_exapp_app(env: Mapping[str, str] | None = None) -> Starlette:
     # and the routes stop containing one (AUTH-07, D-35). One store opener serves the
     # browser onboarding, the authorization server and the token verifier, so a deployment
     # fetches its data key once and every half writes to one file.
+    #
+    # The second switch of the same policy travels the same one way (AUTH-08): the document
+    # announces client id metadata documents exactly while this deployment resolves them, and
+    # it is the same `policy` object `provider.get_client` asks. A second read of the
+    # environment here would be a second answer to one question, and the one that a client
+    # reads is the one that cannot refuse: a client that picks that way because this document
+    # offered it has no fallback left when the resolution then says no.
     for route in (
         *lifecycle_routes(env),
-        *metadata_routes(env, dcr_enabled=policy.dcr_enabled),
+        *metadata_routes(env, dcr_enabled=policy.dcr_enabled, cimd_enabled=policy.cimd_enabled),
         *connect_routes(env, store_provider=store, throttle=counters),
         *connections_routes(
             env,
