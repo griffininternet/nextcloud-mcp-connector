@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Verwaltungs-Clients und Härtungs-Reste
 status: executing
-stopped_at: "Plan 06-07 fertig: die Messtopologie laeuft auf 34.0.3.2 mit dem Connector aus dem Arbeitsbaum (0.1.2, neuer Image-Digest), jane und ihre zwei gueltigen Verbindungen haben Upgrade und Neuregistrierung ueberlebt. EXAPP-06 ist positiv beantwortet: die Store-Oberflaeche zeigt die ExApp mit ihrem Deploy-Daemon, der Installationsknopf heisst Deploy and enable, Remove steht im Aktionsmenue einer abgeschalteten ExApp. Doku, drei READMEs und die drei Store-Beschreibungen sagen genau das, mit der gemessenen Version als Bedingung. 2155 Unit-Tests gruen, ruff sauber, Version unveraendert. Naechster Schritt: 06-08 (Cursor-Live-Nachweis, CLIENT-04)."
-last_updated: "2026-08-20T14:58:56.412Z"
-last_activity: 2026-08-20 -- Plan 06-07 fertig (Messtopologie auf 34.0.3, EXAPP-06 positiv beantwortet)
+stopped_at: "Plan 06-08 fertig, mit negativem Messbefund: Cursor 3.2.16 registriert sich live gegen 0.1.2 mit 201 und den zwei zulaessigen Adressen (cursor:// verworfen, wie a80af0a vorsieht), besteht danach aber an /authorize auf genau dieser cursor://-Adresse und wird mit 400 und der Seite E5 abgewiesen. Kein Token, kein Werkzeugaufruf. Drei Gegenproben schliessen Instanz, Loopback-Portregel und Teilregistrierung als Ursache aus; die Ursache ist, dass Cursor die registrierten Adressen nicht aus der Antwort zuruecklieset. docs/oauth-setup.md und docs/client-setup.md sagen jetzt genau das, BL-14 traegt die offene Entscheidung, CLIENT-04 bleibt unangehakt. mcp.json und Store sind im Vorzustand, 2155 Unit-Tests mit Rueckgabewert 0, ruff sauber. Naechster Schritt: 06-09."
+last_updated: "2026-08-20T15:40:05.661Z"
+last_activity: 2026-08-20
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 10
-  completed_plans: 7
+  completed_plans: 8
   percent: 0
 ---
 
@@ -26,16 +26,16 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 6 (Härtung, Eigennachweise und Conference-Reife), EXECUTING
-Plan: 8 of 10
+Plan: 9 of 10
 Status: Ready to execute
 Milestone: v1.1 Verwaltungs-Clients und Härtungs-Reste (Phasen 6-7)
-Last activity: 2026-08-20 -- Plan 06-07 fertig (Messtopologie auf 34.0.3, EXAPP-06 positiv beantwortet)
+Last activity: 2026-08-20
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 48
+- Total plans completed: 49
 - Average duration: 35 min
 - Total execution time: 15.2 hours
 
@@ -110,6 +110,7 @@ Last activity: 2026-08-20 -- Plan 06-07 fertig (Messtopologie auf 34.0.3, EXAPP-
 | Phase 06 P05 | 35 min | 2 tasks | 7 files |
 | Phase 06 P06 | 40 min | 3 tasks | 7 files |
 | Phase 06 P07 | 45 min | 3 tasks tasks | 9 files files |
+| Phase 06 P08 | 35 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -361,6 +362,13 @@ Recent decisions affecting current work:
 - [Phase ?]: 06-07: Der 34.0.3-Fix ist statisch nur als Aufruf sichtbar (Promise.allSettled mit e.isEnabled ? e.initialize() in dist/appstore-main.mjs, 95762 -> 95841 Bytes), nicht als neues exapp-Vorkommen; darum war die Gegenprobe der Recherche ergebnislos
 - [Phase ?]: 06-07: Ein Browser-Schritt ohne Playwright-Werkzeug laeuft ueber das DevTools-Protokoll gegen das installierte Chrome, mit einem WebSocket-Client aus der Standardbibliothek: ein Paket zu installieren ist ausgeschlossen (T-06-SC)
 
+- [Phase ?]: 06-08: CLIENT-04 ist gemessen und NICHT erfuellt: Cursor 3.2.16 registriert sich gegen 0.1.2 mit 201 und den zwei zulaessigen Adressen, schickt dann aber cursor://anysphere.cursor-mcp/oauth/callback an /authorize und wird mit 400 und der Seite E5 abgewiesen. Die Teilregistrierung hat den Fehlschlag von /register nach /authorize verschoben, nicht beseitigt
+- [Phase ?]: 06-08: Die Ursache liegt belegt auf der Client-Seite: Cursor behaelt nach dem 201 seine eigenen drei Adressen statt die registrierten aus der Antwort zurueckzulesen (RFC 7591 3.2.1), also kann es nicht wissen, dass es die verworfene nimmt. Drei Gegenproben mit derselben client_id schliessen Instanz, Loopback-Portregel (loopback_match nimmt denselben Loopback mit anderem Port an) und Teilregistrierung als Ursache aus
+- [Phase ?]: 06-08: Der Anmeldeknopf in Cursor ist ein Abmelden mit Neuregistrierung (LogoutServer + ReloadClient, 'No stored client information found'): er erzeugt eine neue client_id und laesst die alte Zeile unbenutzt zurueck, zwei Klicks also zwei DCR-Zeilen ohne Verwendung
+- [Phase ?]: 06-08: Kein Fix in diesem Plan, die Entscheidung steht in BL-14 (Schema doch registrieren gegen D-35, wieder ganz abweisen wie 0.1.1, das Verworfene fuer den Client sichtbar machen, oder so lassen und auf das App-Passwort verweisen). CLIENT-04 bleibt in REQUIREMENTS.md unangehakt, weil sein Wortlaut eine durchlaufende Autorisierung verlangt
+- [Phase ?]: 06-08: Fremde GUI-Software des Owners wird fuer eine Messung nicht neu gestartet und nicht mit Debug-Port angefahren: der Lauf hat bei needsAuth gehalten und gefragt, statt Cursor zu beenden (dasselbe Prinzip wie T-06-52)
+- [Phase ?]: 06-08: jane's Passwort steht nirgends im Repository und occ user:resetpassword wurde NICHT benutzt, weil es die App-Passwoerter ihrer zwei OAuth-Verbindungen entwertet haette (Demo-Substanz fuer CONF-01); die Frage wurde gegenstandslos, weil die Abweisung vor jeder Anmeldeseite liegt
+
 ### Pending Todos
 
 - **AUTH-04 (Plan 03-09, Owner):** Claude.ai und ChatGPT gegen eine oeffentlich erreichbare Staging-Instanz. Alles, was ohne oeffentliche Domain messbar war, ist mit 03-08 gemessen; offen bleibt genau der Teil, der eine erreichbare Instanz und die beiden gehosteten Oberflaechen braucht.
@@ -392,11 +400,11 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-08-20T14:58:56.399Z
-Stopped at: Plan 06-07 fertig: die Messtopologie laeuft auf 34.0.3.2 mit dem Connector aus dem Arbeitsbaum (0.1.2, neuer Image-Digest), jane und ihre zwei gueltigen Verbindungen haben Upgrade und Neuregistrierung ueberlebt. EXAPP-06 ist positiv beantwortet: die Store-Oberflaeche zeigt die ExApp mit ihrem Deploy-Daemon, der Installationsknopf heisst Deploy and enable, Remove steht im Aktionsmenue einer abgeschalteten ExApp. Doku, drei READMEs und die drei Store-Beschreibungen sagen genau das, mit der gemessenen Version als Bedingung. 2155 Unit-Tests gruen, ruff sauber, Version unveraendert. Naechster Schritt: 06-08 (Cursor-Live-Nachweis, CLIENT-04).
-Naechster Schritt: /gsd:execute-phase 6 (Plan 06-08)
+Stopped at: Plan 06-08 fertig, mit negativem Messbefund: Cursor 3.2.16 registriert sich live gegen 0.1.2 mit 201 und den zwei zulaessigen Adressen (cursor:// verworfen, wie a80af0a vorsieht), besteht danach aber an /authorize auf genau dieser cursor://-Adresse und wird mit 400 und der Seite E5 abgewiesen. Kein Token, kein Werkzeugaufruf. Drei Gegenproben schliessen Instanz, Loopback-Portregel und Teilregistrierung als Ursache aus; die Ursache ist, dass Cursor die registrierten Adressen nicht aus der Antwort zuruecklieset. docs/oauth-setup.md und docs/client-setup.md sagen jetzt genau das, BL-14 traegt die offene Entscheidung, CLIENT-04 bleibt unangehakt. mcp.json und Store sind im Vorzustand, 2155 Unit-Tests mit Rueckgabewert 0, ruff sauber. Naechster Schritt: 06-09.
+Naechster Schritt: /gsd:execute-phase 6 (Plan 06-09)
 Resume file: None
 
 ## Operator Next Steps
 
-- Phase 6 weiter ausfuehren: `/gsd:execute-phase 6` (10 Plaene, 7 fertig)
+- Phase 6 weiter ausfuehren: `/gsd:execute-phase 6` (10 Plaene, 8 fertig)
 - Phase 7 haengt an fremden Zugaengen (it@M-Antwort fuer MUCGPT, Owner-Kontakte fuer F13 und BaerGPT); sie blockiert keinen Liefergegenstand aus Phase 6
