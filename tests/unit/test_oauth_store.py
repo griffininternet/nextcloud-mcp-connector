@@ -1042,6 +1042,95 @@ async def test_the_connections_of_a_client_are_uncapped_unless_a_limit_is_given(
 
 
 @pytest.mark.anyio
+async def test_a_pause_without_a_single_connection_is_forgotten_after_a_season(
+    tmp_path: Path,
+) -> None:
+    """LO-03: ``user_access`` grew monotonically and held rows for accounts that are gone.
+
+    On a directory setup that reuses account ids, a new account with an old name started
+    silently paused and its first tool call answered R1 without anybody having touched a
+    switch. The row goes when it has nothing left to switch: no authorization at all, and
+    the pause is older than :data:`STALE_ACCESS_TTL`.
+    """
+    subject = open_store(tmp_path)
+    long_ago = int(time.time()) - store.STALE_ACCESS_TTL - 1
+    await subject.set_access(NC_USER, disabled=True, now=long_ago)
+
+    await subject.purge_expired()
+
+    assert query(tmp_path, "SELECT count(*) FROM user_access")[0][0] == 0
+    assert await subject.access_disabled(NC_USER) is False
+
+
+@pytest.mark.anyio
+async def test_a_pause_with_a_connection_behind_it_stays_however_old_it_is(
+    tmp_path: Path,
+) -> None:
+    """The account exists as long as a connection of it does, and its switch is its own."""
+    subject = open_store(tmp_path)
+    long_ago = int(time.time()) - store.STALE_ACCESS_TTL - 1
+    await with_authorization(subject)
+    await subject.set_access(NC_USER, disabled=True, now=long_ago)
+
+    await subject.purge_expired()
+
+    assert await subject.access_disabled(NC_USER) is True
+
+
+@pytest.mark.anyio
+async def test_a_revoked_connection_still_counts_as_one(tmp_path: Path) -> None:
+    """The conservative direction: a revoked row is a Nextcloud app password that may still
+    exist, so the account is not a stranger and its pause is not stale."""
+    subject = open_store(tmp_path)
+    long_ago = int(time.time()) - store.STALE_ACCESS_TTL - 1
+    await with_authorization(subject)
+    await subject.revoke_authorization(AUTH_ID)
+    await subject.set_access(NC_USER, disabled=True, now=long_ago)
+
+    await subject.purge_expired()
+
+    assert await subject.access_disabled(NC_USER) is True
+
+
+@pytest.mark.anyio
+async def test_a_fresh_pause_without_a_connection_stays(tmp_path: Path) -> None:
+    """The ordinary case of a paused account: it pauses first and connects later.
+
+    An account that pauses before it ever connects, or that disconnects everything after
+    pausing, keeps its switch for the whole window. Without this half the cleanup would
+    resume accounts that never asked for it.
+    """
+    subject = open_store(tmp_path)
+    await subject.set_access(NC_USER, disabled=True)
+
+    await subject.purge_expired()
+
+    assert await subject.access_disabled(NC_USER) is True
+
+
+@pytest.mark.anyio
+async def test_the_stale_window_of_a_pause_is_a_season_like_the_idle_client_one(
+    tmp_path: Path,
+) -> None:
+    """The number is a decision and it is named: 90 days, the window of an idle client.
+
+    One day before it the row is still there, one second after it the row is gone, so the
+    constant is the boundary and not a suggestion.
+    """
+    assert store.STALE_ACCESS_TTL == 90 * 24 * 3600 == store.IDLE_CLIENT_TTL
+
+    subject = open_store(tmp_path)
+    now = int(time.time())
+    await subject.set_access(NC_USER, disabled=True, now=now - store.STALE_ACCESS_TTL + 24 * 3600)
+    await subject.set_access(OTHER_USER, disabled=True, now=now - store.STALE_ACCESS_TTL - 1)
+
+    await subject.purge_expired(now=now)
+
+    assert await subject.access_disabled(NC_USER) is True
+    assert await subject.access_disabled(OTHER_USER) is False
+
+
+@pytest.mark.anyio
 async def test_a_used_client_that_is_merely_older_than_a_day_stays(tmp_path: Path) -> None:
     subject = open_store(tmp_path)
     two_days = int(time.time()) - 2 * 24 * 3600
