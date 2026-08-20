@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Verwaltungs-Clients und Härtungs-Reste
 status: executing
-stopped_at: "Plan 06-02 fertig: fetch_document als einzige Modulgrenze (IP-Pinning auf die gepruefte Adresse, Original-Name in Host und sni_hostname, follow_redirects=False, 5120 Bytes, 5 s), validate_document mit den vier MUSTs, und der Negativkatalog AUTH-09 vollstaendig inklusive benanntem Rebinding-Test und dem Beleg, dass Fehler und kaputte Dokumente nicht gecacht werden. 2090 Tests gruen, ruff/pyright/vulture sauber, pyproject und uv.lock unberuehrt. Naechster Schritt: 06-04 (Advertising im AS-Dokument plus Manifest-Deklaration von NC_MCP_OAUTH_CIMD)."
-last_updated: "2026-08-20T13:06:31.835Z"
-last_activity: 2026-08-20 -- Plan 06-02 fertig (gepinnter CIMD-Abruf und Negativkatalog AUTH-09)
+stopped_at: "Plan 06-04 fertig: das AS-Dokument kuendigt CIMD nur bei eingeschaltetem Schalter an (client_id_metadata_document_supported = cimd_enabled or None, bei aus FEHLT das Feld), entry_exapp verdrahtet policy.cimd_enabled aus derselben Policy, die provider.get_client befragt, und appinfo/info.xml deklariert NC_MCP_OAUTH_CIMD als fuenften Eintrag ohne default-Element. 2080 Tests gruen, ruff/pyright/vulture sauber, pyproject und uv.lock unberuehrt. Naechster Schritt: 06-05 (CIMD-Zweig in provider.get_client plus Store-Spalten)."
+last_updated: "2026-08-20T13:21:25.797Z"
+last_activity: 2026-08-20 -- Plan 06-04 fertig (CIMD-Advertising am Schalter, NC_MCP_OAUTH_CIMD im Manifest)
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 10
-  completed_plans: 3
+  completed_plans: 4
   percent: 0
 ---
 
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 6 (Härtung, Eigennachweise und Conference-Reife), EXECUTING
-Plan: 4 of 10
+Plan: 5 of 10
 Status: Ready to execute
 Milestone: v1.1 Verwaltungs-Clients und Härtungs-Reste (Phasen 6-7)
-Last activity: 2026-08-20 -- Plan 06-02 fertig (gepinnter CIMD-Abruf und Negativkatalog AUTH-09)
+Last activity: 2026-08-20 -- Plan 06-04 fertig (CIMD-Advertising am Schalter, NC_MCP_OAUTH_CIMD im Manifest)
 
 ## Performance Metrics
 
@@ -106,6 +106,7 @@ Last activity: 2026-08-20 -- Plan 06-02 fertig (gepinnter CIMD-Abruf und Negativ
 | Phase 06 P01 | 30 min | 2 tasks | 4 files |
 | Phase 06 P03 | 25 min | 3 tasks tasks | 6 files files |
 | Phase 06 P02 | 40 min | 3 tasks | 2 files |
+| Phase 06 P04 | 20 min | 2 tasks tasks | 6 files files |
 
 ## Accumulated Context
 
@@ -343,6 +344,8 @@ Recent decisions affecting current work:
 - [Phase 06]: loopback_match benutzt LOOPBACK_HOSTS (127.0.0.1, localhost, ::1) statt nur der IP-Literale des RFC: Claude Code schickt zur Laufzeit localhost, und D-35 laesst alle drei Namen ohnehin registrieren; frei ist nur der Port, ein Host-Wechsel bleibt eine Absage
 - [Phase 06]: cimd_enabled ist ein eigener Schalter (NC_MCP_OAUTH_CIMD, Default an) mit harter Kopplung an DCR: die Kopplung schlaegt den explizit gesetzten Schalter, ein abgeschaltetes DCR ist ueber CIMD nicht umgehbar (T-06-15)
 - [Phase 06]: Der CIMD-Abruf pinnt auf die gepruefte Adresse und haelt Name und Zertifikatspruefung ueber sni_hostname; genau eine Aufloesung pro Aufruf, kein Negativ-Cache (Drosselung liegt bei throttle.py).
+- [Phase 06]: Das AS-Dokument kuendigt CIMD ueber client_id_metadata_document_supported = cimd_enabled or None an: bei abgeschaltetem Schalter FEHLT das Feld statt false zu sagen, weil der Spec-Rueckfall auf DCR nur greift, solange die Faehigkeit abwesend ist
+- [Phase 06]: NC_MCP_OAUTH_CIMD ist als fuenfter environment-variables-Eintrag im Manifest deklariert (ohne default-Element), und ein Gate haelt die deklarierten Namen als Mengengleichheit gegen die Namen, die der Code liest: eine undeklarierte NC_MCP_-Variable wird vom Deploy-Daemon still verworfen
 
 ### Pending Todos
 
@@ -373,8 +376,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T13:06:31.818Z
-Stopped at: Plan 06-02 fertig: fetch_document als einzige Modulgrenze (IP-Pinning auf die gepruefte Adresse, Original-Name in Host und sni_hostname, follow_redirects=False, 5120 Bytes, 5 s), validate_document mit den vier MUSTs, und der Negativkatalog AUTH-09 vollstaendig inklusive benanntem Rebinding-Test und dem Beleg, dass Fehler und kaputte Dokumente nicht gecacht werden. 2090 Tests gruen, ruff/pyright/vulture sauber, pyproject und uv.lock unberuehrt. Naechster Schritt: 06-04 (Advertising im AS-Dokument plus Manifest-Deklaration von NC_MCP_OAUTH_CIMD).
+Last session: 2026-08-20T13:21:25.783Z
+Stopped at: Plan 06-04 fertig: das AS-Dokument kuendigt CIMD nur bei eingeschaltetem Schalter an (client_id_metadata_document_supported = cimd_enabled or None, bei aus FEHLT das Feld), entry_exapp verdrahtet policy.cimd_enabled aus derselben Policy, die provider.get_client befragt, und appinfo/info.xml deklariert NC_MCP_OAUTH_CIMD als fuenften Eintrag ohne default-Element. 2080 Tests gruen, ruff/pyright/vulture sauber, pyproject und uv.lock unberuehrt. Naechster Schritt: 06-05 (CIMD-Zweig in provider.get_client plus Store-Spalten).
 Naechster Schritt: /gsd:execute-phase 6 (Plan 06-03)
 Resume file: None
 
