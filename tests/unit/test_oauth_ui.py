@@ -675,6 +675,27 @@ def test_the_timeout_page_offers_the_way_back() -> None:
         assert "://" not in target
 
 
+def test_the_return_address_page_names_the_way_that_works() -> None:
+    """The half BL-14 was open about, decided by the owner on 2026-08-20: a reader who is
+    refused over a return address gets the way that works named (the app password path),
+    and still learns nothing about which of the four checks in ``oauth/consent.py`` fell.
+
+    The word ``cursor`` is asked of the document without its stylesheet, because the
+    stylesheet of every page carries a ``cursor: pointer`` declaration that no user ever
+    reads and that says nothing about any client. Everything else of the document counts,
+    markup and attributes included, because a leak in an attribute is still a leak.
+    """
+    response, _ = errors.error_page("E5", env=ENV, client=BENIGN_NAME)
+    document = parse(response)
+    without_stylesheet = re.sub(r"<style.*?</style>", "", body(response), flags=re.DOTALL)
+
+    assert "app password" in document.text
+    assert "Start the connection again" in document.text
+    assert "cursor" not in without_stylesheet.lower()
+    assert "://" not in without_stylesheet
+    assert "cursor" not in strings.ERROR_REDIRECT_BODY.lower()
+
+
 # --- E9, the page of an account that paused its own access (BL-10) ------------------------
 #
 # The answer of the three enforcement points of plan 05-02. It is a page and not a wire
