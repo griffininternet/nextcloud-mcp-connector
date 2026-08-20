@@ -10,6 +10,8 @@ Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick install
 
 ## Current State
 
+**v1.1 Phase 6 complete 2026-08-20** (verified 6/6): CIMD als DCR-Alternative live bewiesen (Claude Code), SSRF-Grenze belegt, Loopback-Portregel eingebaut, Cursor-Befund gemessen und per BL-14 entschieden, Ein-Klick-Story auf 34.0.3 wörtlich wahr, Conference-Material vorführbar. Offen: Phase 7 (MUCGPT/F13/BaerGPT, extern getaktet).
+
 **v1.0 shipped 2026-08-20.** Release 0.1.2 ist live im Nextcloud App Store
 (apps.nextcloud.com/apps/mcp_connector), 16 Tools, OAuth 2.1 E2E gegen Claude.ai und
 ChatGPT bewiesen, Per-User-Verwaltung live, Purge/Deinstallation live bewiesen, alle 27
@@ -43,15 +45,15 @@ BL-12 MUCGPT-Verprobung wartet auf it@M-Antwort).
 - ✓ Transport stdio + Streamable HTTP, App-Passwort + Login Flow v2 — v1.0
 - ✓ App-Store-Einreichung vor der Nextcloud Conference September 2026 — v1.0 (eingereicht 2026-08-19, fünf Wochen vor Termin)
 - ✓ Contribution-Fix an nextcloud/context_agent#227 — v1.0 (Fork + DCO-signierter Fix, Disclosure in #203)
+- ✓ Client ID Metadata Documents als DCR-Alternative, SSRF-geprüft — v1.1 Phase 6 (Claude Code verbindet sich live ohne Registrierung; DCR-Kontrollen greifen wortgleich, kein Fetch außerhalb von /authorize)
+- ✓ Cursor-Verhalten gemessen statt vermutet, Loopback-Portfrage beantwortet — v1.1 Phase 6 (Teilregistrierung wirkt live mit 201; Cursor scheitert belegt an seiner eigenen cursor://-Adresse, Owner-Entscheid BL-14 "sichtbar machen plus Doku"; RFC-8252-7.3-Portregel eingebaut und mit wechselnden Ports live bestätigt)
+- ✓ NC-34.0.3-UI-Smoke: Ein-Klick-Installation über die Store-UI nachgewiesen — v1.1 Phase 6 (Deploy-and-enable- und Remove-Knopf gemessen, Doku/Store-Text EN/DE/FR sagen das Gemessene)
+- ✓ Conference-Demo-Material — v1.1 Phase 6 (Runbook einmal komplett durchgefahren, 82 s; Lightning-Talk-Entwurf, CfP-Schließung im Kopf vermerkt)
 
 ### Active
 
 - MUCGPT verbindet sich live nach dem dokumentierten Protokoll (BL-12; wartet auf it@M-Antwort)
 - F13 und BaerGPT verbinden sich live (Dossier: beide MCP-fähig)
-- Cursor verbindet sich live nach der Teilregistrierung; Loopback-Portfrage geklärt (BL-04-Rest)
-- Client ID Metadata Documents als DCR-Alternative, SSRF-geprüft (BL-05)
-- NC-34.0.3-UI-Smoke: Ein-Klick-Installation über die Store-UI nachgewiesen, Doku/Store-Text angepasst
-- Conference-Demo-Material steht
 
 ### Out of Scope
 
@@ -98,7 +100,8 @@ BL-12 MUCGPT-Verprobung wartet auf it@M-Antwort).
 | Contribution-Fix an context_agent#227 als Flanke | Sichtbarkeit + Goodwill beim Nextcloud-Team vor der Conference | ✓ Good — Fix eingereicht, Disclosure platziert |
 | AGPL-3.0 | Ökosystem-Kultur; Übernahme-Chance wichtiger als maximale Wiederverwendbarkeit | ✓ Good |
 | Risikoarme Writes, destruktive Ops ausgeschlossen | "Kann nichts zerstören" ist Verkaufsargument, kein Mangel | ✓ Good — als Gate implementiert (AST-Grep), Kern der Store-Beschreibung und des LinkedIn-Narrativs |
-| Fail-closed bei DCR-redirect_uris revidiert zu Teilregistrierung (20.08.) | Cursor registriert 3 URIs auf einmal, eine unzulässige sperrte den ganzen Client aus | — Pending (Live-Nachweis mit Cursor steht aus) |
+| Fail-closed bei DCR-redirect_uris revidiert zu Teilregistrierung (20.08.) | Cursor registriert 3 URIs auf einmal, eine unzulässige sperrte den ganzen Client aus | ✓ Good — wirkt live (201 mit den zwei zulässigen Adressen); Cursor scheitert danach an sich selbst (schickt die verworfene cursor://-Adresse an /authorize) |
+| BL-14 "sichtbar machen plus Doku" statt cursor://-Registrierung (Owner, 20.08.) | D-35 steht (Desktop-Schemes kann jede App abfangen); E5-Seite nennt den App-Passwort-Ausweg, Doku den Grund | ✓ Good — Phase 6 verified 6/6, kein Sicherheitsversprechen aufgeweicht |
 | MUCGPT-Verprobung als geführte Lücke abgenommen (Owner, 20.08.) | Braucht fremde Instanz (it@M); Protokoll einlösbar dokumentiert | — Pending (Mail gesendet, Antwort ausstehend) |
 
 ## Evolution
@@ -119,4 +122,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-20 at start of milestone v1.1*
+*Last updated: 2026-08-20 after phase 6 completion*

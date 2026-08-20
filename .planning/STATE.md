@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Verwaltungs-Clients und Härtungs-Reste
-status: verifying
-stopped_at: "Plan 06-11 fertig: CLIENT-04-Gap geschlossen. E5 nennt den App-Passwort-Weg (ein neuer Test haelt Ausweg und Schweigepflicht), BL-14 mit Option, Datum, Messverweis und SDK-Rohbeleg geschlossen, CLIENT-04 und ROADMAP SC3 auf das Gemessene umformuliert (Owner-Freigabe 2026-08-20) und CLIENT-04 abgehakt, beide Doku-Sektionen mit D-35-Grund, Ausweg und getroffener Entscheidung. D-35, Auth-Pfad, READMEs, Store-Text und Abhaengigkeiten unveraendert. 2165 Unit-Tests gruen, Contract gruen, ruff sauber. Naechster Schritt: Re-Verifikation der Phase 6."
-last_updated: "2026-08-20T18:29:03.093Z"
+status: ready_to_plan
+stopped_at: Phase 6 complete (11/11) — ready to discuss Phase 7
+last_updated: 2026-08-20T18:34:30.755Z
 last_activity: 2026-08-20
 progress:
   total_phases: 2
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-14)
 
 **Core value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Current focus:** Phase 6, Härtung, Eigennachweise und Conference-Reife (CIMD mit SSRF-Grenze, Cursor- und Loopback-Messung, 34.0.3-UI-Smoke, Conference-Material)
+**Current focus:** Phase 7 — verwaltungs clients live verprobt
 
 ## Current Position
 
-Phase: 6 (Härtung, Eigennachweise und Conference-Reife), EXECUTING
-Plan: 11 of 11
-Status: Phase complete, ready for verification (Gap-Closure 06-11 erledigt)
+Phase: 7
+Plan: Not started
+Status: Ready to plan
 Milestone: v1.1 Verwaltungs-Clients und Härtungs-Reste (Phasen 6-7)
 Last activity: 2026-08-20
 
@@ -35,7 +35,7 @@ Last activity: 2026-08-20
 
 **Velocity:**
 
-- Total plans completed: 49
+- Total plans completed: 60
 - Average duration: 35 min
 - Total execution time: 15.2 hours
 
@@ -48,6 +48,7 @@ Last activity: 2026-08-20
 | 3 | 8 | 400 min | 50 min |
 | 4 | 2 | 85 min | 43 min |
 | 05 | 16 | - | - |
+| 6 | 11 | - | - |
 
 **Recent Trend:**
 
