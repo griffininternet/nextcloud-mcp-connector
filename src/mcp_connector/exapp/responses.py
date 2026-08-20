@@ -18,6 +18,7 @@ a stale public URL, or a 401, for an hour.
 import logging
 from typing import Any
 
+import httpx
 from starlette.datastructures import FormData
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -28,6 +29,7 @@ __all__ = [
     "BodyTooLarge",
     "BodyUnreadable",
     "bounded_body",
+    "bounded_response",
     "form_or_none",
     "json_response",
     "with_body",
@@ -85,6 +87,42 @@ async def bounded_body(request: Request, max_bytes: int) -> bytes:
     seen = 0
     try:
         async for chunk in request.stream():
+            seen += len(chunk)
+            if seen > max_bytes:
+                raise BodyTooLarge
+            chunks.append(chunk)
+    except BodyTooLarge:
+        raise
+    except Exception as exc:
+        raise BodyUnreadable from exc
+    return b"".join(chunks)
+
+
+async def bounded_response(response: httpx.Response, max_bytes: int) -> bytes:
+    """The body of an answer this process asked for, read no further than ``max_bytes``.
+
+    The twin of :func:`bounded_body` on the response side, and it lives in this module for
+    the reason the module docstring gives: this is the one place a size limit is
+    implemented, and two size limits in two modules are exactly the copy this module once
+    removed. Its caller is the outbound fetch of a client id metadata document
+    (``oauth/cimd.py``, plan 06-02), where the body belongs to a foreign server and is
+    therefore attacker input arriving in the other direction. That module imports this
+    function and builds no limit of its own.
+
+    The rejected alternative is ``response.text`` and a check on ``len`` afterwards: by
+    then the memory is already spent, which is the same defect as trusting an announced
+    ``Content-Length`` (IN-01). A host that answers a hundred megabytes to a request for a
+    five kilobyte document costs nothing here, because the counter stops the read inside
+    the chunk loop rather than after it.
+
+    Raises :class:`BodyTooLarge` and :class:`BodyUnreadable` like its twin, because the
+    caller answers in its own shape and that answer does not belong in this module.
+    Nothing of the body is ever logged here.
+    """
+    chunks: list[bytes] = []
+    seen = 0
+    try:
+        async for chunk in response.aiter_bytes():
             seen += len(chunk)
             if seen > max_bytes:
                 raise BodyTooLarge
