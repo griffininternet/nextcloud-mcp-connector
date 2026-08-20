@@ -67,8 +67,8 @@ default `http://127.0.0.1:8765`, no client can reach it, and the connection fail
 first step with "could not discover authorization server".
 
 The deploy daemon injects a variable into the ExApp container only if the manifest declares
-it. `appinfo/info.xml` declares this one and the three switches below; an installation sets
-the value at registration time:
+it. `appinfo/info.xml` declares this one and every switch below; an installation sets the
+value at registration time:
 
 ```
 occ app_api:app:register mcp_connector \
@@ -94,6 +94,10 @@ All three are optional, and the shipped state is the plug and play one:
 
 A value that is neither on nor off keeps the default and says so in the log, instead of
 guessing.
+
+There is a fourth switch, `NC_MCP_OAUTH_CIMD`, for the second way a client can identify
+itself. It is documented in "Client ID Metadata Documents" below, together with the way
+itself and with what the two switches do to each other.
 
 ### 3. Administrator settings in Nextcloud
 
@@ -253,6 +257,94 @@ attempt (it is in the registration request) and added afterwards. Claude.ai has 
 address and can be listed before the first connection. **And a connector may ask for both
 advertised scopes**, which is why a registration of this server is recorded with both, see
 pitfall 7.
+
+## Client ID Metadata Documents: accepted since this build, next to registration
+
+In the repository since **2026-08-20** and not in 0.1.2, so an installation running 0.1.2
+behaves the way the sections above describe and nothing else. The live proof with a client
+that uses this way is still open and follows in this phase.
+
+A client of this kind does not register here at all. Its client id **is** the https address
+of a small JSON document it publishes itself, this server reads that document once and takes
+the client information out of it. That is the way the MCP specification 2026-07-28 prefers,
+and it is the way Claude Code identifies itself:
+
+```
+https://claude.ai/oauth/claude-code-client-metadata
+```
+
+**It is an addition and not a replacement.** Dynamic registration is untouched, both ways
+run next to each other, and the hosted connectors of the table above stay on registration:
+Claude.ai and ChatGPT register themselves and neither of them publishes such a document.
+Everything a registration goes through, a document goes through as well, in the same code
+and not in a copy of it: only `https` return addresses and loopback ones (D-35), an
+inadmissible address dropped and the admissible ones kept, the allowlist asked in the same
+four places, and no shared secret, because a client of this kind is public by definition of
+the draft.
+
+### The switch, and what the two switches do to each other
+
+| Variable | Default | What it does |
+|----------|---------|--------------|
+| `NC_MCP_OAUTH_CIMD` | on | A client may identify itself by the address of its own published document. Switched off, such a client is refused before any outbound request happens, and the authorization server document stops advertising the capability. |
+
+**Switching registration off switches this off with it.** `NC_MCP_OAUTH_DCR=0` closes both
+ways, because a closed door that can be walked around through the other spelling is not a
+closed door. The other direction does not hold: `NC_MCP_OAUTH_CIMD=0` leaves registration
+exactly as it was. Both switches can also be set in the administration form of section 3,
+where the same precedence applies.
+
+### The allowlist is more useful with this way than with registration
+
+With registration the client id is a random identifier the server mints when the client
+first appears, so an administrator cannot write it down in advance and has to fall back to
+the redirect URI. With a document the client id is a stable, published URL, which means a
+closed instance can name the clients it wants before any of them has ever connected:
+
+```
+NC_MCP_OAUTH_ALLOWLIST_ONLY=1
+NC_MCP_OAUTH_ALLOWED_CLIENTS=https://claude.ai/oauth/claude-code-client-metadata
+```
+
+An unlisted client of this kind is refused with the same page an unlisted registration gets,
+and the refusal is stored, so it survives a restart.
+
+### What the fetch of a document is allowed to do
+
+The client id decides where this process connects to, which is the one place in this app
+where a request chooses the target of an outbound request of ours. The boundaries are fixed
+in code, none of them is a setting, and every one of them is a refusal rather than a
+fallback:
+
+- `https` only, a path is required, no fragment, no user info, no `.` or `..` segment in the
+  path
+- the target must be a public address: private, loopback, link local, reserved, multicast
+  and unspecified addresses are refused, **also after the name has been resolved**, and a
+  name that resolves to one good and one refused address is refused entirely
+- the request goes to the resolved address with the original name in the `Host` header and
+  in the TLS handshake, so a second resolution cannot move the target after the check
+- 5120 bytes, the recommendation of the draft, enforced while reading and not after it
+- 5 seconds to connect and 5 seconds to read
+- redirects are not followed: a `3xx` is a refusal, because a redirect is a second target
+  that nobody checked
+- the answer is kept for as long as its own cache header asks for, between five minutes and
+  one hour; **failures are never kept**, which the draft forbids in those words, and the
+  flooding of this route is handled by the throttle of `/authorize` instead
+
+### What the consent screen says about such a client, and what it does not
+
+The specification asks for two displays, and this app does both. The consent screen names
+the **host of the client id** as an entry of its own next to the id itself, and it carries a
+second warning when every return address of the client is on the computer the user is
+sitting at.
+
+The second one exists because of a limit the specification states itself: "Client ID
+Metadata Documents cannot prevent `localhost` URL impersonation by themselves." A document
+proves who controls the URL it is published at. It does not prove which program on a user's
+machine is listening on a loopback port, and any program on that machine can name a foreign
+client id. So the screen says what is known and what is not, and it does not call such a
+client confirmed by anybody. No image out of a document is ever shown either, because a logo
+address of a foreign domain would make the user's browser call whoever wrote the document.
 
 ## Evidence
 
@@ -704,11 +796,26 @@ when the user denies or never finishes. If you see an app password of this conne
 connection that does not exist, it is either younger than twenty minutes or a failed
 cleanup, and the app remembers the second case.
 
-**6. Clients with a loopback redirect and a changing port do not fit.** Claude Code
-identifies itself with a client id metadata document instead of registering, and its
-callback port changes per run, which exact redirect URI matching cannot accept. That is a
-deliberate limit of v1, not a bug. Those clients use the app password way of
-[client-setup.md](./client-setup.md).
+**6. A loopback client comes back on the port it actually got, and only the port is free.**
+Up to and including 0.1.2 a client with a loopback return address and a port that changes
+per run did not fit: the return address was compared exactly, so the address the client
+published without a port and the address it arrived with never matched, and such a client
+was pointed at the app password way of [client-setup.md](./client-setup.md). That was
+wrong of us rather than a limit of v1. RFC 8252 section 7.3 says MUST: "The authorization
+server MUST allow any port to be specified at the time of the request for loopback IP
+redirect URIs, to accommodate clients that obtain an available ephemeral port from the
+operating system at the time of the request." A native client takes whatever port the
+operating system hands it, so refusing it over that port refuses it over a property it does
+not control.
+
+Since this build the port of a loopback address is not compared, and **nothing else moved**.
+Scheme, host, path and query are still compared character for character, `localhost` still
+does not stand in for `127.0.0.1`, and a hosted client on `https` gains no freedom at all.
+D-35 is unchanged too: which addresses may be registered in the first place is still `https`
+anywhere and `http` on loopback only, and the requested address is checked against that rule
+again where it is used. The relaxed address is never written into the registration; it is a
+comparison and not a second registration. The live proof with a client whose port really
+changes is still open and follows in this phase.
 
 **7. What the metadata advertises is what a registration has to get.** A client reads
 `scopes_supported` and asks for what it finds there, and the authorization endpoint compares

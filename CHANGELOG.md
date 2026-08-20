@@ -31,8 +31,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   loopback ones, an inadmissible address is dropped and the rest kept, the client list of
   an administrator decides in exactly the same place, and a client of this kind never
   holds a shared secret. The app reads such a document from public addresses only, never
-  follows a redirect on the way and never fetches an image from it. This is the way the
-  current specification prefers, and it is the way Claude Code identifies itself.
+  from an address inside a network, never more than five kilobytes of it, never longer than
+  five seconds, never after a redirect and never an image out of it, and a failed read is
+  not remembered. This is the way the current specification prefers, and it is the way
+  Claude Code identifies itself.
+- The approval page now names the host of the address a client goes by, and it carries a
+  second warning when the app can only be reached on the computer you are using. The
+  reason for the warning is worth reading once: an address of that kind says who publishes
+  the information about an app, and it does not say which program on your own computer
+  answers on that port. So the page says both of those things, and it does not claim that
+  anybody confirmed the app.
 - A new administrator switch, `NC_MCP_OAUTH_CIMD`, for the way a client identifies
   itself by the address of its own published metadata document instead of registering.
   It is on unless it is switched off, and switching off client registration switches
