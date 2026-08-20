@@ -41,6 +41,7 @@ from ..errors import ToolError
 from ..nextcloud import NcClients
 from . import calendar as calendar_tools
 from . import chatgpt as chatgpt_tools
+from . import marks
 from . import search as search_tools
 
 #: Hits requested from the search. Wider than any single bucket cap on purpose: the
@@ -87,7 +88,9 @@ EXCERPT_TIMEOUT = 5.0
 
 #: Marked inside the text and not only beside it, exactly as ``chatgpt.fetch`` does it: a
 #: model that only reads the excerpt must still be able to tell it from a whole document.
-EXCERPT_TRUNCATION = "[excerpt truncated; call fetch with this id for the full text]"
+#: Defined in :mod:`mcp_connector.tools.marks` together with the filter that keeps the
+#: sequence this server's own (BL-09, ME-03), and re-exported here under its own name.
+EXCERPT_TRUNCATION = marks.EXCERPT_TRUNCATION
 
 SHORT = "short"
 FULL = "full"
@@ -286,10 +289,18 @@ def _capped(text: str) -> str:
     Bytes and not characters, because the ceiling is about the payload and an umlaut is two
     bytes. ``errors="ignore"`` drops a character that the cut split in half, which is the
     right trade for a preview and would be the wrong one for a document.
+
+    The document's own copy of either marker goes first (BL-09, ME-03). The marker stays in
+    the text, which is what a model reading only the excerpt needs, but it can no longer
+    come from the text: a shared file that writes the sequence itself would otherwise decide
+    where the model believes the server excerpt ends, and that is the boundary D-57 rests
+    on. Filtering happens before the measurement, so the ceiling applies to what is actually
+    handed out.
     """
-    encoded = text.encode("utf-8")
+    body = marks.without_marks(text)
+    encoded = body.encode("utf-8")
     if len(encoded) <= EXCERPT_MAX_BYTES:
-        return text
+        return body
     return f"{encoded[:EXCERPT_MAX_BYTES].decode('utf-8', errors='ignore')}\n\n{EXCERPT_TRUNCATION}"
 
 

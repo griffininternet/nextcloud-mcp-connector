@@ -26,6 +26,14 @@ are load bearing:
   greps this file for it, which is why it is described rather than spelled out.
 * The sweep cache lives inside one call and nowhere else (D-20). A module level cache would
   hand the board list of one user to the next request of another.
+
+**No text of an answer carries a marker this server did not write.** ``text`` is one field
+for every kind, so the truncation note of a cut file and the content of a note or a card
+land in the same place a model reads. Every one of the four readers therefore filters the
+marker sequences out of the foreign text (:mod:`mcp_connector.tools.marks`), and only the
+file reader writes one back in, where a slice actually ended. The rule sits on all four and
+not only on the one that appends, because a note that forges the sequence frames itself
+exactly the same way (BL-09, ME-03).
 """
 
 from typing import Any
@@ -38,6 +46,7 @@ from ..nextcloud.clients import dav as dav_client
 from ..nextcloud.clients import deck as deck_client
 from . import deck as deck_tools
 from . import files as files_tools
+from . import marks
 from . import notes as notes_tools
 from . import search as search_tools
 
@@ -48,8 +57,10 @@ DEFAULT_LIMIT = search_tools.DEFAULT_LIMIT
 MAX_TEXT_BYTES = files_tools.DEFAULT_MAX_BYTES
 
 #: Marked inside the text, not only in the metadata: a model that only reads ``text`` must
-#: still be able to tell a complete document from the beginning of one.
-TRUNCATION_NOTE = "[truncated here; call files_read with offset {offset} to continue]"
+#: still be able to tell a complete document from the beginning of one. Defined in
+#: :mod:`mcp_connector.tools.marks` together with the filter that keeps the sequence this
+#: server's own (BL-09, ME-03), and re-exported here under its own name.
+TRUNCATION_NOTE = marks.TRUNCATION_NOTE
 
 #: Month view of the Calendar app. The event itself is read over CalDAV and needs no app;
 #: this link needs the Calendar web interface, which is what a human opens.
@@ -132,7 +143,10 @@ async def _fetch_file(clients: NcClients, fileid: str) -> dict[str, Any]:
     path = str(entry["path"])
     answer = await files_tools.read(clients, path=path, max_bytes=MAX_TEXT_BYTES)
 
-    text = str(answer["content"])
+    # The document's own copy of either marker goes before this server writes one of its
+    # own (BL-09, ME-03): a complete file that carries the note would claim to be cut, and
+    # a cut one could point the model at an offset its author chose.
+    text = marks.without_marks(str(answer["content"]))
     metadata = {"kind": "file", "path": path}
     if answer["content_type"]:
         metadata["content_type"] = str(answer["content_type"])
@@ -164,7 +178,7 @@ async def _fetch_note(clients: NcClients, note_id: str) -> dict[str, Any]:
     return {
         "id": str(note["id"]),
         "title": str(note["title"]),
-        "text": str(note["content"]),
+        "text": marks.without_marks(str(note["content"])),
         "url": str(note["url"]),
         "metadata": metadata,
     }
@@ -189,7 +203,7 @@ async def _fetch_card(clients: NcClients, parts: tuple[str, ...]) -> dict[str, A
     return {
         "id": ids.encode_card(board, stack, identifier),
         "title": str(card.get("title") or ""),
-        "text": str(card.get("description") or ""),
+        "text": marks.without_marks(str(card.get("description") or "")),
         "url": deck_client.web_url(clients.creds, identifier),
         "metadata": metadata,
     }
@@ -260,7 +274,7 @@ async def _fetch_event(clients: NcClients, calendar_uri: str, object_name: str) 
     return {
         "id": ids.encode_event(calendar_uri, object_name),
         "title": str(event["summary"]),
-        "text": "\n".join(lines),
+        "text": marks.without_marks("\n".join(lines)),
         "url": f"{clients.creds.base_url}{CALENDAR_WEB_PREFIX}/{start[:10]}",
         "metadata": metadata,
     }
