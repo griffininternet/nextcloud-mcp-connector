@@ -271,7 +271,8 @@ and refuses a path that exists.
 `FAIL tools/list expected 15 tools, got 16` and exits `1`. That line is about the script and
 not about the connector. Its expected count is the one phase 1 wrote down, the sixteenth
 tool (`prepare_context`) arrived later, and the script never calls that one. Every tool it
-does call answered. The stale count is recorded in the deferred items of this phase, so it
+does call answered. The current count lives in `tests/contract/test_tool_surface.py`, never
+in a document. The stale count is recorded in the deferred items of this phase, so it
 gets its own change rather than a quick edit inside a demo run.
 
 **Say the transport out loud:** this step runs over the stdio transport with an app
