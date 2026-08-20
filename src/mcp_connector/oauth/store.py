@@ -162,7 +162,22 @@ CREATE TABLE IF NOT EXISTS clients (
   metadata_json TEXT NOT NULL,
   allowed INTEGER NOT NULL DEFAULT 1,
   registered_at INTEGER NOT NULL,
-  last_used_at INTEGER
+  last_used_at INTEGER,
+  -- The two moments of a client that identifies itself with a metadata document instead of
+  -- registering (AUTH-08). NULL in both is what every other row carries and means "not one
+  -- of those": a registration that arrived through RFC 7591 has no document to be fresh
+  -- about, and no row is ever rewritten to say so.
+  -- Two columns and not one, because the two windows are two different statements
+  -- (pitfall 4): the registration TTL above is about a registration that never produced a
+  -- token, while the freshness below is about a document that may have changed since it was
+  -- read. Running out of freshness costs one fetch; running out of registration TTL costs
+  -- the row and, through the cascade, every connection under it.
+  -- The freshness window comes from the HTTP cache headers of the answer, floored at 300
+  -- seconds and capped at 3600, which the draft explicitly leaves to the authorization
+  -- server ("SHOULD respect HTTP cache headers", "MAY define its own upper and/or lower
+  -- bounds", section 6.6).
+  cimd_fetched_at INTEGER,
+  cimd_expires_at INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS flows (
@@ -245,7 +260,13 @@ def token_hash(token: str) -> str:
 
 @dataclass(frozen=True, slots=True, repr=False)
 class ClientRow:
-    """A registered client. The secret hash is masked like every other credential."""
+    """A registered client. The secret hash is masked like every other credential.
+
+    The two ``cimd_`` fields are ``None`` for every row that came from a registration, and
+    that is how the rest of the code tells the two kinds apart: a set ``cimd_fetched_at``
+    means this identity was read from a metadata document and can be read again, which is
+    what takes such a row out of the registration TTL (pitfall 4).
+    """
 
     client_id: str
     client_secret_hash: str | None
@@ -253,6 +274,8 @@ class ClientRow:
     allowed: bool
     registered_at: int
     last_used_at: int | None
+    cimd_fetched_at: int | None = None
+    cimd_expires_at: int | None = None
 
     def __repr__(self) -> str:
         return (
@@ -432,22 +455,42 @@ class OAuthStore:
         secret_hash: str | None = None,
         allowed: bool = True,
         now: int | None = None,
+        cimd_fetched_at: int | None = None,
+        cimd_expires_at: int | None = None,
     ) -> None:
-        """Write a registration, keeping the original registration time on an update."""
+        """Write a registration, keeping the original registration time on an update.
+
+        The two ``cimd_`` values default to ``None``, which is what every caller that
+        writes a registration passes: a row without them is a row of the registration path
+        and stays one. The client identifier metadata document path (AUTH-08) hands both in
+        and hands them in again on every re-read, so an update refreshes them while
+        ``registered_at`` keeps saying when this identity was first seen here.
+        """
         moment = _moment(now)
 
         def work(conn: sqlite3.Connection) -> None:
             conn.execute(
                 """
                 INSERT INTO clients (
-                  client_id, client_secret_hash, metadata_json, allowed, registered_at
-                ) VALUES (?, ?, ?, ?, ?)
+                  client_id, client_secret_hash, metadata_json, allowed, registered_at,
+                  cimd_fetched_at, cimd_expires_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(client_id) DO UPDATE SET
                   client_secret_hash = excluded.client_secret_hash,
                   metadata_json = excluded.metadata_json,
-                  allowed = excluded.allowed
+                  allowed = excluded.allowed,
+                  cimd_fetched_at = excluded.cimd_fetched_at,
+                  cimd_expires_at = excluded.cimd_expires_at
                 """,
-                (client_id, secret_hash, metadata_json, int(allowed), moment),
+                (
+                    client_id,
+                    secret_hash,
+                    metadata_json,
+                    int(allowed),
+                    moment,
+                    cimd_fetched_at,
+                    cimd_expires_at,
+                ),
             )
 
         await self._write(work)
@@ -456,7 +499,7 @@ class OAuthStore:
         def work(conn: sqlite3.Connection) -> ClientRow | None:
             row = conn.execute(
                 "SELECT client_id, client_secret_hash, metadata_json, allowed, registered_at, "
-                "last_used_at FROM clients WHERE client_id = ?",
+                "last_used_at, cimd_fetched_at, cimd_expires_at FROM clients WHERE client_id = ?",
                 (client_id,),
             ).fetchone()
             if row is None:
@@ -468,6 +511,8 @@ class OAuthStore:
                 allowed=bool(row[3]),
                 registered_at=row[4],
                 last_used_at=row[5],
+                cimd_fetched_at=row[6],
+                cimd_expires_at=row[7],
             )
 
         return await self._read(work)
@@ -845,14 +890,23 @@ class OAuthStore:
         The same two windows as the purge below, and deliberately the same SQL shape: a
         caller reads this list, hands the credentials of those clients back to Nextcloud and
         deletes them, and the purge is then the backstop that removes what is left over.
+
+        **A row read from a metadata document is not in this list** (pitfall 4, T-06-31).
+        The registration TTL says "a registration that nobody ever used", and that sentence
+        does not hold for an identity this server can read again at any time: such a row is
+        never orphaned, and deleting it would take the connections under it along through the
+        cascade, which is a user's connection ended by a deadline nobody set. The freshness
+        of those rows is the other column and it costs a fetch, never a row. The purge below
+        still removes them once they carry no connection at all, which is what keeps the
+        table from growing, and re-reading the document writes the row again.
         """
         moment = _moment(now)
 
         def work(conn: sqlite3.Connection) -> list[str]:
             rows = conn.execute(
-                "SELECT client_id FROM clients WHERE "
-                "(last_used_at IS NULL AND registered_at < ?) OR "
-                "(last_used_at IS NOT NULL AND last_used_at < ?) "
+                "SELECT client_id FROM clients WHERE cimd_fetched_at IS NULL AND "
+                "((last_used_at IS NULL AND registered_at < ?) OR "
+                "(last_used_at IS NOT NULL AND last_used_at < ?)) "
                 "ORDER BY registered_at LIMIT ?",
                 (moment - UNUSED_CLIENT_TTL, moment - IDLE_CLIENT_TTL, limit),
             ).fetchall()
@@ -1422,6 +1476,13 @@ def _add_missing_columns(conn: sqlite3.Connection) -> None:
     asks first. Nothing here rewrites a row: a column that is added with a default is what
     every existing code carried anyway, an authorization request that named its return
     address.
+
+    The two columns of plan 06-05 are the same migration in its cheapest form: they are
+    nullable and have no default, so a ``clients`` table written by an earlier build grows
+    two empty columns and every row in it keeps meaning exactly what it meant, a client that
+    registered and has no metadata document to be fresh about (``cleanup_at`` above is the
+    same shape and the same reasoning). There is no data migration here either, and there is
+    nothing that could be migrated: no existing row was ever read from a document.
     """
     columns = {row[1] for row in conn.execute("PRAGMA table_info(auth_codes)")}
     if "redirect_uri_explicit" not in columns:
@@ -1431,6 +1492,11 @@ def _add_missing_columns(conn: sqlite3.Connection) -> None:
     columns = {row[1] for row in conn.execute("PRAGMA table_info(authorizations)")}
     if "cleanup_at" not in columns:
         conn.execute("ALTER TABLE authorizations ADD COLUMN cleanup_at INTEGER")
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(clients)")}
+    if "cimd_fetched_at" not in columns:
+        conn.execute("ALTER TABLE clients ADD COLUMN cimd_fetched_at INTEGER")
+    if "cimd_expires_at" not in columns:
+        conn.execute("ALTER TABLE clients ADD COLUMN cimd_expires_at INTEGER")
 
 
 def _authorization_row(row: tuple[Any, ...]) -> AuthorizationRow:

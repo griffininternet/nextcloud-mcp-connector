@@ -629,6 +629,176 @@ async def test_deleting_a_client_takes_its_authorizations_with_it(tmp_path: Path
     assert await subject.load_authorization(AUTH_ID) is None
 
 
+# --- the two columns of a client that identifies itself with a document (AUTH-08) ------
+
+#: The ``clients`` table exactly as a build before plan 06-05 wrote it. Kept as its own
+#: statement rather than derived from ``store.SCHEMA``, because a derivation would change
+#: with the schema and this string has to keep saying what the old file said.
+CLIENTS_TABLE_BEFORE_06_05 = """
+CREATE TABLE clients (
+  client_id TEXT PRIMARY KEY,
+  client_secret_hash TEXT,
+  metadata_json TEXT NOT NULL,
+  allowed INTEGER NOT NULL DEFAULT 1,
+  registered_at INTEGER NOT NULL,
+  last_used_at INTEGER
+);
+"""
+
+METADATA = '{"client_id": "client-4711"}'
+
+
+def with_a_client_table_of_an_earlier_build(tmp_path: Path, *, registered_at: int) -> None:
+    """A store file with one registration in the shape a build before plan 06-05 left it."""
+    conn = sqlite3.connect(tmp_path / store.STORE_FILENAME)
+    try:
+        conn.executescript(CLIENTS_TABLE_BEFORE_06_05)
+        conn.execute(
+            "INSERT INTO clients (client_id, client_secret_hash, metadata_json, allowed, "
+            "registered_at, last_used_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (CLIENT_ID, None, METADATA, 1, registered_at, None),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def column_names(tmp_path: Path, table: str) -> list[str]:
+    """The columns of one table, in the order the file carries them."""
+    return [str(row[1]) for row in query(tmp_path, f"PRAGMA table_info({table})")]
+
+
+@pytest.mark.anyio
+async def test_a_client_table_of_an_earlier_build_grows_the_two_columns(tmp_path: Path) -> None:
+    """The migration rule of this project: one ALTER that asks first, and no rewritten row.
+
+    A file from before plan 06-05 has a ``clients`` table without the two columns, and
+    ``CREATE TABLE IF NOT EXISTS`` does nothing to a table that is already there. So the
+    first write of a document identity would fail on the file of every existing
+    installation, which is exactly the failure ``_add_missing_columns`` exists against.
+    """
+    with_a_client_table_of_an_earlier_build(tmp_path, registered_at=1_000)
+
+    subject = open_store(tmp_path)
+    await subject.save_client(
+        "https://claude.ai/oauth/claude-code-client-metadata",
+        metadata_json="{}",
+        cimd_fetched_at=2_000,
+        cimd_expires_at=2_300,
+    )
+
+    columns = column_names(tmp_path, "clients")
+    assert "cimd_fetched_at" in columns
+    assert "cimd_expires_at" in columns
+    written = await subject.load_client("https://claude.ai/oauth/claude-code-client-metadata")
+    assert written is not None
+    assert (written.cimd_fetched_at, written.cimd_expires_at) == (2_000, 2_300)
+
+
+@pytest.mark.anyio
+async def test_the_registration_of_an_earlier_build_is_untouched_by_the_migration(
+    tmp_path: Path,
+) -> None:
+    """NULL in both columns is what the existing rows mean: no document, nothing to migrate."""
+    with_a_client_table_of_an_earlier_build(tmp_path, registered_at=1_000)
+
+    subject = open_store(tmp_path)
+    row = await subject.load_client(CLIENT_ID)
+
+    assert row is not None
+    assert row.cimd_fetched_at is None
+    assert row.cimd_expires_at is None
+    assert (row.registered_at, row.allowed, row.metadata_json) == (1_000, True, METADATA)
+
+
+@pytest.mark.anyio
+async def test_the_migration_is_idempotent_over_two_openings_of_the_same_file(
+    tmp_path: Path,
+) -> None:
+    """It asks before it alters, so the second open is not an error and not a second column."""
+    with_a_client_table_of_an_earlier_build(tmp_path, registered_at=1_000)
+
+    first = open_store(tmp_path)
+    await first.save_client("first", metadata_json="{}", cimd_fetched_at=10, cimd_expires_at=310)
+    second = open_store(tmp_path)
+    await second.save_client("second", metadata_json="{}", cimd_fetched_at=20, cimd_expires_at=320)
+
+    columns = column_names(tmp_path, "clients")
+    assert columns.count("cimd_fetched_at") == 1
+    assert columns.count("cimd_expires_at") == 1
+
+
+@pytest.mark.anyio
+async def test_the_two_moments_round_trip_and_a_plain_registration_has_neither(
+    tmp_path: Path,
+) -> None:
+    subject = open_store(tmp_path)
+    await subject.save_client(CLIENT_ID, metadata_json=METADATA)
+    await subject.save_client(
+        "https://claude.ai/oauth/claude-code-client-metadata",
+        metadata_json=METADATA,
+        secret_hash=store.token_hash("the-secret"),
+        cimd_fetched_at=5_000,
+        cimd_expires_at=5_600,
+    )
+
+    registered = await subject.load_client(CLIENT_ID)
+    assert registered is not None
+    assert (registered.cimd_fetched_at, registered.cimd_expires_at) == (None, None)
+
+    read = await subject.load_client("https://claude.ai/oauth/claude-code-client-metadata")
+    assert read is not None
+    assert (read.cimd_fetched_at, read.cimd_expires_at) == (5_000, 5_600)
+    assert store.token_hash("the-secret") not in repr(read), "the mask of the row still holds"
+    assert "***" in repr(read)
+
+
+@pytest.mark.anyio
+async def test_a_second_read_refreshes_the_two_moments_and_keeps_the_first_one(
+    tmp_path: Path,
+) -> None:
+    """Re-reading a document is not a new identity: ``registered_at`` is when it first showed
+    up here, and only the freshness moves."""
+    subject = open_store(tmp_path)
+    await subject.save_client(
+        CLIENT_ID, metadata_json=METADATA, now=1_000, cimd_fetched_at=1_000, cimd_expires_at=1_300
+    )
+
+    await subject.save_client(
+        CLIENT_ID, metadata_json=METADATA, now=9_000, cimd_fetched_at=9_000, cimd_expires_at=9_600
+    )
+
+    row = await subject.load_client(CLIENT_ID)
+    assert row is not None
+    assert row.registered_at == 1_000, "the registration time is deliberately not overwritten"
+    assert (row.cimd_fetched_at, row.cimd_expires_at) == (9_000, 9_600)
+
+
+@pytest.mark.anyio
+async def test_a_row_read_from_a_document_is_never_listed_as_an_expired_client(
+    tmp_path: Path,
+) -> None:
+    """Pitfall 4, T-06-31: the registration TTL must not end a connection nobody ended.
+
+    Both rows are equally old and equally unused. The registration is what the sweep of
+    ``sweep_expired_clients`` exists for; the row that was read from a metadata document is
+    an identity this server can read again at any time, so it is never the orphan the TTL
+    describes, and deleting it would take the connections under it along.
+    """
+    subject = open_store(tmp_path)
+    long_ago = int(time.time()) - store.UNUSED_CLIENT_TTL - 1
+    await subject.save_client("registered-client", metadata_json=METADATA, now=long_ago)
+    await subject.save_client(
+        "https://claude.ai/oauth/claude-code-client-metadata",
+        metadata_json=METADATA,
+        now=long_ago,
+        cimd_fetched_at=long_ago,
+        cimd_expires_at=long_ago + 300,
+    )
+
+    assert await subject.expired_clients(10) == ["registered-client"]
+
+
 # --- flows and authorization codes --------------------------------------------------
 
 
