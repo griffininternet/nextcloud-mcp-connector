@@ -17,9 +17,9 @@ files_reviewed_list:
   - docs/uninstall.md
 findings:
   critical: 0
-  warning: 1
+  warning: 0
   info: 6
-  total: 7
+  total: 6
 status: issues_found
 ---
 
@@ -38,16 +38,18 @@ Gegenstand: das Re-Review des Diffs `eebcc4c..HEAD`, also die Gap-Closure-Läufe
 
 * **CR-01 (alt, http-Crash-Loop): geschlossen, beide Hälften.** Die Prävention steht in `config_values._public_url` (Zeilen 296 bis 301): http auf einem Nicht-Loopback-Host wird verworfen, `LOOPBACK_HOSTS` ist eine exakte Mengen-Mitgliedschaft über `urlsplit(...).hostname` (lowercase, IPv6 ohne Klammern), und die Testmatrix deckt die Umgehungsversuche (`localhost.example.com`, `127.0.0.1.example.com`, private Adresse, Groß-/Kleinschreibung, IPv6-Literal) sowie die Gegenrichtung (Loopback-http bleibt nutzbar, der Default in Code überlebt die Validierung). Die Rettung steht in `entry_exapp.main` (Zeilen 338 bis 374): genau ein Retry ohne `NC_MCP_PUBLIC_URL`, ein zweiter Fehlschlag ist `SystemExit(2)`, nichts wird nach Nextcloud zurückgeschrieben, der Wert erscheint in keiner Log-Zeile (auch der Host nicht, per Test gepinnt). Der Rescue-Pfad ist zusätzlich einmal ungestubbt gegen das echte SDK getestet (`test_an_unusable_address_from_the_deploy_environment_takes_the_same_way`).
 * **WR-01 (alt, Purge trotz Totalausfall der Revocations): geschlossen.** `purge.py` bricht bei `rows and revoked == 0` ab, lässt Tabellen und Schlüssel unangetastet, antwortet mit `purged: false` plus `REVOKE_HINT` und bleibt wiederholbar. Die Linie liegt bewusst bei null, nicht bei eins (Teilfehlschläge zählen und laufen weiter, per Test `test_a_partly_failed_revocation_purges_and_counts_the_failure` gepinnt); das leere Deployment als Gegenprobe ist ebenfalls getestet. `docs/uninstall.md` dokumentiert den neuen Abbruchfall samt Handlungsanweisung.
-* **WR-02 (alt, zu permissive force-Erkennung): im Kern geschlossen, ein Werttyp bleibt offen.** Der Query-String-Zweig ist entfernt (Test: `?force=1`, `?force=true`, `?force=` laufen nichts), `_is_set` arbeitet für Strings mit einer Positivliste (`TRUE_WORDS`), Unbekanntes ist ein Nein plus eine Log-Zeile ohne den Wert. Für JSON-Zahlen gilt die Positivliste jedoch nicht, siehe WR-01 (neu) unten.
+* **WR-02 (alt, zu permissive force-Erkennung): im Kern geschlossen, ein Werttyp bleibt offen.** Der Query-String-Zweig ist entfernt (Test: `?force=1`, `?force=true`, `?force=` laufen nichts), `_is_set` arbeitet für Strings mit einer Positivliste (`TRUE_WORDS`), Unbekanntes ist ein Nein plus eine Log-Zeile ohne den Wert. Für JSON-Zahlen galt die Positivliste zunächst nicht, siehe WR-01 (neu) unten, inzwischen behoben (Commit 8c5954f).
 * **WR-03 (alt, `PUBLIC_URL` ungeprüft im Registrierungs-Payload): geschlossen.** `require_url_shape` existiert, läuft im Hauptlauf vor jeder Registrierung (per Test der Position gepinnt), verbietet `"`, `\` und Whitespace, und läuft mit `grep -z`, sodass ein Wert mit eingebetteter Newline nicht auf seiner ersten Zeile durchrutscht (Testfall vorhanden).
 
-Neu gefunden wurde kein Blocker. Es bleibt eine Warnung (die Zahlen-Lücke in `_is_set`) und eine Reihe kleinerer Punkte, darunter zwei aus dem alten Review offen gebliebene Infos, deren Dateien in diesem Diff angefasst, deren Findings aber nicht adressiert wurden (IN-01, IN-04).
+Neu gefunden wurde kein Blocker. Die eine Warnung (die Zahlen-Lücke in `_is_set`, WR-01) wurde nach dem Review behoben (Commit 8c5954f, siehe unten). Es bleibt eine Reihe kleinerer Punkte, darunter zwei aus dem alten Review offen gebliebene Infos, deren Dateien in diesem Diff angefasst, deren Findings aber nicht adressiert wurden (IN-01, IN-04).
 
 ## Narrative Findings (AI reviewer)
 
 ## Warnings
 
 ### WR-01: `_is_set` wertet jede JSON-Zahl ungleich null als force-Ja und unterläuft damit die eigene Positivlisten-Regel
+
+**Status: BEHOBEN** (2026-08-20, Commit 8c5954f): `_is_set` akzeptiert als Zahl nur noch die 1 als Ja; jede andere Zahl (auch Floats wie 0.5) ist ein Nein mit genau einer Warnzeile, wie ein unbekanntes Wort, die 0 bleibt wie das Wort "0" ein ausgeschriebenes Nein ohne Log-Zeile. Tests: `test_a_number_other_than_one_is_not_a_yes_and_says_so_once` (2, -1, 0.5 mit genau einer Warnung) plus dieselben drei Fälle in `test_a_body_without_the_force_flag_changes_nothing`; die Zahl 1 und `true` bleiben per `test_every_shape_of_the_flag_appapi_may_send_is_accepted` ein Ja.
 
 **File:** `src/mcp_connector/exapp/purge.py:320-353`
 **Issue:** Der WR-02-Fix (alt) begründet die Positivliste damit, dass für die eine nicht rückgängig machbare Aktion "a value nobody understands is a typo, and a typo is not a security switch". Für Strings ist das umgesetzt: `"2"` und `"-1"` sind ein Nein plus Warnung (per Test gepinnt). Für JSON-Integer gilt das Gegenteil: `isinstance(value, int)` mit `value != 0` macht `{"options": {"force": 2}}` und `{"options": {"force": -1}}` zu einem Ja, ohne Log-Zeile. Das ist eine sichtbare Asymmetrie (der String `"2"` verweigert, die Zahl `2` löscht die ganze Instanz) und exakt die Restfläche, die der eigene Docstring als Angriffsfläche benennt "for the day one of the three barriers in front of this handler falls". Die gemessene AppAPI-Invocation sendet Booleans, nie Zahlen; erreichbar ist der Pfad nur mit gültigem App-Secret hinter dem `x-origin-ip`-Check, daher Warning und nicht Critical.
