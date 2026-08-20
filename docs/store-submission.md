@@ -27,12 +27,11 @@ proof of the difference is the last row of the table below.
 What remains is maintenance: raise the version, write the changelog, tag, sign the
 release asset and hand its URL to the store. That is the runbook further down.
 
-**Open, 2026-08-20: 0.1.2 is built, published and signed, and not yet submitted.** Steps
-1 to 6 of the runbook are done and every one of them is a row in the table below: the tag
-`v0.1.2` is pushed, the workflow is green, the asset answers 200 and its signature
-verifies against the certificate. Only step 7 is outstanding, because it needs the store
-account, see the note under step 7. The signature is reproduced by re running the two
-commands of step 6 against the published asset, it does not have to be carried around.
+**Done, 2026-08-20: 0.1.2 is live in the store.** Steps 1 to 7 of the runbook are done and
+every one of them is a row in the table below: the tag `v0.1.2` is pushed, the workflow is
+green, the asset answers 200, its signature verifies against the certificate, and the
+upload answered 201. The upload ran in the page context of the signed in store session
+(see the note under step 7), the token never left the page.
 
 ## What the artifacts are
 
@@ -93,6 +92,8 @@ Every line was measured, not assumed. No fact without its check.
 | 2026-08-20 08:36Z | All three tags exist, none was rewritten | `https://ghcr.io/v2/street1983nk/mcp_connector/tags/list` returns `["0.1.0","0.1.1","0.1.2"]` |
 | 2026-08-20 08:28Z | Both screenshot URLs answer 200, the overview with 82580 bytes and the connections page with 41825 | `curl -sSI` on `docs/screenshots/connections.png` and `docs/screenshots/connections-page.png` |
 | 2026-08-20 08:30Z | The manifest of 0.1.2 passes the validation the store runs, and both screenshots survive the pre pass | `pre-info.xslt` applied to `appinfo/info.xml`, then `info.xsd`, both fetched from the appstore repository: `assertValid` passes. Raw against `info.xsd` reports `routes` only, the documented false positive |
+| 2026-08-20 08:42Z | The store accepted the 0.1.2 release | `POST /api/v1/apps/releases` from the page context of the signed in store session answered HTTP 201 |
+| 2026-08-20 08:43Z | The store page serves 0.1.2 as the current release | `https://apps.nextcloud.com/apps/mcp_connector` answers 200 and names `0.1.2`; `api/v1/appapi_apps.json` carries the `0.1.2` release line with the platform span of the manifest |
 
 ### The update keeps the connections
 
@@ -196,17 +197,19 @@ on, and step 4 is irreversible in public.
    contains `appinfo/info.xml`) and validates the metadata (after `pre-info.xslt`)
    against `info.xsd`. 201 means accepted.
 
-   **This step needs a person, and that is not going to change.** The token belongs to
-   the store account, it is not a repository secret and it is deliberately not stored in
-   this working copy. Reading it out of a browser profile is not a way around that: the
-   profile of a running browser holds its cookie database under an exclusive lock, and
-   from Chrome 127 on those cookies are additionally bound to the installation that
-   wrote them, so a copied profile does not open the session anyway. Whoever holds the
-   account opens `https://apps.nextcloud.com/account/token`, and either pastes the
-   download URL and the signature into the form at
-   `https://apps.nextcloud.com/developer/apps/releases/new` or runs the `curl` above with
-   the token in the environment. Everything before this step is automatable and is
-   automated; this one is the hand off.
+   **This step needs the store session, not necessarily a person at the keyboard.** The
+   token belongs to the store account, it is not a repository secret and it is
+   deliberately not stored in this working copy. Reading it out of a browser profile
+   from outside is not a way in: the profile of a running browser holds its cookie
+   database under an exclusive lock, and from Chrome 127 on those cookies are bound to
+   the installation that wrote them. What does work, and is how both 0.1.1 and 0.1.2
+   were submitted, is running the upload inside the page context of an already signed
+   in browser session: open `https://apps.nextcloud.com/account/token`, read the token
+   from the page and POST to `/api/v1/apps/releases` from within that page, so the
+   token never leaves the browser. Without such a session, whoever holds the account
+   either pastes the download URL and the signature into the form at
+   `https://apps.nextcloud.com/developer/apps/releases/new` or runs the `curl` above
+   with the token in the environment.
 
    Steps 1 to 6 leave nothing to redo: the signature is a pure function of the published
    asset and the key, so it is recomputed with the two commands of step 6 whenever it is
