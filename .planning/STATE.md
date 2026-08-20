@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Plan 05-12 fertig: die Ursache des Startzeit-401 ist gemessen, nicht vermutet. Der Lesekanal traegt (M1 = 200 mit zurueckgeliefertem Wert), M2 und M3 zeigen keine 401-Zeile, M3b und M3c isolieren das enabled-Flag als einzige Variable (401, OCS 997). Zweig N fuer Plan 05-13: keine Selbstneustart-Mechanik, sondern eine ehrliche Logzeile plus der gemessen wirksame Disable/Enable-Zyklus. Restart-Policy: unless-stopped. Naechster Schritt: /gsd:plan-phase 05 fuer Plan 05-13."
-last_updated: "2026-08-20T04:00:48.714Z"
+stopped_at: "Plan 05-15 fertig: WR-01, WR-02 und WR-03 aus 05-REVIEW.md sind geschlossen. Der Purge bricht bei null gelungenen Rueckgaben ehrlich ab (Tabellen und Datenschluessel bleiben, Lauf wiederholbar), die Flag-Erkennung ist eine Positivliste ohne Query-Parameter, und NC_EXAPP_PUBLIC_URL ist im Bootstrap gepinnt. Naechster Schritt: Plan 05-16 (Backlog-Eintrag fuer IN-01 bis IN-06)."
+last_updated: "2026-08-20T04:15:31.935Z"
 last_activity: 2026-08-20
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 50
-  completed_plans: 46
+  completed_plans: 47
   percent: 80
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 ## Current Position
 
 Phase: 05 (hardening-und-store-einreichung) — EXECUTING
-Plan: 3 of 16
+Plan: 4 of 16
 Status: Ready to execute
 Last activity: 2026-08-20
 
-Progress: [█████████░] 92%
+Progress: [█████████░] 94%
 
 ## Performance Metrics
 
@@ -99,6 +99,7 @@ Progress: [█████████░] 92%
 | Phase 05 P10 | 30 min | 3 tasks | 8 files |
 | Phase 05 P11 | 35 min | 2 tasks tasks | 5 files files |
 | Phase 05 P12 | 20 min | 2 tasks tasks | 1 file files |
+| Phase 05 P15 | 30 min | 2 tasks tasks | 5 files files |
 
 ## Accumulated Context
 
@@ -321,6 +322,9 @@ Recent decisions affecting current work:
 - [Phase 05-hardening-und-store-einreichung]: Der gespeicherte Admin-Wert wird im Rettungszweig NICHT geloescht (T-05-44 accept): er bleibt im Formular sichtbar und korrigierbar
 - [Phase 05-hardening-und-store-einreichung]: Der 401 des Startzeit-Lesevorgangs der Admin-Werte haengt allein am Aktivierungszustand der ExApp, nicht am Kanal und nicht am Zeitpunkt. Gemessen in 05-12: M1 antwortet 200 und liefert einen gesetzten Wert zurueck, M2 und M3 starten ohne die 401-Zeile, M3b und M3c isolieren das enabled-Flag als einzige Variable (401, OCS 997, AppAPI authentication failed); die Quelltext-Gegenprobe in AppAPIService::validateExAppRequestToNC bestaetigt es
 - [Phase 05-hardening-und-store-einreichung]: Plan 05-13 geht Zweig N: keine Selbstneustart-Mechanik am enabled=1-Hook, sondern eine ehrliche Logzeile fuer das Fenster vor der Aktivierung plus der dokumentierte Disable/Enable-Zyklus. Ein zweiter Lesevorgang samt Cache waere ohne Wirkung, weil jeder Start einer aktivierten App die Werte bereits vollstaendig liest (M1, M2, M3); die Restart-Policy des Deploy-Daemon-Containers ist gemessen unless-stopped, ein Selbstneustart waere also machbar, loest aber nichts
+- [Phase 05-hardening-und-store-einreichung]: Der Purge bricht bei null gelungenen Rueckgaben ab (WR-01): Tabellen und Datenschluessel bleiben unangetastet, weil die Tabellen die einzige Zuordnung Verbindung zu App-Passwort sind; ein Teilfehlschlag laeuft weiter und wird gezaehlt
+- [Phase 05-hardening-und-store-einreichung]: purge._is_set ist eine Positivliste (TRUE_WORDS) und der Query-Parameter-Zweig entfaellt (WR-02): die gemessene AppAPI-Form ist ein JSON-Boolean und bleibt per Regressionstest angenommen, ein unbekanntes Wort ist ein Tippfehler mit Logzeile
+- [Phase 05-hardening-und-store-einreichung]: require_url_shape pinnt NC_EXAPP_PUBLIC_URL vor json_info (WR-03) und laeuft mit grep -Eqz, weil ein Wert mit Zeilenumbruch sonst auf seiner ersten Zeile bestehen wuerde
 
 ### Pending Todos
 
@@ -351,6 +355,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T04:00:38.232Z
-Stopped at: Plan 05-12 fertig: die Ursache des Startzeit-401 ist gemessen, nicht vermutet. Der Lesekanal traegt (M1 = 200 mit zurueckgeliefertem Wert), M2 und M3 zeigen keine 401-Zeile, M3b und M3c isolieren das enabled-Flag als einzige Variable (401, OCS 997). Zweig N fuer Plan 05-13: keine Selbstneustart-Mechanik, sondern eine ehrliche Logzeile plus der gemessen wirksame Disable/Enable-Zyklus. Restart-Policy: unless-stopped. Naechster Schritt: /gsd:plan-phase 05 fuer Plan 05-13.
+Last session: 2026-08-20T04:15:31.919Z
+Stopped at: Plan 05-15 fertig: WR-01, WR-02 und WR-03 aus 05-REVIEW.md sind geschlossen. Der Purge bricht bei null gelungenen Rueckgaben ehrlich ab (Tabellen und Datenschluessel bleiben, Lauf wiederholbar), die Flag-Erkennung ist eine Positivliste ohne Query-Parameter, und NC_EXAPP_PUBLIC_URL ist im Bootstrap gepinnt. Naechster Schritt: Plan 05-16 (Backlog-Eintrag fuer IN-01 bis IN-06).
 Resume file: None

@@ -236,7 +236,7 @@ Plans:
 
 - [x] 05-11-PLAN.md - CR-01 schliessen: https-oder-Loopback-Regel und Issuer-Refusal ohne Startabbruch (Wave 1)
 - [x] 05-12-PLAN.md - Ursachenanalyse des 401 beim Startzeit-Lesevorgang der Admin-Werte (Wave 1)
-- [ ] 05-15-PLAN.md - Advisory-Funde WR-01, WR-02 und WR-03 aus dem Phasen-Review (Wave 1)
+- [x] 05-15-PLAN.md - Advisory-Funde WR-01, WR-02 und WR-03 aus dem Phasen-Review (Wave 1)
 - [ ] 05-16-PLAN.md - MUCGPT-Verprobungsprotokoll, gefuehrte Restposten, Owner-Entscheidung (Wave 1)
 
 **Wave 7, Gap Closure** *(blocked on 05-11 und 05-12)*
@@ -258,7 +258,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. ExApp-Shell | 7/7 | Complete    | 2026-08-15 |
 | 3. OAuth 2.1 | 8/9 | In Progress|  |
 | 4. Per-User-Verwaltung und prepare_context | 4/4 | Complete   | 2026-08-17 |
-| 5. Hardening und Store-Einreichung | 12/16 | In Progress|  |
+| 5. Hardening und Store-Einreichung | 13/16 | In Progress|  |
 
 ## Coverage
 
