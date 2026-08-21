@@ -9,7 +9,8 @@ user parameter cannot slip in between two plans.
 
 The sixteenth tool, ``prepare_context``, arrived in plan 04-02 and had to be entered here
 on purpose: the frozen literal below refused it until then, which is exactly the job of
-this file (D-58).
+this file (D-58). The Tables pair of plan 08-04 went through the same door, and with it
+every other frozen number of this file, which is why they are named in one place.
 """
 
 import re
@@ -46,12 +47,20 @@ EXPECTED_TOOLS = {
     "contacts_search",
     "unified_search",
     "prepare_context",
+    "tables_browse",
+    "tables_create_row",
     "search",
     "fetch",
 }
 
-# The four write paths. Everything else in EXPECTED_TOOLS only reads (D-16).
-CREATE_TOOLS = {"files_upload", "calendar_create_event", "notes_create", "deck_create_card"}
+# The five write paths. Everything else in EXPECTED_TOOLS only reads (D-16).
+CREATE_TOOLS = {
+    "files_upload",
+    "calendar_create_event",
+    "notes_create",
+    "deck_create_card",
+    "tables_create_row",
+}
 
 # The documented exception to the schema diet: ChatGPT reads structured content (D-14).
 STRUCTURED_TOOLS = {"search", "fetch"}
@@ -237,6 +246,60 @@ async def test_there_is_no_tool_per_deck_level() -> None:
 
 
 @pytest.mark.anyio
+async def test_the_two_tables_tools_are_listed_and_browse_takes_an_enum_level() -> None:
+    """D-06 for the Tables family: one browse tool, one create-only write, no more.
+
+    ``tables_create_row`` is the fifth write path of this server, and its annotations are
+    the whole security statement of the family: it writes, it cannot replace or delete, and
+    a second call is a second row rather than a no-op. The client below has no update and no
+    remove code at all, which is what makes those three flags honest (T-08-21).
+    """
+    async with Client(mcp, raise_exceptions=True) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+
+    for name in ("tables_browse", "tables_create_row"):
+        assert name in tools, f"{name} is part of the curated set (TABLES-01, TABLES-02)"
+        assert tools[name].output_schema is None, "structured_output=False (schema diet)"
+
+    browse = tools["tables_browse"]
+    annotations = browse.annotations
+    assert annotations is not None
+    assert annotations.read_only_hint is True, "tables_browse only reads"
+    assert annotations.open_world_hint is False
+
+    schema = browse.input_schema
+    assert schema["properties"]["level"]["enum"] == ["tables", "columns", "rows"], (
+        "the level is an enum in the schema, not a free string the model has to guess"
+    )
+    assert "$defs" not in schema, "no nested models in the input schema (schema diet)"
+    assert "$defs" not in tools["tables_create_row"].input_schema, (
+        "values is a JSON string, exactly so that no nested model reaches the schema"
+    )
+
+    create = tools["tables_create_row"].annotations
+    assert create is not None
+    assert create.read_only_hint is False, "tables_create_row writes"
+    assert create.destructive_hint is False, "it can only create, never replace or delete"
+    assert create.idempotent_hint is False, "a second call creates a second row"
+    assert create.open_world_hint is False
+
+
+@pytest.mark.anyio
+async def test_there_is_no_tool_per_tables_level() -> None:
+    """The same anti-pattern one family later: three navigation tools buy nothing."""
+    async with Client(mcp, raise_exceptions=True) as client:
+        names = {tool.name for tool in (await client.list_tools()).tools}
+
+    forbidden = {
+        "tables_list_tables",
+        "tables_list_columns",
+        "tables_list_rows",
+        "tables_read_row",
+    }
+    assert not (names & forbidden), f"tables_browse covers these levels: {names & forbidden}"
+
+
+@pytest.mark.anyio
 async def test_unified_search_is_listed_as_a_pure_read_over_all_providers() -> None:
     """D-08 and TOOL-06: one cloud wide read, and the expectation management is in the text."""
     async with Client(mcp, raise_exceptions=True) as client:
@@ -304,12 +367,12 @@ async def test_prepare_context_is_listed_as_a_bundling_read() -> None:
 
 @pytest.mark.anyio
 async def test_the_curated_set_is_complete_and_only_the_chatgpt_profile_has_a_schema() -> None:
-    """The whole surface in one assertion: 16 tools, and the diet holds for 14 of them."""
+    """The whole surface in one assertion: 18 tools, and the diet holds for 16 of them."""
     async with Client(mcp, raise_exceptions=True) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
 
     assert set(tools) == EXPECTED_TOOLS
-    assert len(tools) == 16, "the curated set is 16 tools, no more and no fewer"
+    assert len(tools) == 18, "the curated set is 18 tools, no more and no fewer"
 
     with_schema = {name for name, tool in tools.items() if tool.output_schema is not None}
     assert with_schema == STRUCTURED_TOOLS, (
@@ -406,7 +469,7 @@ def _properties(schema: dict[str, Any]) -> list[tuple[str, Any]]:
 
 @pytest.mark.anyio
 async def test_every_tool_carries_honest_annotations() -> None:
-    """D-16 over the whole registry: four create-only tools, twelve pure reads."""
+    """D-16 over the whole registry: five create-only tools, thirteen pure reads."""
     async with Client(mcp, raise_exceptions=True) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
 
@@ -454,7 +517,7 @@ async def test_no_input_schema_accepts_a_user_parameter() -> None:
     async with Client(mcp, raise_exceptions=True) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
 
-    assert set(tools) == EXPECTED_TOOLS, "the confused deputy check must cover all 16 schemas"
+    assert set(tools) == EXPECTED_TOOLS, "the confused deputy check must cover all 18 schemas"
 
     findings: list[str] = []
     for name, tool in sorted(tools.items()):
@@ -494,7 +557,7 @@ async def test_the_readme_permission_table_matches_the_live_registry() -> None:
 def test_a_documented_tool_count_is_the_current_one_or_says_which_run_it_is_from() -> None:
     """IN-04: a page may record a run with an old count, it may not leave it unexplained.
 
-    Two kinds of number live in ``docs/``. A statement about the product ("all 16 tools")
+    Two kinds of number live in ``docs/``. A statement about the product ("all 18 tools")
     has to be the number this registry answers. A dated evidence line ("connected, 15 tools
     listed") is a record of a run and stays as it was recorded, and a reader who counts both
     holds one of them for wrong unless the page says which is which. So a page that names a
