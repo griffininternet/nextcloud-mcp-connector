@@ -79,29 +79,30 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TALK-01 | — | Pending |
-| TALK-02 | — | Pending |
-| TALK-03 | — | Pending |
-| TALK-04 | — | Pending |
-| TABLES-01 | — | Pending |
-| TABLES-02 | — | Pending |
-| MAIL-01 | — | Pending |
-| MAIL-02 | — | Pending |
-| MAIL-03 | — | Pending |
-| MAIL-04 | — | Pending |
-| SRV-06 | — | Pending |
-| CTX-01 | — | Pending |
-| CTX-02 | — | Pending |
-| TOOL-15 | — | Pending |
-| TOOL-16 | — | Pending |
-| SEC-01 | — | Pending |
-| EXAPP-07 | — | Pending |
+| TALK-01 | Phase 9 | Pending |
+| TALK-02 | Phase 9 | Pending |
+| TALK-03 | Phase 9 | Pending |
+| TALK-04 | Phase 9 | Pending |
+| TABLES-01 | Phase 8 | Pending |
+| TABLES-02 | Phase 8 | Pending |
+| MAIL-01 | Phase 10 | Pending |
+| MAIL-02 | Phase 10 | Pending |
+| MAIL-03 | Phase 10 | Pending |
+| MAIL-04 | Phase 8 | Pending |
+| SRV-06 | Phase 10 | Pending |
+| CTX-01 | Phase 11 | Pending |
+| CTX-02 | Phase 11 | Pending |
+| TOOL-15 | Phase 11 | Pending |
+| TOOL-16 | Phase 11 | Pending |
+| SEC-01 | Phase 10 | Pending |
+| EXAPP-07 | Phase 11 | Pending |
 
 **Coverage:**
 - v1.2 requirements: 17 total
-- Mapped to phases: 0
-- Unmapped: 17 (Roadmap ausstehend)
+- Mapped to phases: 17 (Phase 8: 3, Phase 9: 4, Phase 10: 5, Phase 11: 5)
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-08-21*
-*Last updated: 2026-08-21 after initial definition*
+*Last updated: 2026-08-21 nach Roadmap-Erstellung (Phasen 8-11 zugeordnet)*
+</content>

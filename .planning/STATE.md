@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Kuratierte Breite
 status: planning
-last_updated: "2026-08-21T04:29:06.014Z"
+last_updated: "2026-08-21T05:20:00.000Z"
 last_activity: 2026-08-21
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,17 +17,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-08-14)
+See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Current focus:** Phase 7 — verwaltungs clients live verprobt
+**Current focus:** Phase 8, Erreichbarkeits-Spike und Tables (Mail-Erreichbarkeit unter AppAPI-Impersonation zuerst und blockierend, danach die Tables-Familie)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 8, Erreichbarkeits-Spike und Tables (not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-08-21 — Milestone v1.2 started
+Status: Roadmap steht (Phasen 8-11), Phasenplanung ausstehend
+Last activity: 2026-08-21, Roadmap v1.2 erstellt (17/17 Requirements auf 4 Phasen abgebildet)
 
 ## Performance Metrics
 
@@ -120,6 +120,13 @@ Last activity: 2026-08-21 — Milestone v1.2 started
 
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
+
+- Roadmap v1.2: Phasennummerierung setzt bei 8 fort (v1.1 verbrauchte 6 und das deferred 7); vier Phasen bei Granularität coarse
+- Roadmap v1.2: kein eigener Spike-Phasenkopf; der Mail-Erreichbarkeits-Spike (MAIL-04) ist der erste, blockierende Plan von Phase 8, weil Tables nicht an ihm hängt und die Erkenntnis damit genauso früh fällt
+- Roadmap v1.2: die lethal-trifecta-Frage ist per Owner-Entscheid vom 2026-08-21 entschieden (talk_send kommt hinter einen neuen Admin-Schalter, TALK-04) und wird in der Planung nicht wieder aufgemacht
+- Roadmap v1.2: SRV-06 liegt in Phase 10 statt Phase 8, weil "alle drei Familien degradieren sauber" erst nachweisbar ist, wenn alle drei Familien Werkzeuge haben
+- Roadmap v1.2: SEC-01 liegt in Phase 10 statt in der Release-Phase, weil die Phase, die die Exfiltrationskette schließt, auch ihre Benennung liefern muss; eine später nachgezogene Sicherheitsaussage wäre in der Zwischenzeit unwahr
+- Roadmap v1.2: CTX-01, CTX-02 und TOOL-16 bewusst in der letzten Phase gebündelt, weil die Bucket- und Kind-Entscheidungen beide neuen Kinds gleichzeitig sehen müssen und das Budget-Gate erst mit allen fünf Werkzeugen sinnvoll verankert wird
 
 - Roadmap: 6 Research-Phasen auf 5 komprimiert (Kern + Streamable HTTP zusammengelegt); Settings/prepare_context und Hardening/Store getrennt gehalten
 - Roadmap: App-ID-Freeze (EXAPP-03) und context_agent#227-Fix (CONTRIB-01) bewusst in Phase 1 (Long-Lead-Risiken früh)
@@ -397,9 +404,12 @@ Recent decisions affecting current work:
 
 ### Blockers/Concerns
 
-- Harte Deadline: Store-Einreichung vor der Nextcloud Conference September 2026 (Scope kürzen, nie den Termin)
-- CalDAV/CardDAV mit AppAPI-Auth-Headern: AUFGELOEST in 02-06 (DAV-Spike, beide Familien REPORT 207 unter Impersonation, serverseitig belegt); offen bleibt die Consent-Bridge über AppAPI-Proxy (Spike früh in Phase 3)
-- Vor Phase 1 verifizieren: nc_py_api-Support für NC 34 (vermutlich nur Badge-Lag)
+- Harte Deadline: Nextcloud Conference September 2026 (Demo und Talk-Entwurf liegen bereit; v1.2 darf den Termin nicht gefaehrden, Scope kuerzen statt schieben)
+- Offene Unbekannte v1.2: Mail-Erreichbarkeit unter reiner AppAPI-Impersonation ist nur aus Quellcode gelesen, nie in dieser Topologie gemessen; ein negatives Ergebnis aendert den Schnitt von Phase 10 und 11 (MAIL-01..03, CTX-02, SEC-01, Tool-Zahl in TOOL-15). Deshalb blockierender erster Plan in Phase 8
+- Talk-"Lesen" schreibt per Default in den Nutzerzustand (Lesemarker, Benachrichtigungs-Quittung, Online-Status) und es gibt keinen Reparaturweg, weil DELETE per Gate verboten ist; die vier Parameter gehoeren in den Client, nicht ins Tool, mit positiv behauptendem Test
+- Mails Listen-Routen tragen SCOPE_IGNORE und sind nicht zugesagt; das Rueckgrat bleibt die OCS-Volltext-Route, die interne Route bleibt ersetzbar
+- Budget-Gate: eine einmalige Anhebung ohne gemessene Neu-Verankerung macht es wieder zur Dekoration (Erfahrung aus Phase 1)
+- Tables-Zellwert-Formate je column_types sind unvollstaendig dokumentiert, wahrscheinlichste Quelle fuer einen 400 in Phase 8
 
 ## Deferred Items
 
@@ -411,11 +421,11 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-20T18:28:41.014Z
-Stopped at: Plan 06-11 fertig: CLIENT-04-Gap geschlossen. E5 nennt den App-Passwort-Weg (ein neuer Test haelt Ausweg und Schweigepflicht), BL-14 mit Option, Datum, Messverweis und SDK-Rohbeleg geschlossen, CLIENT-04 und ROADMAP SC3 auf das Gemessene umformuliert (Owner-Freigabe 2026-08-20) und CLIENT-04 abgehakt, beide Doku-Sektionen mit D-35-Grund, Ausweg und getroffener Entscheidung. D-35, Auth-Pfad, READMEs, Store-Text und Abhaengigkeiten unveraendert. 2165 Unit-Tests gruen, Contract gruen, ruff sauber. Naechster Schritt: Re-Verifikation der Phase 6.
-Naechster Schritt: /gsd:execute-phase 6 (Plan 06-09)
+Last session: 2026-08-21T05:20:00.000Z
+Stopped at: Roadmap fuer Milestone v1.2 erstellt: Phasen 8 (Erreichbarkeits-Spike und Tables), 9 (Talk), 10 (Mail strikt lesend und die Trifecta-Grenze), 11 (Buendelung, Budget und Release 0.1.4). Alle 17 v1.2-Requirements genau einmal zugeordnet, Traceability in REQUIREMENTS.md nachgezogen. Kein Phasenplan existiert noch.
+Naechster Schritt: /gsd:plan-phase 8
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Plan phase 8 with /gsd:plan-phase 8 (der Mail-Erreichbarkeits-Spike MAIL-04 gehoert als erster, blockierender Plan hinein)
