@@ -26,7 +26,7 @@ from mcp_connector.server import mcp
 README = Path(__file__).resolve().parents[2] / "README.md"
 DOCS = Path(__file__).resolve().parents[2] / "docs"
 
-# The curated set (D-03 to D-09). A set comparison, not a subset check: a sixteenth tool
+# The curated set (D-03 to D-09). A set comparison, not a subset check: a nineteenth tool
 # fails this file just as loudly as a missing one. Counter proof for the reviewer: adding
 # ``@mcp.tool`` for a ``files_delete`` anywhere under ``server/reg_*.py`` turns
 # ``test_the_curated_set_is_complete_and_only_the_chatgpt_profile_has_a_schema`` and

@@ -9,6 +9,25 @@ All notable changes to this app are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+The Tables app is now part of what an assistant can reach: the tables of the account can
+be looked through, and a row can be added to one of them.
+
+### Added
+
+- An assistant can look through Tables on three levels: the tables the account may see,
+  the columns of one table with their types and limits, and the rows themselves. A row read
+  never returns a whole table. It answers with 25 rows unless a larger window is asked for,
+  at most 200, and it says how many rows the table really holds, that the answer was cut
+  and where the next page starts.
+
+- A row can be added by naming the column titles, not the internal column numbers nobody
+  sees in the app. A title the table does not have, a title that exists twice, a missing
+  mandatory column and a table the account may read but not write to are all refused before
+  anything is written, each with the next step to take. Existing rows are never changed and
+  never removed, here as everywhere else in this app.
+
 ## [0.1.3] - 2026-08-21
 
 This release adds a second way for an assistant to identify itself: by a metadata

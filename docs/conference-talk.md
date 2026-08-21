@@ -102,11 +102,11 @@ of those numbers is in a measurement file in the repository.
 
 ## Slide 6, four, it cannot destroy anything
 
-- Sixteen tools. No delete, no move, no share
+- Eighteen tools. No delete, no move, no share
 - Upload creates, and refuses a path that exists
 - The assistant sees exactly what the signed in account sees, checked against a read only share
 
-**Speaker note (40 s).** Fourth, and this one is about what is missing. There are sixteen
+**Speaker note (40 s).** Fourth, and this one is about what is missing. There are eighteen
 tools. There is no delete, there is no move, and there is no share. Upload creates a file and
 refuses a path that already exists. This is not a setting you can turn off, it is the tool set,
 and a test in the repository fails if that ever stops being true. The other half of the same
@@ -168,7 +168,7 @@ did the ExApp part wrong, that is the most useful five minutes I can have today.
 | 4 | Three runs, three different loopback ports | `06-09-MEASUREMENTS.md`: 45157, 47608, 41977, plus 34567 with the override |
 | 5 | Paused answers 403 with a reason, resumed answers 200, no token reissued | `06-10-MEASUREMENTS.md`, sections 5.1 and 5.2 |
 | 5 | Disconnect answers 401, and the refresh attempt answers 400 | `06-10-MEASUREMENTS.md`, section 6 |
-| 6 | Sixteen tools, no delete, no move, no share | `scripts/check_tool_budget.py` and the tool table contract test |
+| 6 | Eighteen tools, no delete, no move, no share | `scripts/check_tool_budget.py` and the tool table contract test |
 | 6 | Upload refuses a path that exists, and the read only share boundary | `tests/integration/test_permission_parity_share.py` and the phase 5 measurements |
 | 7 | The runbook was walked once, with times | `docs/conference-demo.md` and `06-10-MEASUREMENTS.md` |
 

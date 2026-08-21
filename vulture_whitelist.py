@@ -11,10 +11,11 @@
 # imported, so undefined names are intentional (ruff and pyright are configured to skip it
 # in pyproject.toml).
 
-# --- The fifteen tool functions -------------------------------------------------------
+# --- The tool functions without a visible caller --------------------------------------
 # Registered by the @mcp.tool decorator at import time and called by the MCP runtime, never
 # from our own code. Every one of them is covered by tests/contract/test_tool_surface.py,
-# which fails if any of them stops being listed.
+# which fails if any of them stops being listed. The count is deliberately not written here:
+# it lives in that contract test, which is the only place that can keep it true.
 files_search
 files_list
 files_read
@@ -26,6 +27,8 @@ notes_read
 notes_create
 deck_browse
 deck_create_card
+tables_browse
+tables_create_row
 contacts_search
 
 # --- Framework entry points -----------------------------------------------------------

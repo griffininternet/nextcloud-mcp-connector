@@ -18,7 +18,7 @@ Deux autres propriétés découlent de la même idée :
 
 - **L'assistant ne voit jamais plus que vous.** Chaque requête s'exécute avec vos propres
   identifiants Nextcloud, si bien que les permissions Nextcloud s'appliquent sans changement.
-- **Un ensemble d'outils délibérément restreint.** Les 16 outils sont sélectionnés de façon que ce
+- **Un ensemble d'outils délibérément restreint.** Les 18 outils sont sélectionnés de façon que ce
   serveur cohabite avec vos autres serveurs MCP, même dans des clients avec une limite stricte du
   nombre d'outils.
 
@@ -31,7 +31,7 @@ Version 0.1.3. L'application est référencée dans l'App Store de Nextcloud et 
 ExApp Nextcloud via AppAPI. Ce qui est en place aujourd'hui, et où chacune de ces affirmations est
 consignée :
 
-- Les 16 outils de l'ensemble v1 sont implémentés, et le tableau des outils ci-dessous n'est plus
+- Les 18 outils de l'ensemble v1 sont implémentés, et le tableau des outils ci-dessous n'est plus
   maintenu à la main : un test de contrat lit le registre d'outils en direct et échoue si un nom
   ou un niveau de permission du tableau est en désaccord avec lui.
 - La connexion OAuth 2.1 est vérifiée de bout en bout face aux deux connecteurs hébergés pour
@@ -205,6 +205,8 @@ l'outil peut créer de nouveaux objets mais ne peut jamais modifier ni supprimer
 | `notes_create` | create-only | Crée une nouvelle note ; les notes existantes ne sont jamais modifiées |
 | `deck_browse` | read | Parcourt les tableaux, piles et cartes de Deck |
 | `deck_create_card` | create-only | Crée une nouvelle carte dans une pile ; les cartes existantes ne sont jamais modifiées |
+| `tables_browse` | read | Parcourt Tables : les tables, les colonnes d'une table ou ses lignes |
+| `tables_create_row` | create-only | Ajoute une ligne désignée par les titres de colonnes ; les lignes existantes ne sont jamais modifiées |
 | `contacts_search` | read | Recherche des contacts dans les carnets d'adresses |
 | `unified_search` | read | Interroge la recherche unifiée de Nextcloud à travers les fournisseurs, en respectant les permissions |
 | `prepare_context` | read | Regroupe fichiers, notes et cartes correspondants avec la semaine d'événements à venir pour une même question |

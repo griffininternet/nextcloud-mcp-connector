@@ -137,8 +137,8 @@ uv run --no-sync python scripts/oauth_flow_check.py \
 **Must be visible:** seven steps with their real status codes, in order, the `401` of the
 MCP route first and the tool call last, then the closing line
 `all steps answered as the specification and this deployment require`. Step 7 reports
-`tools=16`, which is the number this server publishes; step 5 below explains why the
-acceptance script says fifteen. The script ends the connection it created itself, so the
+`tools=18`, which is the number this server publishes, and step 5 below expects the same
+number. The script ends the connection it created itself, so the
 instance is where it was before.
 
 ### Step 1, an assistant connects (60 s on stage, 6 s machine)
@@ -252,7 +252,7 @@ logged out, and it can connect again with step 1.
 
 ### Step 5, the whole set, and what is missing from it (40 s on stage, 5 s machine)
 
-**Say:** "Sixteen tools, and here is what is not among them."
+**Say:** "Eighteen tools, and here is what is not among them."
 
 **Do:**
 
@@ -263,17 +263,17 @@ NC_MCP_APP_PASSWORD="$NC_MCP_TEST_APP_PASSWORD" \
     uv run --no-sync python scripts/acceptance_all_tools.py
 ```
 
-**Must be visible:** the acceptance matrix, with `OK` on every one of the fifteen tools it
-calls. Read the names out: there is no delete, no move and no share. The upload tool creates
-and refuses a path that exists.
+**Must be visible:** the acceptance matrix, with `OK` on every one of the eighteen tools it
+calls, and `SKIP` on the two writes that need an object this server cannot create, a Deck
+stack and a table with a text column. Read the names out: there is no delete, no move and no
+share. The upload tool creates and refuses a path that exists.
 
-**Read the matrix, not the summary line.** Measured on 2026-08-20: the script also prints
-`FAIL tools/list expected 15 tools, got 16` and exits `1`. That line is about the script and
-not about the connector. Its expected count is the one phase 1 wrote down, the sixteenth
-tool (`prepare_context`) arrived later, and the script never calls that one. Every tool it
-does call answered. The current count lives in `tests/contract/test_tool_surface.py`, never
-in a document. The stale count is recorded in the deferred items of this phase, so it
-gets its own change rather than a quick edit inside a demo run.
+**Read the matrix, not the summary line.** The script expects exactly the number the
+registry answers, so a mismatch in that line is a real finding again. It was not always so:
+the run measured on 2026-08-20 printed `FAIL tools/list expected 15 tools, got 16` and
+exited `1`, because the expected count was the one phase 1 wrote down while the registry had
+moved on. Plan 08-04 closed that drift together with the Tables pair. The current count
+lives in `tests/contract/test_tool_surface.py`, never in a document.
 
 **Say the transport out loud:** this step runs over the stdio transport with an app
 password, which is the second supported way in and the one for clients that cannot sign in

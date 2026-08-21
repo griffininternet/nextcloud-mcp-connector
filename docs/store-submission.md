@@ -110,7 +110,9 @@ Every line was measured, not assumed. No fact without its check.
 ### The update keeps the connections
 
 Measured on 2026-08-19 on the HaRP topology of `compose.exapp.yml`, on the published
-artifacts and not on a local build.
+artifacts and not on a local build. The two tool listings in the table are records of that
+day and are left as they were recorded; the number a release has to list is held by
+`tests/contract/test_tool_surface.py`, never by this page.
 
 | Time | Step | Result |
 |------|------|--------|
