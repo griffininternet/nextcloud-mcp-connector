@@ -81,6 +81,22 @@ get_board
 # tests/unit/test_ocs_capabilities.py.
 tables_api_versions
 
+# --- The Talk capabilities of phase 9 (plan 09-01) -------------------------------------
+# Same case as tables_api_versions, and parked for the same reason as the Tables transport
+# above: plan 09-01 builds the transport and the app detection of the Talk family before its
+# caller exists. The gate for the app reads spreed_available, which has a production reader
+# in Capabilities.has.
+#
+# spreed_features: what the app says about itself (there is no apiVersions and no enabled in
+#   the spreed section), which is how a missing chat parameter becomes a named finding.
+# spreed_chat_max_length: the chat length limit of the instance, read here so the cap of
+#   TALK-03 is not maintained a second time in the tool layer.
+#
+# Both leave this list with plan 09-02, the plan that adds tools/talk.py and reads them.
+# Asserted on in tests/unit/test_ocs_capabilities.py.
+spreed_features
+spreed_chat_max_length
+
 # --- The store API of phase 3 ----------------------------------------------------------
 # oauth/store.py was built in one piece in plan 03-02, because its schema and its
 # transactions only make sense together, and its callers arrived plan by plan afterwards.

@@ -5,6 +5,12 @@ capabilities answer, an instance without Notes and without Deck, an HTML login p
 instead of JSON, the app-JSON error format of Notes and Deck (pitfall 9), the exact
 wording of the missing-app error (D-15) and the cache behaviour, including the proof that
 the cache only saves latency and never changes an answer (D-20).
+
+Two of them belong to Talk and are worth naming here. The app detection reads the section
+``spreed`` and treats an empty array as absent, because that is what an instance sends when
+Talk is installed but switched off for the asking account. And ``parse_ocs`` accepts an
+envelope with the created status: the Talk send route documents 201 as its only success, and
+without it a successfully sent message would read as a failure (T1).
 """
 
 import json
@@ -181,12 +187,126 @@ def test_a_single_api_version_string_is_tolerated_for_tables() -> None:
     assert caps.tables_api_versions == ("2.0",)
 
 
+@pytest.mark.anyio
+async def test_a_talk_section_reports_its_features_and_the_chat_length_of_the_instance(
+    clients: NcClients,
+) -> None:
+    """Talk publishes neither ``enabled`` nor ``apiVersions``; ``features`` is its statement."""
+    payload = envelope(
+        {
+            "capabilities": {
+                "spreed": {
+                    "features": ["chat-v2", "conversation-v4", "chat-permission"],
+                    "config": {"chat": {"max-length": 32000, "read-privacy": 0}},
+                }
+            }
+        }
+    )
+    with respx.mock(assert_all_called=True) as mock:
+        mock.get(CAPABILITIES_URL).mock(return_value=httpx.Response(200, json=payload))
+        caps = await capabilities.load(clients)
+
+    assert caps.spreed_available is True
+    assert caps.has("spreed") is True
+    assert caps.spreed_features == ("chat-v2", "conversation-v4", "chat-permission")
+    assert caps.spreed_chat_max_length == 32000
+
+
+def test_an_instance_without_a_talk_section_reports_it_as_absent() -> None:
+    """A Nextcloud without Talk is a normal Nextcloud, and the fallback length still holds."""
+    caps = capabilities.parse({"capabilities": {"core": {}}})
+
+    assert caps.spreed_available is False
+    assert caps.has("spreed") is False
+    assert caps.spreed_features == ()
+    assert caps.spreed_chat_max_length == capabilities.DEFAULT_CHAT_MAX_LENGTH
+
+
+def test_a_talk_section_that_is_an_empty_array_counts_as_absent() -> None:
+    """The case Tables does not have: Talk answers ``[]`` when it is off for this user.
+
+    An empty array is what a Nextcloud sends when Talk is installed but not available to the
+    account asking, so the flag is "section present *and* not empty" rather than just
+    present. Reading it as available would produce a 404 on an HTML page where a sentence
+    belongs.
+    """
+    caps = capabilities.parse({"capabilities": {"spreed": []}})
+
+    assert caps.spreed_available is False
+    assert caps.has("spreed") is False
+    assert caps.spreed_chat_max_length == 32000
+
+
+def test_a_single_talk_feature_string_is_tolerated() -> None:
+    """Same tolerance as the API version reader: one value may arrive unwrapped."""
+    caps = capabilities.parse({"capabilities": {"spreed": {"features": "chat-v2"}}})
+
+    assert caps.spreed_available is True
+    assert caps.spreed_features == ("chat-v2",)
+    assert caps.spreed_chat_max_length == 32000
+
+
+def test_an_unreadable_chat_length_falls_back_instead_of_capping_at_zero() -> None:
+    """A cap read from garbage would refuse every message; the fallback is the safer answer."""
+    caps = capabilities.parse(
+        {"capabilities": {"spreed": {"config": {"chat": {"max-length": "not a number"}}}}}
+    )
+
+    assert caps.spreed_chat_max_length == capabilities.DEFAULT_CHAT_MAX_LENGTH
+
+
+@pytest.mark.anyio
+async def test_require_app_names_the_missing_talk_app_and_the_next_step(
+    clients: NcClients,
+) -> None:
+    """The user cannot install an app, so the one action names who can (D-15)."""
+    with respx.mock(assert_all_called=True) as mock:
+        mock.get(CAPABILITIES_URL).mock(
+            return_value=httpx.Response(200, json=envelope({"capabilities": {"spreed": []}}))
+        )
+        with pytest.raises(AppMissingError) as excinfo:
+            await capabilities.require_app(clients, "spreed")
+
+    assert excinfo.value.message == "The Talk app is not available on this Nextcloud."
+    assert "Talk app" in excinfo.value.hint
+    assert excinfo.value.hint != excinfo.value.message
+
+
+def test_an_envelope_with_the_created_status_is_a_success_and_not_an_error() -> None:
+    """T1: the Talk send route documents 201 as its only success, and OCS v2 passes it on.
+
+    ``V2Response::render`` writes the raw HTTP status into ``ocs.meta.statuscode``, so a sent
+    message arrives with 201 in the envelope. While the success set held only 100 and 200,
+    that read as "an unexpected status 201" and invited the model to send the message twice.
+    """
+    response = httpx.Response(201, json=envelope({"id": 4711, "token": "abcd1234"}, 201))
+
+    assert ocs.parse_ocs(response, what="the sent message") == {"id": 4711, "token": "abcd1234"}
+    assert sorted(ocs._OK_STATUS) == [100, 200, 201]
+
+
+def test_an_envelope_with_a_rejected_password_stays_an_error() -> None:
+    """The counter-check to the widened success set: only 201 moved, nothing else."""
+    response = httpx.Response(200, json=envelope(None, 401, "Current user is not logged in"))
+
+    with pytest.raises(ToolError) as excinfo:
+        ocs.parse_ocs(response, what="the sent message")
+
+    assert "app password" in excinfo.value.message.lower()
+
+
 def test_has_refuses_an_app_this_server_does_not_check() -> None:
-    """An unknown name is a programming error, never a silent False."""
+    """An unknown name is a programming error, never a silent False.
+
+    The name used here is deliberately an app this project does *not* check. It used to be
+    ``spreed`` and had to change when Talk became the fourth checked app, which is the point
+    of the test: the mapping in ``has()`` is the list of apps, and a name outside it is a
+    typo at the developer.
+    """
     caps = capabilities.parse({"capabilities": {"tables": {"enabled": True}}})
     assert caps.has("tables") is True
-    with pytest.raises(ValueError, match="spreed"):
-        caps.has("spreed")
+    with pytest.raises(ValueError, match="mail"):
+        caps.has("mail")
 
 
 @pytest.mark.anyio

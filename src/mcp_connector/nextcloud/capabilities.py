@@ -1,11 +1,12 @@
 """Which optional apps this Nextcloud has, in one round trip (SRV-04).
 
-``GET /ocs/v2.php/cloud/capabilities`` reports Notes, Deck and Tables including their API
-versions, for Deck whether the user may create boards at all, and for Tables whether the app
-is enabled. That is one request instead of a try-except around every tool call, and it is the
-difference between "the Notes app is not installed on this Nextcloud" and a stack trace.
+``GET /ocs/v2.php/cloud/capabilities`` reports Notes, Deck, Tables and Talk including their
+API versions, for Deck whether the user may create boards at all, for Tables whether the app
+is enabled and for Talk the chat length limit of the instance. That is one request instead of
+a try-except around every tool call, and it is the difference between "the Notes app is not
+installed on this Nextcloud" and a stack trace.
 
-Only these three optional apps are checked here, on purpose. Calendars and contacts need
+Only these four optional apps are checked here, on purpose. Calendars and contacts need
 **no** app: CalDAV and CardDAV live in the core ``dav`` app, and the Calendar and Contacts
 apps are only their web interfaces. The honest check there is "does a collection exist" and
 it belongs to plans 07 and 08, not into this module.
@@ -26,7 +27,15 @@ from ..errors import AppMissingError
 from . import NcClients
 from .clients import ocs
 
-__all__ = ["TTL_SECONDS", "Capabilities", "app_missing", "clear_cache", "load", "require_app"]
+__all__ = [
+    "DEFAULT_CHAT_MAX_LENGTH",
+    "TTL_SECONDS",
+    "Capabilities",
+    "app_missing",
+    "clear_cache",
+    "load",
+    "require_app",
+]
 
 CAPABILITIES_PATH = "/cloud/capabilities"
 
@@ -35,6 +44,11 @@ CAPABILITIES_PATH = "/cloud/capabilities"
 TTL_SECONDS = 60.0
 
 _WHAT = "the Nextcloud capabilities"
+
+#: Fallback for ``spreed.config.chat.max-length``. The number belongs to the instance and not
+#: to us, so it is read from the capabilities and only defaulted here; the value matches
+#: ``ChatManager::MAX_CHAT_LENGTH`` of Talk 24.
+DEFAULT_CHAT_MAX_LENGTH = 32000
 
 #: message plus hint per optional app (D-15). The wording is part of the contract: it is
 #: what the user reads, so it names the app and one thing to do instead.
@@ -60,6 +74,10 @@ _MISSING: dict[str, tuple[str, str]] = {
             "created with notes_create."
         ),
     ),
+    "spreed": (
+        "The Talk app is not available on this Nextcloud.",
+        "Ask an administrator to enable the Talk app for this account.",
+    ),
 }
 
 
@@ -74,6 +92,9 @@ class Capabilities:
     can_create_boards: bool = False
     tables_available: bool = False
     tables_api_versions: tuple[str, ...] = ()
+    spreed_available: bool = False
+    spreed_features: tuple[str, ...] = ()
+    spreed_chat_max_length: int = DEFAULT_CHAT_MAX_LENGTH
 
     def has(self, app: str) -> bool:
         """Whether ``app`` is installed. Unknown names are a programming error."""
@@ -81,6 +102,9 @@ class Capabilities:
             "notes": self.notes_available,
             "deck": self.deck_available,
             "tables": self.tables_available,
+            # ``spreed`` and not ``talk``: the capabilities document names the section that
+            # way, and the key of this mapping is the key of the answer.
+            "spreed": self.spreed_available,
         }
         try:
             return flags[app]
@@ -140,6 +164,11 @@ def parse(data: Any) -> Capabilities:
     deck = deck if isinstance(deck, dict) else None
     tables = section.get("tables")
     tables = tables if isinstance(tables, dict) else None
+    # Talk behaves like Notes and Deck (presence of the section, no ``enabled`` field), with
+    # one addition: an instance where Talk is switched off for this user answers an empty
+    # array, so the section is only taken as proof when it carries something.
+    spreed = section.get("spreed")
+    spreed = spreed if isinstance(spreed, dict) and spreed else None
 
     return Capabilities(
         notes_available=notes is not None,
@@ -153,7 +182,36 @@ def parse(data: Any) -> Capabilities:
         # of the section. No gate on ``version``: the API generations are what matter here.
         tables_available=bool(tables.get("enabled")) if tables else False,
         tables_api_versions=_versions(tables, "apiVersions"),
+        spreed_available=spreed is not None,
+        # No gate on a version number: ``features`` is what the app says about itself, and
+        # it is the honest place to look up whether a parameter exists at all.
+        spreed_features=_versions(spreed, "features"),
+        spreed_chat_max_length=_chat_max_length(spreed),
     )
+
+
+def _chat_max_length(section: dict[str, Any] | None) -> int:
+    """Read ``config.chat.max-length``, falling back to the number Talk 24 ships with.
+
+    The limit belongs to the instance, so reading it here keeps it from being maintained a
+    second time in the tool layer. An unreadable or non-positive value is the fallback rather
+    than an error: a wrong cap is a worse answer than a slightly generous one, and Talk
+    refuses an over-long message itself.
+    """
+    if not section:
+        return DEFAULT_CHAT_MAX_LENGTH
+    config_section = section.get("config")
+    config_section = config_section if isinstance(config_section, dict) else {}
+    chat = config_section.get("chat")
+    chat = chat if isinstance(chat, dict) else {}
+    raw = chat.get("max-length")
+    if isinstance(raw, bool) or not isinstance(raw, int | str):
+        return DEFAULT_CHAT_MAX_LENGTH
+    try:
+        value = int(raw)
+    except ValueError:
+        return DEFAULT_CHAT_MAX_LENGTH
+    return value if value > 0 else DEFAULT_CHAT_MAX_LENGTH
 
 
 def _versions(section: dict[str, Any] | None, key: str) -> tuple[str, ...]:

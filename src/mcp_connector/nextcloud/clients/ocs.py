@@ -47,7 +47,14 @@ OCS_HEADERS: Mapping[str, str] = {
 SEARCH_PROVIDERS_PATH = "/search/providers"
 
 #: ``100`` is the OCS v1 success code, ``200`` the v2 one. Instances answer with either.
-_OK_STATUS = frozenset({100, 200})
+#: ``201`` belongs here too, and not because a POST usually answers with it: in OCS v2 the
+#: raw HTTP status is written into ``ocs.meta.statuscode`` (``V2Response::render``), and
+#: ``POST /apps/spreed/api/v1/chat/{token}`` documents 201 as its only success. Without it a
+#: sent Talk message would reach the model as "an unexpected status", and the model would
+#: very likely send it a second time. No route in use today answers 201, so widening the set
+#: cannot turn an existing check around, and the alternative would be a second envelope
+#: evaluation inside the Talk client, which is the duplication this project avoids.
+_OK_STATUS = frozenset({100, 200, 201})
 
 _HTML_HINT = (
     "That is the Nextcloud login page. Check the app password and that the configured URL "
