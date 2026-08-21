@@ -252,7 +252,7 @@ logged out, and it can connect again with step 1.
 
 ### Step 5, the whole set, and what is missing from it (40 s on stage, 5 s machine)
 
-**Say:** "Eighteen tools, and here is what is not among them."
+**Say:** "Twenty tools, and here is what is not among them."
 
 **Do:**
 
@@ -263,11 +263,14 @@ NC_MCP_APP_PASSWORD="$NC_MCP_TEST_APP_PASSWORD" \
     uv run --no-sync python scripts/acceptance_all_tools.py
 ```
 
-**Must be visible:** the acceptance matrix, with `OK` on every one of the twenty tools it
-calls, and `SKIP` on the writes that need an object this server cannot create: a Deck stack,
-a table with a text column, and a Talk conversation this account may write into. Read the
-names out: there is no delete, no move and no share, and no way to edit or remove a message
-that was sent. The upload tool creates and refuses a path that exists.
+**Must be visible:** the acceptance matrix, with `OK` or `SKIP` on every one of the twenty
+tools it calls. On the bootstrap topology exactly two are `SKIP`, the writes that need an
+object this server cannot create: `deck_create_card` wants a Deck stack, `tables_create_row`
+a table with a text column. `talk_send` is not among them: `scripts/bootstrap_exapp.sh`
+leaves alice a conversation she may write into, so the tool posts into it and answers `OK`,
+and that run leaves a message behind. Read the names out: there is no delete, no move and no
+share, and no way to edit or remove a message that was sent. The upload tool creates and
+refuses a path that exists.
 
 **Read the matrix, not the summary line.** The script expects exactly the number the
 registry answers, twenty since plan 09-04, so a mismatch in that line is a real finding
