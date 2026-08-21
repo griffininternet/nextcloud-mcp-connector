@@ -362,6 +362,51 @@ async def test_more_rows_than_the_window_are_named_with_a_next_handle(
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("level", ["tables", "columns"])
+async def test_a_cursor_on_a_level_without_a_next_page_is_refused_before_any_request(
+    clients: NcClients, level: str
+) -> None:
+    """IN-04: silently handing back the first page again is paging in a circle.
+
+    Only ``level=rows`` ever puts a ``next`` into an answer, so a handle on either of the
+    other two levels is a handle of the row level or one somebody invented. Both are refused
+    with a sentence and a next step, and the refusal stands before the capabilities request,
+    so it costs no request at all: the catch-all route of the capabilities is asserted empty
+    together with the two Tables generations.
+    """
+    handle = paging.encode_cursor({"o": 25, "t": "7"})
+    with respx.mock(assert_all_called=False) as mock:
+        caps = mock.get(CAPABILITIES_URL)
+        v2_calls, v1_calls = tables_routes(mock)
+
+        with pytest.raises(ToolError) as excinfo:
+            await tables_tools.browse(clients, level=level, table_id="7", cursor=handle)
+
+    assert caps.call_count == 0, "the refusal is cheaper than the capabilities request"
+    assert v2_calls.call_count == 0
+    assert v1_calls.call_count == 0
+    assert f"level={level!r}" in excinfo.value.message
+    assert "no next page" in excinfo.value.message
+    assert "level=rows" in excinfo.value.hint
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("blank", ["", "   ", None])
+async def test_no_cursor_on_the_table_level_is_not_a_refusal(
+    clients: NcClients, blank: str | None
+) -> None:
+    """Edge: the registration layer sends an empty string, and empty is "no handle"."""
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock.get(TABLES_URL).mock(return_value=httpx.Response(200, json=envelope([OWN_TABLE])))
+
+        result = await tables_tools.browse(clients, level="tables", cursor=blank)
+
+    assert result["level"] == "tables"
+    assert result["count"] == 1
+
+
+@pytest.mark.anyio
 async def test_a_cursor_of_another_table_is_refused_instead_of_applied(
     clients: NcClients,
 ) -> None:

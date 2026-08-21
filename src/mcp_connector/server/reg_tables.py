@@ -31,7 +31,9 @@ async def tables_browse(
     limit: Annotated[
         int, Field(ge=1, le=tables_tools.MAX_LIMIT, description="Maximum number of entries")
     ] = tables_tools.DEFAULT_LIMIT,
-    cursor: Annotated[str, Field(description="Handle from a truncated answer, next page")] = "",
+    cursor: Annotated[
+        str, Field(description="Next page handle from a truncated rows answer; only level=rows")
+    ] = "",
     ctx: Context | None = None,
 ) -> str:
     """List the user's Tables, the columns of one table, or its rows."""

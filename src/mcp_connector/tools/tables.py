@@ -46,6 +46,13 @@ MAX_LIMIT = 200
 _LEVEL_HINT = f"Use one of: {', '.join(LEVELS)}."
 _TABLE_HINT = "Call tables_browse with level=tables first; it lists the table ids."
 
+#: The way out of a cursor on a level that has none. One sentence and the next step, like every
+#: other refusal of this family.
+_CURSOR_HINT = (
+    "Only level=rows hands out a cursor. Call tables_browse without cursor; the answer says "
+    "with truncated that it was cut."
+)
+
 #: Column fields that a model needs to interpret a value, and only those. Everything else
 #: of a column object (uuid, technicalName, orderWeight, defaults, timestamps) is payload
 #: nobody reads.
@@ -82,9 +89,22 @@ async def browse(
     limit: int = DEFAULT_LIMIT,
     cursor: str | None = None,
 ) -> dict[str, Any]:
-    """Walk the user's Tables: the tables, the columns of one table, or its rows."""
+    """Walk the user's Tables: the tables, the columns of one table, or its rows.
+
+    A ``cursor`` on the table or the column level is refused rather than ignored, and it is
+    refused here, before the capabilities request, so the cheapest mistake costs no request at
+    all. Only the row level hands one out, so a handle on either of the other two is either a
+    handle of the row level or one somebody invented; answering it with the first page again
+    would look like a page that happens to be identical to the previous one, and a model has no
+    way to notice that its paging went in a circle (review finding IN-04).
+    """
     if level not in LEVELS:
         raise ToolError(message=f"{level!r} is not a Tables level.", hint=_LEVEL_HINT)
+    if str(cursor or "").strip() and level != "rows":
+        raise ToolError(
+            message=f"level={level!r} has no next page, so a cursor cannot be applied here.",
+            hint=_CURSOR_HINT,
+        )
     capped = min(max(limit, 1), MAX_LIMIT)
 
     await capabilities.require_app(clients, APP)

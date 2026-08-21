@@ -551,6 +551,49 @@ async def test_a_cursor_of_this_conversation_becomes_the_last_known_message_id(
 
 
 @pytest.mark.anyio
+async def test_a_cursor_on_the_conversation_level_is_refused_before_any_request(
+    clients: NcClients,
+) -> None:
+    """IN-04: silently handing back the first page again is paging in a circle.
+
+    Only ``level=messages`` ever puts a ``next`` into an answer, so a handle on the
+    conversation level is a handle of the message level or one somebody invented. It is
+    refused with a sentence and a next step, and the refusal stands before the capabilities
+    request, so it costs no request at all.
+    """
+    handle = paging.encode_cursor({"o": 5100, "c": "abcd1234"})
+    with respx.mock(assert_all_called=False) as mock:
+        caps = mock.get(CAPABILITIES_URL)
+        room_calls, chat_calls = talk_routes(mock)
+
+        with pytest.raises(ToolError) as excinfo:
+            await talk_tools.browse(clients, level="conversations", cursor=handle)
+
+    assert caps.call_count == 0, "the refusal is cheaper than the capabilities request"
+    assert len(room_calls.calls) == 0
+    assert len(chat_calls.calls) == 0
+    assert "level='conversations'" in excinfo.value.message
+    assert "no next page" in excinfo.value.message
+    assert "level=messages" in excinfo.value.hint
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("blank", ["", "   ", None])
+async def test_no_cursor_on_the_conversation_level_is_not_a_refusal(
+    clients: NcClients, blank: str | None
+) -> None:
+    """Edge: the registration layer sends an empty string, and empty is "no handle"."""
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock_rooms(mock)
+
+        result = await talk_tools.browse(clients, level="conversations", cursor=blank)
+
+    assert result["level"] == "conversations"
+    assert result["count"]
+
+
+@pytest.mark.anyio
 async def test_a_cursor_of_another_conversation_is_refused_instead_of_applied(
     clients: NcClients,
 ) -> None:

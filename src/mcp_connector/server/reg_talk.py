@@ -37,7 +37,10 @@ async def talk_browse(
     limit: Annotated[
         int, Field(ge=1, le=talk_tools.MAX_LIMIT, description="Maximum number of entries")
     ] = talk_tools.DEFAULT_LIMIT,
-    cursor: Annotated[str, Field(description="Handle from a truncated answer, next page")] = "",
+    cursor: Annotated[
+        str,
+        Field(description="Next page handle from a truncated messages answer; only that level"),
+    ] = "",
     ctx: Context | None = None,
 ) -> str:
     """List the conversations of this account, or the history of one of them.

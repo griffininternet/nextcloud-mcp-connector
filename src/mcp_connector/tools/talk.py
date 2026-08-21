@@ -102,6 +102,13 @@ _CONVERSATION_HINT = (
     "of this account."
 )
 
+#: The way out of a cursor on a level that has none. One sentence and the next step, like every
+#: other refusal of this family.
+_CURSOR_HINT = (
+    "Only level=messages hands out a cursor. Call talk_browse without cursor; the conversation "
+    "list says with truncated and total that it was cut."
+)
+
 #: ``{placeholder}`` names of a message text. The values stand beside it in
 #: ``messageParameters``, keyed by exactly this name.
 _PLACEHOLDER = re.compile(r"\{([a-z0-9_-]+)\}", re.IGNORECASE)
@@ -139,9 +146,22 @@ async def browse(
     limit: int = DEFAULT_LIMIT,
     cursor: str | None = None,
 ) -> dict[str, Any]:
-    """Walk the user's Talk: the conversations of the account, or the history of one of them."""
+    """Walk the user's Talk: the conversations of the account, or the history of one of them.
+
+    A ``cursor`` on the conversation level is refused rather than ignored, and it is refused
+    here, before the capabilities request, so the cheapest mistake costs no request at all.
+    Only the message level hands one out, so a handle on this level is either a handle of the
+    other level or one somebody invented; answering it with the first page again would look
+    like a page that happens to be identical to the previous one, and a model has no way to
+    notice that its paging went in a circle (review finding IN-04).
+    """
     if level not in LEVELS:
         raise ToolError(message=f"{level!r} is not a Talk level.", hint=_LEVEL_HINT)
+    if str(cursor or "").strip() and level != "messages":
+        raise ToolError(
+            message=f"level={level!r} has no next page, so a cursor cannot be applied here.",
+            hint=_CURSOR_HINT,
+        )
     capped = min(max(limit, 1), MAX_LIMIT)
 
     await capabilities.require_app(clients, APP)
@@ -328,6 +348,9 @@ async def _conversations(clients: NcClients, limit: int) -> dict[str, Any]:
     # not paginate this list, so a handle could only fetch the whole list again and cut it
     # somewhere else, which is a round trip for a different slice of the same read. The cut
     # plus the total number behind it says the same thing honestly and costs one number.
+    #
+    # A handle that arrives here anyway is refused in :func:`browse` and never silently
+    # dropped (IN-04): this function is only reached without one.
     answer = _envelope("conversations", entries, min(limit, MAX_CONVERSATIONS))
     if answer.get("truncated"):
         answer["total"] = len(entries)

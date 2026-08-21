@@ -25,12 +25,18 @@ from mcp_connector.server import mcp
 #   Measurement 2026-08-21, all 20 curated tools registered: 14312 bytes
 #   Budget      unchanged at 15000, because the measurement fits below it
 #
+#   Measurement 2026-08-21, same 20 tools, cursor description of tables_browse and
+#               talk_browse says which level hands one out (review finding IN-04): 14358 bytes
+#   Budget      unchanged at 15000, because the measurement fits below it
+#
 # The older lines stay where they are: a regression is only attributable when the number it
 # regressed from is still readable. The first 2026-08-21 line is the tables_browse and
 # tables_create_row pair of phase 8 (751 and 780 bytes), which took the surface past the
 # gate of phase 1 exactly as it was meant to. The second is the talk_browse and talk_send
 # pair of phase 9 (861 and 648 bytes), and it raises nothing: a budget is lifted against a
-# measurement that needs it, never out of habit, and this one leaves 688 bytes of headroom.
+# measurement that needs it, never out of habit. The third is 46 bytes of wording, spent
+# because both tools now refuse a cursor on a level that has none and the schema is where a
+# model reads which level that is; it leaves 642 bytes of headroom.
 #
 # The headroom is for wording, not for a new tool: at ~4 bytes per token the whole surface
 # costs roughly 3.6k tokens in every single session of every client. A twenty-first tool or a
