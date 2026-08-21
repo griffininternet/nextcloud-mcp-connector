@@ -62,7 +62,7 @@ Plans:
 **Wave 1**
 
 - [x] 08-01-PLAN.md: Mail-Erreichbarkeits-Spike (MAIL-04, blockierend): vier Wege messen, Protokoll, Topologie
-- [ ] 08-02-PLAN.md: Tables-Client über zwei API-Generationen, erste OCS-Schreibnaht, App-Erkennung
+- [x] 08-02-PLAN.md: Tables-Client über zwei API-Generationen, erste OCS-Schreibnaht, App-Erkennung
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -178,7 +178,7 @@ Plans:
 | 5. Hardening und Store-Einreichung | v1.0 | 16/16 | Complete | 2026-08-20 |
 | 6. Härtung, Eigennachweise und Conference-Reife | v1.1 | 11/11 | Complete | 2026-08-20 |
 | 7. Verwaltungs-Clients live verprobt | v1.1 | 0/0 | Deferred (extern getaktet) | - |
-| 8. Erreichbarkeits-Spike und Tables | v1.2 | 1/5 | In Progress|  |
+| 8. Erreichbarkeits-Spike und Tables | v1.2 | 2/5 | In Progress|  |
 | 9. Talk | v1.2 | 0/? | Not started | - |
 | 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 0/? | Not started | - |
 | 11. Bündelung, Budget und Release 0.1.4 | v1.2 | 0/? | Not started | - |

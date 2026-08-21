@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Kuratierte Breite
 status: executing
-stopped_at: "Completed 08-01-PLAN.md (Mail-Erreichbarkeits-Spike: MAIL-04 beantwortet, Mail unter AppAPI-Impersonation erreichbar)"
-last_updated: "2026-08-21T07:25:22.656Z"
+stopped_at: "Completed 08-02-PLAN.md (Transportschicht Tables: clients/tables.py, ocs_post, tables.enabled-Gate)"
+last_updated: "2026-08-21T07:39:16.424Z"
 last_activity: 2026-08-21
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 5
-  completed_plans: 1
-  percent: 20
+  completed_plans: 2
+  percent: 0
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 8 (Erreichbarkeits-Spike und Tables) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-08-21
 
@@ -115,6 +115,7 @@ Last activity: 2026-08-21
 | Phase 06 P10 | 30 | 3 tasks | 5 files |
 | Phase 06 P11 | 30 min | 3 tasks | 8 files |
 | Phase 08-erreichbarkeits-spike-und-tables P01 | 42 min | 3 tasks tasks | 4 files files |
+| Phase 08-erreichbarkeits-spike-und-tables P02 | 12 min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -393,6 +394,10 @@ Recent decisions affecting current work:
 - [Phase 08-erreichbarkeits-spike-und-tables]: Spike-Stufe 1 reicht ohne IMAP-Server: das Spike-Konto zeigt auf imap.invalid, weil occ mail:account:create-imap die Verbindung nicht prueft und jede Antwort aus App-Code den erreichten Controller beweist; GreenMail bleibt Vorlage in docs/spike-mail.md, compose.exapp.yml unveraendert
 - [Phase 08-erreichbarkeits-spike-und-tables]: ensure_mail_account prueft die Ausgabe von occ mail:account:export und nicht dessen Exit-Code: der Befehl endet auch ohne jedes Konto mit 0, eine Exit-Code-Pruefung haette bei jedem Lauf ein zweites Konto angelegt
 - [Phase 08-erreichbarkeits-spike-und-tables]: Die drei Mail-Listen-Routen tragen SCOPE_IGNORE und bleiben ersetzbar; der Ausweg ist der Suchprovider mail plus die OCS-Volltextroute, und der Hinweis wandert in Phase 10 in den Modul-Docstring von clients/mail.py
+- [Phase 08-erreichbarkeits-spike-und-tables]: Die v2-Tables-GETs bauen ihre URL über ocs.ocs_url, senden aber TABLES_HEADERS statt über ocs_get zu laufen: OCS_HEADERS traegt kein Content-Type, D-18 verlangt beide Pflichtheader auch auf einem GET dieser Familie
+- [Phase 08-erreichbarkeits-spike-und-tables]: limit ist im Tables-Client ein Keyword ohne Default und wird auf 1 bis 200 gekappt, offset auf mindestens 0: eine Zeilen-URL ohne limit kann konstruktiv nicht entstehen, ein Weglassen ist ein Fehler beim Entwickler und kein Volltabellenlesen beim Nutzer
+- [Phase 08-erreichbarkeits-spike-und-tables]: tables_available kommt aus tables.enabled und nicht aus der Sektionspraesenz: eine installierte, aber abgeschaltete Tables-App antwortet auf keinen Request und gilt fuer diesen Server als nicht vorhanden (Abweichung von Deck, das kein enabled veroeffentlicht)
+- [Phase 08-erreichbarkeits-spike-und-tables]: Auf dem Tables-POST gibt es keinen Retry und nie einen Origin-Header: eine doppelte Zeile ist Datenkorruption, die dieser Server nicht aufraeumen kann, und mit Origin verlangt Nextclouds CORS-Middleware eine Basic-Reauthentifizierung, die unter Impersonation nicht existiert
 
 ### Pending Todos
 
@@ -427,8 +432,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-21T07:25:22.636Z
-Stopped at: Completed 08-01-PLAN.md (Mail-Erreichbarkeits-Spike: MAIL-04 beantwortet, Mail unter AppAPI-Impersonation erreichbar)
+Last session: 2026-08-21T07:39:16.407Z
+Stopped at: Completed 08-02-PLAN.md (Transportschicht Tables: clients/tables.py, ocs_post, tables.enabled-Gate)
 Naechster Schritt: /gsd:plan-phase 8
 Resume file: None
 

@@ -51,7 +51,7 @@ patterns-established:
   - "Der Modul-Docstring eines Client-Moduls trägt die Generationswahl, die Pflichtheader, die Schreibweisen und das ausdrückliche Fehlen von Update und Delete"
   - "Eine Eigenschaft, die eine geparste Antwort nicht zeigt, wird an der gebauten Anfrage behauptet (URL, Query, Header)"
 
-requirements-completed: [TABLES-01]
+requirements-completed: []  # TABLES-01 bleibt Pending: dieser Plan liefert die Transportschicht, das Tool kommt mit 08-03
 
 # Metrics
 duration: 12 min
@@ -164,9 +164,17 @@ akzeptiert auch einen JSON-String (K4).
 - **Verification:** `grep -c "201" tests/unit/test_tables_client.py` ist 0, 16 Tests grün
 - **Committed in:** `8745927`
 
+**3. [Rule 1 - Bug] TABLES-01 bleibt Pending statt Complete**
+- **Found during:** Abschluss (Requirements-Schritt)
+- **Issue:** Die Plan-Frontmatter nennt `requirements: [TABLES-01]`, und `requirements.mark-complete` hakte die Anforderung ab. Der Text von TABLES-01 verspricht aber `tables_browse` mit Projektion, Default 25, Max 200 und benannter Truncation. Dieser Plan registriert kein Tool, die Zusage wäre also unwahr gewesen, und die Pläne 08-03 bis 08-05 nennen dieselbe Anforderung.
+- **Fix:** Die Markierung in `.planning/REQUIREMENTS.md` zurückgenommen; TABLES-01 bleibt Pending und wird von dem Plan abgehakt, der das Tool liefert (08-03, bestätigt durch 08-04 und 08-05).
+- **Files modified:** keine (Änderung verworfen)
+- **Verification:** `grep TABLES-01 .planning/REQUIREMENTS.md` zeigt `[ ]` und `Pending`
+- **Committed in:** nicht committet, die Rücknahme ist die Abwesenheit der Änderung
+
 ---
 
-**Total deviations:** 2 auto-fixed (1 blockierendes CI-Gate, 1 Kollision zwischen Doku und Gate)
+**Total deviations:** 3 auto-fixed (1 blockierendes CI-Gate, 1 Kollision zwischen Doku und Gate, 1 verfrühte Anforderungs-Zusage)
 **Impact on plan:** Beide Korrekturen halten bestehende Gates scharf, ohne den Umfang zu vergrössern. Kein Scope-Creep, kein neuer Fehlerpfad, keine neue Abhängigkeit.
 
 ## Verification
