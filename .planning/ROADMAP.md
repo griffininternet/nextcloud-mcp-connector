@@ -59,11 +59,23 @@ Audit: [milestones/v1.1-MILESTONE-AUDIT.md](milestones/v1.1-MILESTONE-AUDIT.md) 
 **Plans**: 5 Pläne in 4 Wellen
 
 Plans:
+**Wave 1**
+
 - [ ] 08-01-PLAN.md: Mail-Erreichbarkeits-Spike (MAIL-04, blockierend): vier Wege messen, Protokoll, Topologie
 - [ ] 08-02-PLAN.md: Tables-Client über zwei API-Generationen, erste OCS-Schreibnaht, App-Erkennung
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 08-03-PLAN.md: Tables-Werkzeuge: browse mit drei Ebenen, Zeile mit Spaltentiteln anlegen
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 08-04-PLAN.md: Registrierung, Gates, Budget-Verankerung, READMEs EN/DE/FR und Changelog
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 08-05-PLAN.md: Integrationsnachweis gegen eine echte Instanz und Zwei-Konten-Negativbeweis
+
 **UI hint**: nein (kein eigenes Frontend, reine Server- und Tool-Schicht)
 
 ### Phase 9: Talk

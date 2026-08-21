@@ -918,24 +918,26 @@ der Environment-Tabelle erfasst und wird im Bootstrap-Skript reproduzierbar gema
 | A5 | `occ app:install tables` und `occ app:install mail` laufen auf der Testinstanz durch | Environment | Gering: der Store ist aus dem Container erreichbar (200 verifiziert) und der Bootstrap hat für `notes` und `deck` denselben Weg; Fallback (Handinstallation in `custom_apps`) ist in beiden Bootstrap-Skripten schon dokumentiert |
 | A6 | Die 200-Antwort von `GET /api/2/tables/{id}` enthält `rowsCount` und `onSharePermissions` auch dann, wenn nur eine Tabelle existiert | Muster 4, K11 | Gering: `show()` ruft `TableService::find` mit aktivem Enhancement; im Integrationstest sofort sichtbar |
 
-## Offene Fragen
+## Offene Fragen (RESOLVED)
 
-1. **Welchen Weg nimmt der Spike: Stufe 1 oder direkt Stufe 2?**
+Alle vier Fragen sind mit der Planung von Phase 8 entschieden; die jeweilige Empfehlung wurde unverändert in die Pläne übernommen (1: Plan 08-01 Task 3, 2: Plan 08-04, 3 und 4: Plan 08-03).
+
+1. **RESOLVED: Welchen Weg nimmt der Spike: Stufe 1 oder direkt Stufe 2?**
    - Was wir wissen: Stufe 1 beantwortet MAIL-04 vollständig und braucht keinen neuen Compose-Dienst; Stufe 2 liefert zusätzlich die Feldformen, die Phase 10 sonst annehmen muss.
    - Was unklar ist: ob die Owner-Zeit für den zusätzlichen Dienst jetzt oder in Phase 10 besser investiert ist.
    - Empfehlung: Stufe 1 im ersten Plan, Stufe 2 als benannter, ausgeklammerter Folgeschritt im Plan von Phase 10. Wenn Stufe 1 auch nur einen Weg uneindeutig lässt, wird Stufe 2 in Phase 8 nachgezogen, weil MAIL-04 blockierend ist.
 
-2. **Wie hoch genau landet das Budget-Gate?**
+2. **RESOLVED: Wie hoch genau landet das Budget-Gate?**
    - Was wir wissen: Messung heute 11268 bei Gate 12500; die Phase fügt rund 1310 Bytes hinzu; TOOL-15 schreibt für den Endstand "Messung plus 15 Prozent, aufgerundet auf die nächsten 500" fest.
    - Was unklar ist: ob die Zwischenanhebung in Phase 8 derselben Formel folgt (etwa 14500) oder knapper auf die nächsten 500 über der Messung geht (etwa 13000).
    - Empfehlung: derselben Formel folgen wie der bestehende Eintrag im Skript, **und** die Pro-Tool-Behauptung (max. 1400 Bytes) dazunehmen; sie ist der Teil, der eine Regression wirklich meldet.
 
-3. **Bekommt `tables_browse` schon einen `cursor`?**
+3. **RESOLVED: Bekommt `tables_browse` schon einen `cursor`?**
    - Was wir wissen: `paging` bedient `limit`/`offset` direkt, und die v1-Route nimmt beide.
    - Was unklar ist: ob ein Cursor-Parameter die rund 130 Byte Schema in jeder Sitzung wert ist, wenn `offset` in der Antwort ohnehin genannt wird.
    - Empfehlung: Cursor ja, weil ein `next`-Handle das etablierte Antwortmuster dieses Servers ist und `check_scope` eine Verwechslung zweier Tabellen verhindert. Alternative wäre ein offener `offset`-Parameter, der die Scope-Prüfung verliert.
 
-4. **Sind doppelte Spaltentitel in Tables wirklich möglich?**
+4. **RESOLVED: Sind doppelte Spaltentitel in Tables wirklich möglich?**
    - Was wir wissen: Es gibt keine Unique-Bedingung auf `title` in der Spaltenverwaltung, und `textUnique` betrifft Zellwerte, nicht Titel.
    - Was unklar ist: ob die Oberfläche es verhindert.
    - Empfehlung: den Mehrdeutigkeitsfall trotzdem behandeln (TABLES-02 verlangt ihn wörtlich) und ihn im Unit-Test mit einer konstruierten Spaltenliste abdecken, nicht am Server.
