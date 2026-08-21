@@ -5,12 +5,20 @@ status: verified
 threats_open: 0
 asvs_level: 1
 created: 2026-08-21
+updated: 2026-08-21
+residual_risks_closed:
+  R-1: 697f2b1
+  R-2: 1bad377
+  R-3: 27954c4 5311fcb
 ---
 
 # Phase 9 , Security
 
 > Sicherheitsvertrag dieser Phase: Bedrohungsregister, akzeptierte Risiken, Prüfprotokoll.
 > Geprüfter Stand: HEAD (`f4756bc`), also nach den Review-Fixes bis `0f2603d`.
+> Nachtrag vom 21.08.2026 nach dem Owner-Entscheid zu den vier zurückgestellten
+> Review-Findings: Stand bis `5311fcb`, Restrisiken R-1 bis R-3 geschlossen, Details im
+> Audit Trail unten.
 > Grundhaltung dieser Prüfung: jede Minderung gilt als abwesend, bis eine Fundstelle im
 > Implementierungsstand sie belegt. Doku und Absicht allein sind kein Beweis.
 > Register aufgebaut aus den fünf `<threat_model>`-Blöcken von `09-01-PLAN.md` bis
@@ -62,7 +70,7 @@ created: 2026-08-21
 | T-09-20 | Information Disclosure | `send`, Ausgangskanal in fremde Hände | mitigate | `config.talk_send_enabled()` ist die erste Zeile von `send`, vor `require_app` (Z. 188) und vor jedem Client-Aufruf (`tools/talk.py:177-186`); Begründung der umgekehrten Prüfreihenfolge im Modul- und Funktions-Docstring (Z. 22-25, 142-145). Null HTTP-Aufrufe im Aus-Zustand: `tests/unit/test_talk_tools.py:818`, Reihenfolge belegt `:867`, Standardzustand `:886` | closed |
 | T-09-21 | Spoofing | Adressierung mit erfundenem Token | mitigate | `_room` sucht den Token in der eigenen Konversationsliste (`tools/talk.py:509-530`) und wird auf beiden Wegen benutzt: Sendepfad Z. 216 und Lesepfad Z. 403. `GET /room/{token}` existiert nirgends (siehe T-09-03). Tests `tests/unit/test_talk_tools.py:799` und `:1074`; live `tests/integration/test_talk_roundtrip.py:509` (erfundener Token in keiner ausgehenden URL, Konversationsliste dennoch abgefragt) | closed |
 | T-09-22 | Elevation of Privilege | Vorprüfung am falschen Feld | mitigate | `_may_send` liest `room.get("permissions")` (`tools/talk.py:565`), dazu `readOnly` (Z. 561) und Typ 4 (Z. 563); `attendeePermissions` steht nur im Warnkommentar (Z. 533-542). Regressionsfall `permissions=128` bei `attendeePermissions=0` sendet erfolgreich: `tests/unit/test_talk_tools.py:926-945`; Fixture-Fälle in `tests/fixtures/talk_rooms.json` (u. a. Z. 14-15, 333-334); Note-to-self nicht mitgesperrt `:950`; Ablehnung vor dem POST `:975` | closed |
-| T-09-23 | Denial of Service | Sammel-Erwähnung als Verstärker | mitigate | `_MENTION_ALL = re.compile(r"@\"?(all\|here)\"?(?![\w-])", re.IGNORECASE)` (`tools/talk.py:113`), geprüft vor jedem Lesen und Senden (Z. 200-209), `mentionPermissions` im Fehlersatz (Z. 206) und im Listeneintrag (Z. 347-348). Tests `tests/unit/test_talk_tools.py:1003` (abgelehnt, bevor etwas gelesen wird) und `:1022` (`@allan` bleibt erlaubt), `:434` (Konversation mit Moderator-Erwähnungsrecht sagt es). Restrisiko zu Gruppen- und Team-Erwähnungen siehe R-1 | closed |
+| T-09-23 | Denial of Service | Sammel-Erwähnung als Verstärker | mitigate | Stand 21.08.2026 (`697f2b1`, Owner-Entscheid zu IN-02): `_MENTION_COLLECTIVE = re.compile(r"@\"?(?:(?:all\|here)\"?(?![\w-])\|(?:federated_)?(?:group\|team)/)", re.IGNORECASE)` (`tools/talk.py:144`), also alle sechs kollektiven Schreibweisen und nicht mehr nur zwei; geprüft vor jedem Lesen und Senden (Z. 271-283), `mentionPermissions` im Hinweis und im Listeneintrag. Belegte Quellen der Syntax: nextcloud/server v34.0.0 `lib/private/Comments/Comment.php:216`, spreed v24.0.4 `lib/Chat/Notifier.php:525` und `:581`, `lib/Chat/Parser/UserMention.php:138-145`. Tests `tests/unit/test_talk_tools.py:1061` (14 Fälle, abgelehnt bevor etwas gelesen wird) und `:1107` (zwölf Negativfälle, darunter `@allan`, `@"alice mueller"`, `@"federated_user/..."`, `@grouping`), `:434` (Konversation mit Moderator-Erwähnungsrecht sagt es). Restrisiko R-1 damit geschlossen | closed |
 | T-09-24 | Tampering (Prompt Injection) | Fremder Chattext im Modellkontext | mitigate | `marks.without_marks` auf jedem Nachrichtentext (`_resolve`, `tools/talk.py:483`), auf jedem Anzeigenamen und Aktornamen (`_text`, Z. 570-577, genutzt Z. 217, 334, 412, 443) und über `_resolve` auf jedem Namen aus `messageParameters` (Z. 474-483). Kappungsmarkierung als Feld ausserhalb des Textes (Z. 446-447 und Z. 496-506, Begründung ME-03 Z. 435-437). Systemnachrichten fallen über die Positivliste `KEPT_TYPES` weg (Z. 80, `_is_kept` Z. 422-424). Tests `tests/unit/test_talk_tools.py:370,725,748,665,592,706,1138` | closed |
 | T-09-25 | Tampering | Doppelte Nachricht | mitigate | Kein Retry (siehe T-09-07); die Antwort trägt `id`, `token`, `conversation`, `timestamp` und `url` (`tools/talk.py:233-240`), eine Antwort ohne Id wird gemeldet statt erfunden (Z. 224-231, Test `tests/unit/test_talk_tools.py:1091`). Erfolgsantwort geprüft `:903`, live `tests/integration/test_talk_roundtrip.py:437` | closed |
 | T-09-26 | Denial of Service | Antwortgrösse | mitigate | Drei benannte Konstanten: `MAX_LIMIT = 50` (`tools/talk.py:53`), `MAX_CONVERSATIONS = 50` (Z. 58), `MAX_MESSAGE_BYTES = 800` (Z. 65). Kappung im Envelope benannt statt still (`_envelope` Z. 591-597, `truncated` Z. 596, `total` bei der Konversationsliste Z. 304-305, Byte-Cut `_capped` Z. 495-506). Tests `tests/unit/test_talk_tools.py:342,397,487,665,1129` | closed |
@@ -71,7 +79,7 @@ created: 2026-08-21
 | T-09-31 | Elevation of Privilege | Geplanter Versand als Umgehung des Admin-Schalters | mitigate | Eigene Nadel `"/schedule"` mit dem Grund "walks around the administrative switch of TALK-04" (`tests/contract/test_no_destructive_calls.py:78-79`) und eigener Gegenprobe (Z. 109) | closed |
 | T-09-32 | Information Disclosure | `/summarize` schickt Inhalt an einen KI-Anbieter der Instanz | mitigate | Eigene Nadel `"/summarize"` (`tests/contract/test_no_destructive_calls.py:80`) mit eigener Gegenprobe (Z. 110); kein Chatinhalt verlässt diesen Server an einen dritten Dienst | closed |
 | T-09-33 | Repudiation | Annotationen von `talk_send` | mitigate | `CREATE_ONLY` mit `read_only_hint=False`, `destructive_hint=False`, `idempotent_hint=False`, `open_world_hint=False` (`server/__init__.py:55-60`), gesetzt an `talk_send` (`server/reg_talk.py:59`), `READ_ONLY` an `talk_browse` (Z. 27). Über `tools/list` behauptet: `tests/contract/test_tool_surface.py:326` (browse nur lesend), `:340-342` (die drei Hints von `talk_send`), `:356-358` (verbotene Nachbarnamen) | closed |
-| T-09-34 | Denial of Service | Grösse von `tools/list` | mitigate | `MAX_TOOL_BYTES` steht unverändert bei 1400 (`scripts/check_tool_budget.py:47`, Prüfung Z. 73-79). Messlauf im Audit: `uv run python scripts/check_tool_budget.py` endet mit Exit-Code 0, "tools/list: 14312 bytes, 20 tools, budget 15000", grösstes Werkzeug 1351 Bytes, `talk_browse` 861 Bytes. Kein angehobener Deckel | closed |
+| T-09-34 | Denial of Service | Grösse von `tools/list` | mitigate | `MAX_TOOL_BYTES` steht unverändert bei 1400 (`scripts/check_tool_budget.py:63`, Prüfung Z. 94-100). Messlauf im Audit: `uv run python scripts/check_tool_budget.py` endet mit Exit-Code 0, "tools/list: 14312 bytes, 20 tools, budget 15000", grösstes Werkzeug 1351 Bytes, `talk_browse` 861 Bytes. Kein angehobener Deckel. Nachtrag 21.08.2026: die Pro-Werkzeug-Messung zählt seit `1bad377` Bytes statt Zeichen (IN-03, siehe R-2), der Deckel bleibt 1400; nach den 46 Bytes Beschreibungstext aus `27954c4` (IN-04, siehe R-3) steht der Lauf bei "14358 bytes, 20 tools, budget 15000" mit `talk_browse` bei 886 und dem grössten Werkzeug unverändert bei 1351 Bytes, Messzeilen im Kommentar über `BUDGET_BYTES` nachgetragen | closed |
 | T-09-35 | Tampering | Modulweiter veränderlicher Zustand in den neuen Modulen | mitigate | `ALLOWED_MODULE_STATE` bleibt bei genau zwei namentlich gelisteten Einträgen (`tests/contract/test_no_destructive_calls.py:199-202`); das Gate liest alle Dateien unter `src` (`_source_files` Z. 214-217, Prüfung Z. 494-504) und ist im Audit grün, also tragen `clients/talk.py`, `tools/talk.py` und `server/reg_talk.py` keinen Modulzustand | closed |
 | T-09-36 | Information Disclosure | Store-Beschreibung nimmt SEC-01 vorweg | accept | Dokumentiert als AR-04. Faktisch geprüft: die Store-Beschreibung nennt in allen drei Sprachen nur den Ausgangskanal und den Schalter (`appinfo/info.xml:29,42,55`), keine Exfiltrationskette | closed |
 | T-09-37 | Repudiation | Datierte Doku-Messwerte alter Läufe | accept | Dokumentiert als AR-05. Der bestehende Wächter erzwingt je Zahl Aktualität oder den Zeiger auf den Contract-Test (`tests/contract/test_tool_surface.py:616`); im Review als WR-01 nachgezogen (`docs/client-setup.md`, Commit `9d67b36`), die datierte Messzeile durfte stehenbleiben | closed |
@@ -118,9 +126,9 @@ Protokoll.
 | UF-1 | unregistered_flag (Prozess) | `09-01-SUMMARY.md` hat keinen Abschnitt `## Threat Flags`. Die vier anderen Zusammenfassungen melden ausdrücklich "keine neue sicherheitsrelevante Oberfläche" | Die Fläche von Plan 09-01 ist im Audit direkt am Code geprüft (T-09-01 bis T-09-08 alle closed), es fehlt also die Meldung und nicht die Minderung. Gleiche Beobachtung wie UF-1 der Phase 8; für kommende Phasen den Abschnitt in jeder Zusammenfassung erzwingen |
 | UF-2 | Threat Flag (zugeordnet) | `09-05-SUMMARY.md` meldet, dass die Gerüst-Funktion `_talk_status` absichtlich einen Einzelkonversations-Pfad mit einem echten fremden Token baut, um den Statuscode der Instanz zu messen (`tests/integration/test_permission_fidelity_exapp.py:563-590`) | Zugeordnet zu T-09-42. Die Regel gilt für den Connector, und die belegt der Test (Z. 538). Das Gerüst läuft nur auf der Wegwerf-Topologie mit abgeschaltetem Wächter, zweimal pro Lauf, ist im Docstring als Gerüst markiert und liegt in `tests/`, also nicht unter `src`. Kein Produktionspfad, keine Massnahme |
 | UF-3 | Threat Flag (zugeordnet) | `09-03-SUMMARY.md` meldet eine Abweichung in Richtung mehr Schutz: die Vorprüfung über die eigene Konversationsliste wirkt jetzt auch auf dem Lesepfad (`tools/talk.py:403`) und nicht nur beim Senden | Zugeordnet zu T-09-21, verstärkt die dortige Minderung. Preis ist ein zusätzlicher Request pro Verlaufslesen, im Docstring benannt (Z. 374-380) |
-| R-1 | Restrisiko zu T-09-23 | Gruppen- und Team-Erwähnungen (`@"group/<id>"`, `@"team/<id>"`) fallen nicht unter `_MENTION_ALL`. Review-Befund IN-02 ist bewusst zurückgestellt (`09-REVIEW.md:124-129`) | Die deklarierte Minderung ist wörtlich "`@all` und `@here` mit Wortgrenze", und sie ist erfüllt und getestet. Die enger gefasste Restklasse benachrichtigt eine Gruppe statt aller Teilnehmer und braucht eine eigene Aufgabe mit Owner-Entscheid samt Positiv- und Negativtests. Kein offener Threat, Kandidat für eine geplante Änderung |
-| R-2 | Restrisiko zu T-09-26 | `scripts/check_tool_budget.py` misst das Gesamtbudget in Bytes, das Pro-Tool-Limit in Zeichen (Befund IN-03, zurückgestellt) | Die Minderung von T-09-34 (Deckel bleibt bei 1400, Messung vor jeder Anhebung) ist erfüllt; der Messlauf steht bei 14312 von 15000 Bytes und das grösste Werkzeug bei 1351 von 1400. Ein Werkzeug mit vielen Nicht-ASCII-Zeichen würde pro Tool unterzählt, aktuell ohne Wirkung, weil die Beschreibungen ASCII sind |
-| R-3 | Restrisiko zu T-09-26 | Ein `cursor` auf `level=conversations` wird stillschweigend ignoriert (Befund IN-04) und die Längen-Vorprüfung zählt Zeichen, während Talk serverseitig möglicherweise anders zählt (Befund IN-06); beide zurückgestellt | Keine der beiden Stellen berührt eine deklarierte Minderung: die Kappung der Konversationsliste ist benannt (`truncated` plus `total`), und Talks eigene 400 bleibt der Rückhalt und wird mit eigener Meldung durchgereicht (`tests/unit/test_talk_tools.py:1110`). Redaktionell offen, sicherheitlich unauffällig |
+| R-1 | Restrisiko zu T-09-23 | **GESCHLOSSEN 21.08.2026** (`697f2b1`). Vorher: Gruppen- und Team-Erwähnungen (`@"group/<id>"`, `@"team/<id>"`) fielen nicht unter `_MENTION_ALL`, Review-Befund IN-02 war zurückgestellt | Owner-Entscheid vom 21.08.2026: dicht machen. `_MENTION_COLLECTIVE` (`tools/talk.py:144`) deckt jetzt alle vier kollektiven Typen des Nextcloud-Kommentarparsers ab (`group`, `federated_group`, `team`, `federated_team`), je mit und ohne Anführungszeichen, dazu weiterhin `@all` und `@here`. Syntax belegt an nextcloud/server v34.0.0 `lib/private/Comments/Comment.php:216` und spreed v24.0.4 `lib/Chat/Notifier.php:525`/`:581` sowie `lib/Chat/Parser/UserMention.php:138-145`. Einzeladressen (`guest/`, `email/`, `federated_user/`) bleiben sendbar. Tests: `tests/unit/test_talk_tools.py:1061` (14 Ablehnungsfälle, null HTTP-Aufrufe) und `:1107` (zwölf Negativfälle). Restklasse leer, Minderung von T-09-23 entsprechend erweitert |
+| R-2 | Restrisiko zu T-09-26 | **GESCHLOSSEN 21.08.2026** (`1bad377`). Vorher: `scripts/check_tool_budget.py` misst das Gesamtbudget in Bytes, das Pro-Tool-Limit in Zeichen (Befund IN-03, zurückgestellt) | Owner-Entscheid vom 21.08.2026: auf Bytes umstellen. Die Pro-Werkzeug-Messung zählt jetzt ebenfalls die UTF-8-Kodierung (`scripts/check_tool_budget.py:78`), beide Grenzen messen dieselbe Einheit. Der Deckel wurde **nicht** angehoben und steht unverändert bei 1400 (Z. 63); der Messlauf nach der Umstellung war zahlengleich (14312 von 15000, größtes Werkzeug 1351), weil alle Beschreibungen heute ASCII sind. Die Minderung von T-09-34 gilt damit in derselben Einheit, in der sie behauptet wird |
+| R-3 | Restrisiko zu T-09-26 | **GESCHLOSSEN 21.08.2026** (`27954c4`, `5311fcb`). Vorher: ein `cursor` auf `level=conversations` wurde stillschweigend ignoriert (Befund IN-04) und die Längen-Vorprüfung zählte Zeichen, während Talks serverseitige Zählung offen war (Befund IN-06); beide zurückgestellt | Owner-Entscheid vom 21.08.2026: ablehnen mit Hinweis, und nachmessen plus angleichen. Erste Hälfte: ein Cursor wird auf `talk_browse(level=conversations)` (`tools/talk.py:168-171`) und auf `tables_browse(level=tables\|columns)` (`tools/tables.py:103-107`) vor jedem HTTP-Aufruf abgelehnt, Capabilities eingeschlossen; Tests `tests/unit/test_talk_tools.py:554` und `tests/unit/test_tables_tools.py:366`. Zweite Hälfte: nachgemessen an spreed v24.0.4 `lib/Chat/ChatManager.php:407` (Konstante `:72`), `lib/Controller/ChatController.php:416` (und `:448`, die Antwort ist 413 und nicht 400) sowie nextcloud/server v34.0.0 `lib/private/Comments/Comment.php:186-189`: der Server trimmt und zählt danach `mb_strlen` in UTF-8, also Code-Points. Die Vorprüfung strippt jetzt `_PHP_TRIM` und zählt Code-Points (`tools/talk.py:262`, Konstante `:122`); Grenzfall mit Mehrbyte-Zeichen `tests/unit/test_talk_tools.py:1141` und `:1172`. Beide Stellen berührten keine deklarierte Minderung und tun es jetzt in der belegten Einheit |
 | R-4 | Hinweis zu T-09-SC-05 | Der Plan nennt eine Gegenprüfung der installierten Talk-Version gegen `occ app:list`; der Lauf liest sie stattdessen aus der `spreed`-Sektion der Capabilities (`tests/integration/test_talk_roundtrip.py:250-255`). `occ app:list` wird im Bootstrap nur für notes und deck geprüft (`scripts/bootstrap_test_nc.sh:314`) | Die geschützte Eigenschaft, die installierte Version wird gemessen statt angenommen, ist erfüllt und erscheint als Messzeile im Lauf. Der Weg unterscheidet sich vom Plantext. Da Talk etwa monatlich veröffentlicht, bleibt die Messzeile die Stelle, an der eine Versionsdrift auffällt |
 
 ---
@@ -130,6 +138,38 @@ Protokoll.
 | Audit Date | Threats Total | Closed | Open | Run By |
 |------------|---------------|--------|------|--------|
 | 2026-08-21 | 39 | 39 (32 mitigate verifiziert, 7 akzeptiert) | 0 | gsd-security-auditor |
+| 2026-08-21 (Nachtrag) | 39 | 39, davon zwei Minderungen erweitert (T-09-23, T-09-34) | 0 | gsd-code-fixer |
+
+**Nachtrag 21.08.2026, Restrisiken R-1 bis R-3 geschlossen.** Der Owner hat die vier im
+Review zurückgestellten Findings entschieden (jeweils die Empfehlung), und damit fallen die
+drei Restrisiken weg, die auf diese Findings verwiesen haben:
+
+- **R-1** (Gruppen- und Team-Erwähnungen, IN-02) geschlossen mit `697f2b1`. Der Guard heisst
+  `_MENTION_COLLECTIVE` und deckt alle vier kollektiven Typen des Nextcloud-Kommentarparsers
+  ab, je mit und ohne Anführungszeichen. Die Minderung von T-09-23 ist entsprechend erweitert
+  statt nur bestätigt.
+- **R-2** (Einheit des Budget-Gates, IN-03) geschlossen mit `1bad377`. Beide Grenzen zählen
+  Bytes. Der Deckel von 1400 wurde nicht angehoben, nachgewiesen an einem Messlauf.
+- **R-3** (stiller Cursor und Längen-Vorprüfung, IN-04 und IN-06) geschlossen mit `27954c4`
+  und `5311fcb`. Der Cursor wird auf drei Ebenen vor jedem HTTP-Aufruf abgelehnt, und die
+  Längen-Vorprüfung zählt jetzt so, wie der Server zählt: trimmen, dann Code-Points. Die
+  serverseitige Zählung, die der Review offengelassen hatte, ist belegt an spreed v24.0.4
+  `lib/Chat/ChatManager.php:407` und nextcloud/server v34.0.0
+  `lib/private/Comments/Comment.php:186-189`.
+
+Keine Bedrohung hat dabei ihre Disposition gewechselt, kein akzeptiertes Risiko wurde neu
+verhandelt, und `threats_open: 0` bleibt gültig. Gegenproben dieses Nachtrags:
+`uv run python -m pytest -q` (2465 passed, 119 deselected), `ruff check .`,
+`ruff format --check .`, `pyright` (0 errors), `vulture src scripts vulture_whitelist.py`,
+`uv run python scripts/check_tool_budget.py` (Exit-Code 0, 14358 von 15000 Bytes, 20
+Werkzeuge, grösstes 1351 von 1400) und die beiden Integrationsläufe gegen die laufende
+Docker-Topologie (`tests/integration/test_talk_roundtrip.py` und
+`tests/integration/test_tables_roundtrip.py`, 14 passed).
+
+Im Nachtrag geänderte Implementierungsdateien: `src/mcp_connector/tools/talk.py`,
+`src/mcp_connector/tools/tables.py`, `src/mcp_connector/server/reg_talk.py`,
+`src/mcp_connector/server/reg_tables.py`, `scripts/check_tool_budget.py`,
+`tests/unit/test_talk_tools.py`, `tests/unit/test_tables_tools.py`.
 
 Geprüfter Commit: `f4756bc` (nach den Review-Fixes bis `0f2603d`). ASVS-Level 1,
 `block_on: high`.
@@ -165,5 +205,6 @@ Keine Implementierungsdatei wurde in diesem Lauf verändert.
 - [x] Akzeptierte Risiken im Accepted Risks Log dokumentiert (AR-01 bis AR-07)
 - [x] `threats_open: 0` bestätigt
 - [x] `status: verified` in der Frontmatter gesetzt
+- [x] Restrisiken R-1 bis R-3 nach Owner-Entscheid geschlossen und im Audit Trail belegt
 
-**Approval:** verified 2026-08-21
+**Approval:** verified 2026-08-21, Nachtrag zu R-1 bis R-3 vom 21.08.2026
