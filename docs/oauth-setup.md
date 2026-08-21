@@ -125,11 +125,12 @@ instance and regardless of what an account is allowed to do in Talk itself. It i
 it is switched off, reading conversations and their history is never affected by it, and like
 the other five it takes effect after this app has been disabled and enabled again.
 
-**The fifth field is new and takes effect with the next release, 0.1.3.** In 0.1.2 the form
-carries four fields and `NC_MCP_OAUTH_CIMD` can only be set as a deploy variable, which a
-store installation never receives: on such an installation that switch could not be set at
-all. The document way itself is not in 0.1.2 either, so nothing was reachable and unswitchable
-in a released version.
+**The last field is new and takes effect with 0.1.4**, together with the Talk family it
+belongs to. The field above it arrived with 0.1.3: in 0.1.2 the form carries four fields and
+`NC_MCP_OAUTH_CIMD` can only be set as a deploy variable, which a store installation never
+receives, so on such an installation that switch could not be set at all. The document way
+itself is not in 0.1.2 either, so nothing was reachable and unswitchable in a released
+version.
 
 The config key of a field is the id of the field itself, without a prefix: AppAPI stores a
 declarative settings value under that id, and the app reads the same six keys back over the
@@ -273,10 +274,10 @@ address and can be listed before the first connection. **And a connector may ask
 advertised scopes**, which is why a registration of this server is recorded with both, see
 pitfall 7.
 
-## Client ID Metadata Documents: accepted since this build, next to registration
+## Client ID Metadata Documents: accepted since 0.1.3, next to registration
 
-In the repository since **2026-08-20** and not in 0.1.2, so an installation running 0.1.2
-behaves the way the sections above describe and nothing else.
+In the repository since **2026-08-20** and released with **0.1.3**, so an installation running
+0.1.2 or older behaves the way the sections above describe and nothing else.
 
 **Measured live on 2026-08-20 against Claude Code 2.1.233**, on a Nextcloud 34.0.3 instance
 running this build: the client identifies itself with the document address alone, no row is

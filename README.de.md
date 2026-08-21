@@ -26,7 +26,7 @@ Lizenz: AGPL-3.0-or-later. App-ID, Paketnamen und Repository-Name sind eingefror
 
 ## Status
 
-Version 0.1.3. Die App ist im Nextcloud App Store gelistet und als Nextcloud-ExApp über AppAPI
+Version 0.1.4. Die App ist im Nextcloud App Store gelistet und als Nextcloud-ExApp über AppAPI
 installierbar. Was heute vorliegt und wo jede dieser Aussagen festgehalten ist:
 
 - Alle 20 Tools des v1-Satzes sind implementiert, und die Tool-Tabelle weiter unten wird nicht
@@ -42,6 +42,15 @@ installierbar. Was heute vorliegt und wo jede dieser Aussagen festgehalten ist:
 - `prepare_context` bündelt eine Suche und die kommende Woche an Terminen in einem Aufruf, eine
   Frage kostet damit einen Rundlauf statt mehrerer.
 
+Neu in 0.1.4: Tables und Talk. Eine Assistenz durchsucht die Tabellen des Kontos und legt in
+einer davon eine Zeile an, über die Spaltentitel, sie liest die Unterhaltungen des Kontos und
+den Verlauf einer davon, und sie schreibt eine Nachricht in eine Unterhaltung. Das Lesen einer
+Unterhaltung hinterlässt keine Spur: keine Lesemarke wird verschoben, keine Benachrichtigung
+bestätigt, und der Online-Status bleibt, wie er war. Talk ist die einzige Familie, in der eine
+Assistenz anderen Menschen etwas vorlegen kann, deshalb kann eine Administratorin das Senden
+für die ganze Instanz abschalten, und eine Nachricht, die alle, eine ganze Gruppe oder ein
+ganzes Team auf einmal erwähnt, wird nie gesendet.
+
 Schritt-für-Schritt-Einrichtung für Claude Desktop, Claude Code und Remote-HTTP-Clients, inklusive der
 drei Fehler, die tatsächlich auftreten: **[docs/client-setup.md](docs/client-setup.md)**.
 
@@ -54,7 +63,7 @@ Ein Client wie Claude.ai oder ChatGPT erhält eine URL, meldet den Nutzer auf de
 Nextcloud an und sieht niemals ein Passwort oder ein App password. Die Verbindung erscheint unter
 Einstellungen, Sicherheit, Geräte und Sitzungen und kann dort beendet werden.
 
-Neu in 0.1.3: Eine Assistenz-App kann sich auch
+Seit 0.1.3: Eine Assistenz-App kann sich auch
 über die Adresse eines Metadaten-Dokuments ausweisen, das sie selbst veröffentlicht, statt sich
 hier zuerst zu registrieren. Das ist der Weg, den die aktuelle MCP-Spezifikation bevorzugt, und
 der Weg, über den Claude Code sich verbindet. Beide Wege laufen nebeneinander, und eine

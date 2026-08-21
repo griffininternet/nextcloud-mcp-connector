@@ -24,7 +24,7 @@ License: AGPL-3.0-or-later. App id, package names and repository name are frozen
 
 ## Status
 
-Version 0.1.3. The app is listed in the Nextcloud App Store and installable as a Nextcloud ExApp
+Version 0.1.4. The app is listed in the Nextcloud App Store and installable as a Nextcloud ExApp
 through AppAPI. What is in place today, and where each of these claims is written down:
 
 - All 20 tools of the v1 set are implemented, and the tool table below is no longer maintained
@@ -39,6 +39,14 @@ through AppAPI. What is in place today, and where each of these claims is writte
 - `prepare_context` bundles a search and the coming week of events into one call, so one
   question costs one round trip instead of several.
 
+New in 0.1.4: Tables and Talk. An assistant looks through the tables of the account and adds a
+row to one of them by column titles, reads the conversations of the account and the history of
+one of them, and sends one message into a conversation. Reading a conversation leaves no trace:
+no read marker is moved, no notification is acknowledged and the online status stays as it was.
+Talk is the one family in which an assistant can put something in front of other people, so an
+administrator can switch the sending off for the whole instance, and a message that mentions
+everybody, a whole group or a whole team at once is never sent.
+
 Step by step setup for Claude Desktop, Claude Code and remote HTTP clients, including the three
 errors that actually happen: **[docs/client-setup.md](docs/client-setup.md)**.
 
@@ -51,7 +59,7 @@ Claude.ai or ChatGPT is given one URL, signs the user in on Nextcloud's own page
 sees a password or an app password. The connection appears under Settings, Security, Devices
 and sessions and can be ended there.
 
-New in 0.1.3: an assistant can also identify itself
+Since 0.1.3: an assistant can also identify itself
 by the address of a metadata document it publishes itself, instead of registering here first.
 That is the way the current MCP specification prefers, and it is the way Claude Code connects.
 Both ways run next to each other, and an administrator can switch either of them off.

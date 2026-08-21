@@ -27,7 +27,7 @@ Licence : AGPL-3.0-or-later. L'app id, les noms de paquets et le nom du dépôt 
 
 ## Statut
 
-Version 0.1.3. L'application est référencée dans l'App Store de Nextcloud et installable comme
+Version 0.1.4. L'application est référencée dans l'App Store de Nextcloud et installable comme
 ExApp Nextcloud via AppAPI. Ce qui est en place aujourd'hui, et où chacune de ces affirmations est
 consignée :
 
@@ -44,6 +44,15 @@ consignée :
 - `prepare_context` regroupe une recherche et la semaine à venir en un seul appel, de sorte
   qu'une question coûte un aller-retour au lieu de plusieurs.
 
+Nouveau dans la 0.1.4 : Tables et Talk. Un assistant parcourt les tableaux du compte et ajoute
+une ligne à l'un d'eux en nommant les titres de colonnes, il lit les conversations du compte et
+l'historique de l'une d'elles, et il envoie un message dans une conversation. La lecture d'une
+conversation ne laisse aucune trace : aucun marqueur de lecture n'est déplacé, aucune
+notification n'est acquittée et le statut en ligne reste tel quel. Talk est la seule famille où
+un assistant peut présenter quelque chose à d'autres personnes : un administrateur peut donc
+désactiver cet envoi pour toute l'instance, et un message qui mentionne tout le monde, un groupe
+entier ou une équipe entière d'un coup n'est jamais envoyé.
+
 Installation pas à pas pour Claude Desktop, Claude Code et les clients HTTP distants, y compris les
 trois erreurs qui surviennent réellement : **[docs/client-setup.md](docs/client-setup.md)**.
 
@@ -57,7 +66,7 @@ l'utilisateur sur les propres pages de Nextcloud et ne voit jamais de mot de pas
 password. La connexion apparaît sous Paramètres, Sécurité, Appareils et sessions et peut y être
 close.
 
-Nouveau dans la 0.1.3 : une application d'assistant peut
+Depuis la 0.1.3 : une application d'assistant peut
 aussi s'identifier par l'adresse d'un document de métadonnées qu'elle publie elle-même, au lieu
 de s'enregistrer ici d'abord. C'est la voie que la spécification MCP actuelle préfère, et celle
 par laquelle Claude Code se connecte. Les deux voies fonctionnent côte à côte, et un

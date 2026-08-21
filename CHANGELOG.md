@@ -9,11 +9,14 @@ All notable changes to this app are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.4] - 2026-08-21
 
 The Tables app and Talk are now part of what an assistant can reach: the tables of the
 account can be looked through and a row can be added to one of them, and conversations can
-be read and one message can be sent into one of them.
+be read and one message can be sent into one of them. Talk is the first family in which an
+assistant can put something in front of other people, so it is also the first one an
+administrator can close for the whole instance with a single switch, and reading a
+conversation deliberately leaves no trace in the account.
 
 ### Added
 
@@ -37,7 +40,10 @@ be read and one message can be sent into one of them.
 - An assistant can send one message into a conversation. It is addressed only by a token the
   read tool reported, so a made up address never reaches Nextcloud, and a conversation the
   account may not write in is refused before anything is sent. A sent message is never edited
-  and never removed, and a message that mentions everybody at once is not sent at all.
+  and never removed, and a message that mentions everybody, a whole group or a whole team at
+  once is not sent at all: each of those turns one tool call into a notification for every
+  participant or every member. A mention of a single account, of a guest or of a federated
+  user is sent as written.
 
 - An administrator can switch the sending of Talk messages off for the whole instance, in the
   settings of this app, whatever an account is allowed to do in Talk itself. Reading
@@ -296,7 +302,8 @@ First release, submitted to the Nextcloud App Store.
   never sees more than that user sees in the web interface.
 - A privacy and data flow description, see [docs/privacy.md](docs/privacy.md).
 
-[Unreleased]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.0...v0.1.1
