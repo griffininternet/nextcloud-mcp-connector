@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Verwaltungs-Clients und Härtungs-Reste
-status: Awaiting next milestone
-stopped_at: "Plan 06-11 fertig: CLIENT-04-Gap geschlossen. E5 nennt den App-Passwort-Weg (ein neuer Test haelt Ausweg und Schweigepflicht), BL-14 mit Option, Datum, Messverweis und SDK-Rohbeleg geschlossen, CLIENT-04 und ROADMAP SC3 auf das Gemessene umformuliert (Owner-Freigabe 2026-08-20) und CLIENT-04 abgehakt, beide Doku-Sektionen mit D-35-Grund, Ausweg und getroffener Entscheidung. D-35, Auth-Pfad, READMEs, Store-Text und Abhaengigkeiten unveraendert. 2165 Unit-Tests gruen, Contract gruen, ruff sauber. Naechster Schritt: Re-Verifikation der Phase 6."
-last_updated: "2026-08-20T19:48:41.166Z"
-last_activity: 2026-08-20 — Milestone v1.1 completed and archived
+milestone: v1.2
+milestone_name: Kuratierte Breite
+status: planning
+last_updated: "2026-08-21T04:29:06.014Z"
+last_activity: 2026-08-21
 progress:
-  total_phases: 2
-  completed_phases: 1
-  total_plans: 11
-  completed_plans: 11
-  percent: 50
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-08-14)
 
 ## Current Position
 
-Phase: Milestone v1.1 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-08-20 — Milestone v1.1 completed and archived
+Status: Defining requirements
+Last activity: 2026-08-21 — Milestone v1.2 started
 
 ## Performance Metrics
 

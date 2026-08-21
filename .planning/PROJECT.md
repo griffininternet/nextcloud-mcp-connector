@@ -8,9 +8,22 @@ Ein schlankes MCP-only-ExApp für Nextcloud: Nutzer installieren es per Klick au
 
 Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
 
+## Current Milestone: v1.2 Kuratierte Breite
+
+**Goal:** Die kuratierte Tool-Basis wächst um Talk, Tables und Mail, ohne das Sicherheitsversprechen ("kann konstruktionsbedingt nichts zerstören") oder die Schlankheit aufzugeben.
+
+**Target features:**
+- Talk-Tools: Konversationen und Nachrichten lesen, Nachricht senden als risikoarmer Create
+- Tables-Tools: Tabellen und Zeilen lesen, Zeile anlegen als risikoarmer Create
+- Mail-Tools: strikt lesend (sensibelste Familie, kein Senden, kein Verschieben, kein Markieren)
+- prepare_context bezieht die neuen Familien ein (kappbar und degradierend wie bisher)
+- Tool-Budget-Gate angehoben plus Schema-Diät für alle neuen Tools
+
+**Key context:** Das "nach Store-Feedback"-Gate aus den Next-Milestone-Kandidaten wurde per Owner-Entscheid (21.08.) bewusst vorgezogen. Alle drei Familien brauchen App-Erkennung mit Graceful Degradation wie bei Notes/Deck. Writes laufen weiter durchs AST-Grep-Gate.
+
 ## Current State
 
-**v1.1 shipped 2026-08-20** (Audit passed 7/7, Verification 6/6, Security 74/74): CIMD als DCR-Alternative live bewiesen (Claude Code verbindet ohne Registrierung), SSRF-gehärteter Dokumentabruf, RFC-8252-Loopback-Portregel, CIMD als fünfter Admin-Settings-Wert, Cursor-Befund gemessen und per BL-14 entschieden ("sichtbar machen plus Doku", D-35 steht), Ein-Klick-Story auf NC 34.0.3 wörtlich wahr (Store-UI zeigt beide Knöpfe), Conference-Demo-Runbook (82 s, durchgefahren) plus Lightning-Talk-Entwurf. Phase 7 (MUCGPT/F13/BaerGPT) per Owner-Entscheid deferred, extern getaktet. Die Änderungen ab Phase 6 sind im Repo, aber noch nicht released (Kandidat 0.1.3, Owner-Freigabe nötig). Codebasis: ~2208 Unit-/Contract-Tests grün, ruff/pyright/vulture sauber.
+**v1.1 shipped 2026-08-20** (Audit passed 7/7, Verification 6/6, Security 74/74): CIMD als DCR-Alternative live bewiesen (Claude Code verbindet ohne Registrierung), SSRF-gehärteter Dokumentabruf, RFC-8252-Loopback-Portregel, CIMD als fünfter Admin-Settings-Wert, Cursor-Befund gemessen und per BL-14 entschieden ("sichtbar machen plus Doku", D-35 steht), Ein-Klick-Story auf NC 34.0.3 wörtlich wahr (Store-UI zeigt beide Knöpfe), Conference-Demo-Runbook (82 s, durchgefahren) plus Lightning-Talk-Entwurf. Phase 7 (MUCGPT/F13/BaerGPT) per Owner-Entscheid deferred, extern getaktet. **Release 0.1.3 ist seit 21.08. live im Store** (Owner-Freigabe erteilt, alle Runbook-Proofs geschlossen; trägt CIMD, Loopback-Portregel, Admin-CIMD-Schalter, E5-Ausweg, F2 serverInfo.version). Codebasis: ~2208 Unit-/Contract-Tests grün, ruff/pyright/vulture sauber.
 
 **v1.0 shipped 2026-08-20.** Release 0.1.2 ist live im Nextcloud App Store
 (apps.nextcloud.com/apps/mcp_connector), 16 Tools, OAuth 2.1 E2E gegen Claude.ai und
@@ -21,12 +34,10 @@ BL-12 MUCGPT-Verprobung wartet auf it@M-Antwort).
 
 ## Next Milestone Goals
 
-Kandidaten, bei `/gsd:new-milestone` zu priorisieren:
-- Release 0.1.3 in den Store (trägt CIMD, Loopback-Portregel, Admin-CIMD-Schalter, E5-Ausweg, F2 serverInfo.version; Owner-Freigabe nötig)
+Kandidaten für SPÄTERE Milestones (v1.2 läuft, siehe Current Milestone):
 - MUCGPT/F13/BaerGPT live verproben, sobald externer Zugang besteht (deferred CLIENT-01..03, Protokoll in docs/client-setup.md)
 - Nextcloud Conference September 2026: Demo fahren, Talk-Entwurf verwenden (Contributor Week / Gespräche; CfP ist zu)
-- v1.2 "Kuratierte Breite": Talk/Tables/Mail, prepare_context-Ausbau (Q4, nach Store-Feedback)
-- Tech-Debt aus v1.1-Audit (uv.lock-Selbstangabe, acceptance_all_tools-Zählung, CIMD-E2E-Live-Rerun nach den Review-Fixes, E5-Wortlaut bei CIMD-off)
+- Tech-Debt aus v1.1-Audit (acceptance_all_tools-Zählung 15 vs 16, CIMD-E2E-Live-Rerun nach den Review-Fixes, E5-Wortlaut bei CIMD-off; uv.lock-Selbstangabe am 21.08. mit 0.1.3 erledigt)
 - Querschnitt: Prototype Fund Frist 1.10. bis 30.11.2026 (Solo-Dev, 47,5k)
 - v2.0 "openDesk/Behörden" als Einzeiler (OpenProject/XWiki/Matrix/OX, Gruppen-Policies, Audit-Log, ZenDiS)
 
@@ -119,4 +130,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-20 after v1.1 milestone*
+*Last updated: 2026-08-21 at v1.2 milestone start*
