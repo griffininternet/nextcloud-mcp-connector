@@ -21,9 +21,14 @@ The calls build on each other on purpose: the file uploaded in step one is the f
 answers "no hits" for an object created seconds earlier is a failure, not an empty result,
 and only a chained run can tell those two apart.
 
-Deck is the one exception. Board and stack are not connector features (the server cannot
-create either, by design), so the script uses the board the integration suite leaves
-behind and reports the two Deck tools as skipped when no board exists.
+Deck and Tables are the two exceptions. A board, a stack, a table and a column are not
+connector features (the server cannot create any of them, by design), so the script uses
+what the integration suite leaves behind and reports the write as skipped when there is
+nothing to write into. For Tables that check has two halves, because two refusals of the
+connector are correct behaviour rather than a defect: a table shared without a write
+permission, and a row that leaves a mandatory column empty. The script therefore only
+considers tables with ``can_create`` and only writes when a text marker fits into every
+mandatory column of one.
 """
 
 import asyncio
@@ -189,28 +194,38 @@ async def run(client: Client, report: Report) -> None:
     # --- tables -----------------------------------------------------------------------
     # Same exception as Deck, one family later: a table and its columns are not connector
     # features, so the script writes into the table the integration suite leaves behind and
-    # reports the write as skipped when there is none. The column is picked by type, because
-    # a text value in a number column is a 400 of the app and not a broken tool.
+    # reports the write as skipped when there is none.
+    #
+    # The table is not simply the first one listed, and the column is not simply the first
+    # text column. Both shortcuts turn a correctly working connector into a FAIL: a table
+    # shared without a write permission is refused by design, and a row that leaves a
+    # mandatory column empty is refused by design as well. So only tables with ``can_create``
+    # are candidates, and a candidate qualifies only when a text marker fits into every
+    # mandatory column of it. If none does, this is a SKIP with a reason, exactly like Deck.
     tables = loads(await call(client, report, "tables_browse", {"level": "tables"}))
-    table_id = _first_id(tables)
-    column_title = ""
-    if table_id:
+    table_id = ""
+    values: dict[str, str] = {}
+    for candidate in _writable_tables(tables):
         columns = loads(
-            await call(client, report, "tables_browse", {"level": "columns", "table_id": table_id})
+            await call(client, report, "tables_browse", {"level": "columns", "table_id": candidate})
         )
-        column_title = _first_text_column(columns)
-    if table_id and column_title:
+        fits = _text_row_for(columns, f"Abnahme {marker}")
+        if fits:
+            table_id, values = candidate, fits
+            break
+    if table_id and values:
         await call(
             client,
             report,
             "tables_create_row",
-            {"table_id": table_id, "values": json.dumps({column_title: f"Abnahme {marker}"})},
+            {"table_id": table_id, "values": json.dumps(values)},
         )
     else:
         report.add(
             "tables_create_row",
             "SKIP",
-            "no table with a text column on this account; the connector creates neither by design",
+            "no writable table whose mandatory columns are all text; the connector creates "
+            "neither a table nor a column by design",
         )
 
     # --- contacts, search, chatgpt profile ---------------------------------------------
@@ -224,15 +239,47 @@ async def run(client: Client, report: Report) -> None:
         report.add("fetch", "FAIL", "no file id from files_search to resolve")
 
 
-def _first_text_column(payload: dict[str, Any]) -> str:
-    """Title of the first text column, which is the only cell shape a marker fits into."""
+def _writable_tables(payload: dict[str, Any]) -> list[str]:
+    """The ids of the tables this account may add a row to, in the order they were listed.
+
+    ``can_create`` is the field ``tables_browse`` reports for exactly this question (K5). A
+    table without it is refused by the connector on purpose, so trying it anyway would report
+    a working refusal as a broken tool.
+    """
     entries = payload.get("results")
     if not isinstance(entries, list):
-        return ""
+        return []
+    ids: list[str] = []
     for entry in entries:
-        if isinstance(entry, dict) and entry.get("type") == "text":
-            return str(entry.get("title") or "")
-    return ""
+        if not isinstance(entry, dict) or not entry.get("can_create"):
+            continue
+        raw = str(entry.get("id", ""))
+        if raw:
+            ids.append(raw.rsplit(":", 1)[-1])
+    return ids
+
+
+def _text_row_for(payload: dict[str, Any], value: str) -> dict[str, str]:
+    """One row that this table would accept, or an empty mapping when there is none.
+
+    Two refusals of the connector are by design and would otherwise look like a failure: a
+    text marker in a number column is a 400 of the Tables app, and a row that leaves a
+    mandatory column empty never leaves this server at all. So a table qualifies only when all
+    of its mandatory columns are text columns, and the row written covers every one of them.
+    A table without any mandatory column needs one text column to write into.
+    """
+    entries = payload.get("results")
+    if not isinstance(entries, list):
+        return {}
+    columns = [entry for entry in entries if isinstance(entry, dict)]
+    mandatory = [column for column in columns if column.get("mandatory")]
+    if any(column.get("type") != "text" for column in mandatory):
+        return {}
+    chosen = mandatory or [column for column in columns if column.get("type") == "text"][:1]
+    titles = [str(column.get("title") or "") for column in chosen]
+    if not titles or not all(titles):
+        return {}
+    return dict.fromkeys(titles, value)
 
 
 def _first_id(payload: dict[str, Any]) -> str:
