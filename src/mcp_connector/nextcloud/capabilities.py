@@ -53,6 +53,13 @@ _MISSING: dict[str, tuple[str, str]] = {
             "created with notes_create."
         ),
     ),
+    "tables": (
+        "The Tables app is not enabled on this Nextcloud.",
+        (
+            "Ask an administrator to enable the Tables app, or keep the list in a note "
+            "created with notes_create."
+        ),
+    ),
 }
 
 
@@ -65,10 +72,16 @@ class Capabilities:
     deck_available: bool = False
     deck_api_versions: tuple[str, ...] = ()
     can_create_boards: bool = False
+    tables_available: bool = False
+    tables_api_versions: tuple[str, ...] = ()
 
     def has(self, app: str) -> bool:
         """Whether ``app`` is installed. Unknown names are a programming error."""
-        flags = {"notes": self.notes_available, "deck": self.deck_available}
+        flags = {
+            "notes": self.notes_available,
+            "deck": self.deck_available,
+            "tables": self.tables_available,
+        }
         try:
             return flags[app]
         except KeyError:
@@ -125,6 +138,8 @@ def parse(data: Any) -> Capabilities:
     notes = notes if isinstance(notes, dict) else None
     deck = section.get("deck")
     deck = deck if isinstance(deck, dict) else None
+    tables = section.get("tables")
+    tables = tables if isinstance(tables, dict) else None
 
     return Capabilities(
         notes_available=notes is not None,
@@ -132,6 +147,12 @@ def parse(data: Any) -> Capabilities:
         deck_available=deck is not None,
         deck_api_versions=_versions(deck, "apiVersions"),
         can_create_boards=bool(deck.get("canCreateBoards")) if deck else False,
+        # The one place that differs from Notes and Deck: Tables publishes an explicit
+        # ``enabled``, and an app that is installed but switched off is absent as far as this
+        # server is concerned, so the flag is read from the field and not from the presence
+        # of the section. No gate on ``version``: the API generations are what matter here.
+        tables_available=bool(tables.get("enabled")) if tables else False,
+        tables_api_versions=_versions(tables, "apiVersions"),
     )
 
 

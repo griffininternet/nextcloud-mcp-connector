@@ -79,6 +79,12 @@ get_columns
 get_rows_simple
 create_row
 
+# tables_api_versions: the same case as deck_api_versions above. The gate for the app reads
+# tables_available, the version tuple exists so an instance that only offers one generation is
+# a named finding instead of a mystery 404 on the rows route. Asserted on in
+# tests/unit/test_ocs_capabilities.py.
+tables_api_versions
+
 # --- The store API of phase 3 ----------------------------------------------------------
 # oauth/store.py was built in one piece in plan 03-02, because its schema and its
 # transactions only make sense together, and its callers arrived plan by plan afterwards.

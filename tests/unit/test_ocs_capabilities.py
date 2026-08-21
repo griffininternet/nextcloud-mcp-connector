@@ -118,6 +118,96 @@ async def test_a_deck_without_board_permission_is_reported_honestly(clients: NcC
 
 
 @pytest.mark.anyio
+async def test_an_enabled_tables_app_reports_both_api_generations(clients: NcClients) -> None:
+    payload = envelope(
+        {
+            "capabilities": {
+                "tables": {
+                    "enabled": True,
+                    "version": "2.2.2",
+                    "apiVersions": ["1.0", "2.0"],
+                    "features": ["favorite", "archive"],
+                }
+            }
+        }
+    )
+    with respx.mock(assert_all_called=True) as mock:
+        mock.get(CAPABILITIES_URL).mock(return_value=httpx.Response(200, json=payload))
+        caps = await capabilities.load(clients)
+
+    assert caps.tables_available is True
+    assert caps.tables_api_versions == ("1.0", "2.0")
+    assert caps.has("tables") is True
+
+
+@pytest.mark.anyio
+async def test_an_installed_but_disabled_tables_app_counts_as_absent(clients: NcClients) -> None:
+    """The one difference to Deck, and the reason the flag is not the section presence.
+
+    Tables publishes an explicit ``enabled``. A section with ``enabled: false`` means the app
+    is installed and switched off, and an app that is switched off answers no request, so
+    treating the section as proof of availability would produce a 404 on an HTML page where a
+    sentence belongs.
+    """
+    payload = envelope(
+        {"capabilities": {"tables": {"enabled": False, "apiVersions": ["1.0", "2.0"]}}}
+    )
+    with respx.mock(assert_all_called=True) as mock:
+        mock.get(CAPABILITIES_URL).mock(return_value=httpx.Response(200, json=payload))
+        caps = await capabilities.load(clients)
+
+    assert caps.tables_available is False
+    assert caps.has("tables") is False
+
+
+@pytest.mark.anyio
+async def test_an_instance_without_a_tables_section_reports_it_as_absent(
+    clients: NcClients,
+) -> None:
+    with respx.mock(assert_all_called=True) as mock:
+        mock.get(CAPABILITIES_URL).mock(
+            return_value=httpx.Response(200, json=capabilities_fixture())
+        )
+        caps = await capabilities.load(clients)
+
+    assert caps.tables_available is False
+    assert caps.tables_api_versions == ()
+
+
+def test_a_single_api_version_string_is_tolerated_for_tables() -> None:
+    """An instance that answers one version as a plain string is not a broken instance."""
+    caps = capabilities.parse({"capabilities": {"tables": {"enabled": True, "apiVersions": "2.0"}}})
+    assert caps.tables_available is True
+    assert caps.tables_api_versions == ("2.0",)
+
+
+def test_has_refuses_an_app_this_server_does_not_check() -> None:
+    """An unknown name is a programming error, never a silent False."""
+    caps = capabilities.parse({"capabilities": {"tables": {"enabled": True}}})
+    assert caps.has("tables") is True
+    with pytest.raises(ValueError, match="spreed"):
+        caps.has("spreed")
+
+
+@pytest.mark.anyio
+async def test_require_app_names_the_missing_tables_app_and_an_alternative(
+    clients: NcClients,
+) -> None:
+    with respx.mock(assert_all_called=True) as mock:
+        mock.get(CAPABILITIES_URL).mock(
+            return_value=httpx.Response(
+                200, json=envelope({"capabilities": {"tables": {"enabled": False}}})
+            )
+        )
+        with pytest.raises(AppMissingError) as excinfo:
+            await capabilities.require_app(clients, "tables")
+
+    assert excinfo.value.message == "The Tables app is not enabled on this Nextcloud."
+    assert "Tables app" in excinfo.value.hint
+    assert excinfo.value.hint != excinfo.value.message
+
+
+@pytest.mark.anyio
 async def test_an_html_login_page_explains_itself_instead_of_raising_a_keyerror(
     clients: NcClients,
 ) -> None:
