@@ -105,7 +105,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 09-04-PLAN.md: Registrierung, Destruktiv-Gate für die verblosen Schreibwege, Budget, READMEs EN/DE/FR, Store-Beschreibung und Changelog
+- [x] 09-04-PLAN.md: Registrierung, Destruktiv-Gate für die verblosen Schreibwege, Budget, READMEs EN/DE/FR, Store-Beschreibung und Changelog
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -198,7 +198,7 @@ Plans:
 | 6. Härtung, Eigennachweise und Conference-Reife | v1.1 | 11/11 | Complete | 2026-08-20 |
 | 7. Verwaltungs-Clients live verprobt | v1.1 | 0/0 | Deferred (extern getaktet) | - |
 | 8. Erreichbarkeits-Spike und Tables | v1.2 | 5/5 | Complete    | 2026-08-21 |
-| 9. Talk | v1.2 | 3/5 | In Progress|  |
+| 9. Talk | v1.2 | 4/5 | In Progress|  |
 | 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 0/? | Not started | - |
 | 11. Bündelung, Budget und Release 0.1.4 | v1.2 | 0/? | Not started | - |
 

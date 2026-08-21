@@ -11,7 +11,7 @@
 - [ ] **TALK-01**: Nutzer kann seine Talk-Konversationen listen (Token, Name, Typ, Ungelesen-/Erwähnungs-Zähler, letzte Aktivität) über `talk_browse(level="conversations")`; archivierte Konversationen bleiben draußen, die Antwort ist gekappt (Max 50) und `noStatusUpdate=1` verhindert, dass das Listen den Online-Status setzt.
 - [ ] **TALK-02**: Nutzer kann den Verlauf einer Konversation lesen über `talk_browse(level="messages")`, nachweislich ohne Nebenwirkung: `setReadMarker=0`, `markNotificationsAsRead=0`, `noStatusUpdate=1`, `lookIntoFuture=0` sind per Test festgenagelt (Lesen setzt weder Lesemarker noch Online-Status noch quittiert es Benachrichtigungen); Platzhalter (`{actor}`, Mentions) sind aufgelöst, Systemnachrichten per Default draußen, Default 20 / Max 50 Nachrichten mit Byte-Kappe pro Nachricht und Paginierung über `lastKnownMessageId`.
 - [ ] **TALK-03**: Nutzer kann eine Nachricht in eine Konversation senden über `talk_send` (CREATE_ONLY): Adressierung ausschließlich per Token aus `talk_browse`, Vorprüfung `readOnly == 0` und Permission-Bit 128 mit hilfreicher Ablehnung, `@all`/`@here` werden abgelehnt, Längenkappe 32.000 Zeichen, kein `silent`-, kein Edit-, kein Delete-Pfad im Client.
-- [ ] **TALK-04**: Administrator kann `talk_send` instanzweit abschalten über einen neuen Admin-Settings-Schalter (Muster der bestehenden fünf OAuth-Werte, an per Default): mit abgeschaltetem Schalter antwortet das Tool mit einem Fehlersatz samt nächstem Schritt, und der Schalter ist Ende-zu-Ende getestet (Settings-Form, Overlay-Lesepfad, Wirkung am Tool).
+- [x] **TALK-04**: Administrator kann `talk_send` instanzweit abschalten über einen neuen Admin-Settings-Schalter (Muster der bestehenden fünf OAuth-Werte, an per Default): mit abgeschaltetem Schalter antwortet das Tool mit einem Fehlersatz samt nächstem Schritt, und der Schalter ist Ende-zu-Ende getestet (Settings-Form, Overlay-Lesepfad, Wirkung am Tool).
 
 ### Tables (TABLES)
 
@@ -82,7 +82,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TALK-01 | Phase 9 | Pending |
 | TALK-02 | Phase 9 | Pending |
 | TALK-03 | Phase 9 | Pending |
-| TALK-04 | Phase 9 | Pending |
+| TALK-04 | Phase 9 | Complete |
 | TABLES-01 | Phase 8 | Complete |
 | TABLES-02 | Phase 8 | Complete |
 | MAIL-01 | Phase 10 | Pending |
