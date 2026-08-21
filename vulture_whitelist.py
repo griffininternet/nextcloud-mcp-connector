@@ -97,6 +97,15 @@ tables_api_versions
 spreed_features
 spreed_chat_max_length
 
+# get_rooms, get_messages, send_message: the transport of the Talk family, written and
+# tested in one piece before its caller exists, exactly as the Tables transport was in plan
+# 08-02. All three are driven directly by tests/unit/test_talk_client.py, which is what keeps
+# them honest, and all three leave this list with plan 09-02. web_url is absent on purpose:
+# the name already has a production caller in the Tables family.
+get_rooms
+get_messages
+send_message
+
 # --- The store API of phase 3 ----------------------------------------------------------
 # oauth/store.py was built in one piece in plan 03-02, because its schema and its
 # transactions only make sense together, and its callers arrived plan by plan afterwards.

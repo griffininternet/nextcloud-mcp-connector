@@ -1,0 +1,135 @@
+[
+  {
+    "id": 5104,
+    "token": "abcd1234",
+    "actorType": "users",
+    "actorId": "bob",
+    "actorDisplayName": "Bob Beispiel",
+    "timestamp": 1755180000,
+    "message": "{actor} hat die Maße an {mention-user1} übergeben",
+    "messageParameters": {
+      "actor": {"type": "user", "id": "bob", "name": "Bob Beispiel"},
+      "mention-user1": {
+        "type": "user",
+        "id": "alice",
+        "name": "Alice Beispiel",
+        "mention-id": "alice"
+      }
+    },
+    "messageType": "comment",
+    "systemMessage": "",
+    "expirationTimestamp": 0,
+    "isReplyable": true,
+    "markdown": true,
+    "reactions": {},
+    "referenceId": "",
+    "parent": {
+      "id": 5099,
+      "token": "abcd1234",
+      "actorType": "users",
+      "actorId": "alice",
+      "actorDisplayName": "Alice Beispiel",
+      "timestamp": 1755170000,
+      "message": "Sind die Maße schon geprüft?",
+      "messageParameters": {},
+      "messageType": "comment",
+      "systemMessage": "",
+      "expirationTimestamp": 0,
+      "isReplyable": true,
+      "markdown": true,
+      "reactions": {},
+      "referenceId": ""
+    }
+  },
+  {
+    "id": 5103,
+    "token": "abcd1234",
+    "actorType": "users",
+    "actorId": "alice",
+    "actorDisplayName": "Alice Beispiel",
+    "timestamp": 1755179000,
+    "message": "Protokoll der Übergabe, bitte einmal ganz lesen. Die Prüfung der Maße am Baulos 4 ist abgeschlossen, alle Werte liegen innerhalb der vereinbarten Toleranz, und die Abweichung an der Südseite bleibt unter zwei Millimetern. Die Straßenentwässerung wurde zweimal gespült, das zweite Spülprotokoll liegt bei den Unterlagen im Ordner Übergabe 2025. Für die Schlussrechnung fehlen weiterhin die beiden Nachweise der Verdichtungsprüfung, die der Prüfstatiker bis Freitag zusagt. Die Restarbeiten an der Böschung sind mit der Kolonne für kommenden Montag abgestimmt, Wetter vorbehalten, und der Kran bleibt bis Mittwoch auf dem Gelände stehen. Bitte gebt mir bis morgen Mittag Rückmeldung, ob die Abnahme wie geplant am Donnerstag um neun Uhr stattfinden kann, damit ich die Einladung an den Auftraggeber und an das Prüfamt herausgeben kann. Wer nicht teilnehmen kann, schreibt es bitte hier in die Konversation und nicht per Mail, damit die Absprache für alle nachvollziehbar bleibt. Danke und Grüße an die ganze Truppe.",
+    "messageParameters": {},
+    "messageType": "comment",
+    "systemMessage": "",
+    "expirationTimestamp": 0,
+    "isReplyable": true,
+    "markdown": true,
+    "reactions": {},
+    "referenceId": "8f1c2d3e",
+    "lastEditActorType": "users",
+    "lastEditActorId": "alice",
+    "lastEditActorDisplayName": "Alice Beispiel",
+    "lastEditTimestamp": 1755179400
+  },
+  {
+    "id": 5102,
+    "token": "abcd1234",
+    "actorType": "users",
+    "actorId": "carla",
+    "actorDisplayName": "Carla Grüßgott",
+    "timestamp": 1755178000,
+    "message": "Die Datei {file} liegt jetzt im Ordner Übergabe",
+    "messageParameters": {
+      "file": {
+        "type": "file",
+        "id": "4711",
+        "name": "Spülprotokoll.pdf",
+        "path": "Übergabe 2025/Spülprotokoll.pdf",
+        "link": "http://nc.test/index.php/f/4711",
+        "mimetype": "application/pdf"
+      }
+    },
+    "messageType": "object_shared",
+    "systemMessage": "",
+    "expirationTimestamp": 0,
+    "isReplyable": true,
+    "markdown": true,
+    "reactions": {},
+    "referenceId": ""
+  },
+  {
+    "id": 5101,
+    "token": "abcd1234",
+    "actorType": "users",
+    "actorId": "bob",
+    "actorDisplayName": "Bob Beispiel",
+    "timestamp": 1755177000,
+    "message": "{actor} hat {mention-user1} zur Konversation hinzugefügt",
+    "messageParameters": {
+      "actor": {"type": "user", "id": "bob", "name": "Bob Beispiel"},
+      "mention-user1": {
+        "type": "user",
+        "id": "carla",
+        "name": "Carla Grüßgott",
+        "mention-id": "carla"
+      }
+    },
+    "messageType": "system",
+    "systemMessage": "user_added",
+    "expirationTimestamp": 0,
+    "isReplyable": false,
+    "markdown": false,
+    "reactions": {},
+    "referenceId": ""
+  },
+  {
+    "id": 5100,
+    "token": "abcd1234",
+    "actorType": "users",
+    "actorId": "alice",
+    "actorDisplayName": "Alice Beispiel",
+    "timestamp": 1755176000,
+    "message": "{actor} hat die Konversation erstellt",
+    "messageParameters": {
+      "actor": {"type": "user", "id": "alice", "name": "Alice Beispiel"}
+    },
+    "messageType": "system",
+    "systemMessage": "conversation_created",
+    "expirationTimestamp": 0,
+    "isReplyable": false,
+    "markdown": false,
+    "reactions": {},
+    "referenceId": ""
+  }
+]
