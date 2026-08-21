@@ -41,7 +41,13 @@ findings:
   warning: 7
   info: 9
   total: 16
-status: issues_found
+status: fixed
+resolution:
+  fixed_at: 2026-08-21T09:11:09Z
+  scope: all seven warnings plus the four Info findings that are pure documentation drift
+  fixed: 11
+  deferred: 5
+  fix_report: .planning/phases/08-erreichbarkeits-spike-und-tables/08-REVIEW-FIX.md
 ---
 
 # Phase 8: Code Review Report
@@ -58,6 +64,16 @@ Geprüft wurde die neue Tables-Familie (Client, Tool-Schicht, Registrierung, Cap
 Gesamtbild: Die Kernlogik der Tables-Familie ist sorgfältig gebaut. Die Berechtigungsvorprüfung (K5, Owner vs. Share), die Node-Type/Node-Collection-Trennung (K3), das erzwungene Limit, der Cursor-Scope-Check und das Fehlen jeglicher Update-/Delete-/Share-Pfade sind konstruktiv abgesichert und durch Unit-, Contract- und Integrationstests belegt. Keine Critical-Befunde.
 
 Es bleiben sieben Warnungen: zwei Randfälle der Zeilen-Paginierung, die die eigene Zusage "Trunkierung wird benannt, nie still" bzw. die Cursor-Semantik brechen können, eine Lücke im Marker-Filter (T-08-14) für Nicht-String-Zellwerte und Auswahloptions-Labels, ein Blindfleck im Destruktiv-Gate, den die eigenen Testdateien vorführen, ein möglicher Fehlalarm im Abnahmeskript sowie in allen drei READMEs eine veraltete "Optionale Apps"-Aussage, die Tables nicht kennt. Dazu neun Info-Befunde, überwiegend Doku-Drift bei Toolzahlen und veraltete Docstrings.
+
+## Behebung
+
+Behoben am 2026-08-21: alle sieben Warnungen und die vier Info-Befunde, die reine
+Doku-Drift sind (IN-01 bis IN-04). Fünf Info-Befunde sind zurückgestellt, jeder mit
+Begründung an seinem Befund. Jeder Fix ist ein eigener Commit, die Warnungen zu
+`tools/tables.py` jeweils mit einem Unit-Test für den Fehlerfall. Vor dem Abschluss liefen
+alle Gates grün: komplette Test-Suite, `ruff check .`, `ruff format --check .`, `pyright`,
+`vulture` und `scripts/check_tool_budget.py`. Details im Fix-Report
+`08-REVIEW-FIX.md`.
 
 ## Warnings
 
@@ -76,6 +92,12 @@ if (known and count > offset + len(results)) or (not known and len(results) == l
     answer["next"] = paging.encode_cursor({"o": offset + len(results), "t": table})
 ```
 
+**Behoben:** Commit `48cfbce`. `_row_count` liefert jetzt `int | None`, `rowsCount` fällt aus
+der Antwort, wenn die App keinen brauchbaren Wert meldet, und ein voll gefülltes Lesefenster
+ist dann das Trunkierungssignal. Test `test_a_full_window_is_named_as_truncated_even_without_a_row_count`
+(vier Formen: Feld fehlt, String, bool, negativ) plus
+`test_a_window_that_was_not_filled_is_the_end_of_the_table`.
+
 ### WR-02: `next`-Cursor kann identisch zum aktuellen Cursor sein (Endlosschleifen-Klasse)
 
 **File:** `src/mcp_connector/tools/tables.py:327-329`
@@ -86,6 +108,11 @@ if results and answer["rowsCount"] > offset + len(results):
     answer["truncated"] = True
     answer["next"] = paging.encode_cursor({"o": offset + len(results), "t": table})
 ```
+
+**Behoben:** Commit `5f3788d`. `bool(results)` steht jetzt vor beiden Zweigen der
+Trunkierungsprüfung, also gibt eine leere Seite kein Handle mehr aus. Test
+`test_a_page_that_carried_nothing_hands_out_no_handle_of_its_own_offset` (Offset 25,
+`rowsCount` 342, null Zeilen).
 
 ### WR-03: Marker-Filter (T-08-14) greift nicht bei Nicht-String-Zellwerten und `selectionOptions`-Labels
 
@@ -104,6 +131,13 @@ def _clean(value: Any) -> Any:
 ```
 und in `_row` sowie für `_COLUMN_LIMITS`-Werte (mindestens `selectionOptions`) anwenden.
 
+**Behoben:** Commit `2b60ac5`. Neue Funktion `_clean` filtert rekursiv bis zum letzten
+Blatt-String und lässt Zahlen, bools und `None` unverändert; angewendet in `_row` und auf
+alle `_COLUMN_LIMITS`-Werte, also auch auf `selectionOptions`. Tests
+`test_a_marker_is_removed_from_a_cell_that_is_not_a_plain_string` (Liste mit verschachteltem
+Objekt, Zahl bleibt Zahl) und
+`test_a_marker_in_a_selection_option_label_is_removed_as_well`.
+
 ### WR-04: Fehlende Spalten-ID wird zu `"None"` und träfe per PHP-`(int)`-Cast Spalte 0
 
 **File:** `src/mcp_connector/tools/tables.py:210`
@@ -119,11 +153,26 @@ if not isinstance(column_id, int) or isinstance(column_id, bool):
 data[str(column_id)] = value
 ```
 
+**Behoben:** Commit `c9a7abf`. `_by_column_id` prüft die Spalten-ID auf echtes `int` (bool
+ausgeschlossen) und lehnt sonst mit eigenem Hinweis `_COLUMN_ID_HINT` ab, bevor irgendetwas
+geschrieben wird. Test `test_a_column_without_a_numeric_id_is_refused_instead_of_written`
+(drei Formen: Feld fehlt, String-ID, bool).
+
 ### WR-05: Destruktiv-Gate: zwei Tables-Needles fangen die projektübliche Schreibweise nicht
 
 **File:** `tests/contract/test_no_destructive_calls.py:45-76`
 **Issue:** Die Needles `'"/columns/'` und `"tables/scheme"` sind auf die öffnende Anführungszeichen-Schreibweise bzw. auf wörtliche Nachbarschaft angewiesen. Die projektübliche Schreibweise umgeht beide: ein Spalten-Write würde als `ocs.ocs_post(client, creds, f"{V2_PREFIX}/columns/{column_id}", ...)` geschrieben (genau so bauen `tests/integration/test_tables_roundtrip.py:170` und `test_permission_fidelity_exapp.py:383` heute ihre Scaffolding-Routen, dort legitim), und der Schema-Export je Tabelle als `f"{V2_PREFIX}/tables/{table}/scheme"` enthält den String `tables/scheme` nicht. Der Kommentar im Gate behauptet, eine solche Route könne "hardly be written" ohne die Needle zu treffen; die eigenen Testdateien sind das Gegenbeispiel. Damit ist die Zusage "no tool may create, change or delete a Tables column" und "no tool may import or export a table scheme" nur teilweise maschinell gedeckt.
 **Fix:** Needles vom öffnenden Anführungszeichen lösen und auf Pfadsegmente ankern, z. B. `"/columns/"` als Needle mit expliziter Ausnahme für die eine erlaubte Lese-Route (`f"{V2_PREFIX}/columns/{NODE_TYPE_TABLE}/"`) nach dem Muster der bestehenden SQL-/DELETE-Ausnahmen, und `"/scheme"` als eigene Needle ergänzen. Die Counter-Proof-Tests um die evasive Schreibweise `f"{V2_PREFIX}/columns/{column}"` erweitern, damit die Lücke nicht zurückkehrt.
+
+**Behoben:** Commit `48d5d5c`. Alle drei segmentbasierten Needles sind vom Anführungszeichen
+gelöst: `"/rows/"`, `"/columns/"` und neu `"/scheme"` statt `"tables/scheme"`. Das dritte
+Needle `'"/rows/'` hatte dieselbe Lücke und ist mitgezogen. Der Preis ist eine schmale
+Ausnahme (`TABLES_READ_FORMS`, zwei exakte Literale in genau einer Datei), die per
+Gegenprobe `test_the_tables_read_exemption_covers_two_call_forms_and_nothing_else` auf
+diese beiden Lesepfade begrenzt ist. Die Counter-Proof-Zeilen in `TABLES_ROUTES` sind auf
+die projektübliche f-String-Schreibweise umgestellt, und
+`test_the_three_routes_the_tables_client_really_builds_stay_allowed` deckt jetzt auch den
+Spalten-Lesepfad ab.
 
 ### WR-06: Abnahmeskript kann bei Tables fälschlich FAIL melden
 
@@ -136,11 +185,20 @@ table = next((t for t in entries if t.get("can_create")), None)
 ```
 und in `_first_text_column` bevorzugt eine Tabelle wählen, deren Pflichtspalten alle vom Typ `text` sind, sonst `SKIP` mit Begründung.
 
+**Behoben:** Commit `c316ac2`. `_first_text_column` ist durch `_writable_tables` (filtert auf
+`can_create`) und `_text_row_for` (Pflichtspalten müssen alle vom Typ `text` sein, die
+geschriebene Zeile deckt jede davon ab) ersetzt. Passt keine Tabelle, ist es ein `SKIP` mit
+Begründung wie bei Deck. Der Modul-Docstring nennt Tables jetzt als zweite Ausnahme.
+
 ### WR-07: READMEs (EN/DE/FR): "Optionale Apps" kennt Tables nicht, "diese fünf Tools" ist falsch
 
 **File:** `README.md:347-351, 378` (ebenso `README.de.md:356-362, 390` und `README.fr.md:367-369, 404`)
 **Issue:** Der Abschnitt "Optional apps" sagt "Notes and Deck are optional Nextcloud apps", und die Zeile in "Known limitations" sagt "Notes and Deck are optional apps ... ignore those five tools". Seit dieser Phase ist Tables die dritte optionale App mit eigener Capabilities-Prüfung und eigener Fehlermeldung ("The Tables app is not enabled on this Nextcloud."), und die Zahl der betroffenen Tools ist sieben (3 Notes, 2 Deck, 2 Tables), nicht fünf. Die Tool-Tabelle derselben Seite listet beide Tables-Tools bereits, die Seite widerspricht sich also selbst. Der Fehler steht identisch in allen drei Sprachfassungen (Regel: Übersetzungen nachziehen).
 **Fix:** In allen drei READMEs: "Notes, Deck and Tables are optional Nextcloud apps ..." und in der Limitations-Zeile "ignore those seven tools" (DE: "diese sieben Tools", FR: "ces sept outils"), plus die Tables-Fehlermeldung als zweites Beispiel nennen.
+
+**Behoben:** Commit `6ddc4a8`. Alle drei Sprachfassungen sagen jetzt "Notes, Deck and Tables"
+(DE "Notes, Deck und Tables", FR "Notes, Deck et Tables"), nennen die Tables-Fehlermeldung
+als zweites Beispiel und zählen sieben Tools ("diese sieben Tools", "ces sept outils").
 
 ## Info
 
@@ -150,11 +208,18 @@ und in `_first_text_column` bevorzugt eine Tabelle wählen, deren Pflichtspalten
 **Issue:** "Note the number of tools it lists, 16 at the time of writing, which is the number `tests/contract/test_tool_surface.py` holds" ist seit dieser Phase falsch: die Datei hält 18. Das Zahlen-Gate (`test_a_documented_tool_count_is_the_current_one_...`) wird hier durch den bloßen Verweis auf die Holder-Datei grün, obwohl die Aussage über die Holder-Datei selbst falsch ist.
 **Fix:** Formulierung entkoppeln: "..., 16 at the time of that run; the current number is held by `tests/contract/test_tool_surface.py`."
 
+**Behoben:** Commit `ba93d80`. Die Aussage über die Holder-Datei ist von der Zahl entkoppelt:
+"16 at the time of that run" plus "The current number is held by
+`tests/contract/test_tool_surface.py` and never by this page."
+
 ### IN-02: oauth-setup.md nennt im selben Dokument "18 today" und "The set is 16"
 
 **File:** `docs/oauth-setup.md:707-709` (vs. `459-461`)
 **Issue:** Zeile 459 wurde auf "The set is 18 today" aktualisiert, Zeile 708 sagt weiter "The set is 16 since `prepare_context` arrived". Interner Widerspruch.
 **Fix:** Zeile 708 analog zu 459 formulieren ("The set is 18 today; ...").
+
+**Behoben:** Commit `ba93d80`. Zeile 708 lautet jetzt "The set is 18 today" mit derselben
+Begründung wie Zeile 459.
 
 ### IN-03: conference-talk.md paart "Eighteen tools" mit Version 0.1.2
 
@@ -162,11 +227,19 @@ und in `_first_text_column` bevorzugt eine Tabelle wählen, deren Pflichtspalten
 **Issue:** Der Talk beansprucht "Every product claim below is measured" und nennt Version 0.1.2 (Folie 1, sowie "No claim about a store release beyond 0.1.2"), gleichzeitig wurde Folie 6 auf "Eighteen tools" gehoben. Eine 0.1.2/0.1.3-Installation aus dem Store listet 16 Tools; 18 gibt es nur im unreleasten Stand. Für ein Dokument mit diesem Anspruch ist das eine messbare Inkonsistenz.
 **Fix:** Entweder Folie 6 auf "Sixteen tools (eighteen in the development tree)" präzisieren oder das ganze Dokument auf den Stand eines Releases datieren.
 
+**Behoben:** Commit `ba93d80`. Folie 6, die Sprechernotiz und die Belegtabelle sagen jetzt
+"Sixteen tools in the released 0.1.2, eighteen in the development tree". Die Versionsangabe
+0.1.2 bleibt, damit das Dokument datierbar bleibt.
+
 ### IN-04: Veraltete Docstrings: capabilities.py und ocs.py kennen Tables nicht
 
 **File:** `src/mcp_connector/nextcloud/capabilities.py:3-11` und `src/mcp_connector/nextcloud/clients/ocs.py:14-17`
 **Issue:** Der Modul-Docstring von capabilities.py sagt "Only Notes and Deck are checked here, on purpose", während das Modul Tables prüft (Dataclass-Felder, `_MISSING["tables"]`, `parse`). Der ocs.py-Docstring beschreibt `parse_app_json` als "for Notes and Deck", während die Tables-Generation-1-Route ihn ebenfalls nutzt.
 **Fix:** Beide Docstrings um Tables ergänzen.
+
+**Behoben:** Commit `ba93d80`. Der Modul-Docstring von `capabilities.py` nennt Tables samt
+`enabled`-Prüfung, der Docstring von `parse_app_json` nennt die Generation-1-Zeilenroute von
+Tables.
 
 ### IN-05: `_path_id` akzeptiert Unicode-Ziffern
 
@@ -174,11 +247,18 @@ und in `_first_text_column` bevorzugt eine Tabelle wählen, deren Pflichtspalten
 **Issue:** `str.isdigit()` ist wahr für Superscripts und fremde Ziffernsysteme ("²", "٧"). Solche Werte passieren die Prüfung, erzeugen aber nie eine gültige Route (harmloses 404). Kein Sicherheitsproblem, da keine Pfad-Metazeichen durchkommen, aber die Fehlermeldung würde den eigentlichen Fehler verdecken.
 **Fix:** `text.isascii() and text.isdigit()` (oder `isdecimal()` plus ASCII-Check).
 
+**Zurückgestellt:** Codeänderung im Client mit eigener Testpflicht (alle Pfade), kein
+Sicherheits- oder Korrektheitsproblem (harmloses 404). Nicht im Auftragsumfang dieses
+Fix-Lauf.
+
 ### IN-06: Abnahmeskript dupliziert die 18er-Toolmenge
 
 **File:** `scripts/acceptance_all_tools.py:47, 271-290`
 **Issue:** `EXPECTED_TOOLS = 18` und das wörtlich duplizierte `expected`-Set stehen neben der Quelle der Wahrheit in `tests/contract/test_tool_surface.py`. Genau diese Duplikatsklasse hat die 15/16-Drift produziert, die das Skript selbst im Kommentar dokumentiert.
 **Fix:** `from tests.contract.test_tool_surface import EXPECTED_TOOLS` ist wegen des Skript-Kontexts unpraktisch; mindestens `EXPECTED_TOOLS = len(expected)` ableiten und das Set als einzige Liste im Skript führen.
+
+**Zurückgestellt:** Umbau der Wahrheitsquelle für die Toolmenge, also eine
+Struktur-Entscheidung und keine Zahlenkorrektur. Nicht im Auftragsumfang dieses Fix-Lauf.
 
 ### IN-07: `tables_browse` meldet Trunkierung ohne Fortsetzungs-Handle auf den Ebenen `tables` und `columns`
 
@@ -186,11 +266,18 @@ und in `_first_text_column` bevorzugt eine Tabelle wählen, deren Pflichtspalten
 **Issue:** `_envelope` setzt `truncated: true`, gibt aber kein `next` aus. Ein Konto mit mehr als 200 Tabellen (oder eine Tabelle mit mehr als 200 Spalten) kann den Rest über dieses Tool nie erreichen; das Antwortmuster der `rows`-Ebene (Handle) gilt hier nicht.
 **Fix:** Entweder einen Offset-Cursor analog zu `rows` ausgeben oder die Grenze im `truncated`-Fall im Antworttext benennen ("raise limit up to 200"), damit der Sackgassen-Charakter zumindest erklärt ist.
 
+**Zurückgestellt:** Antwortformat-Erweiterung (Cursor auf zwei weiteren Ebenen), betrifft
+das Schema von `tables_browse`. Gehört in eine geplante Änderung, nicht in einen Fix-Lauf.
+
 ### IN-08: Exakt gleichnamige Spaltentitel überschreiben sich still im Zeilenobjekt
 
 **File:** `src/mcp_connector/tools/tables.py:333-344`
 **Issue:** Der Schreibpfad verweigert mehrdeutige Titel, der Lesepfad nicht: `_row` benutzt Titel als Objektschlüssel; zwei Spalten mit byte-identischem Titel (Tables hat keine Unique-Constraint) kollabieren auf einen Schlüssel, der Wert der ersten Spalte verschwindet still. Die Fixture umgeht das nur, weil "Status" und "status " sich in einem Leerzeichen unterscheiden.
 **Fix:** Bei Kollision die Schlüssel disambiguieren (z. B. `"Status (2)"`) oder die Kollision im Antwortobjekt benennen.
+
+**Zurückgestellt:** Verlangt eine Entscheidung über die Schlüsselbildung im Zeilenobjekt
+(Disambiguierung oder Benennung im Antworttext) und damit über das Antwortformat. Nicht im
+Auftragsumfang dieses Fix-Lauf.
 
 ### IN-09: `tables_available` hängt am Feld `enabled`, verifiziert nur gegen Tables 2.2.2
 
@@ -198,8 +285,12 @@ und in `_first_text_column` bevorzugt eine Tabelle wählen, deren Pflichtspalten
 **Issue:** `bool(tables.get("enabled")) if tables else False` behandelt eine Tables-Fassung, deren Capabilities-Sektion kein `enabled` publiziert, als abwesend, obwohl die App laufen kann. Die Entscheidung ist gegen 2.2.2 gemessen und begründet; für ältere oder künftige Fassungen ist sie eine fail-closed-Annahme, die sich nur als "Tables app is not enabled"-Fehlermeldung äußern würde.
 **Fix:** Kein Codefix nötig; die Versionsabhängigkeit im Kommentar festhalten und, falls ein Nutzerbericht auftritt, auf `tables.get("enabled", True)` mit Sektion-Präsenz als Fallback wechseln.
 
+**Zurückgestellt:** Der Befund nennt selbst keinen nötigen Codefix, und die
+fail-closed-Annahme ist begründet und gegen 2.2.2 gemessen. Wartet auf einen Nutzerbericht.
+
 ---
 
 _Reviewed: 2026-08-21T08:53:17Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+_Behoben: 2026-08-21T09:11:09Z (Claude, gsd-code-fixer), 11 von 16 Befunden, siehe 08-REVIEW-FIX.md_
