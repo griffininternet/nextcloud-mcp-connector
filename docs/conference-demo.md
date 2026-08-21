@@ -137,7 +137,7 @@ uv run --no-sync python scripts/oauth_flow_check.py \
 **Must be visible:** seven steps with their real status codes, in order, the `401` of the
 MCP route first and the tool call last, then the closing line
 `all steps answered as the specification and this deployment require`. Step 7 reports
-`tools=18`, which is the number this server publishes, and step 5 below expects the same
+`tools=20`, which is the number this server publishes, and step 5 below expects the same
 number. The script ends the connection it created itself, so the
 instance is where it was before.
 
@@ -263,17 +263,20 @@ NC_MCP_APP_PASSWORD="$NC_MCP_TEST_APP_PASSWORD" \
     uv run --no-sync python scripts/acceptance_all_tools.py
 ```
 
-**Must be visible:** the acceptance matrix, with `OK` on every one of the eighteen tools it
-calls, and `SKIP` on the two writes that need an object this server cannot create, a Deck
-stack and a table with a text column. Read the names out: there is no delete, no move and no
-share. The upload tool creates and refuses a path that exists.
+**Must be visible:** the acceptance matrix, with `OK` on every one of the twenty tools it
+calls, and `SKIP` on the writes that need an object this server cannot create: a Deck stack,
+a table with a text column, and a Talk conversation this account may write into. Read the
+names out: there is no delete, no move and no share, and no way to edit or remove a message
+that was sent. The upload tool creates and refuses a path that exists.
 
 **Read the matrix, not the summary line.** The script expects exactly the number the
-registry answers, so a mismatch in that line is a real finding again. It was not always so:
-the run measured on 2026-08-20 printed `FAIL tools/list expected 15 tools, got 16` and
-exited `1`, because the expected count was the one phase 1 wrote down while the registry had
-moved on. Plan 08-04 closed that drift together with the Tables pair. The current count
-lives in `tests/contract/test_tool_surface.py`, never in a document.
+registry answers, twenty since plan 09-04, so a mismatch in that line is a real finding
+again. It was not always so: the run measured on 2026-08-20 printed
+`FAIL tools/list expected 15 tools, got 16` and exited `1`, because the expected count was
+the one phase 1 wrote down while the registry had moved on. That quoted line stays as it was
+recorded, date and all. Plan 08-04 closed the drift together with the Tables pair, and plan
+09-04 raised the same number with the Talk pair. The current count lives in
+`tests/contract/test_tool_surface.py`, never in a document.
 
 **Say the transport out loud:** this step runs over the stdio transport with an app
 password, which is the second supported way in and the one for clients that cannot sign in

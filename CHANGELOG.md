@@ -11,8 +11,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-The Tables app is now part of what an assistant can reach: the tables of the account can
-be looked through, and a row can be added to one of them.
+The Tables app and Talk are now part of what an assistant can reach: the tables of the
+account can be looked through and a row can be added to one of them, and conversations can
+be read and one message can be sent into one of them.
 
 ### Added
 
@@ -27,6 +28,20 @@ be looked through, and a row can be added to one of them.
   mandatory column and a table the account may read but not write to are all refused before
   anything is written, each with the next step to take. Existing rows are never changed and
   never removed, here as everywhere else in this app.
+
+- An assistant can read the conversations of the account and the history of one of them, and
+  that reading leaves no trace in the account: no read marker is moved, no notification is
+  acknowledged and the online status stays as it was. The history answers the newest messages
+  first, says when it was cut, and offers the way further into the past.
+
+- An assistant can send one message into a conversation. It is addressed only by a token the
+  read tool reported, so a made up address never reaches Nextcloud, and a conversation the
+  account may not write in is refused before anything is sent. A sent message is never edited
+  and never removed, and a message that mentions everybody at once is not sent at all.
+
+- An administrator can switch the sending of Talk messages off for the whole instance, in the
+  settings of this app, whatever an account is allowed to do in Talk itself. Reading
+  conversations and their history is not affected by that switch.
 
 ### Fixed
 

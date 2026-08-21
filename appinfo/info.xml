@@ -26,7 +26,7 @@
 	<description><![CDATA[
 Connect your Nextcloud to AI assistants that speak the Model Context Protocol, such as Claude, Cursor or your own agent.
 
-The connector exposes a curated, read first set of tools for files, calendar, notes, deck, contacts and Tables instead of a raw API surface. Every request runs under the identity of the signed in user, so an assistant never sees more than that user sees in the web interface.
+The connector exposes a curated, read first set of tools for files, calendar, notes, deck, contacts, Tables and Talk instead of a raw API surface. Every request runs under the identity of the signed in user, so an assistant never sees more than that user sees in the web interface. Talk is the one family where an assistant can put something in front of other people, so it can only post a new message: editing one, deleting one and handing one to the server for later delivery do not exist, and an administrator can switch the sending off for the whole instance.
 
 **Installing it.** On Nextcloud 34.0.3 an administrator installs it from the apps management: the app list shows an external app with its deploy daemon, its install button reads Deploy and enable, and Remove sits in the row actions once the app is disabled. On 34.0.2 and earlier the apps management lists no external app at all, so the occ commands in the installation guide are the way there, and they work on every version.
 
@@ -39,7 +39,7 @@ More answers, including how an administrator removes the app together with its d
 	<description lang="de"><![CDATA[
 Verbindet Ihre Nextcloud mit KI-Assistenten, die das Model Context Protocol sprechen, etwa Claude, Cursor oder Ihrem eigenen Agenten.
 
-Der Connector stellt einen kuratierten, auf Lesen ausgelegten Satz von Werkzeugen für Dateien, Kalender, Notizen, Deck, Kontakte und Tables bereit statt einer rohen API-Oberfläche. Jede Anfrage läuft unter der Identität des angemeldeten Nutzers, ein Assistent sieht also nie mehr, als dieser Nutzer in der Weboberfläche sieht.
+Der Connector stellt einen kuratierten, auf Lesen ausgelegten Satz von Werkzeugen für Dateien, Kalender, Notizen, Deck, Kontakte, Tables und Talk bereit statt einer rohen API-Oberfläche. Jede Anfrage läuft unter der Identität des angemeldeten Nutzers, ein Assistent sieht also nie mehr, als dieser Nutzer in der Weboberfläche sieht. Talk ist die einzige Familie, in der eine Assistenz anderen Menschen etwas vorlegen kann, sie kann deshalb nur eine neue Nachricht schreiben: eine bearbeiten, eine löschen und eine für späteren Versand hinterlegen gibt es nicht, und eine Administratorin kann das Senden für die ganze Instanz abschalten.
 
 **Installation.** Unter Nextcloud 34.0.3 installiert eine Administratorin die App aus der Apps-Verwaltung: die App-Liste zeigt eine externe App samt ihrem Deploy-Daemon, ihr Installationsknopf heißt Deploy and enable, und Remove steht im Aktionsmenü, sobald die App abgeschaltet ist. Unter 34.0.2 und älter listet die Apps-Verwaltung gar keine externe App, dort führen die occ-Kommandos der Installationsanleitung hin, und die funktionieren auf jeder Version.
 
@@ -52,7 +52,7 @@ Weitere Antworten, auch dazu, wie eine Administratorin die App samt ihren Daten 
 	<description lang="fr"><![CDATA[
 Connecte votre Nextcloud aux assistants IA qui parlent le Model Context Protocol, comme Claude, Cursor ou votre propre agent.
 
-Le connecteur expose un ensemble d'outils sélectionnés et axés sur la lecture pour les fichiers, l'agenda, les notes, Deck, les contacts et Tables, au lieu d'une API brute. Chaque requête s'exécute sous l'identité de l'utilisateur connecté, de sorte qu'un assistant ne voit jamais plus que ce que cet utilisateur voit dans l'interface web.
+Le connecteur expose un ensemble d'outils sélectionnés et axés sur la lecture pour les fichiers, l'agenda, les notes, Deck, les contacts, Tables et Talk, au lieu d'une API brute. Chaque requête s'exécute sous l'identité de l'utilisateur connecté, de sorte qu'un assistant ne voit jamais plus que ce que cet utilisateur voit dans l'interface web. Talk est la seule famille où un assistant peut présenter quelque chose à d'autres personnes : il ne peut donc que publier un nouveau message, en modifier un, en supprimer un ou en confier un au serveur pour un envoi ultérieur n'existe pas, et un administrateur peut désactiver cet envoi pour toute l'instance.
 
 **Installation.** Sous Nextcloud 34.0.3, un administrateur l'installe depuis la gestion des applications : la liste affiche une application externe avec son démon de déploiement, son bouton d'installation s'appelle Deploy and enable, et Remove figure dans le menu d'actions dès que l'application est désactivée. Sous 34.0.2 et antérieur, la gestion n'affiche aucune application externe : ce sont alors les commandes occ du guide d'installation qui y mènent, et elles fonctionnent sur toutes les versions.
 

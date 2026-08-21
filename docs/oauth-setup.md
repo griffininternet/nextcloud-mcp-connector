@@ -107,7 +107,7 @@ variable. A store installation needs this: with a single Docker daemon, Nextclou
 an ExApp without asking for deploy options, so `--env` never happens and every declared
 variable arrives empty.
 
-The form sits in **Administration settings, Security, MCP Connector** and carries five
+The form sits in **Administration settings, Security, MCP Connector** and carries six
 fields:
 
 | Field | Config key | What it sets |
@@ -117,6 +117,13 @@ fields:
 | Let apps identify themselves by their own document | `oauth_cimd` | `NC_MCP_OAUTH_CIMD` |
 | Only allow the clients listed below | `oauth_allowlist_only` | `NC_MCP_OAUTH_ALLOWLIST_ONLY` |
 | Allowed clients | `oauth_allowed_clients` | `NC_MCP_OAUTH_ALLOWED_CLIENTS` |
+| Let assistant apps send Talk messages | `talk_send` | `NC_MCP_TALK_SEND` |
+
+**Not every field of this form is about OAuth.** The last one is not: it decides whether
+`talk_send` may post a message into a Talk conversation at all, for every account of this
+instance and regardless of what an account is allowed to do in Talk itself. It is on unless
+it is switched off, reading conversations and their history is never affected by it, and like
+the other five it takes effect after this app has been disabled and enabled again.
 
 **The fifth field is new and takes effect with the next release, 0.1.3.** In 0.1.2 the form
 carries four fields and `NC_MCP_OAUTH_CIMD` can only be set as a deploy variable, which a
@@ -125,7 +132,7 @@ all. The document way itself is not in 0.1.2 either, so nothing was reachable an
 in a released version.
 
 The config key of a field is the id of the field itself, without a prefix: AppAPI stores a
-declarative settings value under that id, and the app reads the same five keys back over the
+declarative settings value under that id, and the app reads the same six keys back over the
 ExApp configuration channel.
 
 **Precedence: the value stored in Nextcloud wins, then the `NC_MCP_*` variable of the deploy
@@ -456,9 +463,10 @@ Nextcloud call at all, which is the reason.
 **Every line above is from one run against the current code** (2026-08-16, Nextcloud
 34.0.2, AppAPI HaRP `release`). Two of them are worth reading twice.
 
-`tools=15` is what that run listed, and it is left as it was recorded. The set is 18 today:
-`prepare_context` and the two Tables tools were added after this run, and the number a
-release has to list is held by `tests/contract/test_tool_surface.py`, never by this page.
+`tools=15` is what that run listed, and it is left as it was recorded. The set is 20 today:
+`prepare_context` and the two pairs of Tables and Talk tools were added after this run, and
+the number a release has to list is held by `tests/contract/test_tool_surface.py`, never by
+this page.
 
 The decision is `POST /authorize/decide` and it appears **twice**, which is the CR-01 relay
 walked over the full chain. The first one is sent by the caller that started the flow: it
@@ -705,9 +713,9 @@ resource URL; both OAuth fields of the client stayed empty and dynamic client re
 did the rest.
 
 The tool counts in the tables below are the ones those runs listed against 0.1.0, which was
-15. The set is 18 today, `prepare_context` and the two Tables tools having arrived after
-those runs; the number is held by `tests/contract/test_tool_surface.py` and not by a
-recorded run.
+15. The set is 20 today, `prepare_context` and the two pairs of Tables and Talk tools having
+arrived after those runs; the number is held by `tests/contract/test_tool_surface.py` and not
+by a recorded run.
 
 ### Claude.ai: connected
 
