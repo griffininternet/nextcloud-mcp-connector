@@ -582,6 +582,41 @@ async def test_an_empty_values_object_is_refused_before_any_request(
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("broken_id", [None, "11", True])
+async def test_a_column_without_a_numeric_id_is_refused_instead_of_written(
+    clients: NcClients, broken_id: Any
+) -> None:
+    """WR-04: ``str(None)`` is ``"None"``, and ``(int)"None"`` is the column 0 in the app.
+
+    A deformed column object would therefore not fail, it would write the value into the
+    first column of the table, and nothing in the answer would say so. A string id and a
+    bool take the same path: the app casts the key, so only a real int is safe.
+    """
+    columns = [
+        {key: value for key, value in column.items() if key != "id"}
+        if column["id"] == 11
+        else column
+        for column in columns_without_the_collision()
+    ]
+    if broken_id is not None:
+        columns[0]["id"] = broken_id
+
+    with respx.mock(assert_all_called=False) as mock:
+        mock_capabilities(mock)
+        mock.get(TABLE_URL).mock(return_value=httpx.Response(200, json=envelope(OWN_TABLE)))
+        mock.get(COLUMNS_URL).mock(return_value=httpx.Response(200, json=envelope(columns)))
+        post = mock.post(CREATE_ROW_URL)
+
+        with pytest.raises(ToolError) as excinfo:
+            await tables_tools.create_row(clients, "7", '{"Aufgabe": "Baulos 4"}')
+
+    assert len(post.calls) == 0, "a value without a column id must never become a write"
+    assert "Aufgabe" in excinfo.value.message
+    assert "numeric id" in excinfo.value.message
+    assert excinfo.value.hint
+
+
+@pytest.mark.anyio
 async def test_an_unknown_column_title_lists_the_titles_that_exist(
     clients: NcClients,
 ) -> None:

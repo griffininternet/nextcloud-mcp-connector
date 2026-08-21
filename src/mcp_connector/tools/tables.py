@@ -65,6 +65,15 @@ _VALUES_HINT = (
     '"Amount": 12.5}. Call tables_browse with level=columns for the titles and their types.'
 )
 
+#: A column object without a numeric id is a deformed answer, and it is the one deformation
+#: that would write instead of fail: ``str(None)`` is ``"None"``, the app casts every key with
+#: ``(int)``, and ``(int)"None"`` is ``0`` (T-08-15 one level down).
+_COLUMN_ID_HINT = (
+    "Tables addresses a column by its numeric id, and this answer carried none, so the value "
+    "cannot be assigned to a column. Check that the Tables app is enabled and up to date on "
+    "that instance, then read the columns again with tables_browse."
+)
+
 
 async def browse(
     clients: NcClients,
@@ -187,6 +196,11 @@ def _by_column_id(
     the column ``0`` (T-08-15). The comparison is normalised, so "Task" and "task " find the
     same column, and a title that matches two columns ends the call instead of picking one
     of them and writing into the wrong column.
+
+    The same trap has a second entrance, one level down: a column object without an ``id``
+    would produce the key ``"None"``, and ``(int)"None"`` is ``0`` as well. That takes a
+    deformed answer of the app, which the rest of this family treats as a real case
+    (``_as_list``, ``_as_dict``, ``_path_id``), so it is refused here rather than written.
     """
     by_title: dict[str, list[dict[str, Any]]] = {}
     for column in columns:
@@ -209,7 +223,14 @@ def _by_column_id(
             ambiguous.append(f"{str(title)!r} (column ids {found})")
             continue
         column = matches[0]
-        data[str(column.get("id"))] = value
+        column_id = column.get("id")
+        if not isinstance(column_id, int) or isinstance(column_id, bool):
+            raise ToolError(
+                message=f"Table {table} answered a column titled {str(title)!r} without a "
+                "numeric id.",
+                hint=_COLUMN_ID_HINT,
+            )
+        data[str(column_id)] = value
         written[_text(column.get("title") or title)] = value
 
     if ambiguous:
