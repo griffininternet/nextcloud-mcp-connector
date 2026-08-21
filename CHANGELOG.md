@@ -28,6 +28,13 @@ be looked through, and a row can be added to one of them.
   anything is written, each with the next step to take. Existing rows are never changed and
   never removed, here as everywhere else in this app.
 
+### Fixed
+
+- Asking for something that does not exist now says so. When Nextcloud answers such a
+  request with a bare error page instead of a message, the assistant used to be told that
+  its app password might be wrong, which sent it looking in the wrong place. It is now told
+  that the id is unknown to this instance, so it can search for the right one.
+
 ## [0.1.3] - 2026-08-21
 
 This release adds a second way for an assistant to identify itself: by a metadata
