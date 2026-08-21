@@ -34,9 +34,8 @@ upload answered 201. The upload ran in the page context of the signed in store s
 (see the note under step 7), the token never left the page.
 
 **Done, 2026-08-21: 0.1.3 is live in the store.** Same path as 0.1.2, every step a row in
-the table below, and the store page named 0.1.3 as the current release one minute after
-the upload. The one open check is the `appapi_apps.json` release line, which sits behind
-the store side cache and is read again once the hour is over.
+the table below: the store page named 0.1.3 as the current release one minute after the
+upload, and `appapi_apps.json` carried the release line twelve minutes after it.
 
 ## What the artifacts are
 
@@ -105,7 +104,8 @@ Every line was measured, not assumed. No fact without its check.
 | 2026-08-21 04:03Z | The store accepted the 0.1.3 release | `POST /api/v1/apps/releases` from the page context of the signed in store session answered HTTP 201 |
 | 2026-08-21 04:04Z | The image of 0.1.3 is pullable anonymously and a real multi arch index: `linux/amd64`, `linux/arm64`, plus the two attestation entries | anonymous token from `ghcr.io/token`, then `https://ghcr.io/v2/street1983nk/mcp_connector/manifests/0.1.3`, `application/vnd.oci.image.index.v1+json` |
 | 2026-08-21 04:04Z | All four tags exist, none was rewritten | `https://ghcr.io/v2/street1983nk/mcp_connector/tags/list` returns `["0.1.0","0.1.1","0.1.2","0.1.3"]` |
-| 2026-08-21 04:04Z | The store page serves 0.1.3 as the current release | `https://apps.nextcloud.com/apps/mcp_connector` answers 200 and names `0.1.3`. `api/v1/appapi_apps.json` still answered the 0.1.2 list at that minute: that endpoint is cached on the store side, the same cache the section below describes, so the check is repeated once the hour is over |
+| 2026-08-21 04:04Z | The store page serves 0.1.3 as the current release | `https://apps.nextcloud.com/apps/mcp_connector` answers 200 and names `0.1.3`. `api/v1/appapi_apps.json` still answered the 0.1.2 list at that minute: that endpoint is cached on the store side, the same cache the section below describes, so the check was repeated |
+| 2026-08-21 04:16Z | Release 0.1.3 is listed with the platform span `>=32.0.0 <35.0.0`, next to all three earlier releases | `curl -sS https://apps.nextcloud.com/api/v1/appapi_apps.json`, releases of `mcp_connector`: `0.1.3`, `0.1.2`, `0.1.1` and `0.1.0`. Twelve minutes behind the upload, so the cache of that endpoint is measured in minutes, not the hour an instance waits |
 
 ### The update keeps the connections
 
