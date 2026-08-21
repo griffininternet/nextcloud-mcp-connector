@@ -1138,6 +1138,56 @@ async def test_a_message_longer_than_the_instance_allows_is_refused_with_the_num
 
 
 @pytest.mark.anyio
+async def test_a_message_of_multi_byte_characters_is_counted_the_way_the_server_counts_it(
+    clients: NcClients,
+) -> None:
+    """IN-06: the pre-check counts code points after a trim, because the server does.
+
+    ``OC\\Comments\\Comment::setMessage`` (nextcloud/server v34.0.0,
+    ``lib/private/Comments/Comment.php:186-189``) trims first and then compares
+    ``mb_strlen($message, 'UTF-8')``, and spreed v24.0.4 reaches it with
+    ``MAX_CHAT_LENGTH`` from ``lib/Chat/ChatManager.php:407``.
+
+    The text below is 120 umlauts plus a newline and two spaces, so the three ways to measure
+    it disagree on purpose: 243 bytes, 123 characters untrimmed and 120 characters the way the
+    server counts. At a limit of 120 only the third reading sends it, and it is the reading
+    Nextcloud uses, so the message has to go out and it has to go out unchanged.
+    """
+    at_the_limit = "ü" * 120 + "\n  "
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock, spreed={"config": {"chat": {"max-length": 120}}})
+        mock_rooms(mock)
+        post = mock_send(mock)
+
+        await talk_tools.send(clients, "abcd1234", at_the_limit)
+
+    assert len(at_the_limit.encode("utf-8")) == 243, "a byte count would have refused this"
+    assert len(at_the_limit) == 123, "an untrimmed character count would have refused it too"
+    assert post.call_count == 1
+    sent = json.loads(post.calls[0].request.content.decode("utf-8"))
+    assert sent["message"] == at_the_limit, "the text goes out as it came, the server trims it"
+
+
+@pytest.mark.anyio
+async def test_one_character_over_the_instance_limit_is_refused_with_the_counted_number(
+    clients: NcClients,
+) -> None:
+    """The other side of the same boundary: 121 of 120, and the number in the sentence."""
+    too_long = "ü" * 121 + "\n"
+    with respx.mock(assert_all_called=False) as mock:
+        mock_capabilities(mock, spreed={"config": {"chat": {"max-length": 120}}})
+        room_calls, chat_calls = talk_routes(mock)
+
+        with pytest.raises(ToolError) as excinfo:
+            await talk_tools.send(clients, "abcd1234", too_long)
+
+    assert len(room_calls.calls) == 0
+    assert len(chat_calls.calls) == 0
+    assert "121 characters" in excinfo.value.message, "the trailing newline is not counted"
+    assert "120 per message" in excinfo.value.message
+
+
+@pytest.mark.anyio
 async def test_an_instance_without_a_chat_length_falls_back_to_the_number_talk_ships(
     clients: NcClients,
 ) -> None:

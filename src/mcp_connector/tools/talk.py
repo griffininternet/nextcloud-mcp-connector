@@ -113,6 +113,14 @@ _CURSOR_HINT = (
 #: ``messageParameters``, keyed by exactly this name.
 _PLACEHOLDER = re.compile(r"\{([a-z0-9_-]+)\}", re.IGNORECASE)
 
+#: The characters PHP's ``trim`` removes with its default character list: space, tab, newline,
+#: carriage return, NUL and vertical tab. The length pre-check of :func:`send` strips exactly
+#: these before it counts, because that is what the server does one line before it counts
+#: (see the docstring of :func:`send`). ``str.strip()`` without an argument would remove every
+#: Unicode space as well, which is more than the server removes, and a pre-check that is
+#: stricter than the thing it approximates refuses messages Nextcloud would have accepted.
+_PHP_TRIM = " \t\n\r\x00\x0b"
+
 #: Every collective mention this server refuses to send, and the syntax comes out of the
 #: server rather than out of a guess. Nextcloud parses the mentions of a message in
 #: ``OC\Comments\Comment::getMentions`` (nextcloud/server v34.0.0,
@@ -186,7 +194,24 @@ async def send(clients: NcClients, token: str, message: str) -> dict[str, Any]:
     Six refusals follow, and each of them is cheaper than the write it prevents.
 
     The length comes from the instance (``config.chat.max-length``) with the number Talk 24
-    ships as the fallback, so the limit is not maintained a second time here.
+    ships as the fallback, so the limit is not maintained a second time here, and it is
+    counted the way the server counts it rather than approximately. The chain is three links
+    and every one of them is read out of the source rather than assumed:
+    ``ChatController::sendMessage`` hands the text on (spreed v24.0.4,
+    ``lib/Controller/ChatController.php:416``), ``ChatManager::sendMessage`` calls
+    ``$comment->setMessage($message, self::MAX_CHAT_LENGTH)`` with ``MAX_CHAT_LENGTH = 32000``
+    (``lib/Chat/ChatManager.php:407``, constant at ``:72``), and the check itself is two lines
+    of Nextcloud core: ``$message = trim($message);`` followed by
+    ``if ($maxLength && mb_strlen($message, 'UTF-8') > $maxLength)`` (nextcloud/server
+    v34.0.0, ``lib/private/Comments/Comment.php:186-189``).
+
+    So the unit is characters and not bytes, and ``mb_strlen`` on UTF-8 counts code points
+    exactly as Python's ``len`` does; an umlaut is one for both of them. The one thing this
+    pre-check used to get wrong is the ``trim`` in the line above the comparison: a text at the
+    limit with a trailing newline was refused here although Nextcloud would have taken it, so
+    :data:`_PHP_TRIM` is stripped first, with PHP's character list and not Python's wider one.
+    A message that is too long anyway gets Talk's own answer as the backstop, which is a 413
+    from that controller (``:448``) and reaches the caller with the app's own message.
 
     A collective mention is refused, and not only the two that mean everybody. ``@all`` is the
     one that works everywhere: Talk turns it into a notification of every participant of the
@@ -233,10 +258,12 @@ async def send(clients: NcClients, token: str, message: str) -> dict[str, Any]:
 
     text = str(message or "")
     allowed = caps.spreed_chat_max_length or capabilities.DEFAULT_CHAT_MAX_LENGTH
-    if len(text) > allowed:
+    # Trim first, then count code points: the two lines of the server, in the same order.
+    counted = len(text.strip(_PHP_TRIM))
+    if counted > allowed:
         raise ToolError(
             message=(
-                f"The message is {len(text)} characters long, and this Nextcloud accepts "
+                f"The message is {counted} characters long, and this Nextcloud accepts "
                 f"{allowed} per message."
             ),
             hint="Shorten the message, or split it into several messages and send them one by one.",
