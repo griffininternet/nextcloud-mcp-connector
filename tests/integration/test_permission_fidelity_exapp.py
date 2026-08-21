@@ -9,7 +9,7 @@ header and only then trusted by the ExApp. The request runs the full path a real
 
     MCP client  ->  HaRP  ->  ExApp  ->  impersonation  ->  Nextcloud ACLs
 
-Nothing in this file builds a Credentials object or an ``httpx.BasicAuth`` for Nextcloud. The
+No check in this file builds an ``httpx.BasicAuth`` for Nextcloud. In the chain cases the
 only credential is each user's app password in a Basic header on the transport client, the
 same header ``tests/compat/modern_client_check.py`` uses. Everything past the header is the
 deployed topology: HaRP, the reverse proxy, the ExApp container and Nextcloud's own
@@ -25,6 +25,17 @@ The order of the checks is deliberate, so an empty answer can never pass for a b
 5. Positive control (notes) plus leak (``notes_search``): alice finds her note, bob does not.
 6. Positive control and leak (``unified_search``): alice finds her content, bob finds neither.
 7. Direct access (``files_read``): bob, knowing the exact path, is refused, not served content.
+
+The Tables block at the end of the file asks the same question one layer lower, and it says
+so rather than pretending otherwise. A table and its column are not connector capabilities
+(create-only, threat T-08-11), so the scaffolding has to call Nextcloud directly anyway; and
+the interesting boundary of that family is the impersonation seam itself, the way
+``tests/integration/test_exapp_dav_matrix.py`` measures it. Both identities are therefore
+built as ``Credentials`` in ``MODE_APPAPI`` with ``APP_SECRET`` as the only credential, one
+object per account, and no app password is read as a credential source for those three
+checks. The properties that make them proof stay the same: the positive half runs in the
+same session as the negative half, and the negative half uses the real table id rather than
+a guessed one.
 
 The app id ``mcp_connector`` is frozen (docs/app-id-freeze.md), so the HaRP route
 ``/exapps/mcp_connector/mcp`` is a constant here rather than an interpolation.
@@ -46,10 +57,19 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
+import httpx
 import httpx2
 import pytest
 from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
+
+from mcp_connector.config import normalize_base_url
+from mcp_connector.errors import ToolError
+from mcp_connector.nextcloud import NcClients
+from mcp_connector.nextcloud.clients import ocs
+from mcp_connector.nextcloud.clients import tables as tables_client
+from mcp_connector.nextcloud.credentials import MODE_APPAPI, Credentials
+from mcp_connector.tools import tables as tables_tools
 
 pytestmark = [pytest.mark.integration, pytest.mark.anyio]
 
@@ -274,3 +294,185 @@ async def test_bob_cannot_read_alices_file_even_knowing_the_exact_path(
             message = " ".join(_texts(result))
     assert SECRET_LINE not in message, "the refusal carried the content of alice's file"
     assert "Vertrauliche" not in message, "the refusal carried the content of alice's file"
+
+
+# ---------------------------------------------------------------------------------------
+# Tables (T-08-26). One layer lower than the chain above, on the impersonation seam, and
+# with two credential objects in MODE_APPAPI as the only source of both identities.
+# ---------------------------------------------------------------------------------------
+
+TABLES_TITLE = "MCP-Test Berechtigungstreue"
+TABLES_COLUMN = "Notiz"
+
+
+def _appapi_clients(exapp_env: dict[str, str], user: str) -> NcClients:
+    """Build the impersonating clients for one user, ``APP_SECRET`` as the only credential.
+
+    Mirrors ``deps._credentials_from_appapi`` and the factory of
+    ``tests/integration/test_exapp_dav_matrix.py``: same base URL, same fields, same mode.
+    The user id is the whole difference between impersonating alice and impersonating bob,
+    and that difference is what the three checks below measure.
+    """
+    return NcClients(
+        client=httpx.AsyncClient(follow_redirects=False, timeout=30.0),
+        creds=Credentials(
+            base_url=normalize_base_url(exapp_env["base_url"]),
+            user=user,
+            secret=exapp_env["app_secret"],
+            mode=MODE_APPAPI,
+            app_id=exapp_env["app_id"],
+            app_version=exapp_env["app_version"],
+            aa_version=exapp_env["aa_version"],
+        ),
+    )
+
+
+@pytest.fixture
+async def alice_tables(exapp_env: dict[str, str]) -> AsyncIterator[NcClients]:
+    clients = _appapi_clients(exapp_env, exapp_env["alice"])
+    async with clients.client:
+        yield clients
+
+
+@pytest.fixture
+async def bob_tables(exapp_env: dict[str, str]) -> AsyncIterator[NcClients]:
+    clients = _appapi_clients(exapp_env, exapp_env["bob"])
+    async with clients.client:
+        yield clients
+
+
+async def _scaffold(clients: NcClients, path: str, body: dict[str, Any]) -> dict[str, Any]:
+    """Test scaffolding only: the connector creates neither tables nor columns (T-08-11).
+
+    The credential is still the AppAPI one, because the point of this file is that no user
+    password authenticates anything here. A status of 400 or above skips instead of failing:
+    an account that may not prepare a table says nothing about the boundary under test.
+    """
+    response = await ocs.ocs_post(clients.client, clients.creds, path, body)
+    if response.status_code >= 400:
+        pytest.skip(f"this account may not prepare a tables table ({response.status_code})")
+    payload = ocs.parse_ocs(response, what="the prepared table or column")
+    assert isinstance(payload, dict), f"the setup call did not answer with an object: {payload!r}"
+    return payload
+
+
+@pytest.fixture
+async def alices_table(alice_tables: NcClients) -> dict[str, str]:
+    """One table of alice's, with one text column and one row nobody else wrote.
+
+    Idempotent by title (threat T-08-30): a tenth run reuses the table and adds one row. The
+    row is written through ``tables_create_row`` under alice's impersonation, so the
+    positive half below speaks about an object this seam really made.
+
+    The text column carries a ``subtype``, and that is not cosmetic: Tables resolves a
+    business class from type plus subtype, ``TextBusiness`` does not exist, and a text column
+    created without one turns every read of the whole table into a 500.
+    """
+    tables = await tables_client.get_tables(alice_tables.client, alice_tables.creds)
+    table = next((item for item in tables if item.get("title") == TABLES_TITLE), None)
+    if table is None:
+        table = await _scaffold(
+            alice_tables, f"{tables_client.V2_PREFIX}/tables", {"title": TABLES_TITLE}
+        )
+    table_id = str(table["id"])
+
+    columns = await tables_client.get_columns(alice_tables.client, alice_tables.creds, table_id)
+    if TABLES_COLUMN not in {str(column.get("title")) for column in columns}:
+        await _scaffold(
+            alice_tables,
+            f"{tables_client.V2_PREFIX}/columns/text",
+            {
+                "baseNodeId": int(table_id),
+                "baseNodeType": "table",
+                "title": TABLES_COLUMN,
+                "subtype": "line",
+            },
+        )
+
+    marker = f"nurfueralice{uuid.uuid4().hex[:10]}"
+    created = await tables_tools.create_row(
+        alice_tables,
+        table_id=table_id,
+        values=json.dumps({TABLES_COLUMN: f"{marker} Grüße aus Hamburg, Straße 1"}),
+    )
+    assert created["id"], f"alice's row was not created: {created!r}"
+    return {"table_id": table_id, "marker": marker}
+
+
+async def _rows(clients: NcClients, table_id: str) -> list[dict[str, Any]]:
+    """Every row of the table under this identity, page by page."""
+    rows: list[dict[str, Any]] = []
+    cursor: str | None = None
+    for _ in range(50):
+        page = await tables_tools.browse(
+            clients, level="rows", table_id=table_id, limit=tables_tools.MAX_LIMIT, cursor=cursor
+        )
+        rows.extend(page["results"])
+        cursor = page.get("next")
+        if not cursor:
+            break
+    return rows
+
+
+async def test_alice_finds_her_own_table_and_her_own_row(
+    alice_tables: NcClients, alices_table: dict[str, str]
+) -> None:
+    """Positive control (tables): without it, an empty answer for bob would prove nothing."""
+    listed = await tables_tools.browse(alice_tables, level="tables")
+    ids = [str(entry["id"]) for entry in listed["results"]]
+    assert alices_table["table_id"] in ids, f"alice cannot see her own table: {listed!r}"
+
+    rows = await _rows(alice_tables, alices_table["table_id"])
+    values = [str(row.get(TABLES_COLUMN, "")) for row in rows]
+    assert any(alices_table["marker"] in value for value in values), (
+        f"alice cannot read back her own row: {values!r}"
+    )
+
+
+async def test_bob_neither_lists_alices_table_nor_reads_it_by_its_real_id(
+    bob_tables: NcClients, alices_table: dict[str, str]
+) -> None:
+    """The leak test, and the id is the real one rather than a guessed one.
+
+    Two halves, because each of them alone would leave a way out: the table must not appear
+    in bob's own list, and asking for it by its exact id must not answer with alice's
+    content. The refusal comes out of Nextcloud's own permission layer and arrives at the
+    model as a sentence with a next step.
+    """
+    listed = await tables_tools.browse(bob_tables, level="tables")
+    ids = [str(entry["id"]) for entry in listed["results"]]
+    titles = [entry["title"] for entry in listed["results"]]
+    assert alices_table["table_id"] not in ids, f"bob lists a table that is not his: {listed!r}"
+    assert TABLES_TITLE not in titles, f"bob lists a table that is not his: {listed!r}"
+
+    with pytest.raises(ToolError) as excinfo:
+        await tables_tools.browse(bob_tables, level="rows", table_id=alices_table["table_id"])
+
+    assert excinfo.value.hint, "a refusal without a next step is a dead end for the model"
+    said = f"{excinfo.value.message} {excinfo.value.hint}"
+    assert alices_table["marker"] not in said, "the refusal carried the content of alice's row"
+
+
+async def test_bob_cannot_write_into_alices_table_and_leaves_no_row_behind(
+    alice_tables: NcClients, bob_tables: NcClients, alices_table: dict[str, str]
+) -> None:
+    """The write half of the boundary: refused before the first byte, and provably so.
+
+    Counting alice's rows before and after is the part that makes this a proof rather than a
+    reading of the error message: a refusal that still wrote a row would be worse than a
+    silent failure, because no tool of this server can remove a row again (T-08-11).
+    """
+    table_id = alices_table["table_id"]
+    before = len(await _rows(alice_tables, table_id))
+
+    with pytest.raises(ToolError) as excinfo:
+        await tables_tools.create_row(
+            bob_tables, table_id=table_id, values=json.dumps({TABLES_COLUMN: "bob war hier"})
+        )
+    assert excinfo.value.hint, "a refusal without a next step is a dead end for the model"
+
+    after = await _rows(alice_tables, table_id)
+    assert len(after) == before, f"bob's refused write still changed alice's table: {after!r}"
+    assert not any("bob war hier" in str(row.get(TABLES_COLUMN, "")) for row in after), (
+        f"bob's content landed in alice's table: {after!r}"
+    )
