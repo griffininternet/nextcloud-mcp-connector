@@ -397,6 +397,32 @@ async def test_a_table_with_no_rows_is_an_empty_answer_and_not_an_error(
 
 
 @pytest.mark.anyio
+async def test_a_page_that_carried_nothing_hands_out_no_handle_of_its_own_offset(
+    clients: NcClients,
+) -> None:
+    """WR-02: the drifting row counter must not produce a cursor that points at itself.
+
+    ``rowsCount`` still claims 342 rows while the page at offset 25 answers with nothing,
+    which happens because Tables does not always subtract a deleted row. The old condition
+    handed back ``o = 25``, the cursor that was just passed in, and a client that follows
+    ``next`` while it is set never leaves that page.
+    """
+    handle = paging.encode_cursor({"o": 25, "t": "7"})
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock.get(TABLE_URL).mock(return_value=httpx.Response(200, json=envelope(OWN_TABLE)))
+        mock.get(ROWS_URL).mock(return_value=httpx.Response(200, json=rows_payload(rows=0)))
+
+        result = await tables_tools.browse(clients, level="rows", table_id="7", cursor=handle)
+
+    assert result["count"] == 0
+    assert result["offset"] == 25
+    assert result["rowsCount"] == 342, "the number the app reported is passed through as it is"
+    assert "next" not in result, "a handle equal to the current cursor is an endless loop"
+    assert "truncated" not in result
+
+
+@pytest.mark.anyio
 @pytest.mark.parametrize("broken", [None, "342", True, -1])
 async def test_a_full_window_is_named_as_truncated_even_without_a_row_count(
     clients: NcClients, broken: Any

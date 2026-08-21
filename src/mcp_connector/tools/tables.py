@@ -332,7 +332,15 @@ async def _rows(clients: NcClients, table: str, limit: int, cursor: str | None) 
     # only one left when the app reported no count: a window that came back full has a next
     # page behind it often enough to say so, and a wrong "there is more" costs one empty
     # page, while a wrong "that was all" is a silent cut.
-    more = count > offset + len(results) if count is not None else len(results) == limit
+    #
+    # ``results`` guards both of them, and it is not a formality. Tables' row counter drifts,
+    # so ``rowsCount`` can still report rows at an offset that answers with nothing. The
+    # handle would then carry ``o = offset + 0``, which is the cursor that was just handed
+    # in, and a client that follows ``next`` while it is set circles on the same page for
+    # ever (T-08-17 one step further).
+    more = bool(results) and (
+        count > offset + len(results) if count is not None else len(results) == limit
+    )
     if more:
         answer["truncated"] = True
         answer["next"] = paging.encode_cursor({"o": offset + len(results), "t": table})
