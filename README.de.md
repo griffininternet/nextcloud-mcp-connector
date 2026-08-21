@@ -355,11 +355,11 @@ ein Output-Schema mitliefern, weil ChatGPT die Nutzlast als strukturierten Inhal
 
 ### Optionale Apps
 
-Notes und Deck sind optionale Nextcloud-Apps. Die Tool-Liste ist überall gleich: sie hängt nie davon ab,
-welche Apps eine Instanz hat, sodass sie cachebar und für jeden Client vorhersagbar bleibt. Fehlt eine
-App, sagt das Tool das in einem Satz und nennt eine Alternative, zum Beispiel "The Notes app is not
-installed on this Nextcloud." Kalender und Kontakte brauchen überhaupt keine App: CalDAV und CardDAV sind
-Teil des Nextcloud-Kerns.
+Notes, Deck und Tables sind optionale Nextcloud-Apps. Die Tool-Liste ist überall gleich: sie hängt nie
+davon ab, welche Apps eine Instanz hat, sodass sie cachebar und für jeden Client vorhersagbar bleibt.
+Fehlt eine App, sagt das Tool das in einem Satz und nennt eine Alternative, zum Beispiel "The Notes app
+is not installed on this Nextcloud." oder "The Tables app is not enabled on this Nextcloud." Kalender und
+Kontakte brauchen überhaupt keine App: CalDAV und CardDAV sind Teil des Nextcloud-Kerns.
 
 ## Was dieser Server nicht kann
 
@@ -387,7 +387,7 @@ und jede ist in der Antwort sichtbar, die das Tool gibt, statt hinter einem leer
 | **Suche trifft Namen, nicht Inhalte** | Jede Suchantwort trägt `"note":"matched on names only; contents are not indexed"` | Installieren und konfigurieren Sie die Nextcloud-Full-text-search-App, oder suchen Sie nach Dateinamen |
 | **Ein mit `occ user:add` erstelltes Konto hat keinen Kalender** | `calendar_list_events` gibt einen Fehler zurück, der den fehlenden Kalender benennt | `occ dav:create-calendar <user> personal`, oder melden Sie sich einmal über die Web-UI bei Nextcloud an, was ihn erstellt |
 | **Dasselbe gilt für das Adressbuch** | `contacts_search` benennt den Ausweg, statt nichts zurückzugeben | `occ dav:create-addressbook <user> contacts` |
-| **Notes und Deck sind optionale Apps** | Die Tools bleiben überall in `tools/list` und antworten "The Notes app is not installed on this Nextcloud." | Installieren Sie die App, oder ignorieren Sie diese fünf Tools |
+| **Notes, Deck und Tables sind optionale Apps** | Die Tools bleiben überall in `tools/list` und antworten "The Notes app is not installed on this Nextcloud." oder "The Tables app is not enabled on this Nextcloud." | Installieren Sie die App, oder ignorieren Sie diese sieben Tools |
 | **Nichts kann gelöscht oder überschrieben werden** | `files_upload` lehnt einen bestehenden Pfad mit einem Konflikt ab, und es gibt überhaupt kein Update- oder Delete-Tool | Wählen Sie einen anderen Namen. Das ist die Design-Einschränkung, kein fehlendes Feature |
 | **Keine Sitzung, also kein serverseitiger Paging-Zustand** | Eine lange Liste gibt ein `next`-Handle zurück, das Sie erneut übergeben | Nichts. Das Handle übersteht einen Neustart, und genau das ist der Sinn |
 | **Kalender brauchen ein explizites Zeitfenster mit Zone** | Ein `start` oder `end` ohne Zone wird abgelehnt | Senden Sie `2026-09-01T00:00:00+02:00` oder `...Z`. Eine geratene Zone ist eine selbstsicher falsche Antwort |

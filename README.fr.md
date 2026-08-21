@@ -366,11 +366,12 @@ livrer un output schema, car ChatGPT lit la charge utile comme contenu structur�
 
 ### Applications optionnelles
 
-Notes et Deck sont des applications Nextcloud optionnelles. La liste des outils est la même partout :
-elle ne dépend jamais des applications qu'une instance possède, si bien qu'elle reste mise en cache
-et prévisible pour chaque client. Si une application manque, l'outil le dit en une phrase et nomme
-une alternative, par exemple "The Notes app is not installed on this Nextcloud." Les agendas et les
-contacts n'ont besoin d'aucune application : CalDAV et CardDAV font partie du cœur de Nextcloud.
+Notes, Deck et Tables sont des applications Nextcloud optionnelles. La liste des outils est la même
+partout : elle ne dépend jamais des applications qu'une instance possède, si bien qu'elle reste mise
+en cache et prévisible pour chaque client. Si une application manque, l'outil le dit en une phrase et
+nomme une alternative, par exemple "The Notes app is not installed on this Nextcloud." ou "The Tables
+app is not enabled on this Nextcloud." Les agendas et les contacts n'ont besoin d'aucune application :
+CalDAV et CardDAV font partie du cœur de Nextcloud.
 
 ## Ce que ce serveur ne peut pas faire
 
@@ -401,7 +402,7 @@ résultat vide.
 | **La recherche met en correspondance les noms, pas le contenu** | Chaque réponse de recherche porte `"note":"matched on names only; contents are not indexed"` | Installer et configurer l'application Nextcloud Full text search, ou rechercher par nom de fichier |
 | **Un compte créé avec `occ user:add` n'a pas d'agenda** | `calendar_list_events` renvoie une erreur qui nomme l'agenda manquant | `occ dav:create-calendar <user> personal`, ou se connecter une fois à Nextcloud par l'interface web, ce qui le crée |
 | **Il en va de même pour le carnet d'adresses** | `contacts_search` nomme la solution au lieu de ne rien renvoyer | `occ dav:create-addressbook <user> contacts` |
-| **Notes et Deck sont des applications optionnelles** | Les outils restent dans `tools/list` partout et répondent "The Notes app is not installed on this Nextcloud." | Installer l'application, ou ignorer ces cinq outils |
+| **Notes, Deck et Tables sont des applications optionnelles** | Les outils restent dans `tools/list` partout et répondent "The Notes app is not installed on this Nextcloud." ou "The Tables app is not enabled on this Nextcloud." | Installer l'application, ou ignorer ces sept outils |
 | **Rien ne peut être supprimé ni écrasé** | `files_upload` refuse un chemin existant avec un conflit, et il n'y a aucun outil de mise à jour ou de suppression du tout | Choisir un autre nom. C'est la contrainte de conception, pas une fonctionnalité manquante |
 | **Aucune session, donc aucun état de pagination côté serveur** | Une liste longue remet un handle `next` que vous passez de nouveau | Rien. Le handle survit à un redémarrage, ce qui est le but |
 | **Les agendas ont besoin d'une fenêtre de temps explicite avec un fuseau** | Un `start` ou `end` sans fuseau est refusé | Envoyer `2026-09-01T00:00:00+02:00` ou `...Z`. Un fuseau deviné est une réponse confidemment fausse |
