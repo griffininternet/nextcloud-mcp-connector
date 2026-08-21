@@ -18,7 +18,7 @@ Zwei weitere Eigenschaften folgen aus derselben Idee:
 
 - **Der Assistent sieht nie mehr als Sie.** Jede Anfrage läuft mit Ihren eigenen Nextcloud-Zugangsdaten,
   sodass die Nextcloud-Berechtigungen unverändert gelten.
-- **Ein bewusst kleiner Tool-Satz.** Die 18 Tools sind so kuratiert, dass dieser Server neben Ihre
+- **Ein bewusst kleiner Tool-Satz.** Die 20 Tools sind so kuratiert, dass dieser Server neben Ihre
   anderen MCP server passt, selbst in Clients mit einer harten Tool-Obergrenze.
 
 Lizenz: AGPL-3.0-or-later. App-ID, Paketnamen und Repository-Name sind eingefroren, siehe
@@ -29,7 +29,7 @@ Lizenz: AGPL-3.0-or-later. App-ID, Paketnamen und Repository-Name sind eingefror
 Version 0.1.3. Die App ist im Nextcloud App Store gelistet und als Nextcloud-ExApp über AppAPI
 installierbar. Was heute vorliegt und wo jede dieser Aussagen festgehalten ist:
 
-- Alle 18 Tools des v1-Satzes sind implementiert, und die Tool-Tabelle weiter unten wird nicht
+- Alle 20 Tools des v1-Satzes sind implementiert, und die Tool-Tabelle weiter unten wird nicht
   mehr von Hand gepflegt: ein Contract-Test liest die aktive Tool-Registry und schlägt fehl,
   wenn ein Name oder eine Berechtigungsstufe in der Tabelle davon abweicht.
 - Die OAuth-2.1-Anmeldung ist Ende zu Ende gegen die zwei gehosteten Konnektoren belegt, für
@@ -204,6 +204,8 @@ neue Objekte anlegen, aber niemals bestehende ändern oder entfernen.
 | `deck_create_card` | create-only | Legt eine neue Karte in einem Stapel an; bestehende Karten werden nie geändert |
 | `tables_browse` | read | Durchsucht Tables: die Tabellen, die Spalten einer Tabelle oder ihre Zeilen |
 | `tables_create_row` | create-only | Legt eine Zeile über Spaltentitel an; bestehende Zeilen werden nie geändert |
+| `talk_browse` | read | Durchsucht Talk: die Konversationen dieses Kontos oder den Verlauf einer davon |
+| `talk_send` | create-only | Sendet eine Nachricht in eine Konversation; eine Nachricht wird nie bearbeitet oder gelöscht, und eine Administratorin kann das Senden instanzweit abschalten |
 | `contacts_search` | read | Durchsucht Adressbuch-Kontakte |
 | `unified_search` | read | Fragt die Nextcloud-Unified-Search über alle Provider ab, berechtigungsbewusst |
 | `prepare_context` | read | Bündelt passende Dateien, Notizen und Karten mit den Terminen der kommenden Woche zu einer Frage |

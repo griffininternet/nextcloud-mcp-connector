@@ -9,8 +9,9 @@ user parameter cannot slip in between two plans.
 
 The sixteenth tool, ``prepare_context``, arrived in plan 04-02 and had to be entered here
 on purpose: the frozen literal below refused it until then, which is exactly the job of
-this file (D-58). The Tables pair of plan 08-04 went through the same door, and with it
-every other frozen number of this file, which is why they are named in one place.
+this file (D-58). The Tables pair of plan 08-04 and the Talk pair of plan 09-04 went through
+the same door, and with them every other frozen number of this file, which is why they are
+named in one place.
 """
 
 import re
@@ -26,7 +27,7 @@ from mcp_connector.server import mcp
 README = Path(__file__).resolve().parents[2] / "README.md"
 DOCS = Path(__file__).resolve().parents[2] / "docs"
 
-# The curated set (D-03 to D-09). A set comparison, not a subset check: a nineteenth tool
+# The curated set (D-03 to D-09). A set comparison, not a subset check: a twenty-first tool
 # fails this file just as loudly as a missing one. Counter proof for the reviewer: adding
 # ``@mcp.tool`` for a ``files_delete`` anywhere under ``server/reg_*.py`` turns
 # ``test_the_curated_set_is_complete_and_only_the_chatgpt_profile_has_a_schema`` and
@@ -49,17 +50,20 @@ EXPECTED_TOOLS = {
     "prepare_context",
     "tables_browse",
     "tables_create_row",
+    "talk_browse",
+    "talk_send",
     "search",
     "fetch",
 }
 
-# The five write paths. Everything else in EXPECTED_TOOLS only reads (D-16).
+# The six write paths. Everything else in EXPECTED_TOOLS only reads (D-16).
 CREATE_TOOLS = {
     "files_upload",
     "calendar_create_event",
     "notes_create",
     "deck_create_card",
     "tables_create_row",
+    "talk_send",
 }
 
 # The documented exception to the schema diet: ChatGPT reads structured content (D-14).
@@ -300,6 +304,61 @@ async def test_there_is_no_tool_per_tables_level() -> None:
 
 
 @pytest.mark.anyio
+async def test_the_two_talk_tools_are_listed_and_browse_takes_an_enum_level() -> None:
+    """D-06 for the Talk family: one browse tool, one create-only write, no more.
+
+    ``talk_send`` is the sixth write path of this server, and its annotations are the whole
+    security statement of the family: it writes, it cannot edit or delete a message, and a
+    second call is a second message rather than a no-op. The client behind it has no update,
+    no delete and no scheduling code at all, which is what makes those three flags honest
+    (T-09-33).
+    """
+    async with Client(mcp, raise_exceptions=True) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+
+    for name in ("talk_browse", "talk_send"):
+        assert name in tools, f"{name} is part of the curated set (TALK-01 to TALK-03)"
+        assert tools[name].output_schema is None, "structured_output=False (schema diet)"
+
+    browse = tools["talk_browse"]
+    annotations = browse.annotations
+    assert annotations is not None
+    assert annotations.read_only_hint is True, "talk_browse only reads"
+    assert annotations.open_world_hint is False
+
+    schema = browse.input_schema
+    assert schema["properties"]["level"]["enum"] == ["conversations", "messages"], (
+        "the level is an enum in the schema, not a free string the model has to guess"
+    )
+    assert "$defs" not in schema, "no nested models in the input schema (schema diet)"
+    assert "$defs" not in tools["talk_send"].input_schema, (
+        "the message is a plain string, exactly so that no nested model reaches the schema"
+    )
+
+    create = tools["talk_send"].annotations
+    assert create is not None
+    assert create.read_only_hint is False, "talk_send writes"
+    assert create.destructive_hint is False, "it can only send, never edit or delete"
+    assert create.idempotent_hint is False, "a second call is a second message"
+    assert create.open_world_hint is False
+
+
+@pytest.mark.anyio
+async def test_there_is_no_tool_per_talk_level_and_no_second_send() -> None:
+    """The same anti-pattern one family later, plus the name a second send path would take."""
+    async with Client(mcp, raise_exceptions=True) as client:
+        names = {tool.name for tool in (await client.list_tools()).tools}
+
+    forbidden = {
+        "talk_list_conversations",
+        "talk_list_messages",
+        "talk_read_message",
+        "talk_send_message",
+    }
+    assert not (names & forbidden), f"talk_browse and talk_send cover these: {names & forbidden}"
+
+
+@pytest.mark.anyio
 async def test_unified_search_is_listed_as_a_pure_read_over_all_providers() -> None:
     """D-08 and TOOL-06: one cloud wide read, and the expectation management is in the text."""
     async with Client(mcp, raise_exceptions=True) as client:
@@ -367,12 +426,12 @@ async def test_prepare_context_is_listed_as_a_bundling_read() -> None:
 
 @pytest.mark.anyio
 async def test_the_curated_set_is_complete_and_only_the_chatgpt_profile_has_a_schema() -> None:
-    """The whole surface in one assertion: 18 tools, and the diet holds for 16 of them."""
+    """The whole surface in one assertion: 20 tools, and the diet holds for 18 of them."""
     async with Client(mcp, raise_exceptions=True) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
 
     assert set(tools) == EXPECTED_TOOLS
-    assert len(tools) == 18, "the curated set is 18 tools, no more and no fewer"
+    assert len(tools) == 20, "the curated set is 20 tools, no more and no fewer"
 
     with_schema = {name for name, tool in tools.items() if tool.output_schema is not None}
     assert with_schema == STRUCTURED_TOOLS, (
@@ -469,7 +528,7 @@ def _properties(schema: dict[str, Any]) -> list[tuple[str, Any]]:
 
 @pytest.mark.anyio
 async def test_every_tool_carries_honest_annotations() -> None:
-    """D-16 over the whole registry: five create-only tools, thirteen pure reads."""
+    """D-16 over the whole registry: six create-only tools, fourteen pure reads."""
     async with Client(mcp, raise_exceptions=True) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
 
@@ -517,7 +576,7 @@ async def test_no_input_schema_accepts_a_user_parameter() -> None:
     async with Client(mcp, raise_exceptions=True) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
 
-    assert set(tools) == EXPECTED_TOOLS, "the confused deputy check must cover all 18 schemas"
+    assert set(tools) == EXPECTED_TOOLS, "the confused deputy check must cover all 20 schemas"
 
     findings: list[str] = []
     for name, tool in sorted(tools.items()):
@@ -557,7 +616,7 @@ async def test_the_readme_permission_table_matches_the_live_registry() -> None:
 def test_a_documented_tool_count_is_the_current_one_or_says_which_run_it_is_from() -> None:
     """IN-04: a page may record a run with an old count, it may not leave it unexplained.
 
-    Two kinds of number live in ``docs/``. A statement about the product ("all 18 tools")
+    Two kinds of number live in ``docs/``. A statement about the product ("all 20 tools")
     has to be the number this registry answers. A dated evidence line ("connected, 15 tools
     listed") is a record of a run and stays as it was recorded, and a reader who counts both
     holds one of them for wrong unless the page says which is which. So a page that names a

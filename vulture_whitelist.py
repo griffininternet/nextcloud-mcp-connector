@@ -29,6 +29,8 @@ deck_browse
 deck_create_card
 tables_browse
 tables_create_row
+talk_browse
+talk_send
 contacts_search
 
 # --- Framework entry points -----------------------------------------------------------
