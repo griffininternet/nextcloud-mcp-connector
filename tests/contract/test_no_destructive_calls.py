@@ -22,13 +22,26 @@ could act as a session store (D-20), and no tool that stops to ask the user mid 
 import ast
 import io
 import tokenize
+from collections.abc import Iterable
 from pathlib import Path
+
+import pytest
 
 SRC = Path(__file__).resolve().parents[2] / "src" / "mcp_connector"
 
 # Destructive HTTP verbs and the one OCS route that changes who may see an object. Upper
 # case on purpose: httpx spells a custom method in upper case, and the lower case words
 # "move" or "copy" occur in ordinary prose and identifiers.
+#
+# The five Tables entries at the end are a different kind of needle: they carry no
+# forbidden verb, because a POST on a single row route changes that row and a POST on a
+# scheme route rewrites a whole table. The verb alone would let all of that through, so
+# these name the route instead. Two of them are anchored on the opening quote of a path
+# literal, which is how every path in this project is written: the allowed row read is
+# ``f"/tables/{table}/rows/simple"`` and the allowed create route is
+# ``f"{V2_PREFIX}/{NODE_COLLECTION_TABLES}/{table}/rows"``, so neither of them opens a
+# literal with the segment a needle names, while a route addressing one row or one column
+# can hardly be written without doing exactly that.
 FORBIDDEN: dict[str, str] = {
     "DELETE": "no tool may delete anything",
     "MOVE": "no tool may move or rename anything",
@@ -36,7 +49,31 @@ FORBIDDEN: dict[str, str] = {
     "PROPPATCH": "no tool may change properties of an existing object",
     "ocs/v2.php/apps/files_sharing": "no tool may create or change a share",
     ".delete(": "no client helper may expose a delete call",
+    '"/rows/': "no tool may address a single Tables row: reading, changing and deleting "
+    "one all live on that route",
+    '"/columns/': "no tool may create, change or delete a Tables column",
+    "tables/scheme": "no tool may import or export a table scheme",
+    "/transfer": "no tool may hand a table to another owner",
+    "/share": "no tool may create or change a Tables share",
 }
+
+#: The five needles above that name a Tables route, with a line that would carry them into
+#: the code. They stay next to the counter proof rather than next to the dictionary,
+#: because their only job is to prove that each needle can still be hit.
+TABLES_ROUTES: dict[str, str] = {
+    '"/rows/': '    response = await client.get(api_url(creds, f"/rows/{row_id}"))',
+    '"/columns/': '    response = await client.put(ocs.ocs_url(creds, f"/columns/{column}"))',
+    "tables/scheme": '    response = await ocs.ocs_post(client, creds, "/tables/scheme", body)',
+    "/transfer": '    url = ocs.ocs_url(creds, f"{V2_PREFIX}/tables/{table}/transfer")',
+    "/share": '    url = ocs.ocs_url(creds, f"{V2_PREFIX}/{NODE_COLLECTION_TABLES}/{t}/share")',
+}
+
+#: The two forms :mod:`mcp_connector.nextcloud.clients.tables` really builds. They are the
+#: reason the needles are shaped the way they are, so they are asserted, not assumed.
+ALLOWED_TABLES_ROUTES = (
+    '    api_url(creds, f"/tables/{table}/rows/simple"),',
+    '    ocs.ocs_url(creds, f"{V2_PREFIX}/{NODE_COLLECTION_TABLES}/{table}/rows"),',
+)
 
 # The one file where the word DELETE is not an HTTP verb. TOOL-09 is a promise about what
 # this server does to data in Nextcloud, and the OAuth store is our own SQLite file: it
@@ -132,22 +169,33 @@ def _code_lines(path: Path) -> list[tuple[int, str]]:
     return [(number, text) for number, text in enumerate(blanked, start=1) if text.strip()]
 
 
+def _violations(relative: str, lines: Iterable[tuple[int, str]]) -> list[str]:
+    """Every finding in already filtered lines, in the form the failure message prints.
+
+    Shared by the gate and by its counter proofs on purpose: a counter proof that
+    reimplements the check proves something about the counter proof.
+    """
+    findings: list[str] = []
+    for number, text in lines:
+        for needle, why in FORBIDDEN.items():
+            if needle not in text:
+                continue
+            if needle == "DELETE" and _is_own_sql(relative, text):
+                continue
+            if needle == "DELETE" and _is_own_app_password(relative, text):
+                continue
+            if needle == "DELETE" and _is_own_config_value(relative, text):
+                continue
+            findings.append(f"{relative}:{number}: {needle!r} ({why}): {text.strip()}")
+    return findings
+
+
 def test_the_production_code_contains_no_destructive_request() -> None:
     """TOOL-09: the promise holds in the code, not only in the README."""
     findings: list[str] = []
     for path in _source_files():
         relative = path.relative_to(SRC).as_posix()
-        for number, text in _code_lines(path):
-            for needle, why in FORBIDDEN.items():
-                if needle not in text:
-                    continue
-                if needle == "DELETE" and _is_own_sql(relative, text):
-                    continue
-                if needle == "DELETE" and _is_own_app_password(relative, text):
-                    continue
-                if needle == "DELETE" and _is_own_config_value(relative, text):
-                    continue
-                findings.append(f"{relative}:{number}: {needle!r} ({why}): {text.strip()}")
+        findings.extend(_violations(relative, _code_lines(path)))
 
     assert findings == [], "destructive call found:\n" + "\n".join(findings)
 
@@ -232,6 +280,43 @@ def test_the_config_exemption_covers_one_call_form_and_nothing_else() -> None:
     assert not _is_own_config_value(crypto, 'conn.execute("DELETE FROM flows")')
 
 
+@pytest.mark.parametrize(("needle", "line"), sorted(TABLES_ROUTES.items()))
+def test_each_tables_needle_trips_on_its_route_and_leaves_the_real_module_alone(
+    needle: str, line: str
+) -> None:
+    """Counter proof per Tables needle: it hits the route, and it misses today's code.
+
+    A needle that never matches anything is the same as no needle at all, and a needle that
+    matches the module as it stands would be repaired by rewriting the module rather than by
+    narrowing the needle. Both failures are silent, so both are asserted here: the real
+    source of the Tables client stays clean, and the same check reports the route as soon as
+    one line carries it (T-08-20).
+    """
+    relative = "nextcloud/clients/tables.py"
+    real = _code_lines(SRC / relative)
+    assert _violations(relative, real) == [], (
+        f"{relative} must be clean before a needle can prove anything"
+    )
+
+    findings = _violations(relative, [*real, (len(real) + 1, line)])
+    assert any(repr(needle) in finding for finding in findings), (
+        f"the gate must report {needle!r} for: {line.strip()}"
+    )
+
+
+def test_the_two_row_routes_the_tables_client_really_builds_stay_allowed() -> None:
+    """The other half of the same proof: the create path and the row read must pass.
+
+    Creating a row and reading rows are the two things this family exists for. A needle
+    broad enough to catch them would force the choice between a green gate and a working
+    tool, and that choice always ends with the gate losing.
+    """
+    for line in ALLOWED_TABLES_ROUTES:
+        assert _violations("nextcloud/clients/tables.py", [(1, line)]) == [], (
+            f"the gate must not report the allowed route: {line.strip()}"
+        )
+
+
 def test_no_module_level_mutable_state_outside_the_two_documented_caches() -> None:
     """D-20: nothing between two requests may remember anything about a session."""
     findings: list[str] = []
@@ -275,6 +360,10 @@ def _is_mutable(value: ast.expr) -> bool:
 
 def test_the_two_allowed_caches_still_exist_where_they_are_claimed_to_be() -> None:
     """An allow list that points at nothing silently stops allowing anything."""
+    assert len(ALLOWED_MODULE_STATE) == 2, (
+        "the exceptions are counted, not only described: a third cache is a decision, and a "
+        "decision has to be made in a review and not in a diff (D-20, T-08-23)"
+    )
     for relative, name in ALLOWED_MODULE_STATE:
         path = SRC / relative
         assert path.is_file(), f"{relative} is on the allow list but does not exist"

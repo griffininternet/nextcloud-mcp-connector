@@ -1,4 +1,4 @@
-"""Phase acceptance: call all 15 tools once, through a real MCP client over stdio.
+"""Phase acceptance: call all 18 tools once, through a real MCP client over stdio.
 
 This is the proof behind success criterion 1 of phase 1. Not a unit test and not a mock:
 the script starts ``nc-mcp`` as a subprocess exactly as Claude Desktop does, speaks the
@@ -13,7 +13,7 @@ Usage::
     set -a && . ./.env.test && set +a
     uv run python scripts/acceptance_all_tools.py
 
-Exit code 0 only when all 15 tools answered. The output is a matrix of tool name, verdict
+Exit code 0 only when all 18 tools answered. The output is a matrix of tool name, verdict
 and the first line of the answer, so a failure is attributable without a rerun.
 
 The calls build on each other on purpose: the file uploaded in step one is the file that
@@ -41,7 +41,10 @@ from mcp.types import TextContent
 
 REQUIRED_ENV = ("NC_MCP_URL", "NC_MCP_USER", "NC_MCP_APP_PASSWORD")
 
-EXPECTED_TOOLS = 15
+# The count the registry answers today. It stood at 15 while the registry already listed
+# 16, which is the kind of drift only a number in two places produces, so it is raised in
+# the same commit that raises every other frozen number of a phase.
+EXPECTED_TOOLS = 18
 
 
 class Report:
@@ -183,14 +186,53 @@ async def run(client: Client, report: Report) -> None:
             "no board or stack on this account; the connector cannot create either by design",
         )
 
+    # --- tables -----------------------------------------------------------------------
+    # Same exception as Deck, one family later: a table and its columns are not connector
+    # features, so the script writes into the table the integration suite leaves behind and
+    # reports the write as skipped when there is none. The column is picked by type, because
+    # a text value in a number column is a 400 of the app and not a broken tool.
+    tables = loads(await call(client, report, "tables_browse", {"level": "tables"}))
+    table_id = _first_id(tables)
+    column_title = ""
+    if table_id:
+        columns = loads(
+            await call(client, report, "tables_browse", {"level": "columns", "table_id": table_id})
+        )
+        column_title = _first_text_column(columns)
+    if table_id and column_title:
+        await call(
+            client,
+            report,
+            "tables_create_row",
+            {"table_id": table_id, "values": json.dumps({column_title: f"Abnahme {marker}"})},
+        )
+    else:
+        report.add(
+            "tables_create_row",
+            "SKIP",
+            "no table with a text column on this account; the connector creates neither by design",
+        )
+
     # --- contacts, search, chatgpt profile ---------------------------------------------
     await call(client, report, "contacts_search", {"query": "a"})
     await call(client, report, "unified_search", {"query": marker})
+    await call(client, report, "prepare_context", {"query": marker})
     await call(client, report, "search", {"query": marker})
     if file_id:
         await call(client, report, "fetch", {"id": file_id})
     else:
         report.add("fetch", "FAIL", "no file id from files_search to resolve")
+
+
+def _first_text_column(payload: dict[str, Any]) -> str:
+    """Title of the first text column, which is the only cell shape a marker fits into."""
+    entries = payload.get("results")
+    if not isinstance(entries, list):
+        return ""
+    for entry in entries:
+        if isinstance(entry, dict) and entry.get("type") == "text":
+            return str(entry.get("title") or "")
+    return ""
 
 
 def _first_id(payload: dict[str, Any]) -> str:
@@ -240,6 +282,9 @@ async def main() -> int:
         "deck_create_card",
         "contacts_search",
         "unified_search",
+        "prepare_context",
+        "tables_browse",
+        "tables_create_row",
         "search",
         "fetch",
     }
