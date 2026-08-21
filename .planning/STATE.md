@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Kuratierte Breite
 status: executing
-stopped_at: Completed 09-02-PLAN.md
-last_updated: "2026-08-21T11:31:58.472Z"
-last_activity: 2026-08-21 -- Plan 09-02 abgeschlossen (Admin-Schalter talk_send, sechster Wert, os.environ-Export)
+stopped_at: Completed 09-03-PLAN.md
+last_updated: "2026-08-21T12:00:31.282Z"
+last_activity: 2026-08-21 -- Plan 09-03 abgeschlossen (tools/talk.py mit browse und send, drei Inhaltsfallen unit-belegt)
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 10
-  completed_plans: 7
+  completed_plans: 8
   percent: 25
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 9 (Talk) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
-Last activity: 2026-08-21 -- Plan 09-02 abgeschlossen (Admin-Schalter talk_send, sechster Wert, os.environ-Export)
+Last activity: 2026-08-21 -- Plan 09-03 abgeschlossen (tools/talk.py mit browse und send, drei Inhaltsfallen unit-belegt)
 
 ## Performance Metrics
 
@@ -122,6 +122,7 @@ Last activity: 2026-08-21 -- Plan 09-02 abgeschlossen (Admin-Schalter talk_send,
 | Phase 08 P05 | 24 min | 2 tasks tasks | 5 files files |
 | Phase 09-talk P01 | 20 min | 3 tasks | 8 files |
 | Phase 09-talk P02 | 17 min | 3 tasks tasks | 12 files files |
+| Phase 09-talk P03 | 26 min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -427,6 +428,10 @@ Recent decisions affecting current work:
 - [Phase 09-talk]: os.environ ist kein Modulzustand im Sinne von D-20, sondern die Prozessumgebung: ALLOWED_MODULE_STATE bleibt bei zwei Eintraegen, tests/contract/test_no_destructive_calls.py ist unveraendert, und ein Quelltext-Test belegt genau eine Schreibstelle samt Kommentarblock
 - [Phase 09-talk]: talk_send ist der sechste und letzte Eintrag von CONFIG_KEYS: die vier OAuth-Werte bleiben beieinander, weil registry.client_policy zwei davon als eine Antwort liest, und ein Talk-Schalter dazwischen wuerde diese Gruppierung zerreissen
 - [Phase 09-talk]: TALK-04 bleibt Pending: der Wortlaut verlangt die Wirkung am Werkzeug samt Fehlersatz, und das Werkzeug entsteht erst mit Plan 09-03; Schicht 1 (Formular) und Schicht 2 (Overlay-Lesepfad) sind hier belegt
+- [Phase 09-talk]: tools/talk.py liest auf der Nachrichtenebene zuerst die Konversationsliste: Sie ist die einzige Quelle des Anzeigenamens fuer den Envelope und macht ein erfundenes Token zu unserem eigenen Satz, ohne dass Nextcloud es je in einem Pfad sieht (T10 gilt damit auch beim Lesen)
+- [Phase 09-talk]: Eine Erwaehnung wird an mention-id oder am Platzhalternamen erkannt, nicht am Typ allein: {actor} traegt in Talk ebenfalls type=user, ein Praefix darauf haette jede Nachricht so aussehen lassen, als erwaehne sie ihren eigenen Autor
+- [Phase 09-talk]: Keine Kappungsmarkierung im Nachrichtentext, sondern das Feld truncated daneben: Ein Marker im fremden Text ist ein Angriffsweg (ME-03), und eine Chatnachricht ist der billigste Ort dafuer, weil jeder Teilnehmer schreiben darf
+- [Phase 09-talk]: TALK-01 bis TALK-04 bleiben Pending: Der Wortlaut aller vier spricht von den Werkzeugen talk_browse und talk_send; registriert werden sie erst mit Plan 09-04, TALK-02 braucht zusaetzlich die Live-Messung
 
 ### Pending Todos
 
@@ -461,8 +466,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-21T11:31:58.455Z
-Stopped at: Completed 09-02-PLAN.md
+Last session: 2026-08-21T12:00:04.970Z
+Stopped at: Completed 09-03-PLAN.md
 Naechster Schritt: /gsd:plan-phase 8
 Resume file: None
 

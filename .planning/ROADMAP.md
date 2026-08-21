@@ -101,7 +101,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 09-03-PLAN.md: Talk-Werkzeuge: browse mit zwei Ebenen, senden mit Vorprüfungen am Objekt und Schalter als erster Zeile
+- [x] 09-03-PLAN.md: Talk-Werkzeuge: browse mit zwei Ebenen, senden mit Vorprüfungen am Objekt und Schalter als erster Zeile
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -198,7 +198,7 @@ Plans:
 | 6. Härtung, Eigennachweise und Conference-Reife | v1.1 | 11/11 | Complete | 2026-08-20 |
 | 7. Verwaltungs-Clients live verprobt | v1.1 | 0/0 | Deferred (extern getaktet) | - |
 | 8. Erreichbarkeits-Spike und Tables | v1.2 | 5/5 | Complete    | 2026-08-21 |
-| 9. Talk | v1.2 | 2/5 | In Progress|  |
+| 9. Talk | v1.2 | 3/5 | In Progress|  |
 | 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 0/? | Not started | - |
 | 11. Bündelung, Budget und Release 0.1.4 | v1.2 | 0/? | Not started | - |
 
