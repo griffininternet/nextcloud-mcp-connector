@@ -15,6 +15,8 @@ import asyncio
 import base64
 import json
 import logging
+import os
+import re
 from collections.abc import Awaitable, Callable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,6 +36,7 @@ from starlette.testclient import TestClient
 
 from mcp_connector import config, entry_exapp, entry_http
 from mcp_connector.errors import IssuerRefused, ToolError
+from mcp_connector.exapp import config_values
 from mcp_connector.exapp.middleware import RequireAppApi
 from mcp_connector.exapp.ui import connections as ui_connections
 from mcp_connector.exapp.ui import strings
@@ -97,7 +100,7 @@ MCP_HEADERS = {
 #: :data:`PUBLIC_URL`, so a check can tell which of the two sources won.
 ADMIN_URL = "https://admin.example.com/exapps/mcp_connector"
 
-#: The one outgoing call this file allows: the start time read of the five admin values, on
+#: The one outgoing call this file allows: the start time read of the six admin values, on
 #: the route plan 03-08 measured. The constants come from ``crypto`` rather than being spelled
 #: a second time here.
 READ_URL = (
@@ -135,7 +138,7 @@ class AdminConfig:
 def admin_config() -> Iterator[AdminConfig]:
     """Answer the start time read locally, for every check of this file.
 
-    Autouse on purpose: since plan 05-04 ``main`` reads the five admin values once before it
+    Autouse on purpose: since plan 05-04 ``main`` reads the six admin values once before it
     serves, so every check that starts the process would otherwise open a socket against
     ``nc.test``. An empty dictionary is an installation whose administrator has configured
     nothing, which is the state every older check of this file was written under.
@@ -948,6 +951,15 @@ def deployed(
         registry.ENV_ALLOWED_CLIENTS,
     ):
         monkeypatch.delenv(name, raising=False)
+
+    # ``main`` writes this one key back into ``os.environ`` (plan 09-02), and monkeypatch
+    # only undoes what it has touched itself. Recording the variable here before the start
+    # is therefore what keeps a value written by one check from answering
+    # ``config.talk_send_enabled`` in the next one: the setenv records that it was unset,
+    # the delenv removes it again, and the teardown restores that unset state.
+    monkeypatch.setenv(config.ENV_TALK_SEND, "")
+    monkeypatch.delenv(config.ENV_TALK_SEND)
+
     for name, value in (env or {}).items():
         monkeypatch.setenv(name, value)
 
@@ -1382,6 +1394,97 @@ def test_the_start_names_the_keys_it_took_from_nextcloud_and_never_their_values(
     assert registry.ENV_ALLOWED_CLIENTS in messages
     assert ADMIN_URL not in messages
     assert "claude.example" not in messages
+
+
+# --- the one key that leaves the resolved mapping again (TALK-04, way A of 09-RESEARCH) --
+#
+# Four cases, and they exist so the line in ``main`` does not disappear in the next refactor.
+# A tool has no resolved mapping in its hand, so the switch of TALK-04 is only readable at
+# all if the resolved value is part of the environment of this process. What that value is
+# after the start is therefore the contract, not an implementation detail.
+
+
+def test_a_stored_talk_switch_of_off_reaches_the_process_environment(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, admin_config: AdminConfig
+) -> None:
+    """Layer 3 of success criterion 5, as far as this plan can prove it: the value an
+    administrator unticked in Nextcloud is what ``config.talk_send_enabled`` answers on."""
+    admin_config.values["talk_send"] = "0"
+
+    start(monkeypatch, tmp_path)
+
+    assert os.environ[config.ENV_TALK_SEND] == config_values.SWITCH_OFF
+    assert config.talk_send_enabled() is False
+
+
+def test_a_stored_talk_switch_of_on_reaches_the_process_environment(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, admin_config: AdminConfig
+) -> None:
+    """The other direction, so True is never just the absence of the write."""
+    admin_config.values["talk_send"] = "1"
+
+    start(monkeypatch, tmp_path)
+
+    assert os.environ[config.ENV_TALK_SEND] == config_values.SWITCH_ON
+    assert config.talk_send_enabled() is True
+
+
+def test_a_start_without_a_stored_talk_switch_leaves_the_variable_alone(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Exactly one key travels, and only when it is in the overlay: an installation that
+    configured nothing must not gain a variable it never set (TALK-04 ships on)."""
+    start(monkeypatch, tmp_path)
+
+    assert config.ENV_TALK_SEND not in os.environ
+    assert config.talk_send_enabled() is True
+
+
+def test_a_stored_talk_switch_wins_over_the_deploy_variable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, admin_config: AdminConfig
+) -> None:
+    """The precedence rule of 05-01 for this key too: admin value, then variable, then code.
+
+    ``_resolved_env`` builds that order, and the write below carries it into the environment,
+    so the environment a tool reads is the resolved one and not the deployed one.
+    """
+    admin_config.values["talk_send"] = "0"
+
+    start(monkeypatch, tmp_path, env={config.ENV_TALK_SEND: "1"})
+
+    assert os.environ[config.ENV_TALK_SEND] == config_values.SWITCH_OFF
+    assert config.talk_send_enabled() is False
+
+
+def test_the_entry_point_writes_exactly_one_key_into_the_process_environment() -> None:
+    """The exception of D-20 stays one exception, and it keeps its reasoning.
+
+    Constructive rather than documented: a second write, or a write of the whole overlay,
+    fails here, and so does a refactor that keeps the line but drops the comment block that
+    explains why it contradicts the comment above it (A7).
+    """
+    source = Path(entry_exapp.__file__).read_text(encoding="utf-8")
+    writes = re.findall(r"os\.environ\[[^\]]+\]\s*=", source)
+
+    assert writes == ["os.environ[config.ENV_TALK_SEND] ="]
+
+    lines = source.splitlines()
+    index = next(
+        number for number, line in enumerate(lines) if re.search(r"os\.environ\[[^\]]+\]\s*=", line)
+    )
+    reasoning = [line for line in lines[max(0, index - 14) : index] if line.strip().startswith("#")]
+    assert len(reasoning) >= 4
+
+
+def test_the_write_happens_before_the_application_is_built() -> None:
+    """A switch that is exported after the first socket has not switched anything off."""
+    source = Path(entry_exapp.__file__).read_text(encoding="utf-8")
+
+    export = source.index("os.environ[config.ENV_TALK_SEND]")
+    resolved = source.index("resolved, refused = _resolved_env()")
+    served = source.index("uvicorn.run(")
+
+    assert resolved < export < served
 
 
 @pytest.mark.anyio
