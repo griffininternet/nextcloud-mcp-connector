@@ -10,7 +10,9 @@ enum value. The answer envelope is the same on every level (``level``, ``count``
 the table, so a table with 20.000 rows would become one MCP answer (pitfall 1). The default
 is :data:`DEFAULT_LIMIT` rows, the ceiling is :data:`MAX_LIMIT`, and a table that has more
 rows than the window says so in the answer: ``rowsCount`` next to ``count`` and ``offset``,
-plus ``truncated`` and a ``next`` handle. Truncation is named here, never silent.
+plus ``truncated`` and a ``next`` handle. ``rowsCount`` is left out instead of invented when
+the app reports none, and a window that came back full is then the evidence that there is
+more. Truncation is named here, never silent.
 
 **Two things are explained before they can fail.** A missing or disabled Tables app stops
 both tools at the capabilities check, before the first Tables request (SRV-04). And a user
@@ -321,10 +323,17 @@ async def _rows(clients: NcClients, table: str, limit: int, cursor: str | None) 
         "table": _text(info.get("title") or ""),
         "count": len(results),
         "results": results,
-        "rowsCount": _row_count(info, offset + len(results)),
         "offset": offset,
     }
-    if answer["rowsCount"] > offset + len(results):
+    count = _row_count(info)
+    if count is not None:
+        answer["rowsCount"] = count
+    # Two ways to know that this window is not the whole table, and the second one is the
+    # only one left when the app reported no count: a window that came back full has a next
+    # page behind it often enough to say so, and a wrong "there is more" costs one empty
+    # page, while a wrong "that was all" is a silent cut.
+    more = count > offset + len(results) if count is not None else len(results) == limit
+    if more:
         answer["truncated"] = True
         answer["next"] = paging.encode_cursor({"o": offset + len(results), "t": table})
     return answer
@@ -344,11 +353,17 @@ def _row(titles: list[str], values: list[Any]) -> dict[str, Any]:
     return row
 
 
-def _row_count(info: dict[str, Any], fallback: int) -> int:
-    """The row count of the table, or what was read so far if the app reported nothing."""
+def _row_count(info: dict[str, Any]) -> int | None:
+    """The row count of the table, or ``None`` when the app reported no usable one.
+
+    The tempting fallback is "as much as was read so far", and it is the worse answer twice
+    over: it reports a table of 100 rows as a table of 25, and the truncation check built on
+    it can then never be true, so the cut becomes silent. Leaving the field out says the same
+    thing honestly, and the caller has one number less rather than one wrong one.
+    """
     count = info.get("rowsCount")
     if isinstance(count, bool) or not isinstance(count, int) or count < 0:
-        return fallback
+        return None
     return count
 
 

@@ -397,6 +397,53 @@ async def test_a_table_with_no_rows_is_an_empty_answer_and_not_an_error(
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("broken", [None, "342", True, -1])
+async def test_a_full_window_is_named_as_truncated_even_without_a_row_count(
+    clients: NcClients, broken: Any
+) -> None:
+    """WR-01: the count is the usual signal, a full window is the one that is always there.
+
+    Without it a table of 342 rows answers 3 rows, claims ``rowsCount: 3`` and reports no
+    truncation, which is the silent cut this module promises not to do. A count that is a
+    string, a bool or negative is no count either, so all four shapes take the same path.
+    """
+    info: dict[str, Any] = {key: value for key, value in OWN_TABLE.items() if key != "rowsCount"}
+    if broken is not None:
+        info["rowsCount"] = broken
+
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock.get(TABLE_URL).mock(return_value=httpx.Response(200, json=envelope(info)))
+        mock.get(ROWS_URL).mock(return_value=httpx.Response(200, json=rows_payload()))
+
+        result = await tables_tools.browse(clients, level="rows", table_id="7", limit=3)
+
+    assert result["count"] == 3
+    assert "rowsCount" not in result, "a count nobody reported must not be invented"
+    assert result["truncated"] is True
+    assert paging.decode_cursor(result["next"]) == {"o": 3, "t": "7"}
+
+
+@pytest.mark.anyio
+async def test_a_window_that_was_not_filled_is_the_end_of_the_table(
+    clients: NcClients,
+) -> None:
+    """The other half of WR-01: without a count, a short page is the last page."""
+    info = {key: value for key, value in OWN_TABLE.items() if key != "rowsCount"}
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock.get(TABLE_URL).mock(return_value=httpx.Response(200, json=envelope(info)))
+        mock.get(ROWS_URL).mock(return_value=httpx.Response(200, json=rows_payload()))
+
+        result = await tables_tools.browse(clients, level="rows", table_id="7", limit=25)
+
+    assert result["count"] == 3
+    assert "rowsCount" not in result
+    assert "truncated" not in result
+    assert "next" not in result
+
+
+@pytest.mark.anyio
 async def test_values_that_are_not_json_are_refused_with_an_example(
     clients: NcClients,
 ) -> None:
