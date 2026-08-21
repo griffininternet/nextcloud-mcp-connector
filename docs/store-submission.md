@@ -33,6 +33,11 @@ green, the asset answers 200, its signature verifies against the certificate, an
 upload answered 201. The upload ran in the page context of the signed in store session
 (see the note under step 7), the token never left the page.
 
+**Done, 2026-08-21: 0.1.3 is live in the store.** Same path as 0.1.2, every step a row in
+the table below, and the store page named 0.1.3 as the current release one minute after
+the upload. The one open check is the `appapi_apps.json` release line, which sits behind
+the store side cache and is read again once the hour is over.
+
 ## What the artifacts are
 
 Two separate things, do not confuse them:
@@ -94,6 +99,13 @@ Every line was measured, not assumed. No fact without its check.
 | 2026-08-20 08:30Z | The manifest of 0.1.2 passes the validation the store runs, and both screenshots survive the pre pass | `pre-info.xslt` applied to `appinfo/info.xml`, then `info.xsd`, both fetched from the appstore repository: `assertValid` passes. Raw against `info.xsd` reports `routes` only, the documented false positive |
 | 2026-08-20 08:42Z | The store accepted the 0.1.2 release | `POST /api/v1/apps/releases` from the page context of the signed in store session answered HTTP 201 |
 | 2026-08-20 08:43Z | The store page serves 0.1.2 as the current release | `https://apps.nextcloud.com/apps/mcp_connector` answers 200 and names `0.1.2`; `api/v1/appapi_apps.json` carries the `0.1.2` release line with the platform span of the manifest |
+| 2026-08-21 03:57Z | The release workflow of the tag `v0.1.3` is green in every step, run `32445358277` | `gh run watch 32445358277 --exit-status`, exit 0 |
+| 2026-08-21 04:02Z | The download of 0.1.3 answers 200 with 35310 bytes, the size that was signed | `curl -sSIL https://github.com/street1983nk/nextcloud-mcp-connector/releases/download/v0.1.3/mcp_connector-0.1.3.tar.gz` gives 302 then 200 |
+| 2026-08-21 04:02Z | The signature of 0.1.3 verifies against the merged certificate, so the store will accept it | `openssl x509 -in mcp_connector.crt -pubkey -noout`, then `openssl dgst -sha512 -verify` over the downloaded asset: `Verified OK` |
+| 2026-08-21 04:03Z | The store accepted the 0.1.3 release | `POST /api/v1/apps/releases` from the page context of the signed in store session answered HTTP 201 |
+| 2026-08-21 04:04Z | The image of 0.1.3 is pullable anonymously and a real multi arch index: `linux/amd64`, `linux/arm64`, plus the two attestation entries | anonymous token from `ghcr.io/token`, then `https://ghcr.io/v2/street1983nk/mcp_connector/manifests/0.1.3`, `application/vnd.oci.image.index.v1+json` |
+| 2026-08-21 04:04Z | All four tags exist, none was rewritten | `https://ghcr.io/v2/street1983nk/mcp_connector/tags/list` returns `["0.1.0","0.1.1","0.1.2","0.1.3"]` |
+| 2026-08-21 04:04Z | The store page serves 0.1.3 as the current release | `https://apps.nextcloud.com/apps/mcp_connector` answers 200 and names `0.1.3`. `api/v1/appapi_apps.json` still answered the 0.1.2 list at that minute: that endpoint is cached on the store side, the same cache the section below describes, so the check is repeated once the hour is over |
 
 ### The update keeps the connections
 
