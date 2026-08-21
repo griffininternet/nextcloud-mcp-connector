@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Kuratierte Breite
 status: executing
-stopped_at: "Completed 08-02-PLAN.md (Transportschicht Tables: clients/tables.py, ocs_post, tables.enabled-Gate)"
-last_updated: "2026-08-21T07:39:16.424Z"
+stopped_at: Completed 08-03-PLAN.md
+last_updated: "2026-08-21T07:54:30.373Z"
 last_activity: 2026-08-21
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 5
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 8 (Erreichbarkeits-Spike und Tables) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
 Last activity: 2026-08-21
 
@@ -116,6 +116,7 @@ Last activity: 2026-08-21
 | Phase 06 P11 | 30 min | 3 tasks | 8 files |
 | Phase 08-erreichbarkeits-spike-und-tables P01 | 42 min | 3 tasks tasks | 4 files files |
 | Phase 08-erreichbarkeits-spike-und-tables P02 | 12 min | 3 tasks | 9 files |
+| Phase 08 P03 | 12 min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -398,6 +399,10 @@ Recent decisions affecting current work:
 - [Phase 08-erreichbarkeits-spike-und-tables]: limit ist im Tables-Client ein Keyword ohne Default und wird auf 1 bis 200 gekappt, offset auf mindestens 0: eine Zeilen-URL ohne limit kann konstruktiv nicht entstehen, ein Weglassen ist ein Fehler beim Entwickler und kein Volltabellenlesen beim Nutzer
 - [Phase 08-erreichbarkeits-spike-und-tables]: tables_available kommt aus tables.enabled und nicht aus der Sektionspraesenz: eine installierte, aber abgeschaltete Tables-App antwortet auf keinen Request und gilt fuer diesen Server als nicht vorhanden (Abweichung von Deck, das kein enabled veroeffentlicht)
 - [Phase 08-erreichbarkeits-spike-und-tables]: Auf dem Tables-POST gibt es keinen Retry und nie einen Origin-Header: eine doppelte Zeile ist Datenkorruption, die dieser Server nicht aufraeumen kann, und mit Origin verlangt Nextclouds CORS-Middleware eine Basic-Reauthentifizierung, die unter Impersonation nicht existiert
+- [Phase ?]: Plan 08-03: _may_create lebt in einer Funktion für beide Zwecke (can_create in der Projektion und die Vorprüfung von create_row), weil zwei Fassungen derselben Rechteregel zwei Wahrheiten wären
+- [Phase ?]: Plan 08-03: TABLES-01 und TABLES-02 bleiben Pending bis zur Registrierung in 08-04; beide Anforderungstexte versprechen ein aufrufbares Werkzeug, und tools/list bleibt in diesem Plan bei 16
+- [Phase ?]: Plan 08-03: kein clientseitiger Typvalidator für Zellwerte; der 400 der Tables-App wird mit ihrer eigenen Meldung durchgereicht, weil ein eigener Validator bei jedem neuen Spaltentyp veraltet
+- [Phase ?]: Plan 08-03: der Tables-Block in vulture_whitelist.py ist aufgelöst statt erweitert; das Gate ist ohne jeden Eintrag grün, weil vulture namensbasiert arbeitet, und ein Eintrag ohne Wirkung verletzt die Regel der Datei
 
 ### Pending Todos
 
@@ -432,8 +437,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-21T07:39:16.407Z
-Stopped at: Completed 08-02-PLAN.md (Transportschicht Tables: clients/tables.py, ocs_post, tables.enabled-Gate)
+Last session: 2026-08-21T07:53:44.048Z
+Stopped at: Completed 08-03-PLAN.md
 Naechster Schritt: /gsd:plan-phase 8
 Resume file: None
 
