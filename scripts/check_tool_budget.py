@@ -44,6 +44,16 @@ BUDGET_BYTES = 15_000
 # bytes, so one new tool with a paragraph of prose fits under the total while being twice
 # the size of everything around it. That is the change worth catching, and only a per tool
 # ceiling catches it.
+#
+# The unit is the same as the one of the total, and it says bytes because it measures bytes
+# (review finding IN-03). Until 2026-08-21 this one number was measured on characters while
+# the total was measured on the UTF-8 encoding, so a tool with non-ASCII text in its
+# description was undercounted against its own ceiling. Both are bytes now.
+#
+#   Measurement 2026-08-21, per tool on bytes for the first time: unchanged, biggest tool
+#   ``calendar_create_event`` at 1351 bytes. Every description of this surface is ASCII, so
+#   the two units happen to agree today; the point of the change is that they keep agreeing
+#   when one of them is not ASCII any more.
 MAX_TOOL_BYTES = 1400
 
 
@@ -56,7 +66,12 @@ async def main() -> int:
     size = len(blob.encode("utf-8"))
     per_tool = sorted(
         (
-            (len(json.dumps(tool, separators=(",", ":"), ensure_ascii=False)), tool["name"])
+            (
+                # ``.encode("utf-8")`` and not ``len`` of the string: the same unit as the
+                # total above, so the two limits of this gate measure the same thing (IN-03).
+                len(json.dumps(tool, separators=(",", ":"), ensure_ascii=False).encode("utf-8")),
+                tool["name"],
+            )
             for tool in payload["tools"]
         ),
         reverse=True,
