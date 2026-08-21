@@ -96,6 +96,10 @@ MANUAL_APP_PORT="${NC_EXAPP_MANUAL_PORT:-23001}"
 # "Password needs to be at least 10 characters long." and occ exits 1.
 ALICE_PASSWORD="${NC_EXAPP_ALICE_PASSWORD:-alice-test-pw-01}"
 BOB_PASSWORD="${NC_EXAPP_BOB_PASSWORD:-bob-test-pw-01}"
+# The IMAP password of the spike mail account (see ensure_mail_account). Not a Nextcloud
+# credential and not subject to the password policy: it belongs to an account on the host
+# imap.invalid, which no resolver will ever answer for.
+ALICE_IMAP_PASSWORD="${NC_EXAPP_ALICE_IMAP_PASSWORD:-alice-spike-imap-pw}"
 TOKEN_NAME="mcp-exapp"
 ENV_FILE="${ENV_FILE:-.env.exapp}"
 # The base URL a browser and a client use. Everything the app publishes about itself is
@@ -278,6 +282,39 @@ ensure_user() {
     return 1
   fi
   echo "user ${uid}: created"
+}
+
+# The host is invalid on purpose. `occ mail:account:create-imap` never opens a connection,
+# it only writes the account row (CreateImapAccount), so an account pointing at
+# imap.invalid is created without an IMAP server anywhere in the topology. That is enough
+# for the measurement of MAIL-04: the question is whether an impersonated request reaches
+# Mail's own controllers, and every answer that comes out of app code proves it was reached,
+# a 500 from a failed IMAP sync included; only an HTML login page or a redirect to /login
+# would disprove it.
+#
+# The IMAP password travels on the command line, which WR-06 forbids for every value that
+# carries authority. This one carries none: it belongs to an account on a host that does not
+# exist, the occ command takes it as a positional argument and has no stdin form, and it
+# never leaves this throwaway topology.
+ensure_mail_account() {
+  local uid="$1" name="$2" email="$3" password="$4" output
+  # `mail:account:export` exits 0 for a user without any account and prints nothing, so the
+  # output decides and not the exit code. Without this check a second run would create a
+  # second account for the same address.
+  if occ mail:account:export "$uid" 2>/dev/null | grep "${email}" >/dev/null; then
+    echo "mail account ${uid}: exists"
+    return 0
+  fi
+  # Same reason as in ensure_user: occ reports a refused value on stdout, and swallowing it
+  # would turn a rejected account into a silent exit 1.
+  if ! output="$(occ mail:account:create-imap "$uid" "$name" "$email" \
+    imap.invalid 143 none "$uid" "$password" \
+    smtp.invalid 25 none "$uid" "$password" password 2>&1)"; then
+    echo "ERROR: could not create the spike mail account for ${uid}:" >&2
+    echo "${output}" >&2
+    return 1
+  fi
+  echo "mail account ${uid}: created"
 }
 
 # Mandatory, not cosmetic: Nextcloud creates the default calendar and the default address
@@ -848,10 +885,21 @@ wait_for_install
 # Notes and Deck are optional apps; the tool plans of the later phases need both.
 ensure_app notes
 ensure_app deck
+# Tables is the tool family of this phase, Mail is the family the reachability spike of
+# MAIL-04 measures. Both are optional store apps, so both go through the same idempotent
+# install-or-enable step as the two above.
+ensure_app tables
+ensure_app mail
 
 # alice is the full test user, bob is the restricted one for the permission tests.
 ensure_user alice "${ALICE_PASSWORD}"
 ensure_user bob "${BOB_PASSWORD}"
+
+# The spike account of MAIL-04. It has to come after ensure_user and not next to the
+# ensure_app lines above: on a fresh topology alice does not exist yet at that point, and
+# `mail:account:create-imap` for an unknown user is an error, not a no-op. alice is the
+# account the connection file publishes as NC_MCP_TEST_USER.
+ensure_mail_account alice "Alice Spike" alice@example.test "${ALICE_IMAP_PASSWORD}"
 
 ensure_calendar alice personal
 ensure_addressbook alice contacts

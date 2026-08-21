@@ -158,6 +158,10 @@ wait_for_install
 # Notes and Deck are optional apps; the later tool plans need both.
 ensure_app notes
 ensure_app deck
+# Tables joins them in this phase. No mail app and no mail account here on purpose: the app
+# password layer this instance serves needs Tables only, and the mail reachability spike of
+# MAIL-04 runs against the HaRP topology of scripts/bootstrap_exapp.sh.
+ensure_app tables
 
 # alice is the full test user, bob is the restricted one for the permission tests.
 ensure_user alice "${ALICE_PASSWORD}"
