@@ -998,12 +998,32 @@ async def test_a_conversation_nobody_may_write_in_is_refused_before_the_post(
         "Bitte @here einmal lesen",
         'Bitte @"all" einmal lesen',
         "Abnahme morgen @all",
+        # One case per collective spelling the Nextcloud comment parser can answer with
+        # (``lib/private/Comments/Comment.php:216`` in server v34.0.0): quoted, which is the
+        # form that works, and unquoted, which is refused as a precaution the same way
+        # ``@here`` is.
+        'Bitte @"group/bauleitung" die Maße prüfen',
+        "Bitte @group/bauleitung die Maße prüfen",
+        'Bitte @"team/baulos-4" die Maße prüfen',
+        "Bitte @team/baulos-4 die Maße prüfen",
+        'Bitte @"federated_group/planung@cloud.example" lesen',
+        "Bitte @federated_group/planung@cloud.example lesen",
+        'Bitte @"federated_team/planung@cloud.example" lesen',
+        "Bitte @federated_team/planung@cloud.example lesen",
+        # Upper case on a prefix, because the pattern carries ``re.IGNORECASE`` and the
+        # server regex does too.
+        'Bitte @"GROUP/Bauleitung" die Maße prüfen',
     ],
 )
 async def test_a_collective_mention_is_refused_before_anything_is_read(
     clients: NcClients, text: str
 ) -> None:
-    """T11 and T-09-23: one tool call must not become a notification for everybody."""
+    """T11 and T-09-23: one tool call must not become a notification for a whole collective.
+
+    Every spelling of this list ends in one notification per member: ``@all`` covers every
+    participant of the conversation, and the four prefixed types are resolved to their members
+    in spreed v24.0.4 (``lib/Chat/Notifier.php:525`` for groups, ``:581`` for teams).
+    """
     with respx.mock(assert_all_called=False) as mock:
         mock_capabilities(mock)
         room_calls, chat_calls = talk_routes(mock)
@@ -1013,16 +1033,38 @@ async def test_a_collective_mention_is_refused_before_anything_is_read(
 
     assert len(room_calls.calls) == 0
     assert len(chat_calls.calls) == 0
-    assert "everybody" in excinfo.value.message
+    assert "everybody or a whole group" in excinfo.value.message
     assert "one by one" in excinfo.value.hint
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("name", ["@allan", "@allison", "@alle-vier", "@heretic"])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "@allan",
+        "@allison",
+        "@alle-vier",
+        "@heretic",
+        # The three prefixed types that address exactly one person, which is what this tool
+        # is for (``lib/Chat/Parser/UserMention.php:139-145`` lists all six prefixes).
+        '@"federated_user/alice@cloud.example"',
+        '@"guest/a1b2c3d4"',
+        '@"email/a1b2c3d4"',
+        # A quoted ordinary user id, the form Talk writes when the id carries a space.
+        '@"alice mueller"',
+        # The ``/`` is the boundary of the four prefixes, so a person whose id starts with
+        # one of those words stays a person.
+        "@grouping",
+        "@teamster",
+        '@"group"',
+        # And the bare words are ordinary text without an ``@`` in front of them.
+        "Die group und das team der",
+    ],
+)
 async def test_a_mention_of_a_real_person_is_not_a_collective_mention(
     clients: NcClients, name: str
 ) -> None:
-    """The word boundary is the point: a plain containment test eats legitimate mentions."""
+    """The two boundaries are the point: a plain containment test eats legitimate mentions."""
     with respx.mock(assert_all_called=True) as mock:
         mock_capabilities(mock)
         mock_rooms(mock)

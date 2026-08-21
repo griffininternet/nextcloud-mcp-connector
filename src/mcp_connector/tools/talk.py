@@ -106,11 +106,30 @@ _CONVERSATION_HINT = (
 #: ``messageParameters``, keyed by exactly this name.
 _PLACEHOLDER = re.compile(r"\{([a-z0-9_-]+)\}", re.IGNORECASE)
 
-#: The collective mentions this server refuses to send. The optional quote belongs to the
-#: pattern because Talk writes a mention that contains a space as ``@"user id"``, and the
-#: lookahead is the word boundary that keeps ``@allan`` and ``@allison`` sendable. Both words
-#: are refused for different reasons, which the docstring of :func:`send` spells out.
-_MENTION_ALL = re.compile(r"@\"?(all|here)\"?(?![\w-])", re.IGNORECASE)
+#: Every collective mention this server refuses to send, and the syntax comes out of the
+#: server rather than out of a guess. Nextcloud parses the mentions of a message in
+#: ``OC\Comments\Comment::getMentions`` (nextcloud/server v34.0.0,
+#: ``lib/private/Comments/Comment.php:216``), and the four collective types that regex can
+#: answer with are ``group``, ``federated_group``, ``team`` and ``federated_team``; spreed then
+#: turns each of them into a notification for every member (spreed v24.0.4,
+#: ``lib/Chat/Notifier.php:525`` and ``:581``, reached from ``notifyMentionedUsers`` via
+#: ``getMentionedGroupMembers`` and ``getMentionedTeamMembers``). ``guest/``, ``email/`` and
+#: ``federated_user/`` are deliberately not in here: each of those addresses exactly one
+#: person, which is what this tool is for.
+#:
+#: The quote is optional on both halves of the pattern. In the server regex the prefixed forms
+#: only work quoted, because its unquoted alternative has no ``/`` in the character class, and
+#: spreed skips the unquoted spelling as well (``lib/Chat/Parser/UserMention.php:138-145``).
+#: Refusing it anyway is the same precaution that refuses ``@here``: a version in which the
+#: other spelling works costs nothing here, and no legitimate address of one person is lost.
+#:
+#: Two boundaries keep real people sendable. The lookahead after the two words is what makes
+#: ``@allan`` and ``@allison`` mentions of somebody, and the ``/`` after the four prefixes does
+#: the same for ``@grouping`` and ``@teamster``.
+_MENTION_COLLECTIVE = re.compile(
+    r"@\"?(?:(?:all|here)\"?(?![\w-])|(?:federated_)?(?:group|team)/)",
+    re.IGNORECASE,
+)
 
 
 async def browse(
@@ -149,12 +168,17 @@ async def send(clients: NcClients, token: str, message: str) -> dict[str, Any]:
     The length comes from the instance (``config.chat.max-length``) with the number Talk 24
     ships as the fallback, so the limit is not maintained a second time here.
 
-    A collective mention is refused with a word boundary. ``@all`` is the one that works:
-    Talk turns it into a notification of every participant of the conversation, which makes
-    one tool call a message to everybody. ``@here`` is ordinary text in spreed 24 and is
-    refused as a precaution against a version in which it is not. The boundary matters,
-    because a plain containment test would refuse ``@allan`` and ``@allison`` as well, and
-    those are legitimate mentions of real people.
+    A collective mention is refused, and not only the two that mean everybody. ``@all`` is the
+    one that works everywhere: Talk turns it into a notification of every participant of the
+    conversation, which makes one tool call a message to everybody. ``@"group/<id>"``,
+    ``@"team/<id>"`` and their two federated spellings are the same amplifier one size smaller,
+    one notification per member of a whole group or team, so they are refused with it (threat
+    T-09-23; the six spellings and their source in spreed 24 and in the Nextcloud comment
+    parser stand at :data:`_MENTION_COLLECTIVE`). ``@here`` is ordinary text in spreed 24 and is
+    refused as a precaution against a version in which it is not. The two boundaries of that
+    pattern matter, because a plain containment test would refuse ``@allan``, ``@allison`` and
+    ``@grouping`` as well, and those are legitimate mentions of real people; so is
+    ``@"federated_user/alice@cloud.example"``, which addresses exactly one person and passes.
 
     A missing token is refused before that lookup, the same way :func:`browse` refuses one, so
     the cheapest mistake a caller can make costs no request at all. It also closes a second
@@ -197,14 +221,18 @@ async def send(clients: NcClients, token: str, message: str) -> dict[str, Any]:
             ),
             hint="Shorten the message, or split it into several messages and send them one by one.",
         )
-    if _MENTION_ALL.search(text):
+    if _MENTION_COLLECTIVE.search(text):
         raise ToolError(
-            message="A message that mentions everybody is not sent through this connector.",
+            message=(
+                "A message that mentions everybody or a whole group at once is not sent "
+                "through this connector."
+            ),
             hint=(
-                "Talk turns @all into a notification for every participant of the "
-                "conversation, and in many conversations only moderators may do that at all "
-                "(mention_permissions in talk_browse). Mention the people you mean one by one "
-                "instead."
+                'Talk turns @all, @"group/<id>" and @"team/<id>" into a notification for every '
+                "participant or member at once, and in many conversations only moderators may "
+                "do that at all (mention_permissions in talk_browse). Mention the people you "
+                "mean one by one instead; a mention of a single account, a guest or a federated "
+                "user is sent."
             ),
         )
 
