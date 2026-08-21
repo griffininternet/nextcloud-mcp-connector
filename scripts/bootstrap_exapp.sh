@@ -840,7 +840,7 @@ verify_image_digest() {
 # override a declared variable, while the json-info path hands the decoded object through
 # untouched (ExAppService::getAppInfo, verified in the running AppAPI 34.0.0). So the
 # already normalised shape is what a json-info registration has to carry, and `--env`
-# alone is accepted and silently dropped. appinfo/info.xml declares the same four
+# alone is accepted and silently dropped. appinfo/info.xml declares the same six
 # variables for the installation that registers from the manifest.
 EXCLUDED_HEADERS='["AUTHORIZATION-APP-API","EX-APP-ID","EX-APP-VERSION","AA-VERSION","X-ORIGIN-IP"]'
 json_info() {
