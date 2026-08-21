@@ -96,7 +96,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 09-01-PLAN.md: Talk-Client (v4-Räume, v1-Chat), 201 im OCS-Parser, 304 als leere Antwort, App-Erkennung spreed
+- [x] 09-01-PLAN.md: Talk-Client (v4-Räume, v1-Chat), 201 im OCS-Parser, 304 als leere Antwort, App-Erkennung spreed
 - [ ] 09-02-PLAN.md: Sechster Admin-Wert: Formular, Overlay-Lesepfad, Manifest-Variable und der Weg in den Tool-Lesepfad
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -198,7 +198,7 @@ Plans:
 | 6. Härtung, Eigennachweise und Conference-Reife | v1.1 | 11/11 | Complete | 2026-08-20 |
 | 7. Verwaltungs-Clients live verprobt | v1.1 | 0/0 | Deferred (extern getaktet) | - |
 | 8. Erreichbarkeits-Spike und Tables | v1.2 | 5/5 | Complete    | 2026-08-21 |
-| 9. Talk | v1.2 | 0/? | Not started | - |
+| 9. Talk | v1.2 | 1/5 | In Progress | - |
 | 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 0/? | Not started | - |
 | 11. Bündelung, Budget und Release 0.1.4 | v1.2 | 0/? | Not started | - |
 

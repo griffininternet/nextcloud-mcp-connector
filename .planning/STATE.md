@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Kuratierte Breite
 status: executing
-stopped_at: Completed 08-04-PLAN.md
-last_updated: "2026-08-21T10:53:33.720Z"
-last_activity: 2026-08-21 -- Phase 9 planning complete
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-08-21T11:11:36.972Z"
+last_activity: 2026-08-21 -- Plan 09-01 abgeschlossen (Talk-Client, 201, spreed)
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 10
-  completed_plans: 5
+  completed_plans: 6
   percent: 25
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Current focus:** Phase 9 — talk
+**Current focus:** Phase 9 — Talk
 
 ## Current Position
 
-Phase: 9
-Plan: Not started
+Phase: 9 (Talk) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-08-21 -- Phase 9 planning complete
+Last activity: 2026-08-21 -- Plan 09-01 abgeschlossen (Talk-Client, 201, spreed)
 
 ## Performance Metrics
 
@@ -120,6 +120,7 @@ Last activity: 2026-08-21 -- Phase 9 planning complete
 | Phase 08 P03 | 12 min | 3 tasks | 3 files |
 | Phase 08 P04 | 18 min | 3 tasks | 14 files |
 | Phase 08 P05 | 24 min | 2 tasks tasks | 5 files files |
+| Phase 09-talk P01 | 20 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -413,6 +414,13 @@ Recent decisions affecting current work:
 - [Phase 08]: Annahme A2 ist gemessen statt angenommen: Auswahl-Label und ISO-Datum gehen ohne clientseitige Umformung durch (ein Create mit allen vier Werten, Antwort 200); ungemessen bleiben usergroup, relation und die datetime-Untertypen
 - [Phase 08]: Eine Tables-Textspalte ohne subtype macht jeden Zugriff auf die ganze Tabelle zu einem 500 (ColumnsHelper loest die Business-Klasse aus type plus subtype auf, TextBusiness existiert nicht); das Testgeruest legt Textspalten immer mit subtype line an
 - [Phase 08]: Der Zwei-Konten-Beweis fuer Tables laeuft auf der Impersonation-Naht mit zwei Credential-Objekten im Modus appapi; Nextcloud beantwortet den Zugriff auf eine fremde Tabelle mit 404 und leerem Koerper statt mit 403 und gibt ihre Existenz damit nicht preis
+- [Phase 09-talk]: get_messages gibt tuple[list[dict], int | None] zurück: Nachrichten plus Fortsetzung aus dem Antwort-Header X-Chat-Last-Given; ein fehlender oder nicht numerischer Header ergibt None, also kein Angebot einer nächsten Seite
+- [Phase 09-talk]: Die 304 des leeren Verlaufs wird im Talk-Client vor parse_ocs abgefangen; _check_transport bleibt unverändert, weil 304 nur an dieser einen Route eine Bedeutung hat
+- [Phase 09-talk]: _OK_STATUS trägt 201, weil OCS v2 den rohen Status in ocs.meta.statuscode schreibt und die Talk-Sende-Route 201 als einzigen Erfolg dokumentiert
+- [Phase 09-talk]: Die spreed-Sektion gilt nur als vorhanden, wenn sie nicht leer ist: ein für den Nutzer abgeschaltetes Talk antwortet mit einem leeren Array
+- [Phase 09-talk]: spreed_chat_max_length liest config.chat.max-length, DEFAULT_CHAT_MAX_LENGTH 32000 als Rückfall; die Zahl gehört der Instanz
+- [Phase 09-talk]: TALK-01 bis TALK-03 bleiben Pending: dieser Plan liefert den Transport, die Anforderungen sprechen von talk_browse und talk_send und sind erst mit Plan 09-02 und 09-03 wahr
+- [Phase 09-talk]: Drei Namen des Talk-Transports und zwei Capabilities-Felder stehen vorübergehend in vulture_whitelist.py, nach dem Vorbild von Plan 08-02; sie verlassen die Liste mit Plan 09-02
 
 ### Pending Todos
 
@@ -447,7 +455,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-21T08:42:35.585Z
+Last session: 2026-08-21T11:11:19.017Z
 Stopped at: Completed 08-04-PLAN.md
 Naechster Schritt: /gsd:plan-phase 8
 Resume file: None
