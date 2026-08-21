@@ -51,18 +51,20 @@ findings:
   total: 9
 status: resolved
 fixed_at: 2026-08-21T15:52:00Z
-fixed: 5
-deferred: 4
+owner_decision: 2026-08-21
+deferred_resolved_at: 2026-08-21T18:40:00Z
+fixed: 9
+deferred: 0
 resolution:
   WR-01: fixed 9d67b36
   WR-02: fixed 4e5eded
   WR-03: fixed 422c1a7
   IN-01: fixed 7ca35fc
-  IN-02: deferred
-  IN-03: deferred
-  IN-04: deferred
+  IN-02: fixed 697f2b1
+  IN-03: fixed 1bad377
+  IN-04: fixed 27954c4
   IN-05: fixed 31fbe9c
-  IN-06: deferred
+  IN-06: fixed 5311fcb
 ---
 
 # Phase 9: Code-Review-Bericht
@@ -76,7 +78,7 @@ resolution:
 
 Geprüft wurde die neue Talk-Familie (Client `nextcloud/clients/talk.py`, Tools `tools/talk.py`, Registrierung `server/reg_talk.py`), die OCS-Erweiterungen (201 im Erfolgs-Set, 304-Sonderfall), der Admin-Schalter `NC_MCP_TALK_SEND` über alle drei Schichten (config, config_values, admin_settings, entry_exapp), die Bootstrap-Skripte, die Gates und die Doku.
 
-Der Sicherheitskern hält der Prüfung stand: der Send-Pfad liest den Admin-Schalter vor jedem Netzwerkzugriff, ein erfundenes Token erreicht Nextcloud nie in einem Pfad (Listen-Lookup statt Einzelroute), das Token-Muster wird vor dem Pfadbau erzwungen, `@all`/`@here` werden mit Wortgrenze abgewiesen, fremder Text läuft durch `marks.without_marks`, der Byte-Cut schneidet auf Zeichengrenze, es gibt keinen Retry auf dem Send, und die destruktiven Routen sind durch zehn Talk-Nadeln mit Gegenproben verriegelt. Die Precedence-Kette des Schalters (Admin-Wert, Deploy-Variable, Code-Default) ist konsistent und per Test gehalten; der Rückschrieb in `os.environ` ist auf genau einen Schlüssel begrenzt und durch `test_the_entry_point_writes_exactly_one_key_into_the_process_environment` fixiert.
+Der Sicherheitskern hält der Prüfung stand: der Send-Pfad liest den Admin-Schalter vor jedem Netzwerkzugriff, ein erfundenes Token erreicht Nextcloud nie in einem Pfad (Listen-Lookup statt Einzelroute), das Token-Muster wird vor dem Pfadbau erzwungen, `@all`/`@here` werden mit Wortgrenze abgewiesen (seit dem Fix zu IN-02 zusammen mit allen vier kollektiven Präfixformen), fremder Text läuft durch `marks.without_marks`, der Byte-Cut schneidet auf Zeichengrenze, es gibt keinen Retry auf dem Send, und die destruktiven Routen sind durch zehn Talk-Nadeln mit Gegenproben verriegelt. Die Precedence-Kette des Schalters (Admin-Wert, Deploy-Variable, Code-Default) ist konsistent und per Test gehalten; der Rückschrieb in `os.environ` ist auf genau einen Schlüssel begrenzt und durch `test_the_entry_point_writes_exactly_one_key_into_the_process_environment` fixiert.
 
 Was nicht mitgezogen wurde, ist die Dokumentation: drei Stellen widersprechen dem 20-Tool-Stand bzw. lassen die neue Familie und ihren Admin-Schalter aus. Das sind die drei Warnings. Kein Blocker.
 
@@ -126,21 +128,37 @@ Gegengeprüft: kein "seven tools" / "sieben Tools" / "sept outils" mehr übrig, 
 **File:** `src/mcp_connector/tools/talk.py:113,195-204`
 **Issue:** `_MENTION_ALL` weist nur `@all` und `@here` ab. Talk kennt auch `@"group/<id>"` und `@"team/<id>"`, die eine ganze Gruppe benachrichtigen; ein Tool-Aufruf kann damit weiterhin viele Menschen auf einmal anpingen (dieselbe Risikoklasse wie T-09-23, nur enger gefasst). Das ist möglicherweise eine bewusste Grenze, sie ist aber nirgends als solche dokumentiert.
 **Fix:** Entweder das Muster um `@\"?(group|team)/` erweitern oder die bewusste Grenze im Docstring von `send` und im Threat-Kommentar festhalten.
-**Resolution:** ZURÜCKGESTELLT. Keine der beiden Varianten ist risikofrei: eine Musteränderung verschiebt eine Sicherheitsgrenze und braucht eigene Positiv- und Negativtests gegen echte Talk-Mention-Syntax (auch die Form ohne Anführungszeichen), und die Doku-Variante ist eine bewusste Produktentscheidung darüber, wie weit der Kollektiv-Mention-Schutz reichen soll. Beides gehört in eine eigene Aufgabe mit Owner-Entscheid, nicht in einen Review-Fix.
+**Resolution:** BEHOBEN in `697f2b1` (Owner-Entscheid 21.08.2026: "dicht machen", also die Musteränderung und nicht die Doku-Variante). Zuvor war ZURÜCKGESTELLT, weil eine Musteränderung eine Sicherheitsgrenze verschiebt und eigene Positiv- und Negativtests gegen echte Talk-Mention-Syntax braucht.
+
+`_MENTION_ALL` heisst jetzt `_MENTION_COLLECTIVE` und lehnt neben `@all` und `@here` alle vier kollektiven Erwähnungstypen ab, je mit und ohne Anführungszeichen: `group`, `federated_group`, `team`, `federated_team`. Die Syntax ist am Quellcode belegt und nicht geraten:
+
+- nextcloud/server v34.0.0, `lib/private/Comments/Comment.php:216`: `OC\Comments\Comment::getMentions` mit der Regex, die genau sieben Präfixe kennt (`guest`, `email`, `federated_group`, `group`, `federated_team`, `team`, `federated_user`). Die unquotierte Alternative der Regex enthält kein `/` in ihrer Zeichenklasse, die Präfixformen wirken also nur als `@"group/<id>"`.
+- spreed v24.0.4, `lib/Chat/Notifier.php:525` und `:581`: `getMentionedGroupMembers` und `getMentionedTeamMembers`, aufgerufen aus `notifyMentionedUsers` (Z. 122-125). Jedes Mitglied einer Gruppe bzw. eines Teams bekommt eine eigene Benachrichtigung, das ist derselbe Verstärker wie `@all`, nur eine Nummer kleiner.
+- spreed v24.0.4, `lib/Chat/Parser/UserMention.php:138-145`: spreed ersetzt die unquotierte Schreibweise der Präfixformen ausdrücklich nicht. Sie wird hier trotzdem abgelehnt, aus derselben Vorsicht, aus der `@here` schon vorher abgelehnt wurde, und der Preis ist null: keine Adresse einer einzelnen Person geht dabei verloren.
+
+Bewusst nicht abgelehnt: `guest/`, `email/` und `federated_user/`. Jede dieser drei Formen adressiert genau eine Person. Beide Wortgrenzen bleiben: die Lookahead-Grenze hinter `all`/`here` und der Schrägstrich hinter den vier Präfixen. Tests: 14 Ablehnungsfälle (je Schreibweise quotiert und unquotiert, dazu ein Großschreibungsfall) und zwölf Negativfälle, darunter `@allan`, `@"alice mueller"`, `@"federated_user/alice@cloud.example"`, `@"guest/..."`, `@"email/..."`, `@grouping`, `@teamster`, `@"group"` ohne Schrägstrich sowie `group` und `team` als normale Wörter im Text. Fehlersatz und Hinweis nennen jetzt beide Klassen und den nächsten Schritt. Threat-Hinweis T-09-23 in `09-SECURITY.md` nachgezogen, Restrisiko R-1 geschlossen.
 
 ### IN-03: check_tool_budget misst pro Tool Zeichen, insgesamt Bytes
 
 **File:** `scripts/check_tool_budget.py:54-63`
 **Issue:** Das Gesamtbudget wird auf `len(blob.encode("utf-8"))` gemessen, das Pro-Tool-Limit auf `len(json.dumps(tool, ..., ensure_ascii=False))`, also Zeichen. Ein Tool mit vielen Nicht-ASCII-Zeichen wird pro Tool unterzählt; die beiden Grenzen messen nicht dieselbe Einheit.
 **Fix:** Auch pro Tool `.encode("utf-8")` zählen.
-**Resolution:** ZURÜCKGESTELLT. Die Änderung ist klein, verschiebt aber eine Budget-Grenze: pro Tool würde ab dann mehr gezählt, und `check_tool_budget.py` ist ein Gate, das im Zweifel den Push blockiert. Das gehört mit einem Messlauf gegen das aktuelle Pro-Tool-Limit zusammen entschieden, nicht blind mitgenommen. Der Lauf steht bei 14312 von 15000 Bytes gesamt, es ist also kein akuter Druck.
+**Resolution:** BEHOBEN in `1bad377` (Owner-Entscheid 21.08.2026: "auf Bytes umstellen"). Zuvor war ZURÜCKGESTELLT, weil die Änderung eine Budget-Grenze verschiebt und `check_tool_budget.py` ein Gate ist, das im Zweifel den Push blockiert; der Messlauf gehörte dazu.
+
+Beide Grenzen zählen jetzt die UTF-8-Kodierung. Die Ausgabezeile sagte schon vorher "bytes" und war bei der Pro-Werkzeug-Zeile damit falsch beschriftet, das ist mit erledigt. Messlauf direkt nach der Umstellung, Exit-Code 0: `tools/list: 14312 bytes, 20 tools, budget 15000`, größtes Werkzeug `calendar_create_event` bei 1351 Bytes. Kein Werkzeug liegt über 1400, der Deckel wurde also **nicht** angehoben. Die Zahlen sind identisch zum Lauf vor der Umstellung, weil jede Beschreibung dieser Oberfläche heute ASCII ist; genau das ist der Punkt der Änderung, die beiden Einheiten stimmen weiter überein, sobald eine davon kein ASCII mehr ist (Gegenprobe der Einheit: ein Objekt mit "Maße prüfen" ist 40 Zeichen und 42 Bytes). Messzeile und Begründung stehen als Kommentar über `MAX_TOOL_BYTES`, wie es die Regel dieses Gates für jede Zahländerung verlangt. Restrisiko R-2 in `09-SECURITY.md` geschlossen.
 
 ### IN-04: Cursor auf level=conversations wird stillschweigend ignoriert
 
 **File:** `src/mcp_connector/tools/talk.py:116-136`
 **Issue:** `browse` liest den `cursor`-Parameter nur im Messages-Zweig. Ein Modell, das auf der Konversationsebene ein Cursor-Handle übergibt (etwa eines aus einer Messages-Antwort), erhält kommentarlos wieder dieselbe erste Seite. Die Entscheidung "kein Cursor auf dieser Ebene" ist dokumentiert, ein übergebener Cursor wird aber weder abgelehnt noch benannt.
 **Fix:** Auf der Konversationsebene einen nicht-leeren Cursor mit einem Satz abweisen ("Die Konversationsliste hat keine Seiten; truncated plus total nennen den Schnitt").
-**Resolution:** ZURÜCKGESTELLT. Eine neue Ablehnung im Lesepfad ist eine Verhaltensänderung an einer öffentlichen Tool-Signatur: ein Modell, das heute einen Cursor mitschickt und eine Antwort bekommt, bekäme dann einen Fehler. Das ist eine Design-Entscheidung (abweisen oder benennen und ignorieren) und braucht eigene Tests für beide Ebenen.
+**Resolution:** BEHOBEN in `27954c4` (Owner-Entscheid 21.08.2026: "ablehnen mit Hinweis"). Zuvor war ZURÜCKGESTELLT, weil eine neue Ablehnung im Lesepfad eine Verhaltensänderung an einer öffentlichen Tool-Signatur ist und die Wahl zwischen Abweisen und Ignorieren eine Design-Entscheidung war.
+
+Umgesetzt auf allen drei betroffenen Ebenen, nicht nur auf der aus dem Befund: `tables_browse(level=tables)`, `tables_browse(level=columns)` und `talk_browse(level=conversations)`. Ein nicht-leerer `cursor` wird dort mit `ToolError(message=..., hint=...)` abgelehnt, und zwar **vor jedem HTTP-Aufruf**, also auch vor dem Capabilities-Request. Der Satz nennt die Ebene ("level=... has no next page, so a cursor cannot be applied here."), der Hinweis nennt die Ebene, die einen Cursor ausgibt, und dass die Antwort ihren Schnitt mit `truncated` benennt. Leer und nur Leerzeichen gelten weiter als "kein Handle", weil die Registrierungsschicht einen leeren String schickt.
+
+Die Kommentare, die das Ignorieren begründet haben, sind ersetzt: `_conversations` sagt jetzt, dass ein Handle in `browse` abgelehnt und nicht still verworfen wird, und beide `browse`-Docstrings nennen die Ablehnung samt Grund. Die `cursor`-Beschreibung beider Werkzeuge nennt jetzt die Ebene, die einen Cursor ausgibt: das ist die Stelle, an der ein Modell es liest, bevor es einen Fehler kassiert. Preis 46 Bytes, neue Messzeile in `scripts/check_tool_budget.py`: `tools/list: 14358 bytes, 20 tools, budget 15000`, `talk_browse` bei 886 Bytes, größtes Werkzeug unverändert 1351 Bytes. Gesamtbudget 15000 und Pro-Werkzeug-Deckel 1400 bleiben unverändert, 642 Bytes Luft.
+
+Tests: je Ebene ein Ablehnungsfall mit null Aufrufen auf Capabilities und auf allen betroffenen API-Generationen (Tables parametrisiert über `tables` und `columns`), dazu je ein Positivfall über `""`, `"   "` und `None`. Kein bestehender Test behauptete das Ignorieren, es war nur nicht geprüft; die Contract-Tests bleiben ohne Aufweichung grün. Restrisiko R-3 in `09-SECURITY.md` zur Hälfte geschlossen (zweite Hälfte über IN-06).
 
 ### IN-05: Veralteter Kommentar "declares the same four variables" im Bootstrap
 
@@ -154,13 +172,23 @@ Gegengeprüft: kein "seven tools" / "sieben Tools" / "sept outils" mehr übrig, 
 **File:** `src/mcp_connector/tools/talk.py:186-194`
 **Issue:** Die Vorprüfung vergleicht `len(text)` (Python-Zeichen) mit `config.chat.max-length`. Talk 24 prüft die Länge serverseitig (PHP), je nach Implementierung in Bytes bzw. mit anderer Zählung; eine umlautreiche Nachricht knapp unter der Zeichen-Grenze kann die Vorprüfung passieren und trotzdem Talks eigene 400 kassieren. Der Fall ist abgefangen (400 wird mit Talks eigener Meldung durchgereicht, Test vorhanden), aber der Docstring-Anspruch "the limit is not maintained a second time here" ist nur näherungsweise wahr.
 **Fix:** Einen Satz im Docstring ergänzen, dass die Vorprüfung eine Näherung ist und Talks eigene Ablehnung der Rückhalt bleibt; keine Codeänderung nötig.
-**Resolution:** ZURÜCKGESTELLT. Rein redaktionell und ohne Risiko, aber der Satz sollte sagen, *wie* Talk 24 tatsächlich zählt, und das ist im Review als "je nach Implementierung" offen geblieben. Ein Docstring, der eine Näherung durch eine zweite Vermutung erklärt, ist keine Verbesserung. Der Fall ist ohnehin abgefangen (400 wird mit Talks eigener Meldung durchgereicht, Test vorhanden); nachzuziehen, sobald die serverseitige Zählung einmal belegt ist.
+**Resolution:** BEHOBEN in `5311fcb` (Owner-Entscheid 21.08.2026: "nachmessen und angleichen"). Zuvor war ZURÜCKGESTELLT, weil der Docstring-Satz sagen sollte, *wie* Talk 24 zählt, und der Review das als "je nach Implementierung" offen gelassen hatte. Genau das ist jetzt nachgemessen, also wurde daraus eine Code- und keine Doku-Änderung.
+
+Nachgemessen im Quellcode, drei Glieder, jedes mit Fundstelle:
+
+- spreed v24.0.4, `lib/Controller/ChatController.php:416`: `ChatController::sendMessage` gibt den Text weiter und prüft die Länge nicht selbst; er fängt nur `MessageTooLongException` (Z. 448) und antwortet damit **413**, nicht 400.
+- spreed v24.0.4, `lib/Chat/ChatManager.php:407`: `$comment->setMessage($message, self::MAX_CHAT_LENGTH)`, Konstante `MAX_CHAT_LENGTH = 32000` in Z. 72.
+- nextcloud/server v34.0.0, `lib/private/Comments/Comment.php:186-189`: die eigentliche Prüfung, `$message = trim($message);` und danach `if ($maxLength && mb_strlen($message, 'UTF-8') > $maxLength)`.
+
+Befund: der Server zählt **Zeichen und keine Bytes**, und `mb_strlen` auf UTF-8 zählt Code-Points genau wie Pythons `len`. Die Einheit stimmte also schon, die Vermutung des Reviews ("womöglich in Bytes") war falsch. Der echte Unterschied war das `trim` eine Zeile über dem Vergleich: ein Text auf der Grenze mit einem Zeilenumbruch am Ende wurde hier abgelehnt, obwohl Nextcloud ihn genommen hätte. Die Vorprüfung strippt jetzt zuerst `_PHP_TRIM` (die Standardliste von PHPs `trim`, nicht Pythons breitere Unicode-Liste) und zählt danach die Code-Points, also die zwei Zeilen des Servers in derselben Reihenfolge. Der Docstring nennt Datei und Zeile aller drei Glieder statt einer Näherung.
+
+Tests, der Grenzfall in beide Richtungen: 120 Umlaute plus Zeilenumbruch und zwei Leerzeichen bei einem Limit von 120 sind 243 Bytes, 123 Zeichen ungetrimmt und 120 Zeichen so wie der Server zählt; nur die dritte Lesart sendet, und der Text geht unverändert hinaus (der Server trimmt selbst). Ein Zeichen mehr wird mit "121 characters" abgelehnt, bei null Aufrufen auf beiden Talk-Routen. Restrisiko R-3 in `09-SECURITY.md` damit vollständig geschlossen.
 
 ---
 
 ## Fix-Lauf
 
-Behoben: 5 von 9 (alle drei Warnings, dazu IN-01 und IN-05). Zurückgestellt: IN-02, IN-03, IN-04, IN-06.
+Behoben: 9 von 9. Zurückgestellt: keine.
 
 | Finding | Ergebnis | Commit |
 |---------|----------|--------|
@@ -168,15 +196,25 @@ Behoben: 5 von 9 (alle drei Warnings, dazu IN-01 und IN-05). Zurückgestellt: IN
 | WR-02 | behoben | `4e5eded` |
 | WR-03 | behoben | `422c1a7` |
 | IN-01 | behoben | `7ca35fc` |
-| IN-02 | zurückgestellt | |
-| IN-03 | zurückgestellt | |
-| IN-04 | zurückgestellt | |
+| IN-02 | behoben | `697f2b1` |
+| IN-03 | behoben | `1bad377` |
+| IN-04 | behoben | `27954c4` |
 | IN-05 | behoben | `31fbe9c` |
-| IN-06 | zurückgestellt | |
+| IN-06 | behoben | `5311fcb` |
 
-Vier der sechs Infos sind zurückgestellt, weil sie keine reinen Doku-Korrekturen sind: IN-02 und IN-04 verschieben Grenzen einer öffentlichen Tool-Signatur, IN-03 verschiebt eine Gate-Grenze, und IN-06 bräuchte einen Befund zu Talks serverseitiger Zählung, den dieser Review offengelassen hat. Die Begründung steht bei jedem Finding.
+### Erster Lauf, 21.08.2026 15:52
 
-Gates nach dem letzten Code-Fix, alle grün: `uv run python -m pytest -q` (2437 passed, 119 deselected), `ruff check .`, `ruff format --check .` (187 Dateien), `pyright` (0 errors), `vulture src scripts vulture_whitelist.py`, `scripts/check_tool_budget.py` (14312 von 15000 Bytes, 20 Tools).
+Behoben: 5 von 9 (alle drei Warnings, dazu IN-01 und IN-05). Zurückgestellt: IN-02, IN-03, IN-04, IN-06. Vier der sechs Infos waren zurückgestellt, weil sie keine reinen Doku-Korrekturen sind: IN-02 und IN-04 verschieben Grenzen einer öffentlichen Tool-Signatur, IN-03 verschiebt eine Gate-Grenze, und IN-06 bräuchte einen Befund zu Talks serverseitiger Zählung, den der Review offengelassen hat. Die Begründung steht bei jedem Finding.
+
+Gates nach dem letzten Code-Fix dieses Laufs, alle grün: `uv run python -m pytest -q` (2437 passed, 119 deselected), `ruff check .`, `ruff format --check .` (187 Dateien), `pyright` (0 errors), `vulture src scripts vulture_whitelist.py`, `scripts/check_tool_budget.py` (14312 von 15000 Bytes, 20 Tools).
+
+### Zweiter Lauf, 21.08.2026 18:40, nach Owner-Entscheid
+
+Der Owner hat die vier zurückgestellten Findings am 21.08.2026 entschieden, jeweils die Empfehlung: IN-02 dicht machen, IN-03 auf Bytes umstellen, IN-04 ablehnen mit Hinweis, IN-06 nachmessen und angleichen. Alle vier sind damit behoben, je ein atomarer Commit. Zwei davon haben eine Vermutung des Reviews korrigiert: die unquotierte Präfixform der Erwähnungen wirkt in spreed 24 gar nicht (sie wird trotzdem abgelehnt, als Vorsicht), und Talk zählt die Nachrichtenlänge nicht in Bytes, sondern in Zeichen nach einem `trim`.
+
+Gates nach dem letzten Code-Fix, alle grün: `uv run python -m pytest -q` (2465 passed, 119 deselected), `ruff check .`, `ruff format --check .` (187 Dateien), `pyright` (0 errors), `vulture src scripts vulture_whitelist.py`, `scripts/check_tool_budget.py` (14358 von 15000 Bytes, 20 Tools, größtes 1351 Bytes).
+
+Integrationstests gegen die laufende Docker-Topologie, weil Tool-Code geändert wurde: `uv run python -m pytest tests/integration/test_talk_roundtrip.py tests/integration/test_tables_roundtrip.py -m integration` ergibt **14 passed**. Ohne geladene `.env.test` überspringen dieselben Tests mit dem Grund "NC_MCP_URL is not set", der Lauf ist also nachweislich gegen eine echte Nextcloud gegangen und nicht durchgerutscht.
 
 ---
 
@@ -185,3 +223,4 @@ _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
 _Fixed: 2026-08-21T15:52:00Z_
 _Fixer: Claude (gsd-code-fixer)_
+_Zurückgestellte Findings nachgezogen: 2026-08-21T18:40:00Z, nach Owner-Entscheid vom 21.08.2026_
