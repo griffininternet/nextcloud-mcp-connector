@@ -220,6 +220,21 @@ def _check_transport(response: httpx.Response, what: str) -> None:
             message=f"Nextcloud reported a server error ({status}) while reading {what}.",
             hint="This is a problem on the Nextcloud side. Retry later or check its log.",
         )
+    if status >= 400 and not _looks_like_json(response):
+        # A 4xx whose body is not JSON is explained by its status and by nothing else.
+        # Measured against Tables 2.2.2: an unknown table id answers 404 with an empty body
+        # and ``Content-Type: text/html``, and the HTML branch of :func:`_json_payload`
+        # would call that the login page and send the model to check its app password. That
+        # is the wrong next step for the most common mistake of all, a guessed id.
+        raise _status_error(status, "", what)
+
+
+def _looks_like_json(response: httpx.Response) -> bool:
+    """Whether this body can still carry the app's own wording of the failure."""
+    if "json" in response.headers.get("content-type", "").lower():
+        return True
+    body = response.text.lstrip()
+    return body.startswith(("{", "["))
 
 
 def _json_payload(response: httpx.Response, what: str) -> Any:

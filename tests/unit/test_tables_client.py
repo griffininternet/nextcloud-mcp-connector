@@ -218,6 +218,30 @@ async def test_a_403_on_the_rows_route_becomes_a_sentence_with_a_next_step(
 
 
 @pytest.mark.anyio
+async def test_an_unknown_table_names_the_id_and_not_the_app_password(
+    client: httpx.AsyncClient, creds: Credentials
+) -> None:
+    """The shape a live instance really answers with, measured against Tables 2.2.2.
+
+    An unknown table id does not produce an OCS envelope: the answer is a bare 404 with an
+    empty body and ``Content-Type: text/html``. Read literally that is an HTML page, and the
+    HTML branch used to call it the login page and tell the model to check its app password.
+    The status is the only thing that explains this answer, and a guessed id is the most
+    likely reason a tool ever sees it.
+    """
+    with respx.mock(assert_all_called=True) as mock:
+        mock.get(TABLE_URL).mock(
+            return_value=httpx.Response(404, headers={"content-type": "text/html"}, text="")
+        )
+        with pytest.raises(ToolError) as excinfo:
+            await tables_client.get_table(client, creds, 7)
+
+    assert "did not find" in excinfo.value.message
+    assert "7" in excinfo.value.message
+    assert "app password" not in excinfo.value.hint, "a 404 is not a credential problem"
+
+
+@pytest.mark.anyio
 async def test_a_table_with_no_rows_is_no_data_and_not_an_error(
     client: httpx.AsyncClient, creds: Credentials
 ) -> None:
