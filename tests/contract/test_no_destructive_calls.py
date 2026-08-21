@@ -47,6 +47,20 @@ SRC = Path(__file__).resolve().parents[2] / "src" / "mcp_connector"
 # routes in exactly that spelling, so the gap was not hypothetical (WR-05). Anchoring on the
 # segment costs two exemptions instead, for the two reads the family exists for, and those
 # are named as exact literals below.
+#
+# The ten Talk entries after them are the same kind of needle for a family that needs it more
+# than any other, and the reason is a verb that is missing from this list: **PUT** is not
+# forbidden in this project, because ``files_upload`` is a PUT. A route that edits a message
+# therefore falls through every verb needle there is, and a route that hands a message to the
+# app for later delivery ("/schedule") would even walk past the administrative send switch of
+# TALK-04, because the app, not this server, would do the sending. So this family is secured
+# from both sides: the ten segments below, each with its own counter proof in
+# :data:`TALK_ROUTES`, and :data:`ALLOWED_TALK_ROUTES` as the positive statement about the
+# exactly three path forms the Talk client really builds.
+#
+# ``/share`` already stands above and needs no second entry: the attachment route of Talk is
+# ``chat/{token}/share``, so the Tables needle covers it. An eleventh needle beside it would
+# only look like more security.
 FORBIDDEN: dict[str, str] = {
     "DELETE": "no tool may delete anything",
     "MOVE": "no tool may move or rename anything",
@@ -59,7 +73,19 @@ FORBIDDEN: dict[str, str] = {
     "/columns/": "no tool may create, change or delete a Tables column",
     "/scheme": "no tool may import or export a table scheme",
     "/transfer": "no tool may hand a table to another owner",
-    "/share": "no tool may create or change a Tables share",
+    "/share": "no tool may create or change a Tables share, and it is the attachment route "
+    "of Talk as well",
+    "/schedule": "no tool may hand a message to the app for later delivery: the app would "
+    "send it, which walks around the administrative switch of TALK-04",
+    "/summarize": "no tool may send chat content to an AI provider of the instance",
+    "/reminder": "no tool may set or drop a reminder on somebody's message",
+    "/pin": "no tool may pin or unpin a message in a conversation",
+    "/attachment": "no tool may place a file in a conversation",
+    "/read": "no tool may move the read marker of this account or reset it to unread",
+    "/favorite": "no tool may mark a conversation as a favourite or take the mark away",
+    "/notify": "no tool may push a notification into somebody's conversation",
+    "/participants": "no tool may add, remove or re-rank a participant",
+    "/archive": "no tool may put a conversation aside or take it back out",
 }
 
 #: The five needles above that name a Tables route, with a line that would carry them into
@@ -74,6 +100,34 @@ TABLES_ROUTES: dict[str, str] = {
     "/transfer": '    url = ocs.ocs_url(creds, f"{V2_PREFIX}/tables/{table}/transfer")',
     "/share": '    url = ocs.ocs_url(creds, f"{V2_PREFIX}/{NODE_COLLECTION_TABLES}/{t}/share")',
 }
+
+#: The ten needles above that name a Talk route, with a line that would carry them into the
+#: code. Same job as :data:`TABLES_ROUTES` one family earlier: a needle nobody ever hit is
+#: indistinguishable from no needle at all, so every one of them gets the line it has to
+#: report, written in the f-string spelling this project uses for a path.
+TALK_ROUTES: dict[str, str] = {
+    "/schedule": '    await ocs.ocs_post(client, creds, f"{CHAT_PREFIX}/{room}/schedule", b)',
+    "/summarize": '    await ocs.ocs_post(client, creds, f"{CHAT_PREFIX}/{room}/summarize", b)',
+    "/reminder": '    await ocs.ocs_post(client, creds, f"{CHAT_PREFIX}/{room}/{m}/reminder", b)',
+    "/pin": '    await ocs.ocs_post(client, creds, f"{CHAT_PREFIX}/{room}/{m}/pin", b)',
+    "/attachment": '    url = ocs.ocs_url(creds, f"{CHAT_PREFIX}/{room}/{m}/attachment")',
+    "/read": '    await ocs.ocs_post(client, creds, f"{CHAT_PREFIX}/{room}/read", b)',
+    "/favorite": '    await ocs.ocs_post(client, creds, f"{ROOM_PREFIX}/{room}/favorite", b)',
+    "/notify": '    await ocs.ocs_post(client, creds, f"{CHAT_PREFIX}/{room}/notify", b)',
+    "/participants": '    url = ocs.ocs_url(creds, f"{ROOM_PREFIX}/{room}/participants")',
+    "/archive": '    await ocs.ocs_post(client, creds, f"{ROOM_PREFIX}/{room}/archive", b)',
+}
+
+#: The three forms :mod:`mcp_connector.nextcloud.clients.talk` really builds: the conversation
+#: list, one window of history, and the one send. This tuple is the half of the proof the
+#: needles cannot deliver, because PUT is not a forbidden verb here (see the block above
+#: :data:`FORBIDDEN`): the family says out loud which path forms exist instead of only saying
+#: which ones must not.
+ALLOWED_TALK_ROUTES = (
+    '    await ocs.ocs_get(client, creds, ROOM_PREFIX, params={"noStatusUpdate": 1}),',
+    '    await ocs.ocs_get(client, creds, f"{CHAT_PREFIX}/{conversation}", params=params),',
+    '    await ocs.ocs_post(client, creds, f"{CHAT_PREFIX}/{conversation}", {"message": t}),',
+)
 
 #: The three forms :mod:`mcp_connector.nextcloud.clients.tables` really builds. They are the
 #: reason the needles are shaped the way they are, so they are asserted, not assumed.
@@ -346,6 +400,52 @@ def test_the_three_routes_the_tables_client_really_builds_stay_allowed() -> None
     """
     for line in ALLOWED_TABLES_ROUTES:
         assert _violations("nextcloud/clients/tables.py", [(1, line)]) == [], (
+            f"the gate must not report the allowed route: {line.strip()}"
+        )
+
+
+@pytest.mark.parametrize(("needle", "line"), sorted(TALK_ROUTES.items()))
+def test_each_talk_needle_trips_on_its_route_and_leaves_the_real_module_alone(
+    needle: str, line: str
+) -> None:
+    """Counter proof per Talk needle: it hits the route, and it misses today's code.
+
+    The Talk app offers every one of these routes, and none of them needs a forbidden verb to
+    do its damage: a POST is enough to pin somebody's message, to move a read marker, to push
+    a notification or to hand a message to the app for later delivery. So each segment is a
+    needle, and each needle is proven here in both directions. If one of them ever reports the
+    real module, the fix is a narrower needle and never a rewritten client (T-09-30).
+    """
+    relative = "nextcloud/clients/talk.py"
+    real = _code_lines(SRC / relative)
+    assert _violations(relative, real) == [], (
+        f"{relative} must be clean before a needle can prove anything"
+    )
+
+    findings = _violations(relative, [*real, (len(real) + 1, line)])
+    assert any(repr(needle) in finding for finding in findings), (
+        f"the gate must report {needle!r} for: {line.strip()}"
+    )
+
+
+def test_every_talk_needle_of_this_phase_has_a_counter_proof() -> None:
+    """A needle without a counter proof is a claim, and this file does not make claims."""
+    assert len(TALK_ROUTES) == 10, (
+        "ten Talk segments are named in FORBIDDEN, and each of them needs its own line here"
+    )
+    unbacked = sorted(needle for needle in TALK_ROUTES if needle not in FORBIDDEN)
+    assert unbacked == [], f"a counter proof for a needle nobody armed: {unbacked}"
+
+
+def test_the_three_routes_the_talk_client_really_builds_stay_allowed() -> None:
+    """The other half of the same proof: the two reads and the one send must pass.
+
+    Listing conversations, reading one history window and sending one message are the three
+    things this family exists for. A needle broad enough to catch them would force the choice
+    between a green gate and a working tool, and that choice always ends with the gate losing.
+    """
+    for line in ALLOWED_TALK_ROUTES:
+        assert _violations("nextcloud/clients/talk.py", [(1, line)]) == [], (
             f"the gate must not report the allowed route: {line.strip()}"
         )
 

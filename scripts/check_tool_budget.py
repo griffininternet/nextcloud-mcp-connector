@@ -22,13 +22,18 @@ from mcp_connector.server import mcp
 #   Measurement 2026-08-21, all 18 curated tools registered: 12801 bytes
 #   Budget      12801 + 15 percent = 14721, rounded up to the next 500 = 15000 bytes
 #
-# The older line stays where it is: a regression is only attributable when the number it
-# regressed from is still readable. The 2026-08-21 line is the tables_browse and
+#   Measurement 2026-08-21, all 20 curated tools registered: 14312 bytes
+#   Budget      unchanged at 15000, because the measurement fits below it
+#
+# The older lines stay where they are: a regression is only attributable when the number it
+# regressed from is still readable. The first 2026-08-21 line is the tables_browse and
 # tables_create_row pair of phase 8 (751 and 780 bytes), which took the surface past the
-# gate of phase 1 exactly as it was meant to.
+# gate of phase 1 exactly as it was meant to. The second is the talk_browse and talk_send
+# pair of phase 9 (861 and 648 bytes), and it raises nothing: a budget is lifted against a
+# measurement that needs it, never out of habit, and this one leaves 688 bytes of headroom.
 #
 # The headroom is for wording, not for a new tool: at ~4 bytes per token the whole surface
-# costs roughly 3.2k tokens in every single session of every client. A nineteenth tool or a
+# costs roughly 3.6k tokens in every single session of every client. A twenty-first tool or a
 # description that grows into a paragraph is supposed to trip this gate, so the decision
 # gets made on purpose instead of by accident. Raising the number is allowed, but only
 # together with a new measurement line above, so a regression stays attributable.

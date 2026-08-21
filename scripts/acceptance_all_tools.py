@@ -1,4 +1,4 @@
-"""Phase acceptance: call all 18 tools once, through a real MCP client over stdio.
+"""Phase acceptance: call all 20 tools once, through a real MCP client over stdio.
 
 This is the proof behind success criterion 1 of phase 1. Not a unit test and not a mock:
 the script starts ``nc-mcp`` as a subprocess exactly as Claude Desktop does, speaks the
@@ -13,7 +13,7 @@ Usage::
     set -a && . ./.env.test && set +a
     uv run python scripts/acceptance_all_tools.py
 
-Exit code 0 only when all 18 tools answered. The output is a matrix of tool name, verdict
+Exit code 0 only when all 20 tools answered. The output is a matrix of tool name, verdict
 and the first line of the answer, so a failure is attributable without a rerun.
 
 The calls build on each other on purpose: the file uploaded in step one is the file that
@@ -21,14 +21,16 @@ The calls build on each other on purpose: the file uploaded in step one is the f
 answers "no hits" for an object created seconds earlier is a failure, not an empty result,
 and only a chained run can tell those two apart.
 
-Deck and Tables are the two exceptions. A board, a stack, a table and a column are not
-connector features (the server cannot create any of them, by design), so the script uses
-what the integration suite leaves behind and reports the write as skipped when there is
-nothing to write into. For Tables that check has two halves, because two refusals of the
-connector are correct behaviour rather than a defect: a table shared without a write
+Deck, Tables and Talk are the three exceptions. A board, a stack, a table, a column and a
+conversation are not connector features (the server cannot create any of them, by design),
+so the script uses what the instance already holds and reports the write as skipped when
+there is nothing to write into. For Tables that check has two halves, because two refusals
+of the connector are correct behaviour rather than a defect: a table shared without a write
 permission, and a row that leaves a mandatory column empty. The script therefore only
 considers tables with ``can_create`` and only writes when a text marker fits into every
-mandatory column of one.
+mandatory column of one. For Talk the same holds with one field, ``can_send``: a read only
+conversation and the changelog conversation of the account are refused by design, so a run
+without a conversation this account may write into is a skip and never a failure.
 """
 
 import asyncio
@@ -49,7 +51,11 @@ REQUIRED_ENV = ("NC_MCP_URL", "NC_MCP_USER", "NC_MCP_APP_PASSWORD")
 # The count the registry answers today. It stood at 15 while the registry already listed
 # 16, which is the kind of drift only a number in two places produces, so it is raised in
 # the same commit that raises every other frozen number of a phase.
-EXPECTED_TOOLS = 18
+EXPECTED_TOOLS = 20
+
+#: The conversation Talk creates for every account to announce its own new features. It is
+#: read only by design, so a send into it is a refusal of the connector working correctly.
+CHANGELOG_TYPE = 4
 
 
 class Report:
@@ -228,6 +234,39 @@ async def run(client: Client, report: Report) -> None:
             "neither a table nor a column by design",
         )
 
+    # --- talk -------------------------------------------------------------------------
+    # The third exception, same reason as Deck and Tables: a conversation is not a connector
+    # feature, so the script reads and writes what the instance already holds. The write goes
+    # into the first conversation that reports ``can_send`` and is not the changelog
+    # conversation of the account, because both of the refusals behind that field are correct
+    # behaviour and would otherwise be reported as a broken tool.
+    conversations = loads(await call(client, report, "talk_browse", {"level": "conversations"}))
+    entries = [entry for entry in (conversations.get("results") or []) if isinstance(entry, dict)]
+    first = str(entries[0].get("token") or "") if entries else ""
+    if first:
+        await call(client, report, "talk_browse", {"level": "messages", "token": first})
+    else:
+        report.add(
+            "talk_browse",
+            "SKIP",
+            "no conversation on this account, so there is no history to read back",
+        )
+
+    writable = _sendable_conversation(entries)
+    if writable:
+        await call(
+            client,
+            report,
+            "talk_send",
+            {"token": writable, "message": f"Abnahmelauf {marker}, Straßenbau."},
+        )
+    else:
+        report.add(
+            "talk_send",
+            "SKIP",
+            "no conversation this account may write into; the connector creates none by design",
+        )
+
     # --- contacts, search, chatgpt profile ---------------------------------------------
     await call(client, report, "contacts_search", {"query": "a"})
     await call(client, report, "unified_search", {"query": marker})
@@ -282,6 +321,23 @@ def _text_row_for(payload: dict[str, Any], value: str) -> dict[str, str]:
     return dict.fromkeys(titles, value)
 
 
+def _sendable_conversation(entries: list[dict[str, Any]]) -> str:
+    """The token of the first conversation this account may write into, or an empty string.
+
+    ``can_send`` is the field ``talk_browse`` reports for exactly this question, and it already
+    covers the read only case and the missing chat permission. The changelog conversation is
+    excluded a second time by its type, because a run that tries it would report a correct
+    refusal of the connector as a defect.
+    """
+    for entry in entries:
+        if not entry.get("can_send") or entry.get("type") == CHANGELOG_TYPE:
+            continue
+        token = str(entry.get("token") or "")
+        if token:
+            return token
+    return ""
+
+
 def _first_id(payload: dict[str, Any]) -> str:
     for key in ("results", "items", "boards", "stacks"):
         entries = payload.get(key)
@@ -332,6 +388,8 @@ async def main() -> int:
         "prepare_context",
         "tables_browse",
         "tables_create_row",
+        "talk_browse",
+        "talk_send",
         "search",
         "fetch",
     }
