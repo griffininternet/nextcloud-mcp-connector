@@ -2,8 +2,8 @@
 
 # MCP Connector for Nextcloud
 
-A curated MCP server that connects your Nextcloud (files, calendar, notes, deck, contacts) to AI
-assistants such as Claude, Cursor, ChatGPT or your own agents.
+A curated MCP server that connects your Nextcloud (files, calendar, notes, deck, contacts, Tables
+and Talk) to AI assistants such as Claude, Cursor, ChatGPT or your own agents.
 
 **This server can never delete, overwrite or re-share anything.**
 
@@ -174,6 +174,7 @@ the bind address: `--host 0.0.0.0` allows nobody in.
 | `NC_MCP_OAUTH_CIMD` | ExApp | no | A client may identify itself by the address of a metadata document it publishes itself, on unless switched off; switching self registration off closes this way with it |
 | `NC_MCP_OAUTH_ALLOWLIST_ONLY` | ExApp | no | Only listed clients may authorize; an empty list then closes the door for everyone |
 | `NC_MCP_OAUTH_ALLOWED_CLIENTS` | ExApp | no | Comma separated client ids or redirect URIs, read only when the allowlist is on |
+| `NC_MCP_TALK_SEND` | all | no | The outgoing Talk channel of this app, on unless it is set to off. With it off no assistant can send a Talk message through this connector, whatever an account is allowed to do in Talk itself; reading conversations and their history is not affected. In the ExApp mode the administration form writes it |
 
 No credential is ever logged, in any mode.
 
@@ -346,12 +347,12 @@ ship an output schema, because ChatGPT reads the payload as structured content:
 
 ### Optional apps
 
-Notes, Deck and Tables are optional Nextcloud apps. The tool list is the same everywhere: it never
-depends on which apps an instance has, so it stays cacheable and predictable for every client. If an
-app is missing, the tool says so in one sentence and names an alternative, for example
-"The Notes app is not installed on this Nextcloud." or "The Tables app is not enabled on this
-Nextcloud." Calendars and contacts need no app at all: CalDAV and CardDAV are part of the Nextcloud
-core.
+Notes, Deck, Tables and Talk are optional Nextcloud apps, nine tools in total. The tool list is the
+same everywhere: it never depends on which apps an instance has, so it stays cacheable and
+predictable for every client. If an app is missing, the tool says so in one sentence and names an
+alternative, for example "The Notes app is not installed on this Nextcloud.", "The Tables app is not
+enabled on this Nextcloud." or "The Talk app is not available on this Nextcloud." Calendars and
+contacts need no app at all: CalDAV and CardDAV are part of the Nextcloud core.
 
 ## What this server cannot do
 
@@ -378,7 +379,7 @@ each one is visible in the answer the tool gives rather than hidden behind an em
 | **Search matches names, not contents** | Every search answer carries `"note":"matched on names only; contents are not indexed"` | Install and configure the Nextcloud Full text search app, or search by file name |
 | **An account created with `occ user:add` has no calendar** | `calendar_list_events` returns an error that names the missing calendar | `occ dav:create-calendar <user> personal`, or log in to Nextcloud once through the web UI, which creates it |
 | **The same is true for the address book** | `contacts_search` names the way out instead of returning nothing | `occ dav:create-addressbook <user> contacts` |
-| **Notes, Deck and Tables are optional apps** | The tools stay in `tools/list` everywhere and answer "The Notes app is not installed on this Nextcloud." or "The Tables app is not enabled on this Nextcloud." | Install the app, or ignore those seven tools |
+| **Notes, Deck, Tables and Talk are optional apps** | The tools stay in `tools/list` everywhere and answer "The Notes app is not installed on this Nextcloud.", "The Tables app is not enabled on this Nextcloud." or "The Talk app is not available on this Nextcloud." | Install the app, or ignore those nine tools |
 | **Nothing can be deleted or overwritten** | `files_upload` refuses an existing path with a conflict, and there is no update or delete tool at all | Pick another name. This is the design constraint, not a missing feature |
 | **No session, so no server side paging state** | A long list hands back a `next` handle you pass in again | Nothing. The handle survives a restart, which is the point |
 | **Calendars need an explicit time window with a zone** | A `start` or `end` without a zone is refused | Send `2026-09-01T00:00:00+02:00` or `...Z`. A guessed zone is a confidently wrong answer |

@@ -4,8 +4,8 @@
 
 # MCP Connector für Nextcloud
 
-Ein kuratierter MCP server, der Ihr Nextcloud (Dateien, Kalender, Notizen, Deck, Kontakte) mit KI-Assistenten
-wie Claude, Cursor, ChatGPT oder Ihren eigenen Agenten verbindet.
+Ein kuratierter MCP server, der Ihr Nextcloud (Dateien, Kalender, Notizen, Deck, Kontakte, Tables und Talk)
+mit KI-Assistenten wie Claude, Cursor, ChatGPT oder Ihren eigenen Agenten verbindet.
 
 **Dieser Server kann niemals etwas löschen, überschreiben oder neu teilen.**
 
@@ -181,6 +181,7 @@ Anfragen handelt, nicht um die Bind-Adresse: `--host 0.0.0.0` lässt niemanden h
 | `NC_MCP_OAUTH_CIMD` | ExApp | nein | Ein Client kann sich über die Adresse eines Metadaten-Dokuments ausweisen, das er selbst veröffentlicht, an, sofern nicht abgeschaltet; wird die Selbstregistrierung abgeschaltet, ist dieser Weg mit geschlossen |
 | `NC_MCP_OAUTH_ALLOWLIST_ONLY` | ExApp | nein | Nur gelistete Clients dürfen autorisieren; eine leere Liste verschließt dann die Tür für alle |
 | `NC_MCP_OAUTH_ALLOWED_CLIENTS` | ExApp | nein | Komma-getrennte Client-IDs oder Redirect-URIs, nur gelesen, wenn die Allowlist aktiv ist |
+| `NC_MCP_TALK_SEND` | alle | nein | Der ausgehende Talk-Kanal dieser App, an, sofern er nicht auf off gesetzt ist. Mit off kann kein Assistent über diesen Connector eine Talk-Nachricht senden, ganz gleich, was ein Konto in Talk selbst darf; das Lesen von Konversationen und ihrer Historie ist nicht betroffen. Im ExApp-Modus schreibt das Administrationsformular den Wert |
 
 Keine Zugangsdaten werden jemals protokolliert, in keinem Modus.
 
@@ -357,11 +358,12 @@ ein Output-Schema mitliefern, weil ChatGPT die Nutzlast als strukturierten Inhal
 
 ### Optionale Apps
 
-Notes, Deck und Tables sind optionale Nextcloud-Apps. Die Tool-Liste ist überall gleich: sie hängt nie
-davon ab, welche Apps eine Instanz hat, sodass sie cachebar und für jeden Client vorhersagbar bleibt.
-Fehlt eine App, sagt das Tool das in einem Satz und nennt eine Alternative, zum Beispiel "The Notes app
-is not installed on this Nextcloud." oder "The Tables app is not enabled on this Nextcloud." Kalender und
-Kontakte brauchen überhaupt keine App: CalDAV und CardDAV sind Teil des Nextcloud-Kerns.
+Notes, Deck, Tables und Talk sind optionale Nextcloud-Apps, insgesamt neun Tools. Die Tool-Liste ist
+überall gleich: sie hängt nie davon ab, welche Apps eine Instanz hat, sodass sie cachebar und für jeden
+Client vorhersagbar bleibt. Fehlt eine App, sagt das Tool das in einem Satz und nennt eine Alternative,
+zum Beispiel "The Notes app is not installed on this Nextcloud.", "The Tables app is not enabled on this
+Nextcloud." oder "The Talk app is not available on this Nextcloud." Kalender und Kontakte brauchen
+überhaupt keine App: CalDAV und CardDAV sind Teil des Nextcloud-Kerns.
 
 ## Was dieser Server nicht kann
 
@@ -389,7 +391,7 @@ und jede ist in der Antwort sichtbar, die das Tool gibt, statt hinter einem leer
 | **Suche trifft Namen, nicht Inhalte** | Jede Suchantwort trägt `"note":"matched on names only; contents are not indexed"` | Installieren und konfigurieren Sie die Nextcloud-Full-text-search-App, oder suchen Sie nach Dateinamen |
 | **Ein mit `occ user:add` erstelltes Konto hat keinen Kalender** | `calendar_list_events` gibt einen Fehler zurück, der den fehlenden Kalender benennt | `occ dav:create-calendar <user> personal`, oder melden Sie sich einmal über die Web-UI bei Nextcloud an, was ihn erstellt |
 | **Dasselbe gilt für das Adressbuch** | `contacts_search` benennt den Ausweg, statt nichts zurückzugeben | `occ dav:create-addressbook <user> contacts` |
-| **Notes, Deck und Tables sind optionale Apps** | Die Tools bleiben überall in `tools/list` und antworten "The Notes app is not installed on this Nextcloud." oder "The Tables app is not enabled on this Nextcloud." | Installieren Sie die App, oder ignorieren Sie diese sieben Tools |
+| **Notes, Deck, Tables und Talk sind optionale Apps** | Die Tools bleiben überall in `tools/list` und antworten "The Notes app is not installed on this Nextcloud.", "The Tables app is not enabled on this Nextcloud." oder "The Talk app is not available on this Nextcloud." | Installieren Sie die App, oder ignorieren Sie diese neun Tools |
 | **Nichts kann gelöscht oder überschrieben werden** | `files_upload` lehnt einen bestehenden Pfad mit einem Konflikt ab, und es gibt überhaupt kein Update- oder Delete-Tool | Wählen Sie einen anderen Namen. Das ist die Design-Einschränkung, kein fehlendes Feature |
 | **Keine Sitzung, also kein serverseitiger Paging-Zustand** | Eine lange Liste gibt ein `next`-Handle zurück, das Sie erneut übergeben | Nichts. Das Handle übersteht einen Neustart, und genau das ist der Sinn |
 | **Kalender brauchen ein explizites Zeitfenster mit Zone** | Ein `start` oder `end` ohne Zone wird abgelehnt | Senden Sie `2026-09-01T00:00:00+02:00` oder `...Z`. Eine geratene Zone ist eine selbstsicher falsche Antwort |
