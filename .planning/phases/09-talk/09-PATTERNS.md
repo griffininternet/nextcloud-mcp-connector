@@ -271,7 +271,7 @@ promise (T-08-11).
 
 **Konstanten- und Hint-Muster** (`tables.py` Zeile 37-47): `APP`, `LEVELS`, `DEFAULT_LIMIT`,
 `MAX_LIMIT`, dann die Hint-Konstanten. Für Talk kommen `MAX_CONVERSATIONS = 50`,
-`MAX_MESSAGE_CHARS` (A6, benannte Konstante an genau einer Stelle) und `KEPT_TYPES`
+`MAX_MESSAGE_BYTES` (A6, UTF-8-Byte-Kappe, benannte Konstante an genau einer Stelle) und `KEPT_TYPES`
 (Positivliste, Muster 6) dazu.
 
 ```python
