@@ -24,7 +24,7 @@ License: AGPL-3.0-or-later. App id, package names and repository name are frozen
 
 ## Status
 
-Version 0.1.2. The app is listed in the Nextcloud App Store and installable as a Nextcloud ExApp
+Version 0.1.3. The app is listed in the Nextcloud App Store and installable as a Nextcloud ExApp
 through AppAPI. What is in place today, and where each of these claims is written down:
 
 - All 16 tools of the v1 set are implemented, and the tool table below is no longer maintained
@@ -51,7 +51,7 @@ Claude.ai or ChatGPT is given one URL, signs the user in on Nextcloud's own page
 sees a password or an app password. The connection appears under Settings, Security, Devices
 and sessions and can be ended there.
 
-Not in 0.1.2, and in the repository since 2026-08-20: an assistant can also identify itself
+New in 0.1.3: an assistant can also identify itself
 by the address of a metadata document it publishes itself, instead of registering here first.
 That is the way the current MCP specification prefers, and it is the way Claude Code connects.
 Both ways run next to each other, and an administrator can switch either of them off.

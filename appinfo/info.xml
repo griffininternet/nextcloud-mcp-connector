@@ -62,7 +62,7 @@ Le connecteur lui-même n'envoie aucune télémétrie et n'appelle aucun tiers. 
 
 D'autres réponses, notamment sur la façon dont un administrateur supprime l'application et ses données : [questions fréquentes](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/faq.md) et [confidentialité et flux de données](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/privacy.md), les deux en anglais.
 	]]></description>
-	<version>0.1.2</version>
+	<version>0.1.3</version>
 	<licence>agpl</licence>
 	<author mail="k.cherif@outlook.de">street1983nk</author>
 	<namespace>McpConnector</namespace>
@@ -106,7 +106,7 @@ D'autres réponses, notamment sur la façon dont un administrateur supprime l'ap
 			-->
 			<registry>ghcr.io</registry>
 			<image>street1983nk/mcp_connector</image>
-			<image-tag>0.1.2</image-tag>
+			<image-tag>0.1.3</image-tag>
 		</docker-install>
 		<!--
 		  - Exactly thirteen routes, and they are the whole external attack surface of this app.

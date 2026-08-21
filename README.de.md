@@ -26,7 +26,7 @@ Lizenz: AGPL-3.0-or-later. App-ID, Paketnamen und Repository-Name sind eingefror
 
 ## Status
 
-Version 0.1.2. Die App ist im Nextcloud App Store gelistet und als Nextcloud-ExApp über AppAPI
+Version 0.1.3. Die App ist im Nextcloud App Store gelistet und als Nextcloud-ExApp über AppAPI
 installierbar. Was heute vorliegt und wo jede dieser Aussagen festgehalten ist:
 
 - Alle 16 Tools des v1-Satzes sind implementiert, und die Tool-Tabelle weiter unten wird nicht
@@ -54,7 +54,7 @@ Ein Client wie Claude.ai oder ChatGPT erhält eine URL, meldet den Nutzer auf de
 Nextcloud an und sieht niemals ein Passwort oder ein App password. Die Verbindung erscheint unter
 Einstellungen, Sicherheit, Geräte und Sitzungen und kann dort beendet werden.
 
-Nicht in 0.1.2, und seit dem 20. August 2026 im Repository: Eine Assistenz-App kann sich auch
+Neu in 0.1.3: Eine Assistenz-App kann sich auch
 über die Adresse eines Metadaten-Dokuments ausweisen, das sie selbst veröffentlicht, statt sich
 hier zuerst zu registrieren. Das ist der Weg, den die aktuelle MCP-Spezifikation bevorzugt, und
 der Weg, über den Claude Code sich verbindet. Beide Wege laufen nebeneinander, und eine

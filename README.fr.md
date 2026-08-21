@@ -27,7 +27,7 @@ Licence : AGPL-3.0-or-later. L'app id, les noms de paquets et le nom du dépôt 
 
 ## Statut
 
-Version 0.1.2. L'application est référencée dans l'App Store de Nextcloud et installable comme
+Version 0.1.3. L'application est référencée dans l'App Store de Nextcloud et installable comme
 ExApp Nextcloud via AppAPI. Ce qui est en place aujourd'hui, et où chacune de ces affirmations est
 consignée :
 
@@ -57,7 +57,7 @@ l'utilisateur sur les propres pages de Nextcloud et ne voit jamais de mot de pas
 password. La connexion apparaît sous Paramètres, Sécurité, Appareils et sessions et peut y être
 close.
 
-Pas dans la 0.1.2, et dans le dépôt depuis le 20 août 2026 : une application d'assistant peut
+Nouveau dans la 0.1.3 : une application d'assistant peut
 aussi s'identifier par l'adresse d'un document de métadonnées qu'elle publie elle-même, au lieu
 de s'enregistrer ici d'abord. C'est la voie que la spécification MCP actuelle préfère, et celle
 par laquelle Claude Code se connecte. Les deux voies fonctionnent côte à côte, et un

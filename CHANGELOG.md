@@ -9,9 +9,21 @@ All notable changes to this app are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.3] - 2026-08-21
+
+This release adds a second way for an assistant to identify itself: by a metadata
+document it publishes, instead of registering with this app first. That is the way the
+current specification prefers, it is the way Claude Code connects, and an administrator
+can switch it off. Next to it, a locally running assistant may now come back on the
+port it actually got, which is the other half of what kept Claude Code out, and the
+page a refused desktop app lands on now names the way that works for it.
 
 ### Fixed
+
+- The version this app names in the MCP handshake is now the version that is installed.
+  It was a fixed string that stayed at the first release, so a connected assistant was
+  told 0.1.0 whatever version answered. The handshake now derives it from the package
+  version, the single string every release raises.
 
 - The switch for the way an app identifies itself by its own published document can now be
   set in the administration settings of this app, next to the switch for self registration.
@@ -243,7 +255,8 @@ First release, submitted to the Nextcloud App Store.
   never sees more than that user sees in the web interface.
 - A privacy and data flow description, see [docs/privacy.md](docs/privacy.md).
 
-[Unreleased]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/street1983nk/nextcloud-mcp-connector/releases/tag/v0.1.0
