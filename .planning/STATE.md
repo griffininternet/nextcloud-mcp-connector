@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Kuratierte Breite
-status: executing
-stopped_at: Completed 09-03-PLAN.md
-last_updated: "2026-08-21T12:36:54.893Z"
+status: verifying
+stopped_at: Completed 09-05-PLAN.md
+last_updated: "2026-08-21T13:07:47.171Z"
 last_activity: 2026-08-21
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 10
-  completed_plans: 9
-  percent: 25
+  completed_plans: 10
+  percent: 50
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 
 Phase: 9 (Talk) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-21
 
 ## Performance Metrics
@@ -124,6 +124,7 @@ Last activity: 2026-08-21
 | Phase 09-talk P02 | 17 min | 3 tasks tasks | 12 files files |
 | Phase 09-talk P03 | 26 min | 3 tasks | 3 files |
 | Phase 09-talk P04 | 33 min | 3 tasks | 15 files |
+| Phase 09-talk P05 | 29 min | 3 tasks tasks | 6 files files |
 
 ## Accumulated Context
 
@@ -434,6 +435,11 @@ Recent decisions affecting current work:
 - [Phase 09-talk]: Keine Kappungsmarkierung im Nachrichtentext, sondern das Feld truncated daneben: Ein Marker im fremden Text ist ein Angriffsweg (ME-03), und eine Chatnachricht ist der billigste Ort dafuer, weil jeder Teilnehmer schreiben darf
 - [Phase 09-talk]: TALK-01 bis TALK-04 bleiben Pending: Der Wortlaut aller vier spricht von den Werkzeugen talk_browse und talk_send; registriert werden sie erst mit Plan 09-04, TALK-02 braucht zusaetzlich die Live-Messung
 - [Phase 09-talk]: BUDGET_BYTES bleibt 15000: 14312 Bytes bei 20 Werkzeugen gemessen — Eine Anhebung erfolgt nur gegen eine Messung, die sie braucht; die Messzeile steht trotzdem im Skript, damit TOOL-15 in Phase 11 auf einer lesbaren Zahl fortschreibt
+- [Phase 09-talk]: spreed 24.0.4 bringt kein listendes occ-Room-Kommando mit: die Idempotenz der Testkonversationen laeuft nach Namen ueber GET /apps/spreed/api/v4/room mit dem Konto selbst, und der Name wird auf seinem ASCII-Praefix gematcht, weil PHP jeden Umlaut einer JSON-Antwort als \uXXXX-Escape schreibt
+- [Phase 09-talk]: Werte in .env.test und .env.exapp tragen keine Leerzeichen: die Dateien werden mit set -a und . gelesen, und ein unquotierter Wert mit Leerzeichen laesst die Shell sein zweites Wort als Kommando ausfuehren (im ersten Lauf von 09-05 gemessen)
+- [Phase 09-talk]: Erfolgskriterium 3 ist live gemessen: lastReadMessage 23 zu 23, unreadMessages 0 zu 0, unreadMention False zu False, lastCommonReadMessage 23 zu 23 um einen Verlauf-Lesevorgang mit einer Nachricht im Fenster; die Messung fuellt vorher, weil setReadMarker nur einen Marker bewegen kann, der ein Ziel hat
+- [Phase 09-talk]: Bobs Zugriff auf eine fremde Talk-Konversation: die Instanz antwortet GET 404 und POST 404 und gibt die Existenz nicht preis; der Connector kommt nie so weit, seine Absage entsteht aus der eigenen Konversationsliste vor jedem Talk-Pfad
+- [Phase 09-talk]: Der Admin-Schalter talk_send ist auf beiden Topologien an (NC_MCP_TALK_SEND ungesetzt); der Integrationstest stellt den Zustand fest und behauptet zusaetzlich beide Enden des Schalters, weil ein einmal gespeicherter Wert jedes Neubauen des Containers ueberlebt
 
 ### Pending Todos
 
@@ -468,8 +474,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-21T12:36:47.106Z
-Stopped at: Completed 09-03-PLAN.md
+Last session: 2026-08-21T13:07:31.781Z
+Stopped at: Completed 09-05-PLAN.md
 Naechster Schritt: /gsd:plan-phase 8
 Resume file: None
 

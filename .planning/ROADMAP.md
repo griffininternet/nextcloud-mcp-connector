@@ -36,7 +36,7 @@ Audit: [milestones/v1.1-MILESTONE-AUDIT.md](milestones/v1.1-MILESTONE-AUDIT.md) 
 ### v1.2 Kuratierte Breite (Phasen 8-11)
 
 - [x] **Phase 8: Erreichbarkeits-Spike und Tables** - Erst messen, ob Mail unter AppAPI-Impersonation überhaupt erreichbar ist, dann die risikoärmste Familie komplett bauen und damit die mechanische Checkliste einmal etablieren (completed 2026-08-21)
-- [ ] **Phase 9: Talk** - Konversationen und Verlauf nachweislich nebenwirkungsfrei lesen, Nachricht senden als risikoarmer Create, Ausgangskanal per Admin-Schalter abschaltbar
+- [x] **Phase 9: Talk** - Konversationen und Verlauf nachweislich nebenwirkungsfrei lesen, Nachricht senden als risikoarmer Create, Ausgangskanal per Admin-Schalter abschaltbar (completed 2026-08-21)
 - [ ] **Phase 10: Mail strikt lesend und die Trifecta-Grenze** - Konten, Postfächer, Envelopes und Volltext lesen ohne jeden Schreibpfad, App-Erkennung für alle drei Familien, Exfiltrationskette benannt statt beschwiegen
 - [ ] **Phase 11: Bündelung, Budget und Release 0.1.4** - Talk- und Mail-Anteil in prepare_context, Suchtreffer auflösbar, Budget-Gate neu verankert, Fassung im Store
 
@@ -109,7 +109,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 09-05-PLAN.md: Live-Messung der Nebenwirkungsfreiheit, Senden gegen eine echte Instanz und Zwei-Konten-Negativbeweis
+- [x] 09-05-PLAN.md: Live-Messung der Nebenwirkungsfreiheit, Senden gegen eine echte Instanz und Zwei-Konten-Negativbeweis
 
 **UI hint**: nein (der Admin-Schalter ist ein Declarative-Settings-Feld im Muster der bestehenden fünf Werte; Nextcloud rendert es, es entsteht kein eigenes Frontend)
 
@@ -198,7 +198,7 @@ Plans:
 | 6. Härtung, Eigennachweise und Conference-Reife | v1.1 | 11/11 | Complete | 2026-08-20 |
 | 7. Verwaltungs-Clients live verprobt | v1.1 | 0/0 | Deferred (extern getaktet) | - |
 | 8. Erreichbarkeits-Spike und Tables | v1.2 | 5/5 | Complete    | 2026-08-21 |
-| 9. Talk | v1.2 | 4/5 | In Progress|  |
+| 9. Talk | v1.2 | 5/5 | Complete   | 2026-08-21 |
 | 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 0/? | Not started | - |
 | 11. Bündelung, Budget und Release 0.1.4 | v1.2 | 0/? | Not started | - |
 
