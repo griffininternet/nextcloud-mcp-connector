@@ -26,6 +26,7 @@ from mcp_connector import paging
 from mcp_connector.errors import AppMissingError, ToolError
 from mcp_connector.nextcloud import NcClients, capabilities
 from mcp_connector.nextcloud.credentials import Credentials
+from mcp_connector.tools import marks
 from mcp_connector.tools import tables as tables_tools
 
 BASE = "http://nc.test"
@@ -33,6 +34,10 @@ USER = "alice"
 SECRET = "app-password-test"
 
 CAPABILITIES_URL = f"{BASE}/ocs/v2.php/cloud/capabilities"
+
+#: One of the two sequences this server writes into a text itself. A table that may write it
+#: back would decide the framing of foreign text, which is the point of the filter (T-08-14).
+MARKER = marks.EXCERPT_TRUNCATION
 
 # The same frozen literals as in the client test: the tool layer must not be able to move a
 # route by accident either.
@@ -394,6 +399,67 @@ async def test_a_table_with_no_rows_is_an_empty_answer_and_not_an_error(
     assert result["rowsCount"] == 0
     assert "truncated" not in result
     assert "next" not in result
+
+
+@pytest.mark.anyio
+async def test_a_marker_is_removed_from_a_cell_that_is_not_a_plain_string(
+    clients: NcClients,
+) -> None:
+    """WR-03: a multi selection cell is a list, and a list went through unfiltered.
+
+    The type check around the filter covered exactly the shape the fixture happens to have.
+    A cell that answers with a list of objects is the same foreign text one level down, so
+    the marker has to be gone at every leaf and the numbers have to stay numbers.
+    """
+    payload = [
+        ["Aufgabe", "Beteiligte", "Größe in m²"],
+        [f"Baulos 3 {MARKER}", ["Alice", {"label": f"Bob {MARKER}"}], 12.5],
+    ]
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock.get(TABLE_URL).mock(return_value=httpx.Response(200, json=envelope(OWN_TABLE)))
+        mock.get(ROWS_URL).mock(return_value=httpx.Response(200, json=payload))
+
+        result = await tables_tools.browse(clients, level="rows", table_id="7")
+
+    row = result["results"][0]
+    assert MARKER not in json.dumps(row, ensure_ascii=False)
+    assert row["Aufgabe"] == "Baulos 3 "
+    assert row["Beteiligte"] == ["Alice", {"label": "Bob "}]
+    assert row["Größe in m²"] == 12.5, "a number stays a number, the filter is not a cast"
+
+
+@pytest.mark.anyio
+async def test_a_marker_in_a_selection_option_label_is_removed_as_well(
+    clients: NcClients,
+) -> None:
+    """The other half of WR-03: the option labels of a column are foreign text too.
+
+    Whoever manages the table writes them, and ``selectionOptions`` was handed through as it
+    came. It is the one field of ``_COLUMN_LIMITS`` that carries text rather than a number.
+    """
+    columns = [
+        {
+            "id": 12,
+            "title": f"Status {MARKER}",
+            "type": "selection",
+            "mandatory": False,
+            "selectionOptions": [
+                {"id": 0, "label": f"offen {MARKER}"},
+                {"id": 1, "label": "fertig"},
+            ],
+        }
+    ]
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock.get(COLUMNS_URL).mock(return_value=httpx.Response(200, json=envelope(columns)))
+
+        result = await tables_tools.browse(clients, level="columns", table_id="7")
+
+    entry = result["results"][0]
+    assert MARKER not in json.dumps(entry, ensure_ascii=False)
+    assert entry["title"] == "Status "
+    assert entry["selectionOptions"] == [{"id": 0, "label": "offen "}, {"id": 1, "label": "fertig"}]
 
 
 @pytest.mark.anyio

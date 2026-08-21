@@ -291,7 +291,9 @@ def _column(column: dict[str, Any]) -> dict[str, Any]:
         value = column.get(key)
         if value is None or value == "" or value == []:
             continue
-        entry[key] = value
+        # ``selectionOptions`` carries labels somebody typed into the table settings, and a
+        # label is foreign text like any cell value (T-08-14).
+        entry[key] = _clean(value)
     return entry
 
 
@@ -357,7 +359,7 @@ def _row(titles: list[str], values: list[Any]) -> dict[str, Any]:
     row: dict[str, Any] = {}
     for index, title in enumerate(titles):
         value = values[index] if index < len(values) else ""
-        row[title] = _text(value) if isinstance(value, str) else value
+        row[title] = _clean(value)
     return row
 
 
@@ -404,6 +406,27 @@ def _text(value: Any) -> str:
     place where a document could otherwise claim to be this server talking (T-08-14).
     """
     return marks.without_marks(str(value))
+
+
+def _clean(value: Any) -> Any:
+    """The same filter for foreign data of any shape, applied down to every leaf string.
+
+    :func:`_text` covers a single string, and a type check around it covers exactly the case
+    a fixture happens to have. Tables puts more than strings into a cell: a multi selection
+    answers with a list, a selection option is an object whose ``label`` somebody typed into
+    the table settings, and both carry text of whoever may write to or manage the table. A
+    filter that only looks at the top level string leaves those two shapes as an open door
+    for text that claims to be this server talking (T-08-14), and the shape is chosen by the
+    writer, not by us. Numbers, booleans and ``None`` are returned unchanged: there is
+    nothing in them to remove, and rewriting them into strings would change the answer.
+    """
+    if isinstance(value, str):
+        return marks.without_marks(value)
+    if isinstance(value, list):
+        return [_clean(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _clean(item) for key, item in value.items()}
+    return value
 
 
 def _envelope(level: str, results: list[dict[str, Any]], limit: int) -> dict[str, Any]:
