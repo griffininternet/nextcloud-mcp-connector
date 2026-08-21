@@ -37,6 +37,12 @@ checks. The properties that make them proof stay the same: the positive half run
 same session as the negative half, and the negative half uses the real table id rather than
 a guessed one.
 
+The Talk block after it asks the same question a third time, on the same seam and with the
+same two credential objects (T-09-40): alice reads the history of her own test conversation,
+bob does not have it in his list at all, and bob reaches neither its history nor a send with
+the real token. The comparison point there is the message count from alice's side before and
+after bob's two attempts, because no tool of this server can remove a message again.
+
 The app id ``mcp_connector`` is frozen (docs/app-id-freeze.md), so the HaRP route
 ``/exapps/mcp_connector/mcp`` is a constant here rather than an interpolation.
 
@@ -53,6 +59,7 @@ import base64
 import json
 import os
 import uuid
+import warnings
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -68,8 +75,10 @@ from mcp_connector.errors import ToolError
 from mcp_connector.nextcloud import NcClients
 from mcp_connector.nextcloud.clients import ocs
 from mcp_connector.nextcloud.clients import tables as tables_client
+from mcp_connector.nextcloud.clients import talk as talk_client
 from mcp_connector.nextcloud.credentials import MODE_APPAPI, Credentials
 from mcp_connector.tools import tables as tables_tools
+from mcp_connector.tools import talk as talk_tools
 
 pytestmark = [pytest.mark.integration, pytest.mark.anyio]
 
@@ -475,4 +484,197 @@ async def test_bob_cannot_write_into_alices_table_and_leaves_no_row_behind(
     assert len(after) == before, f"bob's refused write still changed alice's table: {after!r}"
     assert not any("bob war hier" in str(row.get(TABLES_COLUMN, "")) for row in after), (
         f"bob's content landed in alice's table: {after!r}"
+    )
+
+
+# ---------------------------------------------------------------------------------------
+# Talk (T-09-40). The same layer as the Tables block above and for the same reason: the
+# interesting boundary of this family is the impersonation seam itself, so both identities are
+# built as ``Credentials`` in ``MODE_APPAPI`` with ``APP_SECRET`` as the only credential, one
+# object per account, and no app password authenticates any of the three checks.
+#
+# A conversation is not a capability of this connector either (create-only, threat T-09-03),
+# so the scaffolding is not built here: ``scripts/bootstrap_exapp.sh`` creates alice's two test
+# conversations with ``occ`` and publishes their names in ``.env.exapp``. Without them these
+# checks skip with the variable named.
+# ---------------------------------------------------------------------------------------
+
+TALK_ROOM_ENV = "NC_MCP_TEST_TALK_ROOM"
+TALK_INTRUSION = "bob war hier"
+
+
+def measured(what: str) -> None:
+    """Make a measurement visible in the test report of a passing run.
+
+    The status code the instance answers bob with is a measurement and not an expectation, and
+    a green run is exactly when that number is wanted.
+    """
+    warnings.warn(f"measured: {what}", stacklevel=2)
+
+
+@pytest.fixture
+async def alice_talk(exapp_env: dict[str, str]) -> AsyncIterator[NcClients]:
+    """One impersonating client per account, and separate objects from the Tables pair.
+
+    The seam is the same, the objects are not: a Talk check that depended on ``alice_tables``
+    would drag the table scaffolding of that block into its own preconditions, and a skip
+    there would then look like a statement about Talk.
+    """
+    clients = _appapi_clients(exapp_env, exapp_env["alice"])
+    async with clients.client:
+        yield clients
+
+
+@pytest.fixture
+async def bob_talk(exapp_env: dict[str, str]) -> AsyncIterator[NcClients]:
+    clients = _appapi_clients(exapp_env, exapp_env["bob"])
+    async with clients.client:
+        yield clients
+
+
+@pytest.fixture
+async def alices_conversation(alice_talk: NcClients) -> dict[str, str]:
+    """The token and the name of alice's writable test conversation, or a skip that names it.
+
+    The token comes out of alice's own list and is therefore the real one. That is what makes
+    the negative half below a proof: a guessed token would be refused by the shape guard of the
+    client and would measure nothing about the boundary.
+    """
+    name = (os.environ.get(TALK_ROOM_ENV) or "").strip()
+    if not name:
+        pytest.skip(f"no Talk scaffolding configured (missing: {TALK_ROOM_ENV})")
+    listed = await talk_tools.browse(alice_talk, level="conversations", limit=talk_tools.MAX_LIMIT)
+    entry = next((item for item in listed["results"] if str(item["name"]) == name), None)
+    if entry is None:
+        pytest.skip(
+            f"the conversation {name!r} does not exist for alice; run scripts/bootstrap_exapp.sh"
+        )
+    return {"token": str(entry["token"]), "name": name}
+
+
+async def _message_count(clients: NcClients, token: str) -> int:
+    """The number of readable messages of one conversation under this identity."""
+    answer = await talk_tools.browse(
+        clients, level="messages", token=token, limit=talk_tools.MAX_LIMIT
+    )
+    return int(answer["count"])
+
+
+async def _talk_status(clients: NcClients, token: str, message: str | None = None) -> int:
+    """What the instance itself answers this identity, as a number and not as an expectation.
+
+    Test scaffolding, and deliberately not what the connector does: ``tools/talk.py`` looks a
+    token up in the account's own list and refuses an unknown one with its own sentence before
+    any Talk path is built (T10), which is why the refusals below produce no status code at
+    all. Phase 8 measured 404 rather than 403 for a foreign Tables object, so Nextcloud does
+    not give away the existence of somebody else's object; this call records which of the two
+    Talk picks instead of writing it into an assertion.
+
+    A single conversation route with a token bob may not see is also what registers a brute
+    force attempt for the source IP, which is why the connector never builds it. One such call
+    per run is acceptable here: the bootstrap switches that counter off on this throwaway
+    topology, and the comment says so rather than leaving the reader to wonder.
+    """
+    path = f"{talk_client.CHAT_PREFIX}/{token}"
+    if message is None:
+        response = await ocs.ocs_get(
+            clients.client,
+            clients.creds,
+            path,
+            params={**talk_client.READ_ONLY_PARAMS, "limit": 5},
+        )
+    else:
+        response = await ocs.ocs_post(clients.client, clients.creds, path, {"message": message})
+    return response.status_code
+
+
+async def test_alice_finds_her_own_conversation_and_reads_its_history(
+    alice_talk: NcClients, alices_conversation: dict[str, str]
+) -> None:
+    """Positive control (Talk): without it, an empty answer for bob would prove nothing.
+
+    It also answers the one question this seam had left open for the family: whether Talk's OCS
+    routes are reachable at all under pure AppAPI impersonation, without any user password
+    anywhere in the request.
+    """
+    token = alices_conversation["token"]
+    answer = await talk_tools.browse(
+        alice_talk, level="messages", token=token, limit=talk_tools.MAX_LIMIT
+    )
+
+    assert answer["token"] == token
+    assert answer["conversation"] == alices_conversation["name"], (
+        f"the envelope names another conversation than the one asked for: {answer!r}"
+    )
+    measured(
+        f"alice reads {token} under impersonation: count={answer['count']} "
+        f"conversation={answer['conversation']!r}"
+    )
+
+
+async def test_bob_does_not_list_alices_conversation(
+    bob_talk: NcClients, alices_conversation: dict[str, str]
+) -> None:
+    """The first half of the boundary: it is not in his own list at all."""
+    listed = await talk_tools.browse(bob_talk, level="conversations", limit=talk_tools.MAX_LIMIT)
+
+    tokens = [str(entry["token"]) for entry in listed["results"]]
+    names = [str(entry["name"]) for entry in listed["results"]]
+    assert alices_conversation["token"] not in tokens, (
+        f"bob lists a conversation that is not his: {listed!r}"
+    )
+    assert alices_conversation["name"] not in names, (
+        f"bob lists a conversation that is not his: {listed!r}"
+    )
+    measured(f"bob's own conversation list: {len(tokens)} entries, {names}")
+
+
+async def test_bob_reaches_neither_the_history_nor_the_send_of_alices_conversation(
+    alice_talk: NcClients, bob_talk: NcClients, alices_conversation: dict[str, str]
+) -> None:
+    """The second half, with the real token, and it leaves nothing behind.
+
+    Counting the messages from alice's side before and after is what makes this a proof rather
+    than a reading of two error messages: a refusal that still posted would be worse than a
+    silent failure, because no tool of this server can remove a message again (threat
+    T-09-03).
+
+    Both refusals come out of our own list check, so neither of them carries a status code of
+    the instance. The two numbers the instance itself answers bob with are measured beside them
+    and named as measurements, in the shape phase 8 established for Tables.
+    """
+    token = alices_conversation["token"]
+    before = await _message_count(alice_talk, token)
+
+    with pytest.raises(ToolError) as read_error:
+        await talk_tools.browse(bob_talk, level="messages", token=token, limit=20)
+    assert read_error.value.hint, "a refusal without a next step is a dead end for the model"
+
+    with pytest.raises(ToolError) as write_error:
+        await talk_tools.send(bob_talk, token=token, message=TALK_INTRUSION)
+    assert write_error.value.hint, "a refusal without a next step is a dead end for the model"
+
+    read_status = await _talk_status(bob_talk, token)
+    write_status = await _talk_status(bob_talk, token, message=TALK_INTRUSION)
+    assert read_status >= 400, (
+        f"the instance served alice's history to bob with status {read_status}"
+    )
+    assert write_status >= 400, (
+        f"the instance accepted a message from bob into alice's conversation ({write_status})"
+    )
+
+    after = await talk_tools.browse(
+        alice_talk, level="messages", token=token, limit=talk_tools.MAX_LIMIT
+    )
+    assert after["count"] == before, (
+        f"bob's refused attempts changed alice's history: {before} -> {after['count']}"
+    )
+    assert not any(TALK_INTRUSION in str(item["message"]) for item in after["results"]), (
+        f"bob's content landed in alice's conversation: {after!r}"
+    )
+    measured(
+        f"bob against {token}: our own refusals were "
+        f"{read_error.value.message!r} and {write_error.value.message!r}; the instance itself "
+        f"answered GET {read_status} and POST {write_status}; alice's message count stayed "
+        f"{before}"
     )
