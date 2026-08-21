@@ -111,13 +111,17 @@ async def test_the_admin_form_sits_in_the_admin_section() -> None:
 
 @pytest.mark.anyio
 @respx.mock
-async def test_the_five_fields_are_the_five_config_keys_in_order() -> None:
+async def test_the_six_fields_are_the_six_config_keys_in_order() -> None:
     """The field id IS the configuration key, so form and read path cannot drift apart.
 
     Five since the audit of the v1.0 milestone: ``NC_MCP_OAUTH_CIMD`` existed as a deploy
     variable, as a manifest declaration and as a documented sentence, and in no part of this
     chain. An installation from the app store never gets a deploy variable, so that switch
     was one no store installation could reach at all (finding B-1).
+
+    Six since phase 9: ``talk_send`` is the same case for the switch of TALK-04, and it sits
+    last because the four OAuth values belong together and a Talk switch between them would
+    tear that grouping apart.
     """
     route = respx.post(SETTINGS_URL).mock(return_value=httpx.Response(200, json={}))
 
@@ -130,6 +134,7 @@ async def test_the_five_fields_are_the_five_config_keys_in_order() -> None:
         "oauth_cimd",
         "oauth_allowlist_only",
         "oauth_allowed_clients",
+        "talk_send",
     ]
     assert tuple(field["id"] for field in fields) == config_values.CONFIG_KEYS
     assert [field["type"] for field in fields] == [
@@ -138,6 +143,7 @@ async def test_the_five_fields_are_the_five_config_keys_in_order() -> None:
         "checkbox",
         "checkbox",
         "text",
+        "checkbox",
     ]
 
 
@@ -222,6 +228,52 @@ async def test_the_cimd_field_is_a_checkbox_that_ships_on() -> None:
     assert cimd["title"] == strings.ADMIN_FIELD_CIMD_LABEL
     assert cimd["description"] == strings.ADMIN_FIELD_CIMD_DESCRIPTION
     assert "sensitive" not in cimd
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_the_talk_send_field_is_a_checkbox_that_ships_on() -> None:
+    """TALK-04, layer 1: the sixth field, and the state it shows is the one in force.
+
+    ``config.talk_send_enabled`` answers True for an unset variable, so a box shown unticked
+    would tell an administrator the opposite of what her installation does before she has
+    touched anything. And no spelling of ``sensitive``: AppAPI would encrypt the value with
+    the server secret, and this app would read back a blob it cannot open (T-05-05), which
+    for a switch means it could never be read as off either.
+    """
+    route = respx.post(SETTINGS_URL).mock(return_value=httpx.Response(200, json={}))
+
+    await admin_settings.register_admin_form(env=ENV)
+
+    fields = json.loads(route.calls.last.request.content)["formScheme"]["fields"]
+    talk_send = fields[-1]
+    assert talk_send["id"] == "talk_send"
+    assert talk_send["type"] == "checkbox"
+    assert talk_send["default"] is True
+    assert talk_send["title"] == strings.ADMIN_FIELD_TALK_SEND_LABEL
+    assert talk_send["description"] == strings.ADMIN_FIELD_TALK_SEND_DESCRIPTION
+    assert "sensitive" not in json.dumps(talk_send).lower()
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_the_talk_send_description_names_the_reading_side_and_the_cycle() -> None:
+    """The two sentences an administrator needs before she closes this switch.
+
+    An administrator who reads "send" as "Talk" switches off a reading capability she never
+    meant to touch, and one who expects an immediate effect measures a state this app does
+    not have until it has been disabled and enabled once (the price named in
+    ``entry_exapp._resolved_env``).
+    """
+    route = respx.post(SETTINGS_URL).mock(return_value=httpx.Response(200, json={}))
+
+    await admin_settings.register_admin_form(env=ENV)
+
+    fields = json.loads(route.calls.last.request.content)["formScheme"]["fields"]
+    description = next(field for field in fields if field["id"] == "talk_send")["description"]
+    lowered = description.lower()
+    assert "reading is not affected" in lowered
+    assert "disable and enable this app again" in lowered
 
 
 @pytest.mark.anyio

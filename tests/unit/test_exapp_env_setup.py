@@ -1908,7 +1908,7 @@ def test_the_text_gate_rejects_the_forbidden_vocabulary(manifest_root: etree._El
 
 
 def test_no_declared_variable_carries_an_empty_default(manifest_root: etree._Element) -> None:
-    """The shipped state: five variables, not one default among them."""
+    """The shipped state: six variables, not one default among them."""
     assert variable_problems(manifest_root) == []
 
 
@@ -1935,6 +1935,7 @@ def test_every_variable_the_code_reads_is_declared_in_the_manifest(
         registry.ENV_CIMD,
         registry.ENV_ALLOWLIST_ONLY,
         registry.ENV_ALLOWED_CLIENTS,
+        config.ENV_TALK_SEND,
     }
 
 

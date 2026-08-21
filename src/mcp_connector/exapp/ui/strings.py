@@ -44,6 +44,8 @@ __all__ = [
     "ADMIN_FIELD_DCR_LABEL",
     "ADMIN_FIELD_PUBLIC_URL_DESCRIPTION",
     "ADMIN_FIELD_PUBLIC_URL_LABEL",
+    "ADMIN_FIELD_TALK_SEND_DESCRIPTION",
+    "ADMIN_FIELD_TALK_SEND_LABEL",
     "ADMIN_PUBLIC_URL_EXAMPLE",
     "ADMIN_SETTINGS_DESCRIPTION",
     "ADMIN_SETTINGS_PLACE",
@@ -553,8 +555,10 @@ ADMIN_SETTINGS_TITLE = "MCP Connector"
 
 ADMIN_SETTINGS_DESCRIPTION = (
     "Settings an installation from the app store needs. A field left empty keeps whatever the "
-    "deploy environment of the container sets, and a value set here wins over it. Changes take "
-    "effect after you disable and enable this app again."
+    "deploy environment of the container sets, and a value set here wins over it. The first "
+    "five fields are about connecting an assistant app; the last one is not, it decides "
+    "whether an assistant may send a Talk message through this app. Changes take effect after "
+    "you disable and enable this app again."
 )
 
 #: Where the administration form of this app sits, named once so a move is one edit. The
@@ -616,6 +620,19 @@ ADMIN_FIELD_ALLOWED_CLIENTS_DESCRIPTION = (
     "One entry per app, separated by commas. An entry is either the client ID of a "
     "registration or the address an app is sent back to after a connection, which is the "
     "value you can write down before an app has ever connected."
+)
+
+ADMIN_FIELD_TALK_SEND_LABEL = "Let assistant apps send Talk messages"
+
+#: The form half of ``NC_MCP_TALK_SEND`` (TALK-04), and the one field of this form that is
+#: not about connecting an assistant. Three things and nothing more: what off means, that
+#: reading is untouched by it, and the activation cycle in the sentence this file already
+#: spells three times. The wording says "through this connector", because the switch neither
+#: can nor does stop anybody from writing in Talk itself.
+ADMIN_FIELD_TALK_SEND_DESCRIPTION = (
+    "With this off, no assistant can send a Talk message through this connector, whatever an "
+    "account is allowed to do in Talk itself. Reading is not affected: conversations and their "
+    "history stay readable. A change takes effect after you disable and enable this app again."
 )
 
 # --- The setup state a missing public address produces (consumed by plan 05-04) -----------

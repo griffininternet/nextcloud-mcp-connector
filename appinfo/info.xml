@@ -331,7 +331,7 @@ D'autres réponses, notamment sur la façon dont un administrateur supprime l'ap
 			</route>
 		</routes>
 		<!--
-		  - The five variables an administrator may set, and the only way to set them: the
+		  - The six variables an administrator may set, and the only way to set them: the
 		  - deploy daemon injects a variable into the container if, and only if, the
 		  - manifest declares it here (AppAPI ExAppService::getAppInfo, measured in plan
 		  - 03-08). Without the declaration, the "env" option of `occ app_api:app:register`
@@ -345,8 +345,16 @@ D'autres réponses, notamment sur la façon dont un administrateur supprime l'ap
 		  - documented default http://127.0.0.1:8765 and no client can complete a
 		  - connection (docs/oauth-setup.md).
 		  -
-		  - The three switches of AUTH-07 and the one of AUTH-08 are declared for the
-		  - administrator who needs them, with their shipped defaults empty so nothing here
+		  - NC_MCP_TALK_SEND is the one variable here that is not about connecting an
+		  - assistant. It closes the outgoing Talk channel of this app for the whole
+		  - instance: with it off no assistant can send a Talk message through this
+		  - connector, while reading conversations and their history stays untouched. It is
+		  - on unless it is set to off, because the switch is the countermeasure for that
+		  - channel and not its precondition (TALK-04).
+		  -
+		  - The three switches of AUTH-07, the one of AUTH-08 and the one of TALK-04 are
+		  - declared for the administrator who needs them, with their shipped defaults
+		  - empty so nothing here
 		  - overrides the code: AppAPI drops a variable with an empty value instead of
 		  - exporting it blank. An empty <default> element is worse than none at all, because
 		  - AppAPI 34.0.3 exports it as the string "Array" and the store answers the upload
@@ -374,6 +382,10 @@ D'autres réponses, notamment sur la façon dont un administrateur supprime l'ap
 				<name>NC_MCP_OAUTH_ALLOWED_CLIENTS</name>
 				<display-name>Allowed clients</display-name>
 				<description>Comma separated client ids or redirect URIs. Only read when the allowlist above is on.</description>			</variable>
+			<variable>
+				<name>NC_MCP_TALK_SEND</name>
+				<display-name>Let assistants send Talk messages</display-name>
+				<description>The outgoing Talk channel of this app. On unless set to off. With it off no assistant can send a Talk message through this connector, whatever an account is allowed to do in Talk itself; reading conversations and their history is not affected.</description>			</variable>
 		</environment-variables>
 	</external-app>
 </info>

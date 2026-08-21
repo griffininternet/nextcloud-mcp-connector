@@ -1,4 +1,4 @@
-"""The five admin values of BL-06, read out of the ExApp configuration (EXAPP-04).
+"""The six admin values of BL-06 and TALK-04, read out of the ExApp configuration (EXAPP-04).
 
 Nothing here opens a socket: the one outgoing OCS call is answered by respx, exactly as in
 ``test_oauth_crypto.py``, whose read path this module reuses.
@@ -70,16 +70,18 @@ def answer(values: dict[str, Any], *, camel: bool = False) -> respx.Route:
     )
 
 
-# --- the contract of the five keys -------------------------------------------------
+# --- the contract of the six keys --------------------------------------------------
 
 
-def test_the_five_keys_are_the_field_ids_of_the_admin_form() -> None:
+def test_the_six_keys_are_the_field_ids_of_the_admin_form() -> None:
     """Pattern 1 of the research: the config key IS the field id, without a prefix.
 
     Five since finding B-1 of the v1.0 milestone audit: ``NC_MCP_OAUTH_CIMD`` was a deploy
     variable and a manifest declaration and nothing in this chain, so on the one kind of
     installation this chain exists for, the one from the app store, that switch could not be
-    set at all.
+    set at all. Six since phase 9, where ``talk_send`` was the same case, and it is last
+    because the four OAuth values belong together (``registry.client_policy`` reads two of
+    them as one answer).
     """
     assert config_values.CONFIG_KEYS == (
         "public_url",
@@ -87,6 +89,7 @@ def test_the_five_keys_are_the_field_ids_of_the_admin_form() -> None:
         "oauth_cimd",
         "oauth_allowlist_only",
         "oauth_allowed_clients",
+        "talk_send",
     )
 
 
@@ -98,8 +101,14 @@ def test_every_key_maps_to_the_variable_the_existing_code_already_reads() -> Non
         "oauth_cimd": registry.ENV_CIMD,
         "oauth_allowlist_only": registry.ENV_ALLOWLIST_ONLY,
         "oauth_allowed_clients": registry.ENV_ALLOWED_CLIENTS,
+        "talk_send": config.ENV_TALK_SEND,
     }
     assert set(config_values.KEY_TO_ENV) == set(config_values.CONFIG_KEYS)
+
+
+def test_the_talk_switch_is_validated_like_every_other_checkbox() -> None:
+    """No new validation code: ``_usable_value`` already branches on this set."""
+    assert "talk_send" in config_values.SWITCH_KEYS
 
 
 def test_the_switch_spellings_are_the_ones_the_registry_understands() -> None:
@@ -120,8 +129,8 @@ def test_only_one_place_in_this_module_reaches_the_network() -> None:
 
 @pytest.mark.anyio
 @respx.mock
-async def test_one_request_asks_for_all_five_keys() -> None:
-    """Five values, one round trip: the read takes a list and there is nothing to loop."""
+async def test_one_request_asks_for_all_six_keys() -> None:
+    """Six values, one round trip: the read takes a list and there is nothing to loop."""
     route = answer({"public_url": ADMIN_URL})
 
     values = await config_values.read_values(env=ENV)
@@ -136,6 +145,7 @@ async def test_one_request_asks_for_all_five_keys() -> None:
             "oauth_cimd",
             "oauth_allowlist_only",
             "oauth_allowed_clients",
+            "talk_send",
         ]
     }
     assert values == {"public_url": ADMIN_URL}
@@ -687,7 +697,7 @@ async def test_the_client_list_passes_through_unchanged() -> None:
 
 @pytest.mark.anyio
 @respx.mock
-async def test_all_five_values_travel_together() -> None:
+async def test_all_six_values_travel_together() -> None:
     """The whole overlay of a fully configured instance, in the spelling of the env."""
     answer(
         {
@@ -696,6 +706,7 @@ async def test_all_five_values_travel_together() -> None:
             "oauth_cimd": "false",
             "oauth_allowlist_only": "true",
             "oauth_allowed_clients": "claude-desktop",
+            "talk_send": "false",
         }
     )
 
@@ -705,13 +716,73 @@ async def test_all_five_values_travel_together() -> None:
         registry.ENV_CIMD: "off",
         registry.ENV_ALLOWLIST_ONLY: "on",
         registry.ENV_ALLOWED_CLIENTS: "claude-desktop",
+        config.ENV_TALK_SEND: "off",
+    }
+
+
+# --- the switch of TALK-04 on the read path (layer 2 of success criterion 5) --------
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_stored_talk_switch_of_zero_becomes_an_overlay_of_off() -> None:
+    """What an unticked checkbox in the form has to arrive as in this process.
+
+    ``0`` is the spelling Nextcloud stores for an unticked box, and ``off`` is the one
+    spelling that leaves this module, because ``config.talk_send_enabled`` reads the value
+    out of the process environment and not out of a form.
+    """
+    answer({"talk_send": "0"})
+
+    assert await config_values.admin_overlay(env=ENV) == {
+        config.ENV_TALK_SEND: config_values.SWITCH_OFF
     }
 
 
 @pytest.mark.anyio
 @respx.mock
+async def test_a_stored_talk_switch_of_one_becomes_an_overlay_of_on() -> None:
+    """The other direction, so the value is never assumed from the absence of the other."""
+    answer({"talk_send": "1"})
+
+    assert await config_values.admin_overlay(env=ENV) == {
+        config.ENV_TALK_SEND: config_values.SWITCH_ON
+    }
+
+
+@pytest.mark.anyio
+@respx.mock
+@pytest.mark.parametrize("raw", ["vielleicht", "maybe", "onoff", "2", "-1"])
+async def test_an_unreadable_talk_switch_is_refused_without_naming_the_value(
+    caplog: pytest.LogCaptureFixture, raw: str
+) -> None:
+    """T-09-10: the value came in over HTTP, so the log names the field and nothing else.
+
+    Refused rather than guessed, and the environment stays in force for this key, which is
+    what makes the precedence rule work in both directions.
+    """
+    answer({"talk_send": raw})
+
+    with caplog.at_level(logging.DEBUG):
+        values = await config_values.admin_values(env=ENV)
+
+    assert values.overlay == {}
+    assert values.refused == frozenset({"talk_send"})
+    # Only the records of this module: the httpx INFO line of the mocked round trip carries
+    # the request URL, and a digit out of that path would answer the negative claim below.
+    logged = "\n".join(
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "mcp_connector.exapp.config_values"
+    )
+    assert "talk_send" in logged
+    assert raw not in logged
+
+
+@pytest.mark.anyio
+@respx.mock
 async def test_one_unusable_value_never_drops_the_others() -> None:
-    """Per key validation: a typo in one field is not an outage of the other four."""
+    """Per key validation: a typo in one field is not an outage of the other five."""
     answer(
         {
             "public_url": "https://cloud.example.test/x#frag",
