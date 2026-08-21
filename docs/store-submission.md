@@ -112,6 +112,7 @@ Every line was measured, not assumed. No fact without its check.
 | 2026-08-21 15:44Z | The store accepted the 0.1.4 release | `POST /api/v1/apps/releases` from the page context of the signed in store session answered HTTP 201 |
 | 2026-08-21 15:46Z | The image of 0.1.4 is pullable anonymously and a real multi arch index: `linux/amd64`, `linux/arm64`, plus the two attestation entries | anonymous token from `ghcr.io/token`, then `https://ghcr.io/v2/street1983nk/mcp_connector/manifests/0.1.4`, `application/vnd.oci.image.index.v1+json` |
 | 2026-08-21 15:46Z | All five tags exist, none was rewritten | `https://ghcr.io/v2/street1983nk/mcp_connector/tags/list` returns `["0.1.0","0.1.1","0.1.2","0.1.3","0.1.4"]` |
+| 2026-08-21 15:46Z | Release 0.1.4 is listed with the platform span `>=32.0.0 <35.0.0`, next to all four earlier releases | `curl -sS https://apps.nextcloud.com/api/v1/appapi_apps.json`, releases of `mcp_connector`: `0.1.4`, `0.1.3`, `0.1.2`, `0.1.1` and `0.1.0`. Two minutes behind the upload this time |
 
 ### The update keeps the connections
 
