@@ -556,6 +556,68 @@ ensure_readonly_share() {
   return 1
 }
 
+# --- the Talk test conversations (plan 09-05) -----------------------------------------
+#
+# Two conversations of alice, both with real umlauts in the name: one writable and one write
+# protected. The write protected one carries the negative case of TALK-03, because a refusal
+# with a sentence and a next step needs an object to be refused on and not an assumption.
+#
+# The changelog conversation (type 4) is deliberately not created and never used as a target.
+# Talk creates it for every account by itself, it is always write protected, and it is exactly
+# the trap `tools.talk._may_send` catches.
+#
+# `occ talk:room:create` is **not** idempotent: a second call creates a second room with the
+# same name. The room is therefore looked up by name first and only created when it is
+# missing. The lookup goes over the conversation list of the account itself, because the app
+# ships no listing command at all: measured against spreed 24.0.4 on 2026-08-21, the `talk:`
+# namespace offers create, update, delete, add, remove, promote and demote, and nothing that
+# lists rooms.
+#
+# The name is matched on its ASCII prefix and not on the whole string, and that is not
+# laziness: PHP writes every umlaut of a JSON answer as a \uXXXX escape, so a grep for the
+# literal name would never match the answer of the API. The prefix is unique per
+# conversation, which is what keeps the match exact enough.
+talk_room_token() {
+  local uid="$1" password="$2" key="$3"
+  nc_body "$uid" "$password" GET "${BASE_URL}/ocs/v2.php/apps/spreed/api/v4/room" \
+    -H "OCS-APIRequest: true" -H "Accept: application/json" |
+    tr '{' '\n' | grep "\"displayName\":\"${key}" |
+    grep -o '"token":"[a-z0-9]\{4,30\}"' | head -n1 | sed 's/.*:"//; s/"$//' || true
+}
+
+ensure_talk_room() {
+  local uid="$1" password="$2" key="$3" name="$4" readonly="$5" token output
+  token="$(talk_room_token "$uid" "$password" "$key")"
+  if [ -z "$token" ]; then
+    if ! output="$(occ talk:room:create "$name" --user "$uid" --owner "$uid" 2>&1)"; then
+      echo "ERROR: could not create the Talk conversation ${name}:" >&2
+      echo "${output}" >&2
+      return 1
+    fi
+    # The command prints "Room token: <token>" and the success line after it. The CR strip is
+    # the Windows guard, the same one app_password needs.
+    token="$(printf '%s\n' "$output" | tr -d '\r' | sed -n 's/^Room token: //p' | head -n1)"
+    if [ -z "$token" ]; then
+      echo "ERROR: talk:room:create printed no token for ${name}:" >&2
+      echo "${output}" >&2
+      return 1
+    fi
+    echo "talk conversation ${name}: created (${token})"
+  else
+    echo "talk conversation ${name}: exists (${token})"
+  fi
+  # The write protection is established on every run instead of only at the create. It is the
+  # object the negative case is measured on, so a conversation somebody switched back to
+  # read-write would turn that test green for the wrong reason. `--readonly 0` says the same
+  # thing about the writable one, and both directions are idempotent.
+  if ! output="$(occ talk:room:update "$token" --readonly "$readonly" 2>&1)"; then
+    echo "ERROR: could not set readonly=${readonly} on the conversation ${name}:" >&2
+    echo "${output}" >&2
+    return 1
+  fi
+  echo "talk conversation ${name}: readonly=${readonly}"
+}
+
 app_password() {
   local uid="$1" password="$2" raw token
   raw="$(occ_pw "$password" user:auth-tokens:add "$uid" --password-from-env --name "$TOKEN_NAME")"
@@ -890,6 +952,11 @@ ensure_app deck
 # install-or-enable step as the two above.
 ensure_app tables
 ensure_app mail
+# Talk is the tool family of phase 9. Chat needs no signaling backend at all: the two routes
+# this connector builds are plain OCS calls against the database, and the internal signaling
+# server covers the rest, so this install step is as cheap as the two above. The app id is
+# `spreed`, not `talk`.
+ensure_app spreed
 
 # alice is the full test user, bob is the restricted one for the permission tests.
 ensure_user alice "${ALICE_PASSWORD}"
@@ -919,6 +986,25 @@ SHARED_FILE="${SHARED_DIR}/${SHARED_MARKER}.md"
 PRIVATE_MARKER="mcp-private-${SHARE_SUFFIX}"
 PRIVATE_FILE="/${PRIVATE_MARKER}.md"
 ensure_readonly_share alice "${ALICE_PASSWORD}" bob "${BOB_PASSWORD}"
+
+# The two Talk test conversations (see the block above talk_room_token). They stand here and
+# not next to the `ensure_app` lines above for the same reason ensure_mail_account does: on a
+# fresh topology alice does not exist at that point, and `talk:room:create --user alice` for an
+# unknown user is an error and not a no-op. The names live in these four lines only and reach
+# tests/integration/test_talk_roundtrip.py through the connection file at the end of this
+# script, so a rename is one edit. The ASCII prefix is what the lookup matches on; the umlauts
+# behind it are there so a broken encoding shows up in the first run instead of never.
+#
+# No spaces in either name, and that is not cosmetic: the connection file below is read with
+# `set -a && . ./.env.exapp`, and an unquoted value with a space in it makes the shell run its
+# second word as a command. Hyphens carry the same reading and survive every consumer of that
+# file, quoting rules included.
+TALK_ROOM_OPEN_KEY="MCP-Talk-offen"
+TALK_ROOM_LOCKED_KEY="MCP-Talk-nurlesen"
+TALK_ROOM_OPEN="${TALK_ROOM_OPEN_KEY}-Grüße-aus-Hamburg"
+TALK_ROOM_LOCKED="${TALK_ROOM_LOCKED_KEY}-Straße-ohne-Ausgang"
+ensure_talk_room alice "${ALICE_PASSWORD}" "${TALK_ROOM_OPEN_KEY}" "${TALK_ROOM_OPEN}" 0
+ensure_talk_room alice "${ALICE_PASSWORD}" "${TALK_ROOM_LOCKED_KEY}" "${TALK_ROOM_LOCKED}" 1
 
 # Nextcloud counts failed logins per source IP, and a remote MCP server is one IP for many
 # users. The negative tests produce 401s on purpose, so the guard would throttle the whole
@@ -980,6 +1066,13 @@ NC_MCP_TEST_SHARED_DIR=${SHARED_DIR#/}
 NC_MCP_TEST_SHARED_FILE=${SHARED_FILE#/}
 NC_MCP_TEST_PRIVATE_FILE=${PRIVATE_FILE#/}
 NC_MCP_TEST_SHARED_MARKER=${SHARED_MARKER}
+# The two Talk test conversations of plan 09-05, both owned by NC_MCP_TEST_USER: one writable
+# and one write protected, and the write protected one carries the negative case of TALK-03.
+# The names are defined once in this script and travel through this file, so
+# tests/integration/test_talk_roundtrip.py never spells them a second time; without them it
+# skips instead of failing.
+NC_MCP_TEST_TALK_ROOM=${TALK_ROOM_OPEN}
+NC_MCP_TEST_TALK_READONLY_ROOM=${TALK_ROOM_LOCKED}
 # The account passwords of the two throwaway users. The OAuth flow check of plan 03-08
 # needs them because it walks the Nextcloud sign in of the Login Flow v2 without a
 # browser; nothing in src/ ever reads a user password, and this file is git-ignored.
