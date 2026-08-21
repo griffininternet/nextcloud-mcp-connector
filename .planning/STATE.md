@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Kuratierte Breite
-status: executing
-stopped_at: Completed 08-04-PLAN.md
-last_updated: "2026-08-21T08:14:12.690Z"
+status: verifying
+stopped_at: Completed 08-05-PLAN.md
+last_updated: "2026-08-21T08:43:17.020Z"
 last_activity: 2026-08-21
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 5
-  completed_plans: 3
-  percent: 0
+  completed_plans: 5
+  percent: 25
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 
 Phase: 8 (Erreichbarkeits-Spike und Tables) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-21
 
 ## Performance Metrics
@@ -118,6 +118,7 @@ Last activity: 2026-08-21
 | Phase 08-erreichbarkeits-spike-und-tables P02 | 12 min | 3 tasks | 9 files |
 | Phase 08 P03 | 12 min | 3 tasks | 3 files |
 | Phase 08 P04 | 18 min | 3 tasks | 14 files |
+| Phase 08 P05 | 24 min | 2 tasks tasks | 5 files files |
 
 ## Accumulated Context
 
@@ -407,6 +408,10 @@ Recent decisions affecting current work:
 - [Phase 08]: Das Budget-Gate steht auf einer datierten Messung plus 15 Prozent (12801 Bytes bei 18 Werkzeugen, Gate 15000) und traegt zusaetzlich MAX_TOOL_BYTES = 1400 je Werkzeug. Eine Aggregatzahl mit Luft meldet keine Regression: calendar_create_event liegt bei 1351 Bytes, ein neues Werkzeug mit Absatzbeschreibung faellt ueber 1400 und wird damit sichtbar
 - [Phase 08]: Die fuenf Tables-Nadeln des Destruktiv-Gates sind auf die Anfuehrungszeichen-Form eines Pfadliterals verankert, weil die erlaubten Routen tables/{id}/rows und rows/simple sonst mitgetroffen wuerden; je Nadel eine Gegenprobe plus der Nachweis, dass die erlaubten Formen durchgehen
 - [Phase 08]: TABLES-01 und TABLES-02 werden mit der Registrierung abgehakt, wie 08-03 es angekuendigt hat; der Live-Nachweis gegen eine echte Instanz bleibt Gegenstand von 08-05
+- [Phase 08]: Ein Status ab 400 ohne JSON-Koerper wird an seinem Status erklaert und nicht als Loginseite; die echte 404-Antwort auf eine unbekannte Tabelle traegt Content-Type text/html und einen leeren Koerper, und der alte Hinweis schickte das Modell zum App-Passwort statt zur Id
+- [Phase 08]: Annahme A2 ist gemessen statt angenommen: Auswahl-Label und ISO-Datum gehen ohne clientseitige Umformung durch (ein Create mit allen vier Werten, Antwort 200); ungemessen bleiben usergroup, relation und die datetime-Untertypen
+- [Phase 08]: Eine Tables-Textspalte ohne subtype macht jeden Zugriff auf die ganze Tabelle zu einem 500 (ColumnsHelper loest die Business-Klasse aus type plus subtype auf, TextBusiness existiert nicht); das Testgeruest legt Textspalten immer mit subtype line an
+- [Phase 08]: Der Zwei-Konten-Beweis fuer Tables laeuft auf der Impersonation-Naht mit zwei Credential-Objekten im Modus appapi; Nextcloud beantwortet den Zugriff auf eine fremde Tabelle mit 404 und leerem Koerper statt mit 403 und gibt ihre Existenz damit nicht preis
 
 ### Pending Todos
 
@@ -441,7 +446,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-21T08:14:12.675Z
+Last session: 2026-08-21T08:42:35.585Z
 Stopped at: Completed 08-04-PLAN.md
 Naechster Schritt: /gsd:plan-phase 8
 Resume file: None
