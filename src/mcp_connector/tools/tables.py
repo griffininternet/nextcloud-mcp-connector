@@ -23,6 +23,7 @@ and every share path. The client below has no code for any of it, which is what 
 create-only annotation of ``tables_create_row`` honest rather than a promise (T-08-11).
 """
 
+import json
 from typing import Any
 
 from .. import paging
@@ -55,6 +56,13 @@ _COLUMN_LIMITS = (
     "datetimeDefault",
 )
 
+#: The example is part of the hint, because "invalid JSON" without a shape to copy costs a
+#: round trip that a single object literal prevents.
+_VALUES_HINT = (
+    'Pass one JSON object of column titles and values, for example {"Task": "Call back", '
+    '"Amount": 12.5}. Call tables_browse with level=columns for the titles and their types.'
+)
+
 
 async def browse(
     clients: NcClients,
@@ -82,6 +90,163 @@ async def browse(
         return _envelope(level, [_column(column) for column in columns], capped)
 
     return await _rows(clients, table, capped, cursor)
+
+
+async def create_row(clients: NcClients, table_id: str, values: str) -> dict[str, Any]:
+    """Add one row to an existing table, addressed by column titles instead of ids.
+
+    ``values`` is a **string** with one compact JSON object, not a mapping parameter. A
+    ``dict`` parameter would pull ``additionalProperties`` or ``$defs`` into the input
+    schema, and the tool surface of this server forbids ``$defs`` in several places on
+    purpose; the precedent in this codebase is the comma string of
+    ``unified_search.providers``. The Tables app accepts a JSON string for ``data`` as well
+    (K4), so the string does not create a second shape on the way down either.
+
+    Nothing is written before all four refusals have been passed: a missing write
+    permission, an unknown title, an ambiguous title and a missing mandatory column. The
+    order matters, because each of them is cheaper than the write it prevents.
+
+    Cell values are not type checked here. The accepted shape per column ``type`` and
+    ``subtype`` is not fully documented in the app, and a hand rolled validator would be a
+    second truth that goes stale with every new column type. A 400 of the app is passed
+    through with its own message instead. Verified shapes: a text column takes a JSON
+    string, a number column takes a JSON number.
+
+    There is no retry. A timeout does not mean that nothing was written, and no tool of this
+    server can remove a duplicated row again, so the answer carries the id of the new row
+    and the model can read back instead of repeating (T-08-10).
+    """
+    await capabilities.require_app(clients, APP)
+
+    wanted = _parse_values(values)
+    table = str(table_id or "").strip()
+
+    info = await tables_client.get_table(clients.client, clients.creds, table)
+    if not _may_create(info):
+        raise ToolError(
+            message=f"No permission to add a row to table {table} ({_text(info.get('title'))}).",
+            hint=(
+                "This table is shared with this account without a create permission. Ask its "
+                "owner in Nextcloud for a write permission, or pick a table that tables_browse "
+                "reports with can_create."
+            ),
+        )
+
+    columns = await tables_client.get_columns(clients.client, clients.creds, table)
+    data, written = _by_column_id(table, wanted, columns)
+
+    row = await tables_client.create_row(clients.client, clients.creds, table, data=data)
+    row_id = row.get("id")
+    if row_id in (None, ""):
+        raise ToolError(
+            message="Nextcloud created the row but reported no id.",
+            hint="Look for the row in the Tables app; it was probably created.",
+        )
+
+    return {
+        "id": row_id,
+        "table_id": table,
+        "url": tables_client.web_url(clients.creds, table),
+        "values_written": written,
+    }
+
+
+def _parse_values(values: str) -> dict[str, Any]:
+    """Read the free form parameter, and answer a bad one with a shape to copy."""
+    try:
+        parsed = json.loads(values or "")
+    except json.JSONDecodeError:
+        # ``from None``: a decoder traceback would carry the raw parameter into the log and
+        # tell the model nothing it can act on.
+        raise ToolError(message="values is not valid JSON.", hint=_VALUES_HINT) from None
+
+    if isinstance(parsed, list):
+        raise ToolError(message="values must be a JSON object, not a list.", hint=_VALUES_HINT)
+    if not isinstance(parsed, dict):
+        raise ToolError(
+            message="values must be a JSON object of column titles and values.",
+            hint=_VALUES_HINT,
+        )
+    if not parsed:
+        raise ToolError(
+            message="values is an empty object, so there is nothing to write.",
+            hint=_VALUES_HINT,
+        )
+    return parsed
+
+
+def _by_column_id(
+    table: str, wanted: dict[str, Any], columns: list[dict[str, Any]]
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Resolve column titles against the columns of the instance, or refuse and say why.
+
+    Titles are never guessed and never sent: the keys of the returned mapping are column
+    **ids**, because the app casts every key with ``(int)`` and a title would silently become
+    the column ``0`` (T-08-15). The comparison is normalised, so "Task" and "task " find the
+    same column, and a title that matches two columns ends the call instead of picking one
+    of them and writing into the wrong column.
+    """
+    by_title: dict[str, list[dict[str, Any]]] = {}
+    for column in columns:
+        by_title.setdefault(_normalise(column.get("title")), []).append(column)
+
+    known = [_text(column.get("title") or "") for column in columns]
+    titles_hint = f"Columns of this table: {', '.join(known) or 'none'}."
+
+    ambiguous: list[str] = []
+    unknown: list[str] = []
+    data: dict[str, Any] = {}
+    written: dict[str, Any] = {}
+    for title, value in wanted.items():
+        matches = by_title.get(_normalise(title), [])
+        if not matches:
+            unknown.append(str(title))
+            continue
+        if len(matches) > 1:
+            found = ", ".join(str(column.get("id")) for column in matches)
+            ambiguous.append(f"{str(title)!r} (column ids {found})")
+            continue
+        column = matches[0]
+        data[str(column.get("id"))] = value
+        written[_text(column.get("title") or title)] = value
+
+    if ambiguous:
+        raise ToolError(
+            message=f"Table {table} has more than one column with the same title: "
+            f"{'; '.join(ambiguous)}.",
+            hint=(
+                "Tables has no unique constraint on column titles, so this title cannot be "
+                "resolved to one column. Rename one of them in the Tables app first; writing "
+                "into either of the two would be a guess."
+            ),
+        )
+    if unknown:
+        missing_titles = ", ".join(repr(title) for title in unknown)
+        raise ToolError(
+            message=f"Table {table} has no column titled {missing_titles}.",
+            hint=f"{titles_hint} The comparison ignores case and surrounding spaces.",
+        )
+
+    filled = {_normalise(title) for title in wanted}
+    required = [
+        _text(column.get("title") or "")
+        for column in columns
+        if column.get("mandatory") and _normalise(column.get("title")) not in filled
+    ]
+    if required:
+        raise ToolError(
+            message=f"Table {table} needs a value for {', '.join(repr(t) for t in required)}.",
+            hint=(
+                "These columns are mandatory in Tables, and a row without them is refused by "
+                "the app. Add them to values and try again."
+            ),
+        )
+    return data, written
+
+
+def _normalise(title: Any) -> str:
+    """One title as it is compared: trimmed and case folded, never as it is written."""
+    return str(title or "").strip().casefold()
 
 
 async def _tables(clients: NcClients) -> list[dict[str, Any]]:

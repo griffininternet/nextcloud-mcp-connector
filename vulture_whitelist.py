@@ -65,19 +65,12 @@ deck_api_versions
 NSMAP
 get_board
 
-# --- The transport layer of the Tables family (plan 08-02) ------------------------------
-# The five functions of nextcloud/clients/tables.py exist before their caller: plan 08-02
-# builds the transport with its own unit tests (tests/unit/test_tables_client.py drives every
-# one of them), plan 08-03 adds tools/tables.py, which is the production caller. They are in
-# this list for exactly that one plan, and every name leaves the list with the plan that calls
-# it, the same rule as the phase 4 block below. The transport is where the rules of the family
-# live (enforced limit, numeric path ids, the two spellings of the node path), which is why it
-# is written and tested in one piece instead of being grown from the tool layer downwards.
-get_tables
-get_table
-get_columns
-get_rows_simple
-create_row
+# --- The transport layer of the Tables family (plan 08-02, dissolved in plan 08-03) -----
+# Empty on purpose, and that is the rule of this file at work rather than an omission. Plan
+# 08-02 parked get_tables, get_table, get_columns, get_rows_simple and create_row here,
+# because the transport of nextcloud/clients/tables.py was written and tested in one piece
+# before its caller existed. Plan 08-03 added tools/tables.py, which calls all five, so every
+# one of them left the list with the plan that calls it.
 
 # tables_api_versions: the same case as deck_api_versions above. The gate for the app reads
 # tables_available, the version tuple exists so an instance that only offers one generation is
