@@ -227,8 +227,11 @@ async def _messages(
 ) -> dict[str, Any]:
     """One window of the history of one conversation, newest message first.
 
-    The conversation itself is read first, for two answers out of one request. It turns a
-    token a model invented into our own sentence instead of a request against a Talk path,
+    The handle is read before anything goes out, because it is the cheapest refusal of the
+    two: a handle of another conversation ends the call without a single Talk request.
+
+    The conversation itself is read after that, for two answers out of one request. It turns
+    a token a model invented into our own sentence instead of a request against a Talk path,
     and it is where the display name of the envelope comes from, so a wrong pick is visible
     without a second tool call.
 
@@ -244,8 +247,6 @@ async def _messages(
     answer whose sequence contradicts the meaning of ``next``, which walks backwards into the
     past.
     """
-    room = await _room(clients, token, include_last_message=False)
-
     last_known = 0
     if cursor:
         state = paging.decode_cursor(cursor)
@@ -255,6 +256,7 @@ async def _messages(
         paging.check_scope(state, "c", token, "conversation")
         last_known = paging.read_offset(state)
 
+    room = await _room(clients, token, include_last_message=False)
     raw, last_given = await talk_client.get_messages(
         clients.client, clients.creds, token, limit=limit, last_known_message_id=last_known
     )

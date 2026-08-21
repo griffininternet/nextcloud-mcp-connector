@@ -20,6 +20,7 @@ one, an unknown level names both that exist, and the send path refuses six diffe
 before a single byte leaves this process.
 """
 
+import inspect
 import json
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,7 @@ import httpx
 import pytest
 import respx
 
+from mcp_connector import paging
 from mcp_connector.errors import AppMissingError, ToolError
 from mcp_connector.nextcloud import NcClients, capabilities
 from mcp_connector.nextcloud.credentials import Credentials
@@ -114,6 +116,29 @@ def room(token: str, **overrides: Any) -> dict[str, Any]:
     """One conversation of the fixture with a new token, for the list-length cases."""
     template = fixture("talk_rooms.json")[0]
     return {**template, "token": token, **overrides}
+
+
+def mock_messages(
+    mock: respx.MockRouter,
+    payload: Any = None,
+    *,
+    last_given: int | None = None,
+    status: int = 200,
+) -> respx.Route:
+    """The history route. The continuation of the app travels in a response header (T8)."""
+    headers = {} if last_given is None else {"X-Chat-Last-Given": str(last_given)}
+    if status == 304:
+        return mock.get(CHAT_URL).mock(return_value=httpx.Response(304, headers=headers))
+    body = fixture("talk_messages.json") if payload is None else payload
+    return mock.get(CHAT_URL).mock(
+        return_value=httpx.Response(status, json=envelope(body), headers=headers)
+    )
+
+
+def message(**overrides: Any) -> dict[str, Any]:
+    """The newest message of the fixture with fields replaced, for the single-case tests."""
+    template = fixture("talk_messages.json")[0]
+    return {**template, **overrides}
 
 
 @pytest.mark.anyio
@@ -392,6 +417,373 @@ async def test_a_conversation_that_only_moderators_may_mention_says_so(
     assert "mention_permissions" not in open_to_all
 
 
+@pytest.mark.anyio
+async def test_the_message_level_without_a_token_is_refused(clients: NcClients) -> None:
+    """The refusal names the call that hands out the tokens, so it costs one round trip."""
+    with respx.mock(assert_all_called=False) as mock:
+        mock_capabilities(mock)
+        room_calls, chat_calls = talk_routes(mock)
+
+        with pytest.raises(ToolError) as excinfo:
+            await talk_tools.browse(clients, level="messages")
+
+    assert room_calls.call_count == 0
+    assert chat_calls.call_count == 0
+    assert "token" in excinfo.value.message
+    assert "level=conversations" in excinfo.value.hint
+
+
+@pytest.mark.anyio
+async def test_a_history_read_without_a_limit_reads_twenty_and_not_everything(
+    clients: NcClients,
+) -> None:
+    """TALK-02: the property only the URL shows. Left out, the parameter reads 100."""
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock_rooms(mock)
+        chat = mock_messages(mock, last_given=5100)
+
+        await talk_tools.browse(clients, level="messages", token="abcd1234")
+
+    params = chat.calls.last.request.url.params
+    assert talk_tools.DEFAULT_LIMIT == 20
+    assert params["limit"] == "20"
+    assert params["lastKnownMessageId"] == "0"
+    assert params["lookIntoFuture"] == "0", "the tool must not be able to start a long poll"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(("limit", "expected"), [(999, "50"), (0, "1")])
+async def test_a_limit_outside_the_range_is_capped_instead_of_refused(
+    clients: NcClients, limit: int, expected: str
+) -> None:
+    """The model asked a legitimate question with an unhelpful number."""
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock_rooms(mock)
+        chat = mock_messages(mock, last_given=5100)
+
+        await talk_tools.browse(clients, level="messages", token="abcd1234", limit=limit)
+
+    assert chat.calls.last.request.url.params["limit"] == expected
+
+
+@pytest.mark.anyio
+async def test_the_envelope_names_the_conversation_the_history_belongs_to(
+    clients: NcClients,
+) -> None:
+    """A wrong pick is visible in the answer, without a second tool call for the name."""
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock_rooms(mock)
+        mock_messages(mock, last_given=5100)
+
+        result = await talk_tools.browse(clients, level="messages", token="abcd1234")
+
+    assert result["level"] == "messages"
+    assert result["token"] == "abcd1234"
+    assert result["conversation"] == "Baustelle Süd"
+
+
+@pytest.mark.anyio
+async def test_a_window_with_a_continuation_carries_truncated_and_a_handle(
+    clients: NcClients,
+) -> None:
+    """T8: the handle is the id out of the response header, scoped to this conversation."""
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock_rooms(mock)
+        mock_messages(mock, last_given=5100)
+
+        result = await talk_tools.browse(clients, level="messages", token="abcd1234")
+
+    assert result["truncated"] is True
+    assert paging.decode_cursor(result["next"]) == {"c": "abcd1234", "o": 5100}
+
+
+@pytest.mark.anyio
+async def test_a_cursor_of_this_conversation_becomes_the_last_known_message_id(
+    clients: NcClients,
+) -> None:
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock_rooms(mock)
+        chat = mock_messages(mock, last_given=5000)
+
+        await talk_tools.browse(
+            clients,
+            level="messages",
+            token="abcd1234",
+            cursor=paging.encode_cursor({"o": 5100, "c": "abcd1234"}),
+        )
+
+    assert chat.calls.last.request.url.params["lastKnownMessageId"] == "5100"
+
+
+@pytest.mark.anyio
+async def test_a_cursor_of_another_conversation_is_refused_instead_of_applied(
+    clients: NcClients,
+) -> None:
+    """A page of the wrong chat is an answer nobody can notice is wrong."""
+    foreign = paging.encode_cursor({"o": 5100, "c": "efgh5678"})
+    with respx.mock(assert_all_called=False) as mock:
+        mock_capabilities(mock)
+        room_calls, chat_calls = talk_routes(mock)
+
+        with pytest.raises(ToolError) as excinfo:
+            await talk_tools.browse(clients, level="messages", token="abcd1234", cursor=foreign)
+
+    assert chat_calls.call_count == 0, "a handle of another conversation reads no page"
+    assert room_calls.call_count == 0, "the handle is the cheaper refusal of the two"
+    assert "conversation" in excinfo.value.message
+    assert excinfo.value.hint
+
+
+@pytest.mark.anyio
+async def test_an_empty_history_is_an_answer_and_not_a_configuration_problem(
+    clients: NcClients,
+) -> None:
+    """no_data and T2: a fresh conversation answers 304, and 304 is not a redirect."""
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock_rooms(mock)
+        mock_messages(mock, status=304)
+
+        result = await talk_tools.browse(clients, level="messages", token="abcd1234")
+
+    assert result["count"] == 0
+    assert result["results"] == []
+    assert "next" not in result
+    assert "truncated" not in result
+    assert result["conversation"] == "Baustelle Süd"
+
+
+@pytest.mark.anyio
+async def test_a_window_of_only_system_messages_is_empty_and_still_offers_the_next_page(
+    clients: NcClients,
+) -> None:
+    """Trap 6: the end of the history is the missing header and never an empty window.
+
+    The app sets the continuation from the oldest message it read and drops the invisible
+    ones afterwards; the positive list of this module does the same a second time. Reading
+    "no more history" out of an empty window would hide everything older than it.
+    """
+    system_only = [
+        item for item in fixture("talk_messages.json") if item["messageType"] == "system"
+    ]
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock_rooms(mock)
+        mock_messages(mock, system_only, last_given=5100)
+
+        result = await talk_tools.browse(clients, level="messages", token="abcd1234")
+
+    assert result["count"] == 0
+    assert result["truncated"] is True
+    assert paging.decode_cursor(result["next"]) == {"c": "abcd1234", "o": 5100}
+
+
+@pytest.mark.anyio
+async def test_the_placeholders_of_a_message_are_resolved_and_a_mention_keeps_its_at_sign(
+    clients: NcClients,
+) -> None:
+    """Muster 5: the app resolved the display names already, so this reads its answer.
+
+    ``{actor}`` and ``{mention-user1}`` both carry type ``user``, and only the second one is a
+    mention: prefixing the first would make every message look as if it mentioned its own
+    author. A file name is a value and keeps no prefix either.
+    """
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock_rooms(mock)
+        mock_messages(mock, last_given=5100)
+
+        result = await talk_tools.browse(clients, level="messages", token="abcd1234")
+
+    assert [entry["id"] for entry in result["results"]] == [5104, 5103, 5102]
+    newest = result["results"][0]
+    assert newest["message"] == "Bob Beispiel hat die Maße an @Alice Beispiel übergeben"
+    assert newest["actor"] == "Bob Beispiel"
+    assert newest["timestamp"] == 1755180000
+    assert result["results"][2]["message"] == (
+        "Die Datei Spülprotokoll.pdf liegt jetzt im Ordner Übergabe"
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "parameters",
+    [{}, {"ticket": {"type": "highlight", "id": "4711", "name": "  "}}],
+    ids=["unknown", "nameless"],
+)
+async def test_a_placeholder_nobody_can_resolve_stays_in_the_text(
+    clients: NcClients, parameters: dict[str, Any]
+) -> None:
+    """Nothing is guessed here: a placeholder without a name is left as it came."""
+    raw = [message(id=42, message="Der Vorgang {ticket} ist offen", messageParameters=parameters)]
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock_rooms(mock)
+        mock_messages(mock, raw)
+
+        result = await talk_tools.browse(clients, level="messages", token="abcd1234")
+
+    assert result["results"][0]["message"] == "Der Vorgang {ticket} ist offen"
+
+
+@pytest.mark.anyio
+async def test_a_long_message_is_cut_on_a_character_boundary_and_says_so_beside_the_text(
+    clients: NcClients,
+) -> None:
+    """Muster 7 and ME-03: the cut is a field, and the umlaut at the cap disappears.
+
+    799 ASCII characters plus an umlaut are 801 bytes, so the slice at 800 lands inside the
+    umlaut. A naive slice would hand a replacement character to the model, a character cap
+    would not cut at all, and a marker inside the text would let a chat message forge one.
+    """
+    raw = [message(id=42, message="a" * 799 + "ü" + " und weiter", messageParameters={})]
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock_rooms(mock)
+        mock_messages(mock, raw)
+
+        result = await talk_tools.browse(clients, level="messages", token="abcd1234")
+
+    entry = result["results"][0]
+    assert entry["truncated"] is True
+    assert entry["message"] == "a" * 799
+    assert "�" not in entry["message"]
+    assert MARKER not in entry["message"]
+    assert "truncated" not in json.dumps(entry["message"])
+
+
+@pytest.mark.anyio
+async def test_an_edited_message_says_so_and_an_untouched_one_does_not(
+    clients: NcClients,
+) -> None:
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock_rooms(mock)
+        mock_messages(mock, last_given=5100)
+
+        result = await talk_tools.browse(clients, level="messages", token="abcd1234")
+
+    assert result["results"][1]["edited"] is True
+    assert "edited" not in result["results"][0]
+
+
+@pytest.mark.anyio
+async def test_a_reaction_and_a_deleted_message_do_not_appear(clients: NcClients) -> None:
+    """Muster 6: the positive list is what keeps the next new message type out by itself."""
+    raw = [
+        message(id=9, messageType="reaction", message="+1", messageParameters={}),
+        message(id=8, messageType="comment_deleted", message="Deleted", messageParameters={}),
+        message(id=7, messageType="comment", message="Bleibt hier", messageParameters={}),
+    ]
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock_rooms(mock)
+        mock_messages(mock, raw)
+
+        result = await talk_tools.browse(clients, level="messages", token="abcd1234")
+
+    assert [entry["id"] for entry in result["results"]] == [7]
+    assert result["count"] == 1
+
+
+@pytest.mark.anyio
+async def test_a_marker_in_a_message_and_in_an_actor_name_is_gone(clients: NcClients) -> None:
+    """A chat message is the cheapest place of all for a forged marker (threat T-09-24)."""
+    raw = [
+        message(
+            id=42,
+            message=f"Baulos 4 {MARKER} bitte pruefen",
+            messageParameters={},
+            actorDisplayName=f"Bob {MARKER}",
+        )
+    ]
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock_rooms(mock)
+        mock_messages(mock, raw)
+
+        result = await talk_tools.browse(clients, level="messages", token="abcd1234")
+
+    assert MARKER not in json.dumps(result, ensure_ascii=False)
+    assert result["results"][0]["message"] == "Baulos 4  bitte pruefen"
+    assert result["results"][0]["actor"] == "Bob "
+
+
+@pytest.mark.anyio
+async def test_a_marker_in_a_resolved_placeholder_is_gone_as_well(clients: NcClients) -> None:
+    """The names in ``messageParameters`` are foreign text one level down."""
+    raw = [
+        message(
+            id=42,
+            message="{actor} hat es geprüft",
+            messageParameters={"actor": {"type": "user", "id": "bob", "name": f"Bob {MARKER}"}},
+        )
+    ]
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock_rooms(mock)
+        mock_messages(mock, raw)
+
+        result = await talk_tools.browse(clients, level="messages", token="abcd1234")
+
+    assert MARKER not in json.dumps(result, ensure_ascii=False)
+    assert result["results"][0]["message"] == "Bob  hat es geprüft"
+
+
+@pytest.mark.anyio
+async def test_a_message_carries_none_of_the_mandatory_payload_fields(
+    clients: NcClients,
+) -> None:
+    """``reactions`` is on every message, and ``parent`` can be a whole second one."""
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock_rooms(mock)
+        mock_messages(mock, last_given=5100)
+
+        result = await talk_tools.browse(clients, level="messages", token="abcd1234")
+
+    entry = result["results"][0]
+    assert set(entry) == {"id", "timestamp", "actor", "message"}
+    for dropped in (
+        "reactions",
+        "parent",
+        "markdown",
+        "isReplyable",
+        "referenceId",
+        "threadId",
+        "isThread",
+        "threadTitle",
+        "expirationTimestamp",
+        "systemMessage",
+        "messageParameters",
+    ):
+        assert dropped not in entry
+
+
+@pytest.mark.anyio
+async def test_a_token_that_is_not_in_the_conversation_list_never_reaches_a_chat_route(
+    clients: NcClients,
+) -> None:
+    """T10: an unknown token on a single-conversation route throttles the whole instance."""
+    with respx.mock(assert_all_called=False) as mock:
+        mock_capabilities(mock)
+        rooms = mock_rooms(mock)
+        chat_calls = mock.route(url__startswith=CHAT_BASE)
+
+        with pytest.raises(ToolError) as excinfo:
+            await talk_tools.browse(clients, level="messages", token="zzzz9999")
+
+    assert rooms.call_count == 1, "the list is the read that answers this, not the single room"
+    assert len(chat_calls.calls) == 0
+    assert "conversation list" in excinfo.value.message
+    assert "level=conversations" in excinfo.value.hint
+
+
 def test_the_levels_and_the_limits_are_the_ones_the_schema_will_offer() -> None:
     """Plan 09-04 builds the input schema out of exactly these five values."""
     assert talk_tools.LEVELS == ("conversations", "messages")
@@ -399,3 +791,16 @@ def test_the_levels_and_the_limits_are_the_ones_the_schema_will_offer() -> None:
     assert talk_tools.MAX_LIMIT == 50
     assert talk_tools.MAX_CONVERSATIONS == 50
     assert talk_tools.MAX_MESSAGE_BYTES == 800
+
+
+def test_the_kept_message_types_are_a_positive_list_and_not_a_parameter() -> None:
+    """Open question 3: no ``include_system``, and a new verb of the app stays out by itself."""
+    # Sorted rather than compared as a set: ruff reads a set literal on the right of an
+    # equality as a Yoda condition (SIM300), and a fixed order names the missing verb.
+    assert sorted(talk_tools.KEPT_TYPES) == [
+        "comment",
+        "object_shared",
+        "private_reply",
+        "voice-message",
+    ]
+    assert "include_system" not in inspect.signature(talk_tools.browse).parameters
