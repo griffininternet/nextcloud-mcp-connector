@@ -177,7 +177,7 @@ off with `NC_MCP_DISABLE_DNS_REBINDING_PROTECTION=true`.
 ## ExApp mode (installed through AppAPI)
 
 The third way to run this server is as a Nextcloud ExApp, installed by an administrator
-through AppAPI. It sits beside stdio and the standalone HTTP mode above: same code, same 16
+through AppAPI. It sits beside stdio and the standalone HTTP mode above: same code, same 20
 tools, a different place the identity comes from. Installing it is a separate document,
 [exapp-install.md](exapp-install.md); this section is about connecting a client to an
 instance where it is already installed.
