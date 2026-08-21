@@ -44,6 +44,7 @@ ENV_ALLOWED_HOSTS = "NC_MCP_ALLOWED_HOSTS"
 ENV_STATIC_BEARER = "NC_MCP_STATIC_BEARER"
 ENV_DISABLE_DNS_REBINDING = "NC_MCP_DISABLE_DNS_REBINDING_PROTECTION"
 ENV_PUBLIC_URL = "NC_MCP_PUBLIC_URL"
+ENV_TALK_SEND = "NC_MCP_TALK_SEND"
 
 # The AppAPI deploy environment. The names come from AppAPI, see the module docstring.
 ENV_APP_ID = "APP_ID"
@@ -67,7 +68,14 @@ DEFAULT_PUBLIC_URL = "http://127.0.0.1:8765"
 #: the SDK default, because a silent default is what produces a 421 nobody can explain.
 LOCALHOST_NAMES = ("127.0.0.1", "localhost", "[::1]")
 
+#: The spellings that arm a switch, and the ones that disarm it. Deliberately identical to
+#: the two sets of ``exapp/config_values.py`` and of ``oauth/registry.py``, and held equal by
+#: a test: a value that arms a switch in the environment has to arm the same switch when it
+#: comes out of the admin form, or an administrator debugs a difference nobody wrote down.
+#: Spelled here instead of imported, because ``exapp/config_values.py`` imports this module
+#: and a shared constant in the other direction would be a circular import.
 _TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
+_FALSE_VALUES = frozenset({"0", "false", "no", "off"})
 
 #: Where the OAuth store goes when this process was not started by the AppAPI deploy
 #: daemon, which is the ``--manual`` development mode and nothing else. Relative to the
@@ -316,6 +324,28 @@ def dns_rebinding_protection(env: Mapping[str, str] | None = None) -> bool:
     source = os.environ if env is None else env
     value = (source.get(ENV_DISABLE_DNS_REBINDING) or "").strip().lower()
     return value not in _TRUE_VALUES
+
+
+def talk_send_enabled(env: Mapping[str, str] | None = None) -> bool:
+    """Whether an assistant may send a Talk message through this app at all (TALK-04).
+
+    The one outgoing channel of this connector that an administrator can close for a whole
+    instance. Reading is untouched by it: conversations and history stay readable whatever
+    this answers, which is why the switch is about sending and not about Talk.
+
+    This is the one line of this module that must not be copied from
+    :func:`dns_rebinding_protection`. The return is ``value not in _FALSE_VALUES`` and not
+    ``value in _TRUE_VALUES``, because the shipped state of this switch is on (TALK-04): an
+    unset value, a blank one and a value nobody understands all have to answer True. A
+    membership test in the positive set would turn a typo into the silent removal of a
+    capability this server promises, which is the worse of the two failures.
+    ``dns_rebinding_protection`` does the opposite for the same reason read the other way
+    round: there the variable switches a default-on protection *off*, so an unreadable value
+    must not disarm it either.
+    """
+    source = os.environ if env is None else env
+    value = (source.get(ENV_TALK_SEND) or "").strip().lower()
+    return value not in _FALSE_VALUES
 
 
 def _has_port(name: str) -> bool:

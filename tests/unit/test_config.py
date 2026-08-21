@@ -11,6 +11,8 @@ import pytest
 
 from mcp_connector import config
 from mcp_connector.errors import ToolError
+from mcp_connector.exapp import config_values
+from mcp_connector.oauth import registry
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -265,3 +267,80 @@ def test_the_development_fallback_directory_is_git_ignored() -> None:
     """A store full of encrypted app passwords must never become a commit."""
     ignored = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
     assert f"{config.DEV_STORAGE_DIR}/" in [line.strip() for line in ignored]
+
+
+# --- the switch that closes the outgoing Talk channel (TALK-04) -------------------
+
+
+def test_the_talk_switch_carries_the_name_the_manifest_declares() -> None:
+    """The variable name is the contract with AppAPI: an undeclared one is dropped."""
+    assert config.ENV_TALK_SEND == "NC_MCP_TALK_SEND"
+
+
+@pytest.mark.parametrize("raw", sorted(config._TRUE_VALUES))
+def test_every_understood_on_spelling_leaves_sending_enabled(raw: str) -> None:
+    assert config.talk_send_enabled({config.ENV_TALK_SEND: raw}) is True
+
+
+@pytest.mark.parametrize("raw", sorted(config._FALSE_VALUES))
+def test_every_understood_off_spelling_switches_sending_off(raw: str) -> None:
+    assert config.talk_send_enabled({config.ENV_TALK_SEND: raw}) is False
+
+
+@pytest.mark.parametrize("raw", ["OFF", "False", "NO", "  off  ", "\tOFF\n"])
+def test_an_off_spelling_is_read_without_regard_to_case_or_padding(raw: str) -> None:
+    """An administrator who types OFF has switched it off, not entered a typo."""
+    assert config.talk_send_enabled({config.ENV_TALK_SEND: raw}) is False
+
+
+def test_without_the_variable_sending_is_enabled() -> None:
+    """The shipped state of TALK-04: the switch is the countermeasure for the outgoing
+    channel, not its precondition, so an installation that sets nothing can send."""
+    assert config.talk_send_enabled({}) is True
+
+
+@pytest.mark.parametrize("blank", ["", "   ", "\t\n"])
+def test_a_blank_value_counts_as_unset(blank: str) -> None:
+    """The same rule ``exapp_configured`` applies: an empty value in a compose file is a
+    typo, not a request to remove a capability."""
+    assert config.talk_send_enabled({config.ENV_TALK_SEND: blank}) is True
+
+
+@pytest.mark.parametrize("raw", ["vielleicht", "maybe", "enabled", "2", "-1", "onoff"])
+def test_a_value_nobody_understands_never_switches_sending_off(raw: str) -> None:
+    """Why the reader says ``not in _FALSE_VALUES`` instead of ``in _TRUE_VALUES``.
+
+    With the positive membership test a typo would answer False, and an instance would
+    silently lose a capability this server promises without one line saying so. The default
+    of this switch is on, so only a spelling that means off may turn it off.
+    """
+    assert config.talk_send_enabled({config.ENV_TALK_SEND: raw}) is True
+
+
+def test_the_switch_reads_the_process_environment_when_no_mapping_is_given(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The property plan 09-03 builds on: a tool has no resolved mapping in its hand, so it
+    reads the process environment per call, exactly like ``select_mode`` does today."""
+    monkeypatch.setenv(config.ENV_TALK_SEND, config_values.SWITCH_OFF)
+    assert config.talk_send_enabled() is False
+
+    monkeypatch.setenv(config.ENV_TALK_SEND, config_values.SWITCH_ON)
+    assert config.talk_send_enabled() is True
+
+    monkeypatch.delenv(config.ENV_TALK_SEND)
+    assert config.talk_send_enabled() is True
+
+
+def test_the_switch_spellings_are_the_ones_the_form_and_the_registry_understand() -> None:
+    """Three modules read a switch value and all three have to speak one language.
+
+    The sets are spelled three times because ``exapp/config_values.py`` imports this module,
+    so a shared constant would be a circular import. This is the test the comment on those
+    sets refers to: without it a value would arm a switch in the deploy environment and be
+    refused by the admin form, and nothing would say why.
+    """
+    assert config._TRUE_VALUES == config_values.TRUE_VALUES
+    assert config._FALSE_VALUES == config_values.FALSE_VALUES
+    assert config._TRUE_VALUES == registry._TRUE_VALUES
+    assert config._FALSE_VALUES == registry._FALSE_VALUES
