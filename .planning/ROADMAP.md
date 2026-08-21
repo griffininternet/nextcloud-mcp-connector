@@ -91,7 +91,26 @@ Plans:
   4. Nutzer kann eine Nachricht in eine Konversation senden, adressiert ausschließlich mit einem Token aus dem Lesewerkzeug; eine schreibgeschützte Konversation, ein fehlendes Chat-Recht, `@all`/`@here` und ein zu langer Text werden vorab mit einem Satz samt nächstem Schritt abgelehnt, und es existiert kein Pfad zum Bearbeiten, Löschen oder stillen Senden.
   5. Administrator kann das Senden instanzweit abschalten; mit abgeschaltetem Schalter antwortet das Werkzeug mit einem Fehlersatz samt nächstem Schritt, gemessen über die ganze Kette: Settings-Form, Overlay-Lesepfad, Wirkung am Werkzeug.
 
-**Plans**: TBD
+**Plans**: 5 Pläne in 4 Wellen
+
+Plans:
+**Wave 1**
+
+- [ ] 09-01-PLAN.md: Talk-Client (v4-Räume, v1-Chat), 201 im OCS-Parser, 304 als leere Antwort, App-Erkennung spreed
+- [ ] 09-02-PLAN.md: Sechster Admin-Wert: Formular, Overlay-Lesepfad, Manifest-Variable und der Weg in den Tool-Lesepfad
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 09-03-PLAN.md: Talk-Werkzeuge: browse mit zwei Ebenen, senden mit Vorprüfungen am Objekt und Schalter als erster Zeile
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 09-04-PLAN.md: Registrierung, Destruktiv-Gate für die verblosen Schreibwege, Budget, READMEs EN/DE/FR, Store-Beschreibung und Changelog
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 09-05-PLAN.md: Live-Messung der Nebenwirkungsfreiheit, Senden gegen eine echte Instanz und Zwei-Konten-Negativbeweis
+
 **UI hint**: nein (der Admin-Schalter ist ein Declarative-Settings-Feld im Muster der bestehenden fünf Werte; Nextcloud rendert es, es entsteht kein eigenes Frontend)
 
 ### Phase 10: Mail strikt lesend und die Trifecta-Grenze
