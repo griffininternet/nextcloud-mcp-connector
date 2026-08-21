@@ -81,38 +81,25 @@ get_board
 # tests/unit/test_ocs_capabilities.py.
 tables_api_versions
 
-# --- The Talk capabilities of phase 9 (plan 09-01) -------------------------------------
-# Same case as tables_api_versions, and parked for the same reason as the Tables transport
-# above: plan 09-01 builds the transport and the app detection of the Talk family before its
-# caller exists. The gate for the app reads spreed_available, which has a production reader
-# in Capabilities.has.
+# --- The Talk capabilities of phase 9 (plan 09-01, thinned out in plan 09-03) -----------
+# Plan 09-01 parked five names here, because the transport and the app detection of the Talk
+# family were written and tested in one piece before their caller existed. Plan 09-03 added
+# tools/talk.py, and four of the five left the list with it: get_rooms and get_messages are
+# called by talk_browse, send_message and spreed_chat_max_length by talk_send. web_url never
+# entered the list, because the name already has a production caller in the Tables family.
 #
-# spreed_features: what the app says about itself (there is no apiVersions and no enabled in
-#   the spreed section), which is how a missing chat parameter becomes a named finding.
-# spreed_chat_max_length: the chat length limit of the instance, read here so the cap of
-#   TALK-03 is not maintained a second time in the tool layer.
-#
-# Both leave this list with plan 09-03, the plan that adds tools/talk.py and reads them.
-# Asserted on in tests/unit/test_ocs_capabilities.py.
+# spreed_features: the one that stays, and it is the same case as tables_api_versions and
+#   deck_api_versions above rather than a parked caller. There is no apiVersions and no
+#   enabled field in the spreed section, so this tuple is what the app says about itself, and
+#   it exists so an instance whose Talk lacks a chat feature is a named finding instead of a
+#   mystery 400. The gate for the app reads spreed_available, which has a production reader in
+#   Capabilities.has. Asserted on in tests/unit/test_ocs_capabilities.py.
 spreed_features
-spreed_chat_max_length
 
-# get_rooms, get_messages, send_message: the transport of the Talk family, written and
-# tested in one piece before its caller exists, exactly as the Tables transport was in plan
-# 08-02. All three are driven directly by tests/unit/test_talk_client.py, which is what keeps
-# them honest, and all three leave this list with plan 09-03. web_url is absent on purpose:
-# the name already has a production caller in the Tables family.
-get_rooms
-get_messages
-send_message
-
-# talk_send_enabled: the one reader of the admin switch of TALK-04, built in plan 09-02
-# together with the form, the read path and the export in entry_exapp.main that puts the
-# resolved value into the process environment. Its production caller is the first line of
-# tools.talk.send, which arrives with plan 09-03, and the name leaves this list with it.
-# Driven directly by tests/unit/test_config.py and, through the process environment, by the
-# start time checks of tests/unit/test_exapp_entry.py.
-talk_send_enabled
+# talk_send_enabled: gone from this list with plan 09-03, which is the plan that calls it.
+# The name was parked in plan 09-02 together with the form, the read path and the export in
+# entry_exapp.main, and its production caller is now the first executable line of
+# tools.talk.send.
 
 # --- The store API of phase 3 ----------------------------------------------------------
 # oauth/store.py was built in one piece in plan 03-02, because its schema and its

@@ -34,8 +34,9 @@ which is what makes the create-only annotation of ``talk_send`` honest rather th
 import re
 from typing import Any
 
-from .. import paging
+from .. import config, paging
 from ..errors import ToolError
+from ..exapp.ui import strings
 from ..nextcloud import NcClients, capabilities
 from ..nextcloud.clients import talk as talk_client
 from ..nextcloud.credentials import Credentials
@@ -105,6 +106,12 @@ _CONVERSATION_HINT = (
 #: ``messageParameters``, keyed by exactly this name.
 _PLACEHOLDER = re.compile(r"\{([a-z0-9_-]+)\}", re.IGNORECASE)
 
+#: The collective mentions this server refuses to send. The optional quote belongs to the
+#: pattern because Talk writes a mention that contains a space as ``@"user id"``, and the
+#: lookahead is the word boundary that keeps ``@allan`` and ``@allison`` sendable. Both words
+#: are refused for different reasons, which the docstring of :func:`send` spells out.
+_MENTION_ALL = re.compile(r"@\"?(all|here)\"?(?![\w-])", re.IGNORECASE)
+
 
 async def browse(
     clients: NcClients,
@@ -127,6 +134,134 @@ async def browse(
     if not conversation:
         raise ToolError(message=f"level={level!r} needs a token.", hint=_CONVERSATION_HINT)
     return await _messages(clients, conversation, capped, cursor)
+
+
+async def send(clients: NcClients, token: str, message: str) -> dict[str, Any]:
+    """Send one message into a conversation this account is part of. Never edits or removes.
+
+    The order of this function is the reverse of every other tool of this server, and the
+    first line is what reverses it: the administrative switch of TALK-04 is read before the
+    app is looked up and before any client call, because a switch that is read after the
+    message went out has prevented nothing (threat T-09-20).
+
+    Five refusals follow, and each of them is cheaper than the write it prevents.
+
+    The length comes from the instance (``config.chat.max-length``) with the number Talk 24
+    ships as the fallback, so the limit is not maintained a second time here.
+
+    A collective mention is refused with a word boundary. ``@all`` is the one that works:
+    Talk turns it into a notification of every participant of the conversation, which makes
+    one tool call a message to everybody. ``@here`` is ordinary text in spreed 24 and is
+    refused as a precaution against a version in which it is not. The boundary matters,
+    because a plain containment test would refuse ``@allan`` and ``@allison`` as well, and
+    those are legitimate mentions of real people.
+
+    The token has to stand in the conversation list of this account, so the pre-check goes
+    through ``talk_client.get_rooms`` (in :func:`_room`) and never through the single
+    conversation route: an unknown token there is a counted brute force attempt against the
+    address of this whole container, which is one address for every user of the instance.
+
+    Then the conversation object decides whether this account may write into it at all, by the
+    three rules of :func:`_may_send`.
+
+    There is no retry. If this call times out, that does not mean nothing was posted, and a
+    second attempt would place a message twice in somebody else's chat, where no tool of this
+    server can remove it again. The answer carries the id and the name of the conversation so
+    the model can read back instead of repeating (threat T-09-25).
+    """
+    if not config.talk_send_enabled():
+        raise ToolError(
+            message="Sending Talk messages is switched off for this Nextcloud.",
+            hint=(
+                f"This account cannot change it: an administrator switches it on under "
+                f"{strings.ADMIN_SETTINGS_PLACE}, and the change takes effect after this app "
+                "is disabled and enabled again. Reading conversations and their history with "
+                "talk_browse is unaffected."
+            ),
+        )
+
+    caps = await capabilities.require_app(clients, APP)
+
+    text = str(message or "")
+    allowed = caps.spreed_chat_max_length or capabilities.DEFAULT_CHAT_MAX_LENGTH
+    if len(text) > allowed:
+        raise ToolError(
+            message=(
+                f"The message is {len(text)} characters long, and this Nextcloud accepts "
+                f"{allowed} per message."
+            ),
+            hint="Shorten the message, or split it into several messages and send them one by one.",
+        )
+    if _MENTION_ALL.search(text):
+        raise ToolError(
+            message="A message that mentions everybody is not sent through this connector.",
+            hint=(
+                "Talk turns @all into a notification for every participant of the "
+                "conversation, and in many conversations only moderators may do that at all "
+                "(mention_permissions in talk_browse). Mention the people you mean one by one "
+                "instead."
+            ),
+        )
+
+    conversation = str(token or "").strip()
+    room = await _room(clients, conversation, include_last_message=False)
+    name = _text(room.get("displayName") or "")
+    allowed_here, why = _may_send(room)
+    if not allowed_here:
+        raise _refusal(why, conversation, name)
+
+    sent = await talk_client.send_message(clients.client, clients.creds, conversation, message=text)
+    message_id = sent.get("id")
+    if message_id in (None, ""):
+        raise ToolError(
+            message="Nextcloud accepted the message but reported no id.",
+            hint=(
+                f"Look for it in the conversation {name!r}, it was probably sent; reading the "
+                "history back with talk_browse is cheaper than sending it twice."
+            ),
+        )
+
+    return {
+        "sent": True,
+        "id": message_id,
+        "token": conversation,
+        "conversation": name,
+        "timestamp": _number(sent.get("timestamp")),
+        "url": talk_client.web_url(clients.creds, conversation),
+    }
+
+
+def _refusal(why: str, token: str, name: str) -> ToolError:
+    """One sentence per reason of :func:`_may_send`, each with its own next step."""
+    if why == "read-only":
+        return ToolError(
+            message=f"The conversation {name!r} ({token}) is read only.",
+            hint=(
+                "A moderator of that conversation can lift the read only state in Talk. "
+                "Conversations this account may write in are the ones talk_browse reports "
+                "with can_send true."
+            ),
+        )
+    if why == "changelog":
+        return ToolError(
+            message=(
+                f"{name!r} ({token}) is the changelog conversation of this account, and Talk "
+                "keeps it read only."
+            ),
+            hint=(
+                "It is created automatically for every account and carries the release notes "
+                "of Talk, so nothing can be sent into it. Pick one of the other conversations "
+                "talk_browse reports with can_send true."
+            ),
+        )
+    return ToolError(
+        message=f"This account has no chat permission in {name!r} ({token}).",
+        hint=(
+            "The chat permission of this conversation was taken away for this account; a "
+            "moderator can grant it again in Talk. Conversations this account may write in are "
+            "the ones talk_browse reports with can_send true."
+        ),
+    )
 
 
 async def _conversations(clients: NcClients, limit: int) -> dict[str, Any]:

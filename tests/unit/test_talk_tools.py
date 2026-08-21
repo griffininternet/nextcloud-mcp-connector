@@ -29,8 +29,9 @@ import httpx
 import pytest
 import respx
 
-from mcp_connector import paging
+from mcp_connector import config, paging
 from mcp_connector.errors import AppMissingError, ToolError
+from mcp_connector.exapp.ui import strings
 from mcp_connector.nextcloud import NcClients, capabilities
 from mcp_connector.nextcloud.credentials import Credentials
 from mcp_connector.tools import marks
@@ -141,8 +142,36 @@ def message(**overrides: Any) -> dict[str, Any]:
     return {**template, **overrides}
 
 
+#: What Talk answers a successful send with. The status is 201 in the transport **and** in the
+#: OCS envelope, which is the reason plan 09-01 put 201 into the success set of the parser.
+SENT_MESSAGE = {
+    "id": 5105,
+    "token": "abcd1234",
+    "actorType": "users",
+    "actorId": "alice",
+    "actorDisplayName": "Alice Beispiel",
+    "timestamp": 1755260000,
+    "message": "Die Maße sind geprüft",
+    "messageParameters": {},
+    "messageType": "comment",
+    "systemMessage": "",
+    "expirationTimestamp": 0,
+    "isReplyable": True,
+    "markdown": True,
+    "reactions": {},
+    "referenceId": "",
+}
+
+
+def mock_send(mock: respx.MockRouter) -> respx.Route:
+    """The send route of the one conversation of the fixture."""
+    return mock.post(CHAT_URL).mock(
+        return_value=httpx.Response(201, json=envelope(SENT_MESSAGE, statuscode=201))
+    )
+
+
 @pytest.mark.anyio
-@pytest.mark.parametrize("tool", ["browse_conversations", "browse_messages"])
+@pytest.mark.parametrize("tool", ["browse_conversations", "browse_messages", "send"])
 async def test_a_missing_talk_app_stops_both_tools_before_the_first_request(
     clients: NcClients, tool: str
 ) -> None:
@@ -150,6 +179,7 @@ async def test_a_missing_talk_app_stops_both_tools_before_the_first_request(
     calls = {
         "browse_conversations": lambda: talk_tools.browse(clients),
         "browse_messages": lambda: talk_tools.browse(clients, level="messages", token="abcd1234"),
+        "send": lambda: talk_tools.send(clients, "abcd1234", "Die Maße sind geprüft"),
     }
     with respx.mock(assert_all_called=False) as mock:
         mock_capabilities(mock, spreed=None)
@@ -782,6 +812,293 @@ async def test_a_token_that_is_not_in_the_conversation_list_never_reaches_a_chat
     assert len(chat_calls.calls) == 0
     assert "conversation list" in excinfo.value.message
     assert "level=conversations" in excinfo.value.hint
+
+
+@pytest.mark.anyio
+async def test_a_switched_off_send_makes_not_a_single_http_call(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """TALK-04, layer 3 and trap 10: a switch that catches after the POST caught nothing.
+
+    Nothing is mocked but the catch-all, so this also proves that the switch is read before
+    the capabilities request: with the switch off there is no request at all to answer.
+    """
+    monkeypatch.setenv(config.ENV_TALK_SEND, "0")
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.route(url__startswith=BASE)
+
+        with pytest.raises(ToolError) as excinfo:
+            await talk_tools.send(clients, "abcd1234", "Die Maße sind geprüft")
+
+    assert len(route.calls) == 0, "the outgoing channel is closed, so nothing may leave"
+    assert "switched off" in excinfo.value.message
+    assert "administrator" in excinfo.value.hint
+    assert strings.ADMIN_SETTINGS_PLACE in excinfo.value.hint
+    assert "disabled and enabled again" in excinfo.value.hint
+    assert "talk_browse is unaffected" in excinfo.value.hint
+
+
+@pytest.mark.anyio
+async def test_the_switch_is_read_before_the_app_is_detected(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every other tool of this server starts with the app detection; this one must not."""
+    monkeypatch.setenv(config.ENV_TALK_SEND, "0")
+    with respx.mock(assert_all_called=False) as mock:
+        caps = mock.get(CAPABILITIES_URL)
+        room_calls, chat_calls = talk_routes(mock)
+
+        with pytest.raises(ToolError):
+            await talk_tools.send(clients, "abcd1234", "Die Maße sind geprüft")
+
+    assert len(caps.calls) == 0, "not even the capabilities are asked for"
+    assert len(room_calls.calls) == 0
+    assert len(chat_calls.calls) == 0
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("value", ["1", "true", "", "vielleicht"])
+async def test_the_switch_is_on_unless_it_says_off(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    """The shipped state is on, so an unreadable value must not close the channel (T-09-13)."""
+    monkeypatch.setenv(config.ENV_TALK_SEND, value)
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock_rooms(mock)
+        post = mock_send(mock)
+
+        result = await talk_tools.send(clients, "abcd1234", "Die Maße sind geprüft")
+
+    assert post.call_count == 1
+    assert result["sent"] is True
+
+
+@pytest.mark.anyio
+async def test_a_sent_message_answers_with_its_id_its_conversation_and_its_address(
+    clients: NcClients,
+) -> None:
+    """No retry anywhere: the answer is what lets the model read back instead of repeating."""
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock_rooms(mock)
+        post = mock_send(mock)
+
+        result = await talk_tools.send(clients, "abcd1234", "Die Maße sind geprüft")
+
+    assert json.loads(post.calls.last.request.content) == {"message": "Die Maße sind geprüft"}
+    assert result == {
+        "sent": True,
+        "id": 5105,
+        "token": "abcd1234",
+        "conversation": "Baustelle Süd",
+        "timestamp": 1755260000,
+        "url": f"{BASE}/index.php/call/abcd1234",
+    }
+
+
+@pytest.mark.anyio
+async def test_a_conversation_with_the_chat_permission_may_be_written_in(
+    clients: NcClients,
+) -> None:
+    """The regression to T3: ``permissions`` 128 next to ``attendeePermissions`` 0 is allowed.
+
+    That combination is the ordinary case on any instance, because Talk resolves the
+    permissions through a fallback chain and leaves the raw participant value at 0. A
+    pre-check on the raw field would refuse almost every account in almost every
+    conversation, and the failure would look like a permission problem instead of a field
+    name.
+    """
+    only_chat = room("abcd1234", permissions=talk_tools.PERMISSIONS_CHAT, attendeePermissions=0)
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock_rooms(mock, [only_chat])
+        post = mock_send(mock)
+
+        result = await talk_tools.send(clients, "abcd1234", "Die Maße sind geprüft")
+
+    assert post.call_count == 1, "the resolved permissions carry bit 128, so this may be sent"
+    assert result["id"] == 5105
+
+
+@pytest.mark.anyio
+async def test_a_note_to_self_is_not_locked_away_with_the_read_only_conversations(
+    clients: NcClients,
+) -> None:
+    """Type 6 is writable, and only type 4 is the one Talk keeps read only (T4)."""
+    note = room("abcd1234", type=6, displayName="Notiz an mich")
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock_rooms(mock, [note])
+        post = mock_send(mock)
+
+        await talk_tools.send(clients, "abcd1234", "Maße noch prüfen")
+
+    assert post.call_count == 1
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("target", "expected"),
+    [
+        ("rdon7890", "read only"),
+        ("chlg9012", "changelog conversation"),
+        ("npms2468", "no chat permission"),
+    ],
+    ids=["read-only", "changelog", "no-chat-permission"],
+)
+async def test_a_conversation_nobody_may_write_in_is_refused_before_the_post(
+    clients: NcClients, target: str, expected: str
+) -> None:
+    """Three refusals, three sentences, and no request that could only end in a 403."""
+    with respx.mock(assert_all_called=False) as mock:
+        mock_capabilities(mock)
+        mock_rooms(mock)
+        post = mock.post(f"{CHAT_BASE}/{target}")
+
+        with pytest.raises(ToolError) as excinfo:
+            await talk_tools.send(clients, target, "Die Maße sind geprüft")
+
+    assert len(post.calls) == 0, "a request that can only end in 403 must never leave"
+    assert expected in excinfo.value.message
+    assert "can_send" in excinfo.value.hint
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "text",
+    [
+        "@all bitte die Maße prüfen",
+        "@ALL bitte die Maße prüfen",
+        "Bitte @here einmal lesen",
+        'Bitte @"all" einmal lesen',
+        "Abnahme morgen @all",
+    ],
+)
+async def test_a_collective_mention_is_refused_before_anything_is_read(
+    clients: NcClients, text: str
+) -> None:
+    """T11 and T-09-23: one tool call must not become a notification for everybody."""
+    with respx.mock(assert_all_called=False) as mock:
+        mock_capabilities(mock)
+        room_calls, chat_calls = talk_routes(mock)
+
+        with pytest.raises(ToolError) as excinfo:
+            await talk_tools.send(clients, "abcd1234", text)
+
+    assert len(room_calls.calls) == 0
+    assert len(chat_calls.calls) == 0
+    assert "everybody" in excinfo.value.message
+    assert "one by one" in excinfo.value.hint
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("name", ["@allan", "@allison", "@alle-vier", "@heretic"])
+async def test_a_mention_of_a_real_person_is_not_a_collective_mention(
+    clients: NcClients, name: str
+) -> None:
+    """The word boundary is the point: a plain containment test eats legitimate mentions."""
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock_rooms(mock)
+        post = mock_send(mock)
+
+        await talk_tools.send(clients, "abcd1234", f"{name} bitte die Maße prüfen")
+
+    assert post.call_count == 1
+
+
+@pytest.mark.anyio
+async def test_a_message_longer_than_the_instance_allows_is_refused_with_the_number(
+    clients: NcClients,
+) -> None:
+    """The limit belongs to the instance: it comes out of the capabilities, not out of us."""
+    with respx.mock(assert_all_called=False) as mock:
+        mock_capabilities(mock, spreed={"config": {"chat": {"max-length": 120}}})
+        room_calls, chat_calls = talk_routes(mock)
+
+        with pytest.raises(ToolError) as excinfo:
+            await talk_tools.send(clients, "abcd1234", "ü" * 200)
+
+    assert len(room_calls.calls) == 0
+    assert len(chat_calls.calls) == 0
+    assert "200 characters" in excinfo.value.message
+    assert "120 per message" in excinfo.value.message
+    assert excinfo.value.hint
+
+
+@pytest.mark.anyio
+async def test_an_instance_without_a_chat_length_falls_back_to_the_number_talk_ships(
+    clients: NcClients,
+) -> None:
+    """32000 stands in the capabilities module once, as the fallback and nowhere else."""
+    too_long = "a" * (capabilities.DEFAULT_CHAT_MAX_LENGTH + 1)
+    with respx.mock(assert_all_called=False) as mock:
+        mock_capabilities(mock, spreed={"features": ["chat-v2"]})
+        room_calls, chat_calls = talk_routes(mock)
+
+        with pytest.raises(ToolError) as excinfo:
+            await talk_tools.send(clients, "abcd1234", too_long)
+
+    assert len(room_calls.calls) == 0
+    assert len(chat_calls.calls) == 0
+    assert "32000 per message" in excinfo.value.message
+
+
+@pytest.mark.anyio
+async def test_a_token_nobody_knows_never_reaches_a_chat_route(clients: NcClients) -> None:
+    """T10 and T-09-21: Nextcloud never sees an invented token in a path at all."""
+    with respx.mock(assert_all_called=False) as mock:
+        mock_capabilities(mock)
+        rooms = mock_rooms(mock)
+        chat_calls = mock.route(url__startswith=CHAT_BASE)
+
+        with pytest.raises(ToolError) as excinfo:
+            await talk_tools.send(clients, "zzzz9999", "Die Maße sind geprüft")
+
+    assert rooms.call_count == 1
+    assert len(chat_calls.calls) == 0
+    assert "conversation list" in excinfo.value.message
+    assert "level=conversations" in excinfo.value.hint
+
+
+@pytest.mark.anyio
+async def test_a_sent_message_without_an_id_is_reported_instead_of_faked(
+    clients: NcClients,
+) -> None:
+    """An id nobody sent is the shape that invites a second send (threat T-09-25)."""
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock_rooms(mock)
+        mock.post(CHAT_URL).mock(
+            return_value=httpx.Response(201, json=envelope({"token": "abcd1234"}, statuscode=201))
+        )
+
+        with pytest.raises(ToolError) as excinfo:
+            await talk_tools.send(clients, "abcd1234", "Die Maße sind geprüft")
+
+    assert "no id" in excinfo.value.message
+    assert "Baustelle Süd" in excinfo.value.hint
+
+
+@pytest.mark.anyio
+async def test_a_four_hundred_of_the_app_is_passed_through_with_its_own_message(
+    clients: NcClients,
+) -> None:
+    """The app knows its own limits; a second validator here would be a second truth."""
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock_rooms(mock)
+        mock.post(CHAT_URL).mock(
+            return_value=httpx.Response(
+                400, json=envelope(None, statuscode=400, message="Message too long")
+            )
+        )
+
+        with pytest.raises(ToolError) as excinfo:
+            await talk_tools.send(clients, "abcd1234", "Die Maße sind geprüft")
+
+    assert "Nextcloud says: Message too long" in excinfo.value.message
 
 
 def test_the_levels_and_the_limits_are_the_ones_the_schema_will_offer() -> None:
