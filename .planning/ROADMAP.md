@@ -56,7 +56,14 @@ Audit: [milestones/v1.1-MILESTONE-AUDIT.md](milestones/v1.1-MILESTONE-AUDIT.md) 
   4. Nutzer kann eine Zeile mit Spaltentiteln statt Spalten-Ids anlegen; ein unbekannter, mehrdeutiger oder fehlender Pflichttitel wird mit der Liste der gültigen Titel abgelehnt, bevor irgendetwas geschrieben wird.
   5. Ein Nutzer ohne Schreibrecht auf der Tabelle bekommt vorab einen Fehlersatz samt nächstem Schritt statt eines 403 aus der Nextcloud, und es existiert kein Pfad zum Ändern oder Löschen einer Zeile oder eines Schemas (Gate hält, Gegenprobe vorhanden).
 
-**Plans**: TBD
+**Plans**: 5 Pläne in 4 Wellen
+
+Plans:
+- [ ] 08-01-PLAN.md: Mail-Erreichbarkeits-Spike (MAIL-04, blockierend): vier Wege messen, Protokoll, Topologie
+- [ ] 08-02-PLAN.md: Tables-Client über zwei API-Generationen, erste OCS-Schreibnaht, App-Erkennung
+- [ ] 08-03-PLAN.md: Tables-Werkzeuge: browse mit drei Ebenen, Zeile mit Spaltentiteln anlegen
+- [ ] 08-04-PLAN.md: Registrierung, Gates, Budget-Verankerung, READMEs EN/DE/FR und Changelog
+- [ ] 08-05-PLAN.md: Integrationsnachweis gegen eine echte Instanz und Zwei-Konten-Negativbeweis
 **UI hint**: nein (kein eigenes Frontend, reine Server- und Tool-Schicht)
 
 ### Phase 9: Talk
@@ -159,14 +166,14 @@ Audit: [milestones/v1.1-MILESTONE-AUDIT.md](milestones/v1.1-MILESTONE-AUDIT.md) 
 | 5. Hardening und Store-Einreichung | v1.0 | 16/16 | Complete | 2026-08-20 |
 | 6. Härtung, Eigennachweise und Conference-Reife | v1.1 | 11/11 | Complete | 2026-08-20 |
 | 7. Verwaltungs-Clients live verprobt | v1.1 | 0/0 | Deferred (extern getaktet) | - |
-| 8. Erreichbarkeits-Spike und Tables | v1.2 | 0/? | Not started | - |
+| 8. Erreichbarkeits-Spike und Tables | v1.2 | 0/5 | Planned | - |
 | 9. Talk | v1.2 | 0/? | Not started | - |
 | 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 0/? | Not started | - |
 | 11. Bündelung, Budget und Release 0.1.4 | v1.2 | 0/? | Not started | - |
 
 ## Next
 
-`/gsd:plan-phase 8`
+`/gsd:execute-phase 8`
 
 ---
 *Roadmap created: 2026-08-14 (granularity: coarse, mode: mvp); v1.0 abgeschlossen: 2026-08-20; v1.1 abgeschlossen: 2026-08-20 (Phase 7 deferred); v1.2 Phasen 8-11 ergänzt: 2026-08-21*
