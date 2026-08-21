@@ -65,6 +65,20 @@ deck_api_versions
 NSMAP
 get_board
 
+# --- The transport layer of the Tables family (plan 08-02) ------------------------------
+# The five functions of nextcloud/clients/tables.py exist before their caller: plan 08-02
+# builds the transport with its own unit tests (tests/unit/test_tables_client.py drives every
+# one of them), plan 08-03 adds tools/tables.py, which is the production caller. They are in
+# this list for exactly that one plan, and every name leaves the list with the plan that calls
+# it, the same rule as the phase 4 block below. The transport is where the rules of the family
+# live (enforced limit, numeric path ids, the two spellings of the node path), which is why it
+# is written and tested in one piece instead of being grown from the tool layer downwards.
+get_tables
+get_table
+get_columns
+get_rows_simple
+create_row
+
 # --- The store API of phase 3 ----------------------------------------------------------
 # oauth/store.py was built in one piece in plan 03-02, because its schema and its
 # transactions only make sense together, and its callers arrived plan by plan afterwards.

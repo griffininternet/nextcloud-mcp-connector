@@ -1,0 +1,92 @@
+[
+  {
+    "id": 7,
+    "title": "Übergaben Straßenbau",
+    "emoji": null,
+    "ownership": "alice",
+    "ownerDisplayName": "Alice Beispiel",
+    "createdBy": "alice",
+    "createdAt": "2026-07-02 09:14:11",
+    "lastEditBy": "alice",
+    "lastEditAt": "2026-08-19 16:02:47",
+    "archived": false,
+    "favorite": true,
+    "isShared": false,
+    "onSharePermissions": {
+      "read": true,
+      "create": false,
+      "update": false,
+      "delete": false,
+      "manage": false
+    },
+    "hasShares": false,
+    "rowsCount": 342,
+    "columnsCount": 4,
+    "description": "Offene Übergaben je Baulos",
+    "views": [
+      {
+        "id": 3,
+        "title": "Nur offene",
+        "emoji": null,
+        "tableId": 7,
+        "ownership": "alice",
+        "createdBy": "alice",
+        "createdAt": "2026-07-02 09:31:00",
+        "lastEditBy": "alice",
+        "lastEditAt": "2026-07-30 11:20:04",
+        "description": null,
+        "columns": [11, 12, 14],
+        "columnSettings": [
+          { "columnId": 11, "order": 0 },
+          { "columnId": 12, "order": 1 }
+        ],
+        "sort": [{ "columnId": 14, "mode": "ASC" }],
+        "filter": [[{ "columnId": 12, "operator": "is-equal", "value": "offen" }]],
+        "isShared": false,
+        "favorite": false,
+        "onSharePermissions": null,
+        "hasShares": false,
+        "rowsCount": 118
+      }
+    ],
+    "columnOrder": [
+      { "columnId": 11, "orderWeight": 0 },
+      { "columnId": 12, "orderWeight": 1 },
+      { "columnId": 13, "orderWeight": 2 },
+      { "columnId": 14, "orderWeight": 3 }
+    ],
+    "sort": [{ "columnId": 14, "mode": "ASC" }]
+  },
+  {
+    "id": 9,
+    "title": "Maße Prüfstücke",
+    "emoji": null,
+    "ownership": "bob",
+    "ownerDisplayName": "Bob Beispiel",
+    "createdBy": "bob",
+    "createdAt": "2026-05-11 07:45:02",
+    "lastEditBy": "bob",
+    "lastEditAt": "2026-08-20 08:12:30",
+    "archived": false,
+    "favorite": false,
+    "isShared": true,
+    "onSharePermissions": {
+      "read": true,
+      "create": false,
+      "update": false,
+      "delete": false,
+      "manage": false
+    },
+    "hasShares": true,
+    "rowsCount": 27,
+    "columnsCount": 3,
+    "description": null,
+    "views": [],
+    "columnOrder": [
+      { "columnId": 21, "orderWeight": 0 },
+      { "columnId": 22, "orderWeight": 1 },
+      { "columnId": 23, "orderWeight": 2 }
+    ],
+    "sort": []
+  }
+]

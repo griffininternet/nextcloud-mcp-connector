@@ -83,6 +83,30 @@ async def ocs_get(
     )
 
 
+async def ocs_post(
+    client: httpx.AsyncClient,
+    creds: Credentials,
+    path: str,
+    json_body: Mapping[str, Any],
+) -> httpx.Response:
+    """POST to an OCS endpoint. This is the first write this project makes over OCS (K9).
+
+    Same rules as :func:`ocs_get`, plus one header and one prohibition. Authentication is
+    passed per request, and redirects are never followed: the client is built that way, and
+    a redirecting base URL is a configuration error, not something to chase.
+
+    No ``Origin`` header, ever. With one present Nextcloud's CORS middleware demands a basic
+    reauthentication, and under AppAPI impersonation there is no password to reauthenticate
+    with, so the request would fail for a reason that has nothing to do with the payload.
+    """
+    return await client.post(
+        ocs_url(creds, path),
+        json=dict(json_body),
+        headers={**OCS_HEADERS, "Content-Type": "application/json"},
+        auth=creds.auth(),
+    )
+
+
 async def list_search_providers(
     client: httpx.AsyncClient, creds: Credentials
 ) -> list[dict[str, Any]]:
