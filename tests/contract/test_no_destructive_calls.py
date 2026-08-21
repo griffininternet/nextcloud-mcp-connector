@@ -36,12 +36,17 @@ SRC = Path(__file__).resolve().parents[2] / "src" / "mcp_connector"
 # The five Tables entries at the end are a different kind of needle: they carry no
 # forbidden verb, because a POST on a single row route changes that row and a POST on a
 # scheme route rewrites a whole table. The verb alone would let all of that through, so
-# these name the route instead. Two of them are anchored on the opening quote of a path
-# literal, which is how every path in this project is written: the allowed row read is
-# ``f"/tables/{table}/rows/simple"`` and the allowed create route is
-# ``f"{V2_PREFIX}/{NODE_COLLECTION_TABLES}/{table}/rows"``, so neither of them opens a
-# literal with the segment a needle names, while a route addressing one row or one column
-# can hardly be written without doing exactly that.
+# these name the route instead.
+#
+# All five are anchored on a **path segment**, not on the opening quote of a literal. An
+# earlier version used ``'"/columns/'`` and ``"tables/scheme"``, and the project's own way of
+# writing a path walked straight past both of them: a column write reads
+# ``f"{V2_PREFIX}/columns/{column_id}"`` and never opens a literal with that segment, and a
+# per table scheme export reads ``f"{V2_PREFIX}/tables/{table}/scheme"`` and never puts the
+# two words next to each other. The integration tests of this phase build their scaffolding
+# routes in exactly that spelling, so the gap was not hypothetical (WR-05). Anchoring on the
+# segment costs two exemptions instead, for the two reads the family exists for, and those
+# are named as exact literals below.
 FORBIDDEN: dict[str, str] = {
     "DELETE": "no tool may delete anything",
     "MOVE": "no tool may move or rename anything",
@@ -49,31 +54,50 @@ FORBIDDEN: dict[str, str] = {
     "PROPPATCH": "no tool may change properties of an existing object",
     "ocs/v2.php/apps/files_sharing": "no tool may create or change a share",
     ".delete(": "no client helper may expose a delete call",
-    '"/rows/': "no tool may address a single Tables row: reading, changing and deleting "
+    "/rows/": "no tool may address a single Tables row: reading, changing and deleting "
     "one all live on that route",
-    '"/columns/': "no tool may create, change or delete a Tables column",
-    "tables/scheme": "no tool may import or export a table scheme",
+    "/columns/": "no tool may create, change or delete a Tables column",
+    "/scheme": "no tool may import or export a table scheme",
     "/transfer": "no tool may hand a table to another owner",
     "/share": "no tool may create or change a Tables share",
 }
 
 #: The five needles above that name a Tables route, with a line that would carry them into
 #: the code. They stay next to the counter proof rather than next to the dictionary,
-#: because their only job is to prove that each needle can still be hit.
+#: because their only job is to prove that each needle can still be hit. Every line is
+#: written the way this project writes a path, an f-string with the prefix constant in it,
+#: because that is the spelling the previous needles missed.
 TABLES_ROUTES: dict[str, str] = {
-    '"/rows/': '    response = await client.get(api_url(creds, f"/rows/{row_id}"))',
-    '"/columns/': '    response = await client.put(ocs.ocs_url(creds, f"/columns/{column}"))',
-    "tables/scheme": '    response = await ocs.ocs_post(client, creds, "/tables/scheme", body)',
+    "/rows/": '    response = await client.get(api_url(creds, f"/tables/{table}/rows/{row_id}"))',
+    "/columns/": '    await ocs.ocs_post(client, creds, f"{V2_PREFIX}/columns/{cid}", body)',
+    "/scheme": '    url = ocs.ocs_url(creds, f"{V2_PREFIX}/tables/{table}/scheme")',
     "/transfer": '    url = ocs.ocs_url(creds, f"{V2_PREFIX}/tables/{table}/transfer")',
     "/share": '    url = ocs.ocs_url(creds, f"{V2_PREFIX}/{NODE_COLLECTION_TABLES}/{t}/share")',
 }
 
-#: The two forms :mod:`mcp_connector.nextcloud.clients.tables` really builds. They are the
+#: The three forms :mod:`mcp_connector.nextcloud.clients.tables` really builds. They are the
 #: reason the needles are shaped the way they are, so they are asserted, not assumed.
 ALLOWED_TABLES_ROUTES = (
     '    api_url(creds, f"/tables/{table}/rows/simple"),',
+    '    ocs.ocs_url(creds, f"{V2_PREFIX}/columns/{NODE_TYPE_TABLE}/{table}"),',
     '    ocs.ocs_url(creds, f"{V2_PREFIX}/{NODE_COLLECTION_TABLES}/{table}/rows"),',
 )
+
+# The two reads that live below a segment a needle names, and the file they live in. Both are
+# GETs, both are what the Tables family exists for, and both are named as the exact literal
+# the client writes: the compact row read of generation 1 and the column list of one table.
+# A second route below the same segment, in this file as much as in any other, is still a
+# finding, which is what keeps the exemption from becoming "ignore Tables routes here".
+FILES_WITH_THE_TABLES_READS = frozenset({"nextcloud/clients/tables.py"})
+TABLES_READ_FORMS = (
+    'f"/tables/{table}/rows/simple"',
+    'f"{V2_PREFIX}/columns/{NODE_TYPE_TABLE}/{table}"',
+)
+
+#: The needles the read exemption may apply to. ``DELETE`` and the other verbs are never
+#: exempt by it, and neither are ``/transfer`` and ``/share``: no read of this server needs
+#: either of those segments.
+TABLES_READ_NEEDLES = ("/rows/", "/columns/")
 
 # The one file where the word DELETE is not an HTTP verb. TOOL-09 is a promise about what
 # this server does to data in Nextcloud, and the OAuth store is our own SQLite file: it
@@ -186,6 +210,8 @@ def _violations(relative: str, lines: Iterable[tuple[int, str]]) -> list[str]:
                 continue
             if needle == "DELETE" and _is_own_config_value(relative, text):
                 continue
+            if needle in TABLES_READ_NEEDLES and _is_a_tables_read(relative, text):
+                continue
             findings.append(f"{relative}:{number}: {needle!r} ({why}): {text.strip()}")
     return findings
 
@@ -213,6 +239,13 @@ def _is_own_app_password(relative: str, text: str) -> bool:
 def _is_own_config_value(relative: str, text: str) -> bool:
     """True for the one call that removes this app's own value from the ExApp config."""
     return relative in FILES_WITH_OWN_CONFIG and text.strip() == CONFIG_DELETE_FORM
+
+
+def _is_a_tables_read(relative: str, text: str) -> bool:
+    """True for the two Tables reads below a named segment, false for anything else."""
+    return relative in FILES_WITH_THE_TABLES_READS and any(
+        form in text for form in TABLES_READ_FORMS
+    )
 
 
 def test_the_gate_would_notice_a_destructive_call_in_real_code() -> None:
@@ -304,17 +337,40 @@ def test_each_tables_needle_trips_on_its_route_and_leaves_the_real_module_alone(
     )
 
 
-def test_the_two_row_routes_the_tables_client_really_builds_stay_allowed() -> None:
-    """The other half of the same proof: the create path and the row read must pass.
+def test_the_three_routes_the_tables_client_really_builds_stay_allowed() -> None:
+    """The other half of the same proof: the create path and the two reads must pass.
 
-    Creating a row and reading rows are the two things this family exists for. A needle
-    broad enough to catch them would force the choice between a green gate and a working
-    tool, and that choice always ends with the gate losing.
+    Creating a row, reading rows and reading the columns are the three things this family
+    exists for. A needle broad enough to catch them would force the choice between a green
+    gate and a working tool, and that choice always ends with the gate losing.
     """
     for line in ALLOWED_TABLES_ROUTES:
         assert _violations("nextcloud/clients/tables.py", [(1, line)]) == [], (
             f"the gate must not report the allowed route: {line.strip()}"
         )
+
+
+def test_the_tables_read_exemption_covers_two_call_forms_and_nothing_else() -> None:
+    """Counter proof for the segment exemption: only the two reads, only in that one file.
+
+    The needles ``/rows/`` and ``/columns/`` are anchored on the segment, which is what makes
+    them catch the project's own f-string spelling (WR-05). The price is an exemption, and
+    written as "ignore those segments in the Tables client" it would hide exactly the line
+    that turns this server into something that changes a row or a column, in the very module
+    where such a line would be written. So it matches two exact literals and nothing else.
+    """
+    tables = "nextcloud/clients/tables.py"
+    assert _is_a_tables_read(tables, '        api_url(creds, f"/tables/{table}/rows/simple"),')
+    assert _is_a_tables_read(
+        tables, '        ocs.ocs_url(creds, f"{V2_PREFIX}/columns/{NODE_TYPE_TABLE}/{table}"),'
+    )
+    assert not _is_a_tables_read(tables, '        api_url(creds, f"/tables/{table}/rows/{row}"),')
+    assert not _is_a_tables_read(tables, '        ocs.ocs_url(creds, f"{V2_PREFIX}/columns/{c}"),')
+    assert not _is_a_tables_read(
+        "tools/tables.py", '        api_url(creds, f"/tables/{table}/rows/simple"),'
+    )
+    for relative in FILES_WITH_THE_TABLES_READS:
+        assert (SRC / relative).is_file(), f"{relative} is exempt but does not exist"
 
 
 def test_no_module_level_mutable_state_outside_the_two_documented_caches() -> None:
