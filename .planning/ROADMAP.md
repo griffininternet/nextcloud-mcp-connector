@@ -38,7 +38,7 @@ Audit: [milestones/v1.1-MILESTONE-AUDIT.md](milestones/v1.1-MILESTONE-AUDIT.md) 
 - [x] **Phase 8: Erreichbarkeits-Spike und Tables** - Erst messen, ob Mail unter AppAPI-Impersonation überhaupt erreichbar ist, dann die risikoärmste Familie komplett bauen und damit die mechanische Checkliste einmal etablieren (completed 2026-08-21)
 - [x] **Phase 9: Talk** - Konversationen und Verlauf nachweislich nebenwirkungsfrei lesen, Nachricht senden als risikoarmer Create, Ausgangskanal per Admin-Schalter abschaltbar (completed 2026-08-21)
 - [ ] **Phase 10: Mail strikt lesend und die Trifecta-Grenze** - Konten, Postfächer, Envelopes und Volltext lesen ohne jeden Schreibpfad, App-Erkennung für alle drei Familien, Exfiltrationskette benannt statt beschwiegen
-- [ ] **Phase 11: Bündelung, Budget und Release 0.1.4** - Talk- und Mail-Anteil in prepare_context, Suchtreffer auflösbar, Budget-Gate neu verankert, Fassung im Store
+- [ ] **Phase 11: Bündelung, Budget und Release 0.1.5** - Talk- und Mail-Anteil in prepare_context, Suchtreffer auflösbar, Budget-Gate neu verankert, Fassung im Store
 
 ## Phase Details
 
@@ -130,7 +130,7 @@ Plans:
 **Plans**: TBD
 **UI hint**: nein (kein eigenes Frontend; Doku- und Store-Texte sind Textarbeit)
 
-### Phase 11: Bündelung, Budget und Release 0.1.4
+### Phase 11: Bündelung, Budget und Release 0.1.5
 
 **Goal**: Die neuen Familien kommen dort an, wo ein Assistent sie im Alltag trifft: im Ein-Aufruf-Bündel `prepare_context` und als auflösbarer Suchtreffer. Das Budget-Gate wird auf die neue Messung verankert statt einmalig angehoben, und die Fassung, die all das trägt, liegt im Store.
 **Depends on**: Phase 10 (beide neuen Kinds existieren und sind auflösbar)
@@ -141,7 +141,7 @@ Plans:
   2. Das gemessene Timeout- und Degradations-Verhalten der bestehenden Quellen ist unverändert, und die Request-Kosten der Mail-Zähler sind gemessen und aufgeschrieben statt geschätzt.
   3. Ein Talk- oder Tables-Treffer aus der Suche ist auflösbar: `fetch` liefert Inhalt statt `kind=url`; Mail-Treffer bleiben ehrlich `kind=url` mit benanntem Grund.
   4. `tools/list` bleibt unter einem neu gemessenen und aufgeschriebenen Budget (Messung plus 15 Prozent, aufgerundet), alle fünf neuen Werkzeuge sind schema-diätet, die Annotationen sagen die Wahrheit (drei lesend, zwei anlegend), und Werkzeugzahl 21 steht identisch in Registry, README-Tabelle in drei Sprachen und Contract-Tests.
-  5. Release 0.1.4 ist im Store: Version an allen vier Stellen, Changelog-Block, Store-Texte und READMEs EN/DE/FR nachgezogen, alle Gates grün, Runbook-Schritte mit Proof-Zeilen, Tag erst nach Owner-Freigabe.
+  5. Release 0.1.5 ist im Store (0.1.4 mit Tables+Talk wurde am 21.08.2026 vorgezogen, Owner-Entscheid): Version an allen vier Stellen, Changelog-Block, Store-Texte und READMEs EN/DE/FR nachgezogen, alle Gates grün, Runbook-Schritte mit Proof-Zeilen, Tag erst nach Owner-Freigabe.
 
 **Plans**: TBD
 **UI hint**: nein (kein eigenes Frontend)
@@ -200,7 +200,7 @@ Plans:
 | 8. Erreichbarkeits-Spike und Tables | v1.2 | 5/5 | Complete    | 2026-08-21 |
 | 9. Talk | v1.2 | 5/5 | Complete    | 2026-08-21 |
 | 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 0/? | Not started | - |
-| 11. Bündelung, Budget und Release 0.1.4 | v1.2 | 0/? | Not started | - |
+| 11. Bündelung, Budget und Release 0.1.5 | v1.2 | 0/? | Not started | - |
 
 ## Next
 

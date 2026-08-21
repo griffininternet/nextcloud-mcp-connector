@@ -45,7 +45,7 @@
 
 ### Store und Release (EXAPP)
 
-- [ ] **EXAPP-07**: Release 0.1.4 ist im Store: Version an allen vier Stellen, Changelog-Block, READMEs EN/DE/FR und Store-Texte nachgezogen (Vokabular-Gate), alle Gates grün, Tag erst nach Owner-Freigabe, Runbook docs/store-submission.md Schritte 4 bis 8 mit Proof-Zeilen.
+- [ ] **EXAPP-07**: Release 0.1.5 ist im Store (0.1.4 mit Tables+Talk am 21.08.2026 vorgezogen, Owner-Entscheid): Version an allen vier Stellen, Changelog-Block, READMEs EN/DE/FR und Store-Texte nachgezogen (Vokabular-Gate), alle Gates grün, Tag erst nach Owner-Freigabe, Runbook docs/store-submission.md Schritte 4 bis 8 mit Proof-Zeilen.
 
 ## Future Requirements
 
