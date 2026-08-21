@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Kuratierte Breite
 status: executing
-stopped_at: "Roadmap fuer Milestone v1.2 erstellt: Phasen 8 (Erreichbarkeits-Spike und Tables), 9 (Talk), 10 (Mail strikt lesend und die Trifecta-Grenze), 11 (Buendelung, Budget und Release 0.1.4). Alle 17 v1.2-Requirements genau einmal zugeordnet, Traceability in REQUIREMENTS.md nachgezogen. Kein Phasenplan existiert noch."
-last_updated: "2026-08-21T07:02:10.265Z"
-last_activity: 2026-08-21 -- Phase 8 planning complete
+stopped_at: "Completed 08-01-PLAN.md (Mail-Erreichbarkeits-Spike: MAIL-04 beantwortet, Mail unter AppAPI-Impersonation erreichbar)"
+last_updated: "2026-08-21T07:25:22.656Z"
+last_activity: 2026-08-21
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 5
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 20
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Current focus:** Phase 8, Erreichbarkeits-Spike und Tables (Mail-Erreichbarkeit unter AppAPI-Impersonation zuerst und blockierend, danach die Tables-Familie)
+**Current focus:** Phase 8 — Erreichbarkeits-Spike und Tables
 
 ## Current Position
 
-Phase: 8, Erreichbarkeits-Spike und Tables (not started)
-Plan: —
+Phase: 8 (Erreichbarkeits-Spike und Tables) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-08-21 -- Phase 8 planning complete
+Last activity: 2026-08-21
 
 ## Performance Metrics
 
@@ -114,6 +114,7 @@ Last activity: 2026-08-21 -- Phase 8 planning complete
 | Phase 06 P09 | 50 min | 3 tasks tasks | 6 files files |
 | Phase 06 P10 | 30 | 3 tasks | 5 files |
 | Phase 06 P11 | 30 min | 3 tasks | 8 files |
+| Phase 08-erreichbarkeits-spike-und-tables P01 | 42 min | 3 tasks tasks | 4 files files |
 
 ## Accumulated Context
 
@@ -388,6 +389,10 @@ Recent decisions affecting current work:
 - [Phase ?]: 06-11: Der Ausweg auf einer Fehlerseite steht in Worten und nie als Link (E8-Muster): der eine ausgehende Link dieser App ist die Anmeldeadresse, die Nextcloud selbst liefert, ein erfundener Link waere die Phishing-Form, vor der der Fusstext jeder Seite warnt
 - [Phase ?]: 06-11: Kein Zusatzfeld in der DCR-Antwort: OAuthClientInformationFull lehnt ein nicht deklariertes Attribut ab und model_validate verwirft einen unbekannten Schluessel still (mcp 2.0.0, gemessen 2026-08-20); der Weg dorthin waere ein Eingriff in den Auth-Pfad fuer ein Feld, das kein gemessener Client liest
 - [Phase ?]: 06-11: CLIENT-04 und ROADMAP SC3 mit Owner-Freigabe vom 2026-08-20 auf das Gemessene umformuliert und CLIENT-04 abgehakt; D-35 bleibt unveraendert, BL-14 ist mit Option, Datum, Messverweis und SDK-Rohbeleg geschlossen
+- [Phase 08-erreichbarkeits-spike-und-tables]: MAIL-04 ist beantwortet: alle vier Mail-Wege (accounts 200, mailboxes 500, messages 403, OCS-Volltext 404) antworten unter reiner AppAPI-Impersonation mit JSON aus App-Code; MAIL-01 bis MAIL-03, CTX-02, SEC-01 und die Toolzahl in TOOL-15 bleiben wie geschnitten
+- [Phase 08-erreichbarkeits-spike-und-tables]: Spike-Stufe 1 reicht ohne IMAP-Server: das Spike-Konto zeigt auf imap.invalid, weil occ mail:account:create-imap die Verbindung nicht prueft und jede Antwort aus App-Code den erreichten Controller beweist; GreenMail bleibt Vorlage in docs/spike-mail.md, compose.exapp.yml unveraendert
+- [Phase 08-erreichbarkeits-spike-und-tables]: ensure_mail_account prueft die Ausgabe von occ mail:account:export und nicht dessen Exit-Code: der Befehl endet auch ohne jedes Konto mit 0, eine Exit-Code-Pruefung haette bei jedem Lauf ein zweites Konto angelegt
+- [Phase 08-erreichbarkeits-spike-und-tables]: Die drei Mail-Listen-Routen tragen SCOPE_IGNORE und bleiben ersetzbar; der Ausweg ist der Suchprovider mail plus die OCS-Volltextroute, und der Hinweis wandert in Phase 10 in den Modul-Docstring von clients/mail.py
 
 ### Pending Todos
 
@@ -422,8 +427,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-21T05:20:00.000Z
-Stopped at: Roadmap fuer Milestone v1.2 erstellt: Phasen 8 (Erreichbarkeits-Spike und Tables), 9 (Talk), 10 (Mail strikt lesend und die Trifecta-Grenze), 11 (Buendelung, Budget und Release 0.1.4). Alle 17 v1.2-Requirements genau einmal zugeordnet, Traceability in REQUIREMENTS.md nachgezogen. Kein Phasenplan existiert noch.
+Last session: 2026-08-21T07:25:22.636Z
+Stopped at: Completed 08-01-PLAN.md (Mail-Erreichbarkeits-Spike: MAIL-04 beantwortet, Mail unter AppAPI-Impersonation erreichbar)
 Naechster Schritt: /gsd:plan-phase 8
 Resume file: None
 
