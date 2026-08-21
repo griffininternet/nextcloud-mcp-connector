@@ -15,8 +15,8 @@
 
 ### Tables (TABLES)
 
-- [ ] **TABLES-01**: Nutzer kann Tabellen, Spalten und Zeilen lesen über `tables_browse(level="tables"|"columns"|"rows")`: Spalten projiziert auf die interpretationsnötigen Felder, Zeilen über die dokumentierte v1-Route mit `limit`/`offset` (Default 25, Max 200), `rows/simple`-Kompaktformat als Default für Tabellen, `rowsCount` und benannte Truncation in der Antwort.
-- [ ] **TABLES-02**: Nutzer kann eine Zeile anlegen über `tables_create_row` (CREATE_ONLY) mit Spaltentiteln statt Spalten-Ids: Titel werden serverseitig auf Ids abgebildet, unbekannte oder mehrdeutige Titel und fehlende Pflichtspalten werden mit der Liste der gültigen Titel abgelehnt, und `onSharePermissions.create` wird vorab geprüft statt den Nutzer in ein 403 laufen zu lassen.
+- [x] **TABLES-01**: Nutzer kann Tabellen, Spalten und Zeilen lesen über `tables_browse(level="tables"|"columns"|"rows")`: Spalten projiziert auf die interpretationsnötigen Felder, Zeilen über die dokumentierte v1-Route mit `limit`/`offset` (Default 25, Max 200), `rows/simple`-Kompaktformat als Default für Tabellen, `rowsCount` und benannte Truncation in der Antwort.
+- [x] **TABLES-02**: Nutzer kann eine Zeile anlegen über `tables_create_row` (CREATE_ONLY) mit Spaltentiteln statt Spalten-Ids: Titel werden serverseitig auf Ids abgebildet, unbekannte oder mehrdeutige Titel und fehlende Pflichtspalten werden mit der Liste der gültigen Titel abgelehnt, und `onSharePermissions.create` wird vorab geprüft statt den Nutzer in ein 403 laufen zu lassen.
 
 ### Mail (MAIL)
 
@@ -83,8 +83,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TALK-02 | Phase 9 | Pending |
 | TALK-03 | Phase 9 | Pending |
 | TALK-04 | Phase 9 | Pending |
-| TABLES-01 | Phase 8 | Pending |
-| TABLES-02 | Phase 8 | Pending |
+| TABLES-01 | Phase 8 | Complete |
+| TABLES-02 | Phase 8 | Complete |
 | MAIL-01 | Phase 10 | Pending |
 | MAIL-02 | Phase 10 | Pending |
 | MAIL-03 | Phase 10 | Pending |
