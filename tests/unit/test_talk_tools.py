@@ -839,6 +839,31 @@ async def test_a_switched_off_send_makes_not_a_single_http_call(
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("empty", ["", "   ", None])
+async def test_a_send_without_a_token_never_asks_for_the_conversation_list(
+    clients: NcClients, empty: str | None
+) -> None:
+    """IN-01: the symmetry with ``browse``, which refuses a missing token before any request.
+
+    The conversation list is the read that resolves a token, so a caller who supplied none has
+    nothing to resolve and must not pay for the round trip. The second reason is the empty
+    string itself: it is what a conversation the payload lists without a token of its own would
+    match, and a match there would be worse than the refusal.
+    """
+    with respx.mock(assert_all_called=False) as mock:
+        mock_capabilities(mock)
+        room_calls, chat_calls = talk_routes(mock)
+
+        with pytest.raises(ToolError) as excinfo:
+            await talk_tools.send(clients, empty, "Die Maße sind geprüft")  # type: ignore[arg-type]
+
+    assert len(room_calls.calls) == 0, "there is no token to look up, so nothing is looked up"
+    assert len(chat_calls.calls) == 0
+    assert "token" in excinfo.value.message
+    assert "level=conversations" in excinfo.value.hint
+
+
+@pytest.mark.anyio
 async def test_the_switch_is_read_before_the_app_is_detected(
     clients: NcClients, monkeypatch: pytest.MonkeyPatch
 ) -> None:

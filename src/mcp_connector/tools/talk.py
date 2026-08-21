@@ -144,7 +144,7 @@ async def send(clients: NcClients, token: str, message: str) -> dict[str, Any]:
     app is looked up and before any client call, because a switch that is read after the
     message went out has prevented nothing (threat T-09-20).
 
-    Five refusals follow, and each of them is cheaper than the write it prevents.
+    Six refusals follow, and each of them is cheaper than the write it prevents.
 
     The length comes from the instance (``config.chat.max-length``) with the number Talk 24
     ships as the fallback, so the limit is not maintained a second time here.
@@ -155,6 +155,11 @@ async def send(clients: NcClients, token: str, message: str) -> dict[str, Any]:
     refused as a precaution against a version in which it is not. The boundary matters,
     because a plain containment test would refuse ``@allan`` and ``@allison`` as well, and
     those are legitimate mentions of real people.
+
+    A missing token is refused before that lookup, the same way :func:`browse` refuses one, so
+    the cheapest mistake a caller can make costs no request at all. It also closes a second
+    door: an empty string is what a conversation without a token of its own would match in the
+    list, and matching it there is worse than not asking.
 
     The token has to stand in the conversation list of this account, so the pre-check goes
     through ``talk_client.get_rooms`` (in :func:`_room`) and never through the single
@@ -204,6 +209,10 @@ async def send(clients: NcClients, token: str, message: str) -> dict[str, Any]:
         )
 
     conversation = str(token or "").strip()
+    if not conversation:
+        raise ToolError(
+            message="Sending needs the token of a conversation.", hint=_CONVERSATION_HINT
+        )
     room = await _room(clients, conversation, include_last_message=False)
     name = _text(room.get("displayName") or "")
     allowed_here, why = _may_send(room)
