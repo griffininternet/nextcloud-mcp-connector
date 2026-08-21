@@ -145,7 +145,7 @@ In `tests/unit/test_exapp_entry.py`, damit die Zeile beim nächsten Refactor nic
 1. `test_a_stored_talk_switch_of_off_reaches_the_process_environment`: Overlay mit `talk_send: "0"` ergibt nach dem Start `os.environ[config.ENV_TALK_SEND] == config_values.SWITCH_OFF` und `config.talk_send_enabled() is False`.
 2. `test_a_stored_talk_switch_of_on_reaches_the_process_environment`: Overlay mit `"1"` ergibt `SWITCH_ON` und True, damit True nie nur die Abwesenheit der Schreibstelle ist.
 3. `test_a_start_without_a_stored_talk_switch_leaves_the_variable_alone`: ohne Overlay-Wert ist die Variable nach dem Start nicht in `os.environ`, und die Antwort bleibt True.
-4. `test_a_stored_talk_switch_wins_over_die_deploy_variable` (`test_a_stored_talk_switch_wins_over_the_deploy_variable`): ein in der Deploy-Umgebung gesetztes `"1"` wird von einem gespeicherten `"0"` überschrieben, weil `_resolved_env` genau diese Rangfolge herstellt.
+4. `test_a_stored_talk_switch_wins_over_the_deploy_variable`: ein in der Deploy-Umgebung gesetztes `"1"` wird von einem gespeicherten `"0"` überschrieben, weil `_resolved_env` genau diese Rangfolge herstellt.
 
 Dazu zwei Quelltext-Behauptungen: `test_the_entry_point_writes_exactly_one_key_into_the_process_environment` (genau eine Schreibstelle, sie schreibt `config.ENV_TALK_SEND`, und mindestens vier Kommentarzeilen stehen darüber) und `test_the_write_happens_before_the_application_is_built` (die Reihenfolge Auflösung, Export, `uvicorn.run`).
 

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Kuratierte Breite
 status: executing
-stopped_at: Completed 09-01-PLAN.md
-last_updated: "2026-08-21T11:11:36.972Z"
-last_activity: 2026-08-21 -- Plan 09-01 abgeschlossen (Talk-Client, 201, spreed)
+stopped_at: Completed 09-02-PLAN.md
+last_updated: "2026-08-21T11:31:58.472Z"
+last_activity: 2026-08-21 -- Plan 09-02 abgeschlossen (Admin-Schalter talk_send, sechster Wert, os.environ-Export)
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 10
-  completed_plans: 6
+  completed_plans: 7
   percent: 25
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 9 (Talk) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
-Last activity: 2026-08-21 -- Plan 09-01 abgeschlossen (Talk-Client, 201, spreed)
+Last activity: 2026-08-21 -- Plan 09-02 abgeschlossen (Admin-Schalter talk_send, sechster Wert, os.environ-Export)
 
 ## Performance Metrics
 
@@ -121,6 +121,7 @@ Last activity: 2026-08-21 -- Plan 09-01 abgeschlossen (Talk-Client, 201, spreed)
 | Phase 08 P04 | 18 min | 3 tasks | 14 files |
 | Phase 08 P05 | 24 min | 2 tasks tasks | 5 files files |
 | Phase 09-talk P01 | 20 min | 3 tasks | 8 files |
+| Phase 09-talk P02 | 17 min | 3 tasks tasks | 12 files files |
 
 ## Accumulated Context
 
@@ -421,6 +422,11 @@ Recent decisions affecting current work:
 - [Phase 09-talk]: spreed_chat_max_length liest config.chat.max-length, DEFAULT_CHAT_MAX_LENGTH 32000 als Rückfall; die Zahl gehört der Instanz
 - [Phase 09-talk]: TALK-01 bis TALK-03 bleiben Pending: dieser Plan liefert den Transport, die Anforderungen sprechen von talk_browse und talk_send und sind erst mit Plan 09-02 und 09-03 wahr
 - [Phase 09-talk]: Drei Namen des Talk-Transports und zwei Capabilities-Felder stehen vorübergehend in vulture_whitelist.py, nach dem Vorbild von Plan 08-02; sie verlassen die Liste mit Plan 09-02
+- [Phase 09-talk]: talk_send kommt hinter einen Admin-Schalter nach Weg A der Recherche: der aufgeloeste Wert wird beim Start nach os.environ geschrieben (genau ein Schluessel, entry_exapp.main Zeile 323), und talk_send_enabled liest ihn pro Aufruf: ein Werkzeug hat kein resolved-Mapping in der Hand; Weg B (pro Sendevorgang aus Nextcloud lesen) kostet einen Roundtrip je Nachricht und muesste fail closed sein, Weg C (Wert per Header) haengt am Bereinigen eines von aussen setzbaren Headers
+- [Phase 09-talk]: talk_send_enabled prueft not in _FALSE_VALUES und nicht in _TRUE_VALUES, weil der Default an ist: ein leerer und ein unverstaendlicher Wert duerfen eine zugesagte Faehigkeit nicht still entfernen (T-09-13); dns_rebinding_protection macht es umgekehrt, weil dort die Variable abschaltet
+- [Phase 09-talk]: os.environ ist kein Modulzustand im Sinne von D-20, sondern die Prozessumgebung: ALLOWED_MODULE_STATE bleibt bei zwei Eintraegen, tests/contract/test_no_destructive_calls.py ist unveraendert, und ein Quelltext-Test belegt genau eine Schreibstelle samt Kommentarblock
+- [Phase 09-talk]: talk_send ist der sechste und letzte Eintrag von CONFIG_KEYS: die vier OAuth-Werte bleiben beieinander, weil registry.client_policy zwei davon als eine Antwort liest, und ein Talk-Schalter dazwischen wuerde diese Gruppierung zerreissen
+- [Phase 09-talk]: TALK-04 bleibt Pending: der Wortlaut verlangt die Wirkung am Werkzeug samt Fehlersatz, und das Werkzeug entsteht erst mit Plan 09-03; Schicht 1 (Formular) und Schicht 2 (Overlay-Lesepfad) sind hier belegt
 
 ### Pending Todos
 
@@ -455,8 +461,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-21T11:11:19.017Z
-Stopped at: Completed 08-04-PLAN.md
+Last session: 2026-08-21T11:31:58.455Z
+Stopped at: Completed 09-02-PLAN.md
 Naechster Schritt: /gsd:plan-phase 8
 Resume file: None
 
