@@ -12,9 +12,10 @@ Two parsers, not one, and that is the point of this module (pitfall 9):
     for everything under ``/ocs/v2.php``: the payload sits in ``ocs.data`` and the real
     status in ``ocs.meta.statuscode``.
 ``parse_app_json``
-    for Notes and Deck, which are ordinary app routes and answer with the bare object, or
-    with ``{"status": 4xx, "message": "..."}`` on failure. Letting an ``ocs.meta`` parser
-    loose on that produces a ``KeyError`` where an actionable message belongs.
+    for Notes, Deck and the generation 1 row route of Tables, which are ordinary app routes
+    and answer with the bare object, or with ``{"status": 4xx, "message": "..."}`` on
+    failure. Letting an ``ocs.meta`` parser loose on that produces a ``KeyError`` where an
+    actionable message belongs.
 
 Status handling is the same everywhere in this project: never repeat a failed
 authentication (Nextcloud counts failures per source IP and then throttles every user of

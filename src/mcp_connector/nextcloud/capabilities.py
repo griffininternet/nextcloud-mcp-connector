@@ -1,14 +1,14 @@
 """Which optional apps this Nextcloud has, in one round trip (SRV-04).
 
-``GET /ocs/v2.php/cloud/capabilities`` reports Notes and Deck including their API versions
-and, for Deck, whether the user may create boards at all. That is one request instead of a
-try-except around every tool call, and it is the difference between "the Notes app is not
-installed on this Nextcloud" and a stack trace.
+``GET /ocs/v2.php/cloud/capabilities`` reports Notes, Deck and Tables including their API
+versions, for Deck whether the user may create boards at all, and for Tables whether the app
+is enabled. That is one request instead of a try-except around every tool call, and it is the
+difference between "the Notes app is not installed on this Nextcloud" and a stack trace.
 
-Only Notes and Deck are checked here, on purpose. Calendars and contacts need **no** app:
-CalDAV and CardDAV live in the core ``dav`` app, and the Calendar and Contacts apps are
-only their web interfaces. The honest check there is "does a collection exist" and it
-belongs to plans 07 and 08, not into this module.
+Only these three optional apps are checked here, on purpose. Calendars and contacts need
+**no** app: CalDAV and CardDAV live in the core ``dav`` app, and the Calendar and Contacts
+apps are only their web interfaces. The honest check there is "does a collection exist" and
+it belongs to plans 07 and 08, not into this module.
 
 The cache is a pure latency optimisation and may be empty at any moment (D-20). Nothing in
 this project becomes incorrect when it is cold, and it holds no session state: the key is

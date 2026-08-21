@@ -705,8 +705,9 @@ resource URL; both OAuth fields of the client stayed empty and dynamic client re
 did the rest.
 
 The tool counts in the tables below are the ones those runs listed against 0.1.0, which was
-15. The set is 16 since `prepare_context` arrived; the number is held by
-`tests/contract/test_tool_surface.py` and not by a recorded run.
+15. The set is 18 today, `prepare_context` and the two Tables tools having arrived after
+those runs; the number is held by `tests/contract/test_tool_surface.py` and not by a
+recorded run.
 
 ### Claude.ai: connected
 

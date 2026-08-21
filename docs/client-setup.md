@@ -711,9 +711,9 @@ proves nothing a year from now.
    and the cause is almost always a `headers` block instead of the two keys. A `200` means it
    arrived and was accepted.
 2. **Does the tool list come back?** Ask MUCGPT for the tools of that source. Note the number of
-   tools it lists, 16 at the time of writing, which is the number
-   `tests/contract/test_tool_surface.py` holds, and whether the names match the ones this page
-   lists. A source that authenticates and lists nothing points at the transport, not at the
+   tools it lists, 16 at the time of that run, and whether the names match the ones this page
+   lists. The current number is held by `tests/contract/test_tool_surface.py` and never by this
+   page. A source that authenticates and lists nothing points at the transport, not at the
    credential.
 3. **Does a tool call answer with content of the configured account?** Ask for something that
    needs exactly one tool, for example the files in the root of that Nextcloud. Note the tool that
