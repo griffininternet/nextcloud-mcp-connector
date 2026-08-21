@@ -1,179 +1,241 @@
 # Project Research Summary
 
-**Project:** MCP Connector für Nextcloud (MCP-only ExApp)
-**Domain:** Nextcloud ExApp (Python), Remote-MCP-Server mit OAuth 2.1, App-Store-Distribution
-**Researched:** 2026-08-14
-**Confidence:** HIGH (Kernentscheidungen gegen offizielle Doku, PyPI und Live-GitHub-Daten verifiziert)
+**Project:** MCP Connector fuer Nextcloud -- Milestone v1.2 "Kuratierte Breite"
+**Domain:** Erweiterung einer ausgelieferten MCP-only-ExApp (Groupware-Anbindung: Chat, Tabellen, E-Mail) fuer KI-Assistenten
+**Researched:** 2026-08-21
+**Confidence:** HIGH insgesamt, mit zwei benannten MEDIUM-Flecken (Mail-Mindestversion, Mail-App-Erkennung live)
+
+> Diese Datei ersetzt die v1.0-SUMMARY vom 2026-08-14 vollstaendig. Sie fasst ausschliesslich
+> die vier v1.2-Recherchedateien zusammen (STACK.md, FEATURES.md, ARCHITECTURE.md,
+> PITFALLS.md, alle datiert 2026-08-21). Die v1.0-Gesamtrecherche bleibt in der Git-Historie
+> erreichbar (Commit `29c5940`).
 
 ## Executive Summary
 
-Das Produkt ist ein kuratierter, MCP-only Remote-Server als Nextcloud External App (ExApp): ~16-19 nicht-destruktive Tools über Files, Calendar, Notes, Deck, Contacts und Unified Search, per Klick aus dem Nextcloud App Store installierbar, mit Spec-konformem OAuth 2.1 und Per-User-Verwaltung in den Nextcloud-Settings. Die Wettbewerbsanalyse validiert exakt diese Positionierung: Der offizielle context_agent hat OAuth abgelehnt (#74 "not planned"), kann nicht skalieren und keine Per-User-Tokens; der Community-Platzhirsch (cbcoutinho, 110+ Tools) sprengt Client-Limits (Cursor deaktiviert ab 80 Tools) und hat keinen Store-Vertrieb. Die Lücke "MCP-only ExApp mit Spec-OAuth und Per-User-Kontrolle" ist offen nachgefragt (context_agent#105, #203) und von niemandem besetzt.
+v1.2 fuegt einer bereits im Store ausgelieferten, bewusst schlanken Nextcloud-MCP-ExApp drei
+neue App-Familien hinzu: Talk (Chat), Tables (Tabellen) und Mail. Alle vier Recherchen kommen
+unabhaengig zum selben Bild: **das ist keine neue Architektur, sondern eine dritte
+Wiederholung eines etablierten Musters** (Client-Modul, Tool-Modul mit `level`-Enum,
+`reg_*`-Registrierung, Capability-Gate) -- mit drei Ausnahmen, die die Roadmap explizit
+adressieren muss. Erstens schreibt ein naiver Talk-"Lese"-Aufruf tatsaechlich in den
+Nutzerzustand (Leseeintrag, Benachrichtigungs-Quittierung, Online-Status), unwiderruflich,
+weil `DELETE` per Gate verboten ist. Zweitens hat Tables seine Zeilen-Lese-API nur in der
+aelteren, nicht-OCS-Generation (v1), waehrend das Zeile-Anlegen in der neueren OCS-Generation
+(v2) liegt -- ein gemischter Client ist zwingend. Drittens veroeffentlicht Mail keine
+Capability, hat kein `openapi.json`, und sein einziges dokumentiert zugesagtes API-Stueck sind
+vier OCS-Routen (lesen, senden, roh, Anhang); alles andere ist interne, ungetypte
+Frontend-Route, die laut CSRF-Ausweg (`OCS-APIRequest`-Header) trotzdem erreichbar ist, aber
+nicht zugesagt.
 
-Empfohlener Ansatz: Python 3.13 + offizielles MCP-SDK, nc_py_api[app] für den AppAPI-Lifecycle, rohe httpx-Clients für alle Nextcloud-User-APIs (WebDAV/CalDAV/CardDAV/REST/OCS), ein eigener kleiner Authorization Server (4 Endpoints) im selben Prozess, opake Tokens mit Store-Lookup. Die zentrale Sicherheits-Invariante: Die NC-User-ID kommt ausschließlich aus dem validierten Token und fließt über eine einzige Gateway-Schicht in AppAPI-Impersonation oder App-Passwort-BasicAuth, nie aus Tool-Parametern, nie mit Admin-Rechten. Wichtige neue Faktenlage aus der Stack-Recherche: mcp 2.0.0 ist seit 28.07.2026 stabil (GA), die 1.x-Linie ist offiziell Maintenance-only. Die ursprüngliche Projektentscheidung "1.27 pinnen" ist damit überholt; Empfehlung ist mcp>=2.0,<3 mit dokumentiertem Fallback-Pin auf 1.29, da v2 beide Protokoll-Ären (2025er-Clients wie Claude.ai/Cursor und die stateless Spec 2026-07-28) aus demselben Endpoint bedient und damit auch die context_agent#227-Fehlerklasse konstruktiv löst.
+Der empfohlene Ansatz ist radikal minimal: **keine neue Python-Abhaengigkeit**, fuenf bis
+sechs neue Tools statt der 24+ Tools, die beide direkten Wettbewerber pro Familien-Trio
+anbieten, strikt lesendes Mail (keine Sende-, Verschiebe- oder Markier-Operation), Talk nur
+mit einem risikoarmen Senden-Write, Tables nur mit einem risikoarmen Zeile-Anlegen-Write.
+Kein Update, kein Delete, keine Schema-Aenderung irgendwo. Das haelt den Meilenstein nah an
+der bestehenden Positionierung ("kuratiert schlank" gegen 100+ Tools bei der Konkurrenz) und
+laesst das AST-Grep-Schreibgate im Kern unangetastet erweitern.
 
-Die zwei größten Risiken: (1) OAuth-Discovery-Fehler, die häufigste Ausfallklasse bei Custom-Connectoren; "funktioniert im Inspector, scheitert auf claude.ai" muss durch frühe E2E-Tests gegen eine öffentlich erreichbare Staging-Instanz ausgeschlossen werden. (2) Die harte September-Deadline gegen die Store-Zertifizierungs-Pipeline (CSR-PR, Signatur, Image-Publishing); CSR-Merges dauern aktuell 1-5 Tage, aber der CSR muss 3-4 Wochen vor der Konferenz raus und die App-ID (ohne "nextcloud" im Namen!) muss in Woche 1 eingefroren werden, weil das Zertifikat an die ID gebunden ist. Zwei technische Unbekannte mit MEDIUM-Confidence brauchen frühe Spikes: CalDAV/CardDAV mit AppAPI-Auth-Headern und die Consent-Bridge über die AppAPI-Proxy-Route.
+Das groesste, projektuebergreifende Risiko ist nicht technisch, sondern eine Sicherheits- und
+Produktentscheidung: **Mail-Lesen plus Talk-Senden schliesst im selben Server zum ersten Mal
+die "lethal trifecta"** (private Daten, ungefilterter fremder Inhalt, Ausgangskanal) -- die
+exakte Form des EchoLeak-Vorfalls (CVE-2025-32711, CVSS 9.3) in Microsoft 365 Copilot. Alle
+vier Recherchedateien flaggen das unabhaengig; PITFALLS.md und STACK.md empfehlen
+uebereinstimmend, `talk_send_message` entweder auf v1.3 zu verschieben oder hinter einen
+default-aus Admin-Schalter zu legen, und diese Entscheidung muss **vor** der ersten
+Familienphase fallen, nicht am Ende nachgezogen werden -- sie praegt Tool-Schnitt, Store-Text
+und Budget.
 
 ## Key Findings
 
 ### Recommended Stack
 
-Offizielles MCP-SDK statt FastMCP-Fork, nc_py_api als ExApp-Rahmen, httpx roh für alle Daten-APIs (der vom Platzhirsch validierte Weg), Parsing an Spezial-Libs delegiert. Der Authorization Server wird bewusst selbst gebaut (4 FastAPI-Routen + PyJWT), weil Nextclouds oauth2-App kein DCR und keine Scopes kann und Authlib für 4 maßgeschneiderte Endpoints zu schwer ist.
+Der Stack aendert sich nicht: `pyproject.toml` bleibt komplett unveraendert, kein `uv add`,
+kein Lock-Update. Alle drei Familien sind durchgaengig JSON ueber HTTP, laufen unter der
+bestehenden AppAPI-Impersonation ohne neuen Auth-Pfad, ohne Scope-Deklaration (API-Scopes
+wurden in AppAPI 3.2.0 komplett entfernt) und ohne `info.xml`-Aenderung an Routen oder
+Environment-Variablen.
 
-**Core technologies:**
-- Python 3.13 + uv: Runtime und Toolchain (Projekt-Constraint)
-- mcp[cli]>=2.0,<3: offizielles SDK, GA seit 28.07.2026; TokenVerifier, RFC-9728-PRM und 401-Discovery eingebaut; stateless HTTP nativ; Fallback-Pin >=1.29,<2 dokumentiert
-- nc_py_api[app]>=0.30,<1: AppAPI-Handshake, Auth-Middleware, Declarative Settings (Per-User-UI), Impersonation
-- FastAPI + Uvicorn: ASGI-Rahmen, MCP-App als Sub-App gemountet
-- httpx + lxml + icalendar + recurring-ical-events + vobject: alle Nextcloud-User-APIs plus DAV/ICS/VCF-Parsing
-- PyJWT[crypto]: selbst signierte Tokens (bereits transitive mcp-Dependency)
-- Test: pytest + In-Memory `Client(mcp)`, lokale Wegwerf-NC via juliusknorr/nextcloud-docker-dev, CI mit offiziellem nextcloud-Image + manual-install
+**Kerntechnologien (alle bereits im Projekt):**
+- `httpx` (bestehend) -- einziger HTTP-Client fuer alle neun neuen Endpunkte; kein XML, kein DAV, kein IMAP direkt
+- `lxml.html.fromstring(...).text_content()` (bestehend, neuer Verwendungszweck) -- HTML-Mail-Bodies zu Text reduzieren, ohne neue Abhaengigkeit (`lxml.html.clean` bewusst vermeiden, seit lxml 5.2 ausgelagert)
+- `mcp[cli]` (bestehend) -- Tool-Registrierung folgt dem Deck/Notes-Muster 1:1
+- neu nur in der Client-Schicht: `ocs_post` neben dem vorhandenen `ocs_get` (Talk-Senden und Tables-Create sind die ersten OCS-Schreibaufrufe des Projekts)
+- Integrationstest-Ebene: GreenMail als zweiter Compose-Service fuer einen echten IMAP-Server (kein Python-Paket, nur Testinfrastruktur)
 
-**Nicht verwenden:** FastMCP standalone (Fork, 4.x Beta), aiodav (verwaist), Docker Socket Proxy als Deploy-Ziel (deprecated, Entfernung NC 35, HaRP ist der Weg), Nextclouds oauth2-App als AS, sync-HTTP-Clients im async-Server.
+**Explizit abgelehnt:** `html2text`/`beautifulsoup4`/`markdownify` (lxml reicht), `imapclient`/`imaplib` (wuerde die Mail-App und ihre Berechtigungen umgehen), `nc_py_api` (unnoetig, neun HTTP-Aufrufe reichen), Talk-Bot-API (eigene Identitaet statt Nutzer-Impersonation, bricht das Kernversprechen).
 
 ### Expected Features
 
-**Must have (table stakes):**
-- Streamable HTTP als Primärtransport (Open WebUI ab 0.6.31 NUR Streamable HTTP), stateless-ready designt
-- Auth-Fallback App-Passwort + Login Flow v2 (Selfhoster-Onboarding ohne OAuth, Pflicht für stdio)
-- Kern-Lesetools für Files/Calendar/Notes/Deck/Contacts plus Unified Search OCS (berechtigungstreu)
-- ChatGPT-Profil: exakt die zwei Pflichttools `search` und `fetch` mit Kompatibilitäts-Schema
-- Tool-Annotationen (readOnlyHint etc.) + Schema-Diät (InfraNode-Playbook, outputSchema = 56% des Token-Footprints)
-- Berechtigungs-Durchgriff (Assistent sieht nie mehr als der Nutzer), Graceful Degradation bei fehlenden Apps, Setup-Doku pro Client
+**Must have (Table Stakes):** Talk-Konversationen und -Nachrichten lesen mit garantiert
+nebenwirkungsfreien Parametern (`setReadMarker=0`, `markNotificationsAsRead=0`,
+`noStatusUpdate=1`, `lookIntoFuture=0`), Talk-Nachricht senden mit Vorpruefung von
+`readOnly`/Permission-Bit; Tables-Tabellen, -Spalten und -Zeilen lesen (Zeilen nur ueber die
+v1-App-Route, v2 hat keine Leseroute), Zeile anlegen mit Spaltentiteln statt roher
+Spalten-Ids; Mail-Konten/Postfaecher/Nachrichtenliste lesen sowie eine Nachricht im Volltext
+lesen (letzteres ueber die einzige offizielle OCS-Route); App-Erkennung mit Graceful
+Degradation fuer alle drei Familien nach dem Notes/Deck-Muster (Mail braucht dafuer einen
+zweiten Kanal, siehe Architektur).
 
-**Should have (differentiators):**
-- OAuth 2.1 nach MCP-Authorization-Spec (PRM, DCR, PKCE, Revocation): meistgefordert, von niemandem geliefert; Voraussetzung für Plug-and-play mit Claude.ai/ChatGPT
-- Per-User-Verwaltung in den NC-Settings (an/aus, Clients einsehen, Tokens widerrufen)
-- MCP-only ExApp per Klick aus dem App Store (die #203-Lücke)
-- prepare_context als Bündel-Tool (spart 4-6 Roundtrips und Bestätigungsdialoge)
-- Kuratiert schlank (~16-19 Tools) und konstruktionsbedingt nicht destruktiv (Behörden-Argument)
+**Should have (Differenzierung):** Mail strikt lesend (positioniert das Projekt naeher an
+Googles offiziellem Gmail-MCP als an beiden Nextcloud-Wettbewerbern, die beide senden koennen);
+Vertrauens-Signale (`isSenderTrusted`, `dkimValid`, `phishingDetails`) als Datenfelder statt
+gefiltert durchreichen; Read-ohne-Nebenwirkung als getestete, dokumentierte Eigenschaft;
+Zeile-Anlegen ueber Spaltentitel statt Ids (Nextcloud-Issue #2237 zeigt, dass sogar Menschen
+das Ids-Format falsch verwenden); ein Browse-Tool mit `level`-Enum pro Familie statt
+CRUD-Spiegelung (5-6 neue Tools gegen 24+ bei beiden Wettbewerbern fuer dieselben drei Apps);
+Talk-Digest in `prepare_context` praktisch kostenlos, weil die Konversationsliste
+`unreadMessages`/`unreadMention` schon mitliefert.
 
-**Defer (v1.x/v2+):**
-- Tasks (VTODO), MCP-Prompts, Response-Format-Parameter, SSE-Fallback (v1.x nach Nachfrage)
-- Talk/Tables/Mail/Cookbook, openDesk-Suite; semantische Suche NIE selbst (Unified Search stattdessen)
-
-**Anti-Features (bewusst nicht):** Tool-Flut, destruktive Operationen, eigener RAG-Index, Admin-weites Shared-Token, ausufernde Output-Schemas.
+**Defer / explizit nicht bauen (v2+ oder nie):** Mail senden, Mail-Entwurf anlegen (v1.2),
+Mail-Flags/Tags/Verschieben/Loeschen, Mail-Anhaenge herunterladen, Talk-Nachricht
+loeschen/bearbeiten, Talk-Konversation anlegen, Talk-Reaktionen/Umfragen/Teilnehmerlisten,
+`lookIntoFuture=1` (Long-Polling), eigene Suchtools pro Familie (unified_search deckt das
+schon ab), Tabellen-Schema aendern/Import/Shares, Zeile aktualisieren/loeschen,
+ungekappte Volltext-Dumps, credential-abhaengige `tools/list`.
 
 ### Architecture Approach
 
-Ein ASGI-Prozess mit klaren Schichten: ExApp-Shell (Lifecycle, Settings), Auth-Layer (RS via SDK-TokenVerifier + embedded AS mit 4 Routen + Consent-Bridge über AppAPI-Proxy), MCP-Server-Layer (Tool-Registry, stateless), Nextcloud-Gateway als Sicherheitsgrenze (CredentialProvider-Abstraktion: A = AppAPI-Impersonation im ExApp-Modus, B = App-Passwort für stdio/standalone), Token-Store (SQLite, Postgres-fähiges Schema). Zwei dünne Entry-Points (HTTP/stdio), ein Kern; tools/ importiert nie auth/ oder exapp/. Drei Deployment-Topologien aus einem Codebase: ExApp in-instance, standalone remote, lokal stdio.
+Talk und Tables passen ohne neue Mechanik in die bestehende Architektur -- je ein
+Client-Modul, ein Tool-Modul, eine `reg_*`-Datei, zwei Zeilen in `capabilities.py`. Mail ist
+die einzige Familie, die echte Architekturentscheidungen erzwingt: keine Capability
+vorhanden, Listing laeuft ueber eine interne, nicht als API zugesagte Route. `prepare_context`
+waechst am billigsten **nicht** als neues Fan-out-Bein, sondern als zwei neue Provider-Kinds in
+`provider_map.PROVIDER_KINDS` plus zwei neue Buckets in `KIND_BUCKETS` -- die Suche fragt
+schon heute ohne Provider-Einschraenkung und Talk-/Mail-Treffer kommen bereits an (heute als
+`url`, `resolvable: false`).
 
 **Major components:**
-1. Nextcloud-Gateway: einzige Quelle des User-Kontexts (Token -> subject -> Clients), erzwingt Berechtigungs-Durchgriff
-2. Auth-Layer: TokenVerifier (RS, vom SDK getragen) + eigener Mini-AS (/authorize, /token, /register, AS-Metadata) + Login-Flow-v2-Fallback
-3. MCP-Server-Layer: ~16-19 freistehende, transport-agnostische Tool-Funktionen mit Permission-Tiers (Scopes nc:read/nc:write)
-4. ExApp-Shell: /heartbeat, /init, enabled_handler, Declarative Settings (preferences_ex, Enable-Flag wirkt sofort im Verifier)
-5. Token-Store: opake Token-Hashes, Client-Registrierungen, Grants, Widerruf
+1. `nextcloud/clients/{talk,tables,mail}.py` (neu) -- Endpunktwissen, Pfad-Waechter, Parser-Wahl (`parse_ocs` vs. `parse_app_json`)
+2. `nextcloud/capabilities.py` (geaendert) -- App-Erkennung ueber zwei Kanaele: `cloud/capabilities` fuer Talk/Tables, `core/navigation/apps` als zweiter Kanal fuer Mail
+3. `tools/{talk,tables,mail}.py` (neu) -- Fachlogik, Envelope, Kappung, Degradations-Wortlaut, `require_app` als erste Zeile jeder Funktion
+4. `ids.py` / `provider_map.py` / `tools/chatgpt.py::fetch` (geaendert) -- drei neue Kinds (`message`, `row`, `mail`), Fragment-Auswertung fuer Talk und Tables, Talk-Nachricht und Mail ueber `fetch` statt eigenes Tool
+5. `scripts/check_tool_budget.py` (geaendert, kritisch) -- CI-Gate mit neuer Messzeile pro Anhebung, plus empfohlene Ergaenzung: Pro-Tool-Deckel (kein Tool ueber 1400 Bytes)
+
+**Build Order laut Architekturforschung:** Phase 0 (Erreichbarkeits-Spike, blockierend, prueft ob Mail unter reiner AppAPI-Impersonation erreichbar ist) -> Tables (risikoaermste Familie, etabliert die mechanische Checkliste) -> Talk (querschneidende Aenderungen: nicht-numerische IDs, neue Kinds, erster `provider_map`-Fragment-Fall) -> Mail (profitiert von den in Talk geweiteten Naehten, sensibelste Familie, zweiter Erkennungskanal) -> `prepare_context`-Erweiterung und Budget-Endstand.
 
 ### Critical Pitfalls
 
-1. **OAuth-Discovery-Kette bricht Claude.ai/ChatGPT silently:** Jedes fehlende Glied (PRM mit Pfad-Suffix, WWW-Authenticate-Pointer, DCR, PKCE-S256-Advertisement, Audience-Binding RFC 8707, 10s-Token-Timeout, Redirects) killt den Connect. Prävention: Discovery als eigenes Deliverable mit Curl-Checkliste, E2E-Test von öffentlichem Netz aus (claude.ai lehnt private IPs vor dem ersten Request ab).
-2. **Session-State-Annahmen im Transport (context_agent#227-Klasse):** Kein Tool darf Session-State brauchen; Pagination über opake Handles, User-Kontext pro Request aus dem Token. Client-Matrix-Test (alte und neue SDK-Clients) einplanen; mcp 2.x entschärft das strukturell.
-3. **ExApp-Deploy/Registrierung scheitert umgebungsspezifisch:** Heartbeat/init/enabled als allererster ExApp-Code, Test Deploy von Tag 1 grün halten, auf zwei Topologien testen (docker-compose + Nextcloud AIO).
-4. **Zertifizierungs-Pipeline vs. September-Deadline:** CSR 3-4 Wochen vorher (Merge-Realität 1-5 Tage plus Rückfragen), App-ID ohne "nextcloud" in Woche 1 einfrieren (Zertifikat ist ID-gebunden), Multi-Arch-Image vor Store-Release pushen, Signing-Key wie Produktions-Secret behandeln.
-5. **System-Credentials umgehen leise die Nutzerrechte:** Eine einzige Client-Factory, die eine User-Identität erzwingt; Permission-Parity-Test mit eingeschränktem Nutzer; exapp_impersonation.log als Audit-Argument dokumentieren.
-6. **Brute-Force-Protection drosselt den ganzen Server (eine IP, viele User):** Nie Auth-Retries, Validierung cachen, 401/429 mit handlungsfähigen Meldungen, Admin-Runbook (occ security:bruteforce:reset, Allowlist).
+1. **Talk-"Lesen" schreibt in den Nutzerzustand, unwiderruflich** -- `setReadMarker`, `markNotificationsAsRead` (Default je 1) und `noStatusUpdate` (Default 0) muessen auf jedem Talk-Request explizit auf die sichere Seite gesetzt werden, im Client, nicht im Tool, mit einem positiv behauptenden Contract-Test (ein Denylist-Gate sieht das nicht, weil es ein GET auf einen Lese-Endpunkt ist). Der Leseeintrag ist zudem fuer Dritte sichtbar (`X-Chat-Last-Common-Read`); es gibt keinen Reparaturweg, weil `DELETE` per Gate verboten ist.
+2. **Mail-Lesen plus Talk-Senden schliesst die "lethal trifecta"** -- private Daten, ungefilterter fremder Inhalt (jede beliebige Mail von aussen), Ausgangskanal (Talk-Senden, potenziell an Gaeste oder foederierte Server). Empfehlung: Senden auf v1.3 verschieben, oder hinter einen default-aus Admin-Schalter, oder strukturell auf lokale, nicht-oeffentliche Konversationen beschraenken. Muss vor der ersten Familienphase entschieden werden.
+3. **Mail auf die interne API bauen** -- Mails Listing-Controller tragen `#[OpenAPI(scope: OpenAPI::SCOPE_IGNORE)]`, es gibt kein `openapi.json`; die einzige zugesagte Flaeche sind vier OCS-Routen. Empfehlung: Discovery ueber den bereits genutzten Unified-Search-Provider `mail`, Inhalt ueber `GET /ocs/v2.php/apps/mail/message/{id}` -- dann ist die interne Route optional und ersetzbar statt Rueckgrat.
+4. **Tables-Zeilen ohne `limit` lesen alle Zeilen** -- `limit`/`offset` sind `nullable`, ein Weglassen liefert die ganze Tabelle. Immer explizites `limit` im Client erzwingen, nicht im Tool.
+5. **Budget-Gate wird einmal angehoben und schuetzt dann nichts mehr** -- drei Familien sind realistisch sechs bis neun neue Tools; ohne gemessene Neu-Verankerung (Messung plus 5-15%, aufgerundet, plus Pro-Tool-Deckel) wird das Gate wieder zur Dekoration wie am Ende von Phase 1.
 
 ## Implications for Roadmap
 
-Basierend auf der Recherche empfohlene Phasenstruktur (folgt der verifizierten Build-Order aus ARCHITECTURE.md; jede Stufe ist unabhängig demo-fähig, das Auth-Neuland liegt hinter den verifizierten NC-Zugriffen):
+Alle vier Recherchedateien konvergieren unabhaengig auf dieselbe Phasenreihenfolge
+(ARCHITECTURE.md schlaegt sie explizit vor, PITFALLS.md ordnet ihre zwoelf Pitfalls exakt
+diesen Phasen zu). Das ist ein starkes Signal -- die folgende Struktur sollte weitgehend
+direkt uebernommen werden.
 
-### Phase 1: Kern ohne ExApp (Tools + Clients + stdio)
-**Rationale:** Schnellste Feedback-Schleife; deckt die MEDIUM-Confidence-Unbekannten (DAV-Handling) früh auf; ein stdio-Server ist bereits ein nutzbares Produkt für Entwickler. App-ID und Name (ohne "nextcloud") werden HIER eingefroren, bevor irgendetwas daran hängt.
-**Delivers:** httpx-Clients (WebDAV/CalDAV/CardDAV/Notes/Deck/OCS), ~14 Kern-Tools inkl. search/fetch, stdio-Entry mit App-Passwort gegen lokale Docker-NC, Schema-Diät + Annotationen von Anfang an, CI-Token-Budget-Check für tools/list.
-**Addresses:** Kern-Lesetools, ChatGPT-Profil search/fetch, Annotationen, Graceful Degradation.
-**Avoids:** Schema-Bloat (P3), WebDAV/CalDAV/OCS-Gotchas (Timezone/DST-Testmatrix, SEARCH-Template, OCS-Envelope), späte App-ID-Änderung (P8).
+### Phase 0: Milestone-Design-Entscheidung + Erreichbarkeits-Spike
+**Rationale:** Zwei Fragen entscheiden die gesamte weitere Planung, und beide sind billig
+vorab zu klaeren, teuer nachtraeglich zu korrigieren: (a) wird `talk_send_message` in v1.2
+geschickt, verschoben oder geschaltet? (b) ist Mail unter reiner AppAPI-Impersonation
+ueberhaupt erreichbar (Mail ist die erste Familie, deren Listing auf dem Pfad "nur der
+`OCS-APIRequest`-Header hebt CSRF auf" laeuft, ungemessen in dieser Topologie)?
+**Delivers:** Eine schriftliche Entscheidung zur lethal-trifecta-Frage (in PROJECT.md Key
+Decisions) plus ein Integrationstest, der Talk/Tables/Mail-Erreichbarkeit unter Impersonation
+misst.
+**Avoids:** Pitfall 2 (lethal trifecta) und die Situation, dass Mail erst in der letzten
+Phase als nicht erreichbar auffaellt.
 
-### Phase 2: Streamable HTTP + Stateless-Beweis
-**Rationale:** Beweist das Stateless-Design, bevor Auth und ExApp obendrauf kommen; billiges Inkrement (Dummy-TokenVerifier mit statischem Token -> fixer User).
-**Delivers:** entry_http mit gemounteter MCP-App, Restart-mid-conversation-Test, Client-Matrix-Test (alte + neue SDK-Clients).
-**Uses:** mcp 2.x Streamable HTTP, FastAPI-Mounting.
-**Implements:** MCP-Server-Layer + Pattern "Token -> User-Context-Injection" (noch mit Dummy).
-**Avoids:** Session-State-Annahmen (P2, context_agent#227-Regressionstest).
+### Phase 1: Tables
+**Rationale:** Die risikoaermste, mechanisch einfachste Familie (numerische IDs, beide Parser
+schon vorhanden, kein Eingriff in `ids.py`/`provider_map`/`fetch`/`context.py` noetig).
+Etabliert die komplette Checkliste (Capability-Feld, `EXPECTED_TOOLS`, `CREATE_TOOLS`, README
+in drei Sprachen, `info.xml`, Budget-Messzeile) einmal an der Familie ohne Zusatzrisiko.
+**Delivers:** `tables_browse` (Level tables/columns/rows), `tables_create_row` mit
+Spaltentiteln statt Ids.
+**Addresses:** Table-Stakes-Features Tables aus FEATURES.md.
+**Avoids:** Pitfall 7b (ungekappte Zeilen), Pitfall 12b (Duplikate durch Retry).
 
-### Phase 3: ExApp-Shell + AppAPI-Integration
-**Rationale:** Lifecycle-Endpoints müssen vor jeder ExApp-Funktionalität stehen; der DAV-über-AppAPI-Spike (MEDIUM confidence) entscheidet, ob Provider A alle API-Familien trägt oder CalDAV/CardDAV bei Provider B bleiben.
-**Delivers:** /heartbeat, /init (mit Progress), enabled_handler, Registrierung an Test-NC, Provider A (Impersonation) für Files verifiziert, DAV-Spike mit AppAPI-Headern, Test Deploy grün auf docker-compose + AIO.
-**Uses:** nc_py_api[app], AppAPIAuthMiddleware, HaRP/manual-install.
-**Implements:** ExApp-Shell, Credential-Provider-Abstraktion (Pattern 2).
-**Avoids:** Deploy-/Registrierungs-Failures (P4), System-Credential-Bypass (P6, Client-Factory-Design hier festzurren).
+### Phase 2: Talk
+**Rationale:** Hier sitzen die querschneidenden Aenderungen (nicht-numerische Pfad-IDs, drei
+neue `ids.py`-Kinds, erster `provider_map`-Fragment-Fall, erster neuer `fetch`-Case). Nach
+dieser Phase sind alle Naehte geweitet, die Mail dann nur noch benutzt.
+**Delivers:** `talk_browse` (Level conversations/messages) garantiert nebenwirkungsfrei,
+`talk_send_message` (falls Phase 0 es freigibt) mit Permission-Vorpruefung.
+**Uses:** `ocs_post`-Erweiterung aus STACK.md.
+**Avoids:** Pitfall 1 (Lesen schreibt Zustand), Pitfall 6 (Rich Object Strings/Platzhalter), Pitfall 7a (Pagination im Header).
 
-### Phase 4: OAuth 2.1 (PRM + DCR + embedded AS + Consent-Bridge)
-**Rationale:** Größter Neuland-Anteil und der Kern-Differenzierer; braucht die stabilen Phasen 1-3 als Basis. Enthält die zwei Haupt-Spikes: unauthentifizierte Discovery-Endpunkte durch den AppAPI-Proxy und Consent-Bridge via Proxy-Route (beide MEDIUM confidence).
-**Delivers:** TokenVerifier (echt), 4 AS-Routen, PKCE, Refresh, Revocation, Consent-Seite, Login-Flow-v2-Fallback, Token-Store. Explizites Erfolgskriterium: Claude.ai-Connector UND ChatGPT-Connector verbinden Ende-zu-Ende gegen eine öffentliche Staging-Instanz.
-**Uses:** mcp-SDK-Auth (TokenVerifier, AuthSettings, PRM automatisch), PyJWT bzw. opake Tokens mit Store-Lookup.
-**Avoids:** OAuth-Discovery-Breakage (P1), Brute-Force-Throttling (P7, No-Retry-Policy + Validierungs-Cache hier einbauen).
+### Phase 3: Mail
+**Rationale:** Sensibelste Familie inhaltlich, einzige ohne Capability, einzige mit
+`/message/send` im eigenen OCS-Bestand (muss aktiv ausgeschlossen werden), profitiert am
+meisten von den in Phase 2 geweiteten Naehten, Erreichbarkeit erst durch Phase 0 geklaert.
+**Delivers:** `mail_browse` (Level accounts/mailboxes/messages), `fetch`-Erweiterung um
+`mail:<databaseId>` statt eigenem Lesetool.
+**Implements:** Zweiter Capability-Kanal (`core/navigation/apps`) aus ARCHITECTURE.md.
+**Avoids:** Pitfall 3 (interne API als Rueckgrat), Pitfall 10 (Brute-Force durch ID-Raten), Pitfall 11 (Marker-Filter zu schwach fuer Mail-HTML/Unicode-Smuggling).
 
-### Phase 5: Per-User-Settings + prepare_context
-**Rationale:** Settings-UI teilt den Token-Store mit OAuth (deshalb nach Phase 4); prepare_context baut komplett auf den fertigen Clients auf.
-**Delivers:** Declarative-Settings-Seite (an/aus, Token-Liste, Widerruf, sofort wirksam), prepare_context mit parallelem Fan-out, Budget/Timeout pro Teilquelle und explizit markierten degradierten Quellen.
-**Addresses:** Differenzierer Per-User-Verwaltung (#105) und prepare_context.
-**Avoids:** Performance-Trap sequentielles Fan-out, silent partial results.
-
-### Phase 6: Hardening + Store-Einreichung
-**Rationale:** Zertifizierung hat eigene Durchlaufzeiten; der CSR-PR startet aber schon WÄHREND dieser Phase (braucht nur App-ID + Public Repo, nicht die fertige App).
-**Delivers:** Permission-Parity-Test (eingeschränkter User: UI vs. MCP identisch), Negative-Credential-Loadtest, Verschlüsselung at rest, Create-only-Write-Tests, Uninstall-Cleanup, Multi-Arch-Image auf ghcr.io, info.xml XSD-validiert, Datenfluss-Disclosure-Text, signiertes Release, Install von Clean-Instanz, Client-Setup-Doku (Claude, ChatGPT, Cursor, Open WebUI, MUCGPT).
-**Avoids:** Zertifizierungs-Lead-Time (P5), Store-Policy-Ablehnung (P8), Token-Storage/Write-Safety-Fehler.
+### Phase 4: prepare_context-Erweiterung, Budget-Endstand, Aussenwirkung
+**Rationale:** `KIND_BUCKETS` und `EXCERPT_KINDS` sind erst sinnvoll zu entscheiden, wenn
+beide neuen Kinds existieren und `fetch` sie aufloesen kann. Hier auch die
+Budget-Neuverankerung und alle mechanischen Nachzieharbeiten (README x3, `info.xml`, `docs/`).
+**Delivers:** Talk-Digest in `prepare_context`, finale Budget-Zahl mit Messzeile,
+aktualisierte Store-Texte und Dokumentation in allen drei Sprachen.
+**Avoids:** Pitfall 4 (unbudgetierte Fan-out-Latenz), Pitfall 5 (Budget-Gate ohne Schutzwirkung).
 
 ### Phase Ordering Rationale
 
-- Dependencies aus FEATURES.md: Token-Store vor OAuth und Per-User-UI; search/fetch vor prepare_context (beide brauchen Unified Search, search/fetch ist das kleinere testbare Inkrement); Annotationen von Anfang an (Nachrüsten heißt alle Approval-Flows neu testen).
-- Das Auth-Neuland (Phase 4) liegt bewusst hinter verifizierten NC-Zugriffen; jede Phase davor ist unabhängig demo-fähig.
-- Die September-Deadline erlaubt einen Scope-Schnitt nach Phase 4 (Fallback-Auth statt voller OAuth-Politur), ohne den Store-Eintrag zu gefährden; CSR-Start ist von der Fertigstellung entkoppelt.
-- Frühe Spikes entschärfen die MEDIUM-Confidence-Stellen genau dort, wo sie günstig zu drehen sind (Phase 3: DAV-über-AppAPI; Phase 4: Discovery/Consent durch den Proxy).
+- Reihenfolge folgt Risiko: Erreichbarkeit und die Sicherheitsentscheidung zuerst gemessen,
+  dann die risikoaermste Familie, dann die querschneidende, dann die sensibelste.
+- Tables vor Talk, obwohl Talk die "attraktivere" Familie ist: die mechanische Checkliste
+  (fuenf eingefrorene Testliteralen, drei READMEs, `info.xml`) einmal an einer risikolosen
+  Familie zu lernen macht die beiden schwierigen Phasen kuerzer.
+- `prepare_context` bewusst als eigene, letzte Phase statt Anhaengsel an jede Familienphase,
+  weil die Bucket-Entscheidung (welche Kinds bekommen einen Auszug) beide neuen Kinds
+  gleichzeitig sehen muss, um konsistent zu sein.
 
 ### Research Flags
 
-Phasen mit vermutlichem Research-Bedarf während der Planung:
-- **Phase 3:** CalDAV/CardDAV mit AppAPI-Auth-Headern ist nicht explizit dokumentiert (MEDIUM); HaRP- vs. manual-install-Verhalten umgebungsspezifisch. Spike-Ergebnisse können die Provider-Aufteilung ändern.
-- **Phase 4:** Consent-Bridge über die AppAPI-Proxy-Route ist abgeleitet, nicht E2E-verifiziert (MEDIUM); externe Erreichbarkeit des MCP-Endpoints (Reverse-Proxy-Route vs. Proxy-Durchgriff) ist das größte Topologie-Risiko; AS-Eigenbau gegen reale Claude.ai/ChatGPT-Connectoren validieren.
-- **Phase 6:** Store-Review-Praxis für eine App, die per Design Nutzerdaten an KI-Clients gibt (Disclosure-Anforderungen), ggf. kurz nachrecherchieren.
+Braucht tiefere Recherche waehrend der Planung (`--research-phase`):
+- **Phase 0 (Spike):** Mail-Erreichbarkeit unter AppAPI-Impersonation ist MEDIUM-Konfidenz, nur aus Quellcode gelesen, nie in dieser Topologie gemessen.
+- **Phase 3 (Mail):** Mail-Mindestversion fuer die OCS-`messageApi`-Routen ist nicht sauber datierbar (kein Capability-Eintrag, kein Changelog-Treffer); die Zellwert-Formate je `column_types` bei Tables-Create sind ebenfalls unklar (wahrscheinlichste Quelle fuer einen 400).
 
-Phasen mit Standard-Patterns (research-phase überspringbar):
-- **Phase 1:** WebDAV/CalDAV/REST/OCS sind gut dokumentiert, der Roh-HTTP-Ansatz ist vom Platzhirsch praktisch validiert; InfraNode-Patterns (Schema-Diät, Graceful Degradation) liegen vor.
-- **Phase 2:** SDK-Doku deckt Streamable HTTP + Mounting vollständig ab.
-- **Phase 5:** Declarative Settings und preferences_ex sind offiziell dokumentiert; prepare_context ist reine Orchestrierung vorhandener Clients.
+Standardmuster, wahrscheinlich ohne Extra-Recherche planbar:
+- **Phase 1 (Tables):** Endpunkte, Parameter und Parser sind HIGH-Konfidenz, direkt aus Quellcode und `openapi.json` verifiziert.
+- **Phase 2 (Talk):** API-Version, Parameter-Defaults und Capability-Struktur sind HIGH-Konfidenz aus offizieller Doku plus Quellcode.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Gegen PyPI + offizielle Doku verifiziert; Restrisiko: mcp 2.0.0 ist erst 2,5 Wochen alt (Fallback-Pin 1.29 dokumentiert); NC-34-Support von nc_py_api vor Phase 1 verifizieren |
-| Features | HIGH | Wettbewerber-Issues direkt verifiziert (context_agent #74/#105/#203/#227, Platzhirsch-Tracker); Client-Anforderungen aus Vendor-Doku (MEDIUM-Anteil) |
-| Architecture | HIGH/MEDIUM | AppAPI-Lifecycle, MCP-Auth-Spec, SDK-Fähigkeiten HIGH; DAV-über-AppAPI und Consent-Bridge via Proxy MEDIUM (Spikes eingeplant) |
-| Pitfalls | HIGH | Offizielle Docs, Live-GitHub-Daten (CSR-Durchlaufzeiten gemessen), eigene InfraNode-Messungen; einzelne NC-API-Edge-Cases MEDIUM (Community-Reports) |
+| Stack | HIGH | Endpunkte, Parameter und Auth-Mechanismus gegen den Quelltext von spreed/tables/mail/server (stable32-34) gelesen; MEDIUM nur fuer Mail-Mindestversion |
+| Features | HIGH fuer API-Lage und Wettbewerb (Quellcode und Tool-Listen direkt gelesen), MEDIUM fuer Nutzererwartung (Vendor-MCPs als Proxy, keine eigenen Store-Rueckmeldungen) |
+| Architecture | HIGH fuer Talk/Tables und Codebasis-Integrationspunkte (live gemessen, z. B. Budget), MEDIUM fuer Mail (Erreichbarkeit unter Impersonation nicht live belegt) |
+| Pitfalls | HIGH fuer API-Fakten und Code-Interaktionen mit diesem Repo, HIGH fuer die Injection-Klasse (oeffentlicher Vorfall), MEDIUM fuer die konkrete Mitigations-Rangfolge (Urteil, keine Messung) |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **SDK-Versionskonflikt in den Research-Dateien:** STACK.md empfiehlt mcp>=2.0,<3 (GA verifiziert); FEATURES.md und PITFALLS.md wurden noch unter der Prämisse "1.27 pinnen / 2.0 ist Beta" geschrieben. Auflösung: mcp 2.x ist die Empfehlung (2.0 ist GA, nicht Beta; 1.x ist Maintenance-only); die Warnungen bleiben als Architektur-Anforderungen gültig (stateless-ready, Client-Matrix-Test alt+neu). Fallback-Pin >=1.29,<2 nur bei konkretem Blocker bis Mitte September.
-- **CalDAV/CardDAV mit AppAPI-Headern:** Spike in Phase 3; Fallback ist Provider B (App-Passwort) für DAV-Familien.
-- **Consent-Bridge + Discovery durch AppAPI-Proxy:** Spike früh in Phase 4; Fallback ist Login Flow v2 als Identity-Bridge plus dokumentierte Reverse-Proxy-Route für den MCP-Endpoint.
-- **nc_py_api-Support für NC 34:** vor Phase 1 verifizieren (vermutlich nur Badge-Lag); min/max-version in info.xml danach festlegen.
-- **AS-Eigenbau vs. reale Connectoren:** früher E2E-Test gegen Claude.ai und ChatGPT von öffentlichem Netz (in Phase 4 als Erfolgskriterium verankert).
+- **Mail-Erreichbarkeit unter reiner AppAPI-Impersonation** ist der einzige echte Blocker-Kandidat: ungemessen in dieser Topologie. Muss in Phase 0 als Spike geklaert werden, bevor Mail verplant wird.
+- **Lethal-Trifecta-Entscheidung fuer `talk_send_message`** ist keine Recherchelluecke, sondern eine offene Produktentscheidung, die vor Phase 1 im PROJECT.md festgehalten werden muss (Optionen: verschieben auf v1.3, default-aus Admin-Schalter, strukturelle Empfaenger-Einschraenkung).
+- **Mail-Mindestversion** fuer die OCS-`messageApi`-Routen laesst sich nicht sauber datieren; Empfehlung ist, nicht auf eine Version zu gaten, sondern bei 404/HTML degradiert zu antworten.
+- **Tables-Zellwert-Formate je `column_types`** beim Zeile-Anlegen sind nicht vollstaendig dokumentiert; das ist der wahrscheinlichste Ort fuer einen 400 in der Tables-Phase und verdient eine kurze Recherche innerhalb der Phase.
+- **`/core/navigation/apps` als Mail-Erkennungsweg** ist im Quellcode verifiziert, aber die Antwortform nie gegen eine laufende Instanz geprueft; Gegenprobe ueber die Unified-Search-Provider-Liste ist der billige Ausweg, falls eine Instanz Mails Navigationseintrag ausblendet.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- PyPI (mcp, fastmcp, nc_py_api, caldav, httpx, pyjwt, icalendar u.a.): Versionen, GA-Status, requires_dist
-- github.com/modelcontextprotocol/python-sdk (Releases) + py.sdk.modelcontextprotocol.io: v2-GA, v1-Maintenance, TokenVerifier/AuthSettings/PRM, stateless HTTP
-- MCP Authorization Spec 2026-07-28: PRM MUST, DCR/CIMD, Audience-Validierung, Step-Up-Scopes
-- Nextcloud-Doku: AppAPI (Auth-Header, Test Deploy, Deployment), ExApp-Troubleshooting, App-Store-Publishing-Regeln, Code Signing, WebDAV/SEARCH, Brute-Force-Protection
-- github.com/nextcloud/app_api, HaRP, app-certificate-requests (CSR-Durchlaufzeiten Jul/Aug 2026 gemessen), nc_py_api-Doku und -Quellcode
-- github.com/nextcloud/context_agent Issues #74, #105, #203, #227
-- github.com/cbcoutinho/nextcloud-mcp-server (Feature-Umfang, Auth-Modi, Issue-Tracker)
-- docs.openwebui.com (nur Streamable HTTP ab 0.6.31, OAuth 2.1 DCR)
-- Interne InfraNode-Messungen: 71 Tools = ~27k Tokens, outputSchema = 56%, Schema-Diät -27%
+- nextcloud/server, stable32/33/34/master -- `Request::passesCSRFCheck()`, `SecurityMiddleware`, `NavigationController` (der `OCS-APIRequest`-CSRF-Ausweg, in vier Zweigen identisch)
+- nextcloud-talk.readthedocs.io -- Conversation v4, Chat v1, Parameter-Defaults, Statuscodes
+- nextcloud/spreed, nextcloud/tables, nextcloud/mail (main-Zweige) -- Controller, Capabilities, Search-Provider, Routen direkt gelesen
+- nextcloud/tables `openapi.json` -- vollstaendige Routenliste, Abwesenheit einer v2-Zeilen-Leseroute
+- nextcloud/app_api `CHANGELOG.md` -- Entfernung der API-Scopes (3.2.0)
+- Eigener Code, live gemessen: `scripts/check_tool_budget.py` (11268/12500 Bytes, 16 Tools), `tests/contract/test_tool_surface.py`, `tests/integration/test_exapp_dav_matrix.py`
+- EchoLeak / CVE-2025-32711 (CVSS 9.3) -- Beleg fuer die lethal-trifecta-Gefahrenklasse
 
 ### Secondary (MEDIUM confidence)
-- Claude-Connector-Doku + Troubleshooting (support.claude.com, claude.com/docs): DCR-Pflicht, Curl-Checkliste, 10s-Token-Timeout, DNS/Private-IP-Ablehnung
-- OpenAI-MCP-Doku (developers.openai.com, help.openai.com): Pflichttools search/fetch, Developer Mode, CIMD/DCR
-- Cursor-Forum (40/80-Tool-Limits), MUCGPT 2.0 (München, 15.000+ Nutzer), Annotations-Verhalten in VS Code/Claude
-- juliusknorr/nextcloud-docker-dev, Community-Reports zu Brute-Force bei API-Clients, Cal.com-CalDAV-Post-mortem
+- github.com/cbcoutinho/nextcloud-mcp-server (332 Sterne) -- unabhaengige Bestaetigung des Mail-CSRF-Mechanismus gegen eine laufende Instanz, gemessene Warnungen zu v2-Scheme-Route und OCS-Anhangsroute, Field-Evidence zu Versions-Drift-Bruechen (#728, #730)
+- nextcloud/context_agent (offiziell) -- Tool-Umfang und Adressierungsmuster als Negativbeispiel
+- developers.google.com Gmail-MCP, docs.slack.dev Slack-MCP -- Referenzpunkte fuer Scope-Disziplin bei Vendor-MCPs
+- nextcloud/tables Issue #2237 -- Row-Create-Format-Verwirrung auch bei Menschen
 
 ### Tertiary (LOW confidence)
-- Community-OIDC-Provider-App (h2ck/oidc) als spätere Integrationsoption: bricht "per Klick installierbar", nur beobachten
+- keine -- alle als LOW eingestuften Einzelpunkte wurden in den vier Recherchedateien bereits als MEDIUM mit expliziter Pruefempfehlung markiert, nicht als LOW belassen
 
 ---
-*Research completed: 2026-08-14*
+*Research completed: 2026-08-21*
 *Ready for roadmap: yes*
