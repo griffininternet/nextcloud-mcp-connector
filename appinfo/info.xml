@@ -24,49 +24,126 @@
 	  - substituted for the answer itself.
 	-->
 	<description><![CDATA[
-Connect your Nextcloud to AI assistants that speak the Model Context Protocol, such as Claude, Cursor or your own agent.
+**MCP Connector** links your Nextcloud to AI assistants that speak the [Model Context Protocol](https://modelcontextprotocol.io), such as Claude, Claude Code or your own agent. Every request runs as the signed in user, so an assistant never sees more than that person sees in the web interface.
 
-The connector exposes a curated, read first set of tools for files, calendar, notes, deck, contacts, Tables and Talk instead of a raw API surface. Every request runs under the identity of the signed in user, so an assistant never sees more than that user sees in the web interface. Talk is the one family where an assistant can put something in front of other people, so it can only post a new message: editing one, deleting one and handing one to the server for later delivery do not exist, and an administrator can switch the sending off for the whole instance.
+### What an assistant can do
 
-**Installing it.** On Nextcloud 34.0.3 an administrator installs it from the apps management: the app list shows an external app with its deploy daemon, its install button reads Deploy and enable, and Remove sits in the row actions once the app is disabled. On 34.0.2 and earlier the apps management lists no external app at all, so the occ commands in the installation guide are the way there, and they work on every version.
+- **Files**: browse, search, read and upload
+- **Calendar**: read the agenda and create an event
+- **Notes**: search, read and write
+- **Deck**: browse boards and cards, add a card
+- **Contacts**: search the address book
+- **Tables**: read tables, columns and rows, add a row
+- **Talk**: read conversations and their history, send a message
+- **Search**: one question across all of it, and a follow up that fetches the full text
 
-**Can I switch it off for myself?** Yes, and you do not need your administrator for it. Nothing runs in the background: there is no scheduled job, no indexing and no telemetry, and the connector acts only when an assistant you connected yourself sends a request. Your own account has a switch on this app's connections page, which Nextcloud links under Settings, Security, MCP Connector, and every connected assistant can be disconnected on its own, which hands its Nextcloud app password back to Nextcloud.
+### What it will not do
 
-The connector itself sends no telemetry and calls no third party. Because an assistant reads your Nextcloud content, the data it reads is transmitted to the assistant you connect, in most cases a hosted provider. Choose your assistant accordingly.
+No delete, no move, no share: the tool set has no way to destroy anything or to hand it to somebody else. Reading a Talk conversation leaves no trace, not even a read marker. Sending a Talk message is the only outgoing action, it can never edit or remove what was sent, and an administrator can switch it off for the whole instance.
 
-More answers, including how an administrator removes the app together with its data: [frequently asked questions](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/faq.md) and [privacy and data flow](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/privacy.md).
+### The account holds the switch
+
+- Assistants sign in through Nextcloud itself, so no account password is ever pasted into a configuration file
+- Every account has its own page to pause access or to disconnect a single assistant, without asking an administrator
+- Nothing runs in the background: no scheduled job, no indexing, no telemetry
+
+Because an assistant reads your content, what it reads goes to the assistant you connect, in most cases a hosted provider. Choose yours accordingly.
+
+### Resources
+
+- [Set up a client](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/client-setup.md)
+- [Privacy and data flow](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/privacy.md)
+- [Questions and answers](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/faq.md)
+- [Source code and issues](https://github.com/street1983nk/nextcloud-mcp-connector)
+- [Rate this app in the app store](https://apps.nextcloud.com/apps/mcp_connector)
 	]]></description>
 	<description lang="de"><![CDATA[
-Verbindet Ihre Nextcloud mit KI-Assistenten, die das Model Context Protocol sprechen, etwa Claude, Cursor oder Ihrem eigenen Agenten.
+**MCP Connector** verbindet Ihre Nextcloud mit KI-Assistenten, die das [Model Context Protocol](https://modelcontextprotocol.io) sprechen, etwa Claude, Claude Code oder Ihrem eigenen Agenten. Jede Anfrage läuft unter der Identität des angemeldeten Nutzers, ein Assistent sieht also nie mehr, als dieser Mensch in der Weboberfläche sieht.
 
-Der Connector stellt einen kuratierten, auf Lesen ausgelegten Satz von Werkzeugen für Dateien, Kalender, Notizen, Deck, Kontakte, Tables und Talk bereit statt einer rohen API-Oberfläche. Jede Anfrage läuft unter der Identität des angemeldeten Nutzers, ein Assistent sieht also nie mehr, als dieser Nutzer in der Weboberfläche sieht. Talk ist die einzige Familie, in der eine Assistenz anderen Menschen etwas vorlegen kann, sie kann deshalb nur eine neue Nachricht schreiben: eine bearbeiten, eine löschen und eine für späteren Versand hinterlegen gibt es nicht, und eine Administratorin kann das Senden für die ganze Instanz abschalten.
+### Was ein Assistent kann
 
-**Installation.** Unter Nextcloud 34.0.3 installiert eine Administratorin die App aus der Apps-Verwaltung: die App-Liste zeigt eine externe App samt ihrem Deploy-Daemon, ihr Installationsknopf heißt Deploy and enable, und Remove steht im Aktionsmenü, sobald die App abgeschaltet ist. Unter 34.0.2 und älter listet die Apps-Verwaltung gar keine externe App, dort führen die occ-Kommandos der Installationsanleitung hin, und die funktionieren auf jeder Version.
+- **Dateien**: durchsehen, suchen, lesen und hochladen
+- **Kalender**: Termine lesen und einen Termin anlegen
+- **Notizen**: suchen, lesen und schreiben
+- **Deck**: Boards und Karten durchsehen, eine Karte anlegen
+- **Kontakte**: das Adressbuch durchsuchen
+- **Tables**: Tabellen, Spalten und Zeilen lesen, eine Zeile anlegen
+- **Talk**: Konversationen und ihren Verlauf lesen, eine Nachricht senden
+- **Suche**: eine Frage über alles davon, mit einem zweiten Schritt für den Volltext
 
-**Kann ich die App für mich abschalten?** Ja, und Sie brauchen Ihren Administrator dafür nicht. Im Hintergrund läuft nichts: es gibt keine geplante Aufgabe, keine Indizierung und keine Telemetrie, und der Connector handelt nur dann, wenn eine von Ihnen selbst verbundene Assistenz eine Anfrage stellt. Ihr eigenes Konto hat einen Schalter auf der Verbindungsseite dieser App, die Nextcloud unter Einstellungen, Sicherheit, MCP Connector verlinkt, und jede verbundene Assistenz lässt sich einzeln trennen, wobei ihr Nextcloud-App-Passwort an Nextcloud zurückgegeben wird.
+### Was er nicht kann
 
-Der Connector selbst sendet keine Telemetrie und ruft keinen Dritten auf. Da ein Assistent Ihre Nextcloud-Inhalte liest, werden die gelesenen Daten an den von Ihnen verbundenen Assistenten übertragen, in den meisten Fällen an einen gehosteten Anbieter. Wählen Sie Ihren Assistenten entsprechend.
+Kein Löschen, kein Verschieben, kein Teilen: der Werkzeugsatz hat keinen Weg, etwas zu zerstören oder an jemand anderen zu geben. Das Lesen einer Talk-Konversation hinterlässt keine Spur, nicht einmal einen Lesemarker. Das Senden einer Talk-Nachricht ist die einzige Handlung nach außen, es kann Gesendetes nie ändern oder entfernen, und eine Administratorin kann es für die ganze Instanz abschalten.
 
-Weitere Antworten, auch dazu, wie eine Administratorin die App samt ihren Daten entfernt: [häufige Fragen](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/faq.md) und [Datenschutz und Datenfluss](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/privacy.md), beide auf Englisch.
+### Der Schalter gehört dem Konto
+
+- Assistenzen melden sich über Nextcloud selbst an, es wird also nie ein Kontopasswort in eine Konfigurationsdatei geklebt
+- Jedes Konto hat seine eigene Seite, um den Zugang zu pausieren oder eine einzelne Assistenz zu trennen, ohne die Administration zu fragen
+- Im Hintergrund läuft nichts: keine geplante Aufgabe, keine Indizierung, keine Telemetrie
+
+Da ein Assistent Ihre Inhalte liest, gehen die gelesenen Daten an die Assistenz, die Sie verbinden, in den meisten Fällen an einen gehosteten Anbieter. Wählen Sie entsprechend.
+
+### Weiterführendes
+
+- [Einen Client einrichten](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/client-setup.md)
+- [Datenschutz und Datenfluss](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/privacy.md)
+- [Fragen und Antworten](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/faq.md)
+- [Quellcode und Fehlermeldungen](https://github.com/street1983nk/nextcloud-mcp-connector)
+- [Diese App im App Store bewerten](https://apps.nextcloud.com/apps/mcp_connector)
+
+Die verlinkten Seiten sind auf Englisch.
 	]]></description>
 	<description lang="fr"><![CDATA[
-Connecte votre Nextcloud aux assistants IA qui parlent le Model Context Protocol, comme Claude, Cursor ou votre propre agent.
+**MCP Connector** relie votre Nextcloud aux assistants IA qui parlent le [Model Context Protocol](https://modelcontextprotocol.io), comme Claude, Claude Code ou votre propre agent. Chaque requête s'exécute sous l'identité de l'utilisateur connecté : un assistant ne voit jamais plus que ce que cette personne voit dans l'interface web.
 
-Le connecteur expose un ensemble d'outils sélectionnés et axés sur la lecture pour les fichiers, l'agenda, les notes, Deck, les contacts, Tables et Talk, au lieu d'une API brute. Chaque requête s'exécute sous l'identité de l'utilisateur connecté, de sorte qu'un assistant ne voit jamais plus que ce que cet utilisateur voit dans l'interface web. Talk est la seule famille où un assistant peut présenter quelque chose à d'autres personnes : il ne peut donc que publier un nouveau message, en modifier un, en supprimer un ou en confier un au serveur pour un envoi ultérieur n'existe pas, et un administrateur peut désactiver cet envoi pour toute l'instance.
+### Ce qu'un assistant peut faire
 
-**Installation.** Sous Nextcloud 34.0.3, un administrateur l'installe depuis la gestion des applications : la liste affiche une application externe avec son démon de déploiement, son bouton d'installation s'appelle Deploy and enable, et Remove figure dans le menu d'actions dès que l'application est désactivée. Sous 34.0.2 et antérieur, la gestion n'affiche aucune application externe : ce sont alors les commandes occ du guide d'installation qui y mènent, et elles fonctionnent sur toutes les versions.
+- **Fichiers** : parcourir, rechercher, lire et téléverser
+- **Agenda** : lire les événements et en créer un
+- **Notes** : rechercher, lire et écrire
+- **Deck** : parcourir les tableaux et les cartes, ajouter une carte
+- **Contacts** : rechercher dans le carnet d'adresses
+- **Tables** : lire les tables, les colonnes et les lignes, ajouter une ligne
+- **Talk** : lire les conversations et leur historique, envoyer un message
+- **Recherche** : une seule question sur tout cela, puis une seconde étape pour le texte complet
 
-**Puis-je la désactiver pour moi ?** Oui, et vous n'avez pas besoin de votre administrateur pour cela. Rien ne tourne en arrière-plan : il n'y a ni tâche planifiée, ni indexation, ni télémétrie, et le connecteur n'agit que lorsqu'un assistant que vous avez connecté vous-même envoie une requête. Votre propre compte dispose d'un interrupteur sur la page des connexions de cette application, que Nextcloud référence sous Paramètres, Sécurité, MCP Connector, et chaque assistant connecté peut être déconnecté séparément, ce qui rend son mot de passe d'application Nextcloud à Nextcloud.
+### Ce qu'il ne fera pas
 
-Le connecteur lui-même n'envoie aucune télémétrie et n'appelle aucun tiers. Comme un assistant lit le contenu de votre Nextcloud, les données lues sont transmises à l'assistant que vous connectez, dans la plupart des cas un fournisseur hébergé. Choisissez votre assistant en conséquence.
+Aucune suppression, aucun déplacement, aucun partage : l'ensemble d'outils n'offre aucun moyen de détruire quoi que ce soit ni de le confier à quelqu'un d'autre. Lire une conversation Talk ne laisse aucune trace, pas même un marqueur de lecture. Envoyer un message Talk est la seule action vers l'extérieur, elle ne peut jamais modifier ni retirer ce qui a été envoyé, et un administrateur peut la désactiver pour toute l'instance.
 
-D'autres réponses, notamment sur la façon dont un administrateur supprime l'application et ses données : [questions fréquentes](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/faq.md) et [confidentialité et flux de données](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/privacy.md), les deux en anglais.
+### L'interrupteur appartient au compte
+
+- Les assistants s'authentifient via Nextcloud elle-même : aucun mot de passe de compte n'est jamais collé dans un fichier de configuration
+- Chaque compte dispose de sa propre page pour suspendre l'accès ou déconnecter un seul assistant, sans passer par l'administration
+- Rien ne tourne en arrière-plan : ni tâche planifiée, ni indexation, ni télémétrie
+
+Comme un assistant lit vos contenus, les données lues sont transmises à l'assistant que vous connectez, dans la plupart des cas un fournisseur hébergé. Choisissez le vôtre en conséquence.
+
+### Pour aller plus loin
+
+- [Configurer un client](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/client-setup.md)
+- [Confidentialité et flux de données](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/privacy.md)
+- [Questions et réponses](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/faq.md)
+- [Code source et signalements](https://github.com/street1983nk/nextcloud-mcp-connector)
+- [Noter cette application dans l'App Store](https://apps.nextcloud.com/apps/mcp_connector)
+
+Les pages liées sont en anglais.
 	]]></description>
 	<version>0.1.4</version>
 	<licence>agpl</licence>
 	<author mail="k.cherif@outlook.de">street1983nk</author>
 	<namespace>McpConnector</namespace>
+	<!--
+	  - The order of the elements below is the order info.xsd declares, and it is binding:
+	  - documentation before category, website before bugs, donation after screenshot.
+	  - A correct element in the wrong place fails the store upload with a schema error.
+	  -->
+	<documentation>
+		<user>https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/client-setup.md</user>
+		<admin>https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/exapp-install.md</admin>
+	</documentation>
 	<category>integration</category>
+	<website>https://github.com/street1983nk/nextcloud-mcp-connector</website>
 	<bugs>https://github.com/street1983nk/nextcloud-mcp-connector/issues</bugs>
 	<repository type="git">https://github.com/street1983nk/nextcloud-mcp-connector</repository>
 	<!--
