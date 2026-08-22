@@ -7,9 +7,17 @@
 	  xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
 	<id>mcp_connector</id>
 	<name>MCP Connector</name>
-	<summary>Connect your Nextcloud to AI assistants over the Model Context Protocol.</summary>
-	<summary lang="de">Verbindet Ihre Nextcloud über das Model Context Protocol mit KI-Assistenten.</summary>
-	<summary lang="fr">Connecte votre Nextcloud aux assistants IA via le Model Context Protocol.</summary>
+	<!--
+	  - The summary is the strongest place for the words people actually type, because the
+	  - store search matches name, summary and description as substrings and every term of a
+	  - multi word query has to appear somewhere. Measured on 2026-08-22: a search for "mcp"
+	  - found this app first, "mcp server" did not find it at all, because the word server
+	  - appeared nowhere, and "chatgpt" did not either. Both are true of this app and both are
+	  - in the text now. The schema allows 128 characters here.
+	  -->
+	<summary>MCP server for Nextcloud: connect Claude, ChatGPT and other AI assistants over the Model Context Protocol.</summary>
+	<summary lang="de">MCP Server für Nextcloud: verbindet Claude, ChatGPT und andere KI-Assistenten über das Model Context Protocol.</summary>
+	<summary lang="fr">Serveur MCP pour Nextcloud : connecte Claude, ChatGPT et d'autres assistants IA via le Model Context Protocol.</summary>
 	<!--
 	  - The three descriptions are written on the smaller common denominator of the two
 	  - pipelines that render them, and the paragraphs are separated by blank lines on
@@ -27,7 +35,7 @@
 	  - and docs/faq.md, which the description links.
 	-->
 	<description><![CDATA[
-**MCP Connector** connects your Nextcloud with AI assistants that speak the [Model Context Protocol](https://modelcontextprotocol.io): Claude, Claude Code or your own agent. Every request runs as the signed in user.
+**MCP Connector** is a self hosted MCP server for your Nextcloud. It connects AI assistants that speak the [Model Context Protocol](https://modelcontextprotocol.io), such as Claude, Claude Code, ChatGPT or your own agent. Every request runs as the signed in user.
 
 ### What an assistant can do
 
@@ -62,7 +70,7 @@
 - [Rate this app in the app store](https://apps.nextcloud.com/apps/mcp_connector)
 	]]></description>
 	<description lang="de"><![CDATA[
-**MCP Connector** verbindet Ihre Nextcloud mit KI-Assistenten, die das [Model Context Protocol](https://modelcontextprotocol.io) sprechen: Claude, Claude Code oder Ihr eigener Agent. Jede Anfrage läuft unter der Identität des angemeldeten Nutzers.
+**MCP Connector** ist ein selbst gehosteter MCP Server für Ihre Nextcloud. Er verbindet KI-Assistenten, die das [Model Context Protocol](https://modelcontextprotocol.io) sprechen, etwa Claude, Claude Code, ChatGPT oder Ihren eigenen Agenten. Jede Anfrage läuft unter der Identität des angemeldeten Nutzers.
 
 ### Was ein Assistent kann
 
@@ -99,7 +107,7 @@
 Die verlinkten Seiten sind auf Englisch.
 	]]></description>
 	<description lang="fr"><![CDATA[
-**MCP Connector** relie votre Nextcloud aux assistants IA qui parlent le [Model Context Protocol](https://modelcontextprotocol.io) : Claude, Claude Code ou votre propre agent. Chaque requête s'exécute sous l'identité de l'utilisateur connecté.
+**MCP Connector** est un serveur MCP auto-hébergé pour votre Nextcloud. Il relie les assistants IA qui parlent le [Model Context Protocol](https://modelcontextprotocol.io), comme Claude, Claude Code, ChatGPT ou votre propre agent. Chaque requête s'exécute sous l'identité de l'utilisateur connecté.
 
 ### Ce qu'un assistant peut faire
 
@@ -135,7 +143,7 @@ Die verlinkten Seiten sind auf Englisch.
 
 Les pages liées sont en anglais.
 	]]></description>
-	<version>0.1.6</version>
+	<version>0.1.7</version>
 	<licence>agpl</licence>
 	<author mail="k.cherif@outlook.de">street1983nk</author>
 	<namespace>McpConnector</namespace>
@@ -148,7 +156,14 @@ Les pages liées sont en anglais.
 		<user>https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/client-setup.md</user>
 		<admin>https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/exapp-install.md</admin>
 	</documentation>
+	<!--
+	  - Three categories, and the first one is the one that was missing: the store has an "AI"
+	  - category, this app was only in "integration", so nobody browsing AI ever saw it.
+	  - Measured on 2026-08-22 against the category list of the store API.
+	  -->
+	<category>ai</category>
 	<category>integration</category>
+	<category>tools</category>
 	<website>https://github.com/street1983nk/nextcloud-mcp-connector</website>
 	<bugs>https://github.com/street1983nk/nextcloud-mcp-connector/issues</bugs>
 	<repository type="git">https://github.com/street1983nk/nextcloud-mcp-connector</repository>
@@ -202,7 +217,7 @@ Les pages liées sont en anglais.
 			-->
 			<registry>ghcr.io</registry>
 			<image>street1983nk/mcp_connector</image>
-			<image-tag>0.1.6</image-tag>
+			<image-tag>0.1.7</image-tag>
 		</docker-install>
 		<!--
 		  - Exactly thirteen routes, and they are the whole external attack surface of this app.

@@ -9,6 +9,22 @@ All notable changes to this app are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.7] - 2026-08-22
+
+Another release about being found, and again not a line of the server changed. The app was
+in one category and reachable under one spelling of its own subject, which is why people
+looking for the thing it is did not find it.
+
+### Changed
+
+- The app is now in the AI and Tools categories as well, not only in Integration. Anyone
+  browsing the AI category could not see it before.
+- The summary now names what the app is, an MCP server, and the assistants it connects,
+  because that is what people type into the search field. Measured on 2026-08-22 against
+  the store search: a search for "mcp" found this app first, a search for "mcp server"
+  did not find it at all, and neither did a search for "chatgpt". All three describe this
+  app, and all three are now in its text.
+
 ## [0.1.6] - 2026-08-22
 
 A release about the app store page and nothing else. No line of the server changed, the
@@ -321,7 +337,8 @@ First release, submitted to the Nextcloud App Store.
   never sees more than that user sees in the web interface.
 - A privacy and data flow description, see [docs/privacy.md](docs/privacy.md).
 
-[Unreleased]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.3...v0.1.4
