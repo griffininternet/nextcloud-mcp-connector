@@ -18,10 +18,13 @@
 	  - rule is not degraded there, it disappears, and a single newline produces no break at
 	  - all. tests/unit/test_exapp_env_setup.py holds both rules with a counter probe each.
 	  -
-	  - Each variant carries the answer to the one question users ask, in three sentences,
-	  - because this text is the only place a user reads without visiting the repository
-	  - (05-RESEARCH open question 2). The long form lives in docs/faq.md and is linked, not
-	  - substituted for the answer itself.
+	  - The shape since 0.1.5: one line of what this is, then one bullet per family of what
+	  - an assistant can do, then what it deliberately cannot do, then who holds the switch.
+	  - This text is the only thing most readers ever read about the app, so it answers the
+	  - capability question first and links the long form instead of retelling it. What it
+	  - does NOT contain any more, on purpose: the version archaeology of the install path,
+	  - and the walkthrough of switching the app off again. Both live in docs/exapp-install.md
+	  - and docs/faq.md, which the description links.
 	-->
 	<description><![CDATA[
 **MCP Connector** links your Nextcloud to AI assistants that speak the [Model Context Protocol](https://modelcontextprotocol.io), such as Claude, Claude Code or your own agent. Every request runs as the signed in user, so an assistant never sees more than that person sees in the web interface.
@@ -129,7 +132,7 @@ Comme un assistant lit vos contenus, les données lues sont transmises à l'assi
 
 Les pages liées sont en anglais.
 	]]></description>
-	<version>0.1.4</version>
+	<version>0.1.5</version>
 	<licence>agpl</licence>
 	<author mail="k.cherif@outlook.de">street1983nk</author>
 	<namespace>McpConnector</namespace>
@@ -154,6 +157,19 @@ Les pages liées sont en anglais.
 	-->
 	<screenshot>https://raw.githubusercontent.com/street1983nk/nextcloud-mcp-connector/main/docs/screenshots/connections.png</screenshot>
 	<screenshot>https://raw.githubusercontent.com/street1983nk/nextcloud-mcp-connector/main/docs/screenshots/connections-page.png</screenshot>
+	<!--
+	  - The donation buttons of the store, and they are the last elements before the
+	  - dependencies: info.xsd declares donation after screenshot, and the order is binding.
+	  - Both are secure-url, which the schema spells as "https://.+" with 256 characters at
+	  - most, and both answered 200 when they were added on 2026-08-22. Nextcloud keeps no
+	  - commission, the money goes to the author directly. The buttons show up on the store
+	  - page and in the app detail view of every instance.
+	  -
+	  - The ampersand of the PayPal address is written as an entity because this is XML: a
+	  - bare one is a parse error, and the store never sees the file.
+	  -->
+	<donation title="Donate with PayPal" type="paypal">https://www.paypal.com/donate/?business=k.cherif83%40web.de&amp;currency_code=EUR</donation>
+	<donation title="Donate with Stripe" type="stripe">https://buy.stripe.com/3cI14n2ke6AbdTPfG22VG00</donation>
 	<dependencies>
 		<!--
 		  - min 32: HaRP is the recommended deploy daemon from Nextcloud 32 on, and the
@@ -183,7 +199,7 @@ Les pages liées sont en anglais.
 			-->
 			<registry>ghcr.io</registry>
 			<image>street1983nk/mcp_connector</image>
-			<image-tag>0.1.4</image-tag>
+			<image-tag>0.1.5</image-tag>
 		</docker-install>
 		<!--
 		  - Exactly thirteen routes, and they are the whole external attack surface of this app.

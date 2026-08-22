@@ -9,6 +9,27 @@ All notable changes to this app are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5] - 2026-08-22
+
+A release about the app store page and nothing else. No line of the server changed, the
+tool set is the same twenty tools 0.1.4 published, and an instance that updates gets the
+same behaviour it had before.
+
+### Changed
+
+- The store description now says what an assistant can do, one line per family, instead of
+  explaining the installation and how to switch the app off again. What it deliberately
+  cannot do keeps its own section, because that is the part a reader has to be able to find
+  in seconds. The long form of both answers stays where it was, in
+  [docs/faq.md](docs/faq.md) and [docs/privacy.md](docs/privacy.md), and is linked from the
+  description.
+
+### Added
+
+- The store page now carries a homepage link and both documentation links, the client setup
+  for a user and the installation guide for an administrator, so a reader does not have to
+  find the repository first.
+
 ## [0.1.4] - 2026-08-21
 
 The Tables app and Talk are now part of what an assistant can reach: the tables of the
@@ -302,7 +323,8 @@ First release, submitted to the Nextcloud App Store.
   never sees more than that user sees in the web interface.
 - A privacy and data flow description, see [docs/privacy.md](docs/privacy.md).
 
-[Unreleased]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.1...v0.1.2
