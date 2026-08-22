@@ -44,7 +44,7 @@ consignée :
 - `prepare_context` regroupe une recherche et la semaine à venir en un seul appel, de sorte
   qu'une question coûte un aller-retour au lieu de plusieurs.
 
-Nouveau dans la 0.1.4 : Tables et Talk. Un assistant parcourt les tableaux du compte et ajoute
+Depuis la 0.1.4 : Tables et Talk. Un assistant parcourt les tableaux du compte et ajoute
 une ligne à l'un d'eux en nommant les titres de colonnes, il lit les conversations du compte et
 l'historique de l'une d'elles, et il envoie un message dans une conversation. La lecture d'une
 conversation ne laisse aucune trace : aucun marqueur de lecture n'est déplacé, aucune

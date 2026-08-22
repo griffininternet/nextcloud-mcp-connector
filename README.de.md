@@ -42,7 +42,7 @@ installierbar. Was heute vorliegt und wo jede dieser Aussagen festgehalten ist:
 - `prepare_context` bündelt eine Suche und die kommende Woche an Terminen in einem Aufruf, eine
   Frage kostet damit einen Rundlauf statt mehrerer.
 
-Neu in 0.1.4: Tables und Talk. Eine Assistenz durchsucht die Tabellen des Kontos und legt in
+Seit 0.1.4: Tables und Talk. Eine Assistenz durchsucht die Tabellen des Kontos und legt in
 einer davon eine Zeile an, über die Spaltentitel, sie liest die Unterhaltungen des Kontos und
 den Verlauf einer davon, und sie schreibt eine Nachricht in eine Unterhaltung. Das Lesen einer
 Unterhaltung hinterlässt keine Spur: keine Lesemarke wird verschoben, keine Benachrichtigung

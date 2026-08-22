@@ -39,7 +39,7 @@ through AppAPI. What is in place today, and where each of these claims is writte
 - `prepare_context` bundles a search and the coming week of events into one call, so one
   question costs one round trip instead of several.
 
-New in 0.1.4: Tables and Talk. An assistant looks through the tables of the account and adds a
+Since 0.1.4: Tables and Talk. An assistant looks through the tables of the account and adds a
 row to one of them by column titles, reads the conversations of the account and the history of
 one of them, and sends one message into a conversation. Reading a conversation leaves no trace:
 no read marker is moved, no notification is acknowledged and the online status stays as it was.
