@@ -27,7 +27,7 @@ Licence : AGPL-3.0-or-later. L'app id, les noms de paquets et le nom du dépôt 
 
 ## Statut
 
-Version 0.1.5. L'application est référencée dans l'App Store de Nextcloud et installable comme
+Version 0.1.6. L'application est référencée dans l'App Store de Nextcloud et installable comme
 ExApp Nextcloud via AppAPI. Ce qui est en place aujourd'hui, et où chacune de ces affirmations est
 consignée :
 

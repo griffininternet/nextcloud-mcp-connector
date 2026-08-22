@@ -27,30 +27,31 @@
 	  - and docs/faq.md, which the description links.
 	-->
 	<description><![CDATA[
-**MCP Connector** links your Nextcloud to AI assistants that speak the [Model Context Protocol](https://modelcontextprotocol.io), such as Claude, Claude Code or your own agent. Every request runs as the signed in user, so an assistant never sees more than that person sees in the web interface.
+**MCP Connector** connects your Nextcloud with AI assistants that speak the [Model Context Protocol](https://modelcontextprotocol.io): Claude, Claude Code or your own agent. Every request runs as the signed in user.
 
 ### What an assistant can do
 
-- **Files**: browse, search, read and upload
-- **Calendar**: read the agenda and create an event
-- **Notes**: search, read and write
+- **Files**: browse, search, read, upload
+- **Calendar**: read the agenda, create an event
+- **Notes**: search, read, write
 - **Deck**: browse boards and cards, add a card
 - **Contacts**: search the address book
 - **Tables**: read tables, columns and rows, add a row
-- **Talk**: read conversations and their history, send a message
-- **Search**: one question across all of it, and a follow up that fetches the full text
+- **Talk**: read conversations, send a message
+- **Search**: one question across all of it, full text on demand
 
 ### What it will not do
 
-No delete, no move, no share: the tool set has no way to destroy anything or to hand it to somebody else. Reading a Talk conversation leaves no trace, not even a read marker. Sending a Talk message is the only outgoing action, it can never edit or remove what was sent, and an administrator can switch it off for the whole instance.
+- **Nothing destructive**: no delete, no move, no share
+- **No trace when reading**: Talk sets no read marker
+- **One way out only**: sending a Talk message, and an administrator can switch it off
 
-### The account holds the switch
+### Under your control
 
-- Assistants sign in through Nextcloud itself, so no account password is ever pasted into a configuration file
-- Every account has its own page to pause access or to disconnect a single assistant, without asking an administrator
-- Nothing runs in the background: no scheduled job, no indexing, no telemetry
-
-Because an assistant reads your content, what it reads goes to the assistant you connect, in most cases a hosted provider. Choose yours accordingly.
+- **Real sign in**: OAuth through Nextcloud, no app password in a configuration file
+- **Your own switch**: pause access or disconnect one assistant, per account
+- **Nothing in the background**: no scheduled job, no indexing, no telemetry
+- **Your data stays yours**: what an assistant reads goes to that assistant, in most cases a hosted provider
 
 ### Resources
 
@@ -61,30 +62,31 @@ Because an assistant reads your content, what it reads goes to the assistant you
 - [Rate this app in the app store](https://apps.nextcloud.com/apps/mcp_connector)
 	]]></description>
 	<description lang="de"><![CDATA[
-**MCP Connector** verbindet Ihre Nextcloud mit KI-Assistenten, die das [Model Context Protocol](https://modelcontextprotocol.io) sprechen, etwa Claude, Claude Code oder Ihrem eigenen Agenten. Jede Anfrage läuft unter der Identität des angemeldeten Nutzers, ein Assistent sieht also nie mehr, als dieser Mensch in der Weboberfläche sieht.
+**MCP Connector** verbindet Ihre Nextcloud mit KI-Assistenten, die das [Model Context Protocol](https://modelcontextprotocol.io) sprechen: Claude, Claude Code oder Ihr eigener Agent. Jede Anfrage läuft unter der Identität des angemeldeten Nutzers.
 
 ### Was ein Assistent kann
 
-- **Dateien**: durchsehen, suchen, lesen und hochladen
-- **Kalender**: Termine lesen und einen Termin anlegen
-- **Notizen**: suchen, lesen und schreiben
+- **Dateien**: durchsehen, suchen, lesen, hochladen
+- **Kalender**: Termine lesen, einen Termin anlegen
+- **Notizen**: suchen, lesen, schreiben
 - **Deck**: Boards und Karten durchsehen, eine Karte anlegen
 - **Kontakte**: das Adressbuch durchsuchen
 - **Tables**: Tabellen, Spalten und Zeilen lesen, eine Zeile anlegen
-- **Talk**: Konversationen und ihren Verlauf lesen, eine Nachricht senden
-- **Suche**: eine Frage über alles davon, mit einem zweiten Schritt für den Volltext
+- **Talk**: Konversationen lesen, eine Nachricht senden
+- **Suche**: eine Frage über alles davon, Volltext auf Abruf
 
 ### Was er nicht kann
 
-Kein Löschen, kein Verschieben, kein Teilen: der Werkzeugsatz hat keinen Weg, etwas zu zerstören oder an jemand anderen zu geben. Das Lesen einer Talk-Konversation hinterlässt keine Spur, nicht einmal einen Lesemarker. Das Senden einer Talk-Nachricht ist die einzige Handlung nach außen, es kann Gesendetes nie ändern oder entfernen, und eine Administratorin kann es für die ganze Instanz abschalten.
+- **Nichts Zerstörendes**: kein Löschen, kein Verschieben, kein Teilen
+- **Keine Spur beim Lesen**: Talk setzt keinen Lesemarker
+- **Nur ein Weg nach außen**: eine Talk-Nachricht senden, und die Administration kann das abschalten
 
-### Der Schalter gehört dem Konto
+### In Ihrer Hand
 
-- Assistenzen melden sich über Nextcloud selbst an, es wird also nie ein Kontopasswort in eine Konfigurationsdatei geklebt
-- Jedes Konto hat seine eigene Seite, um den Zugang zu pausieren oder eine einzelne Assistenz zu trennen, ohne die Administration zu fragen
-- Im Hintergrund läuft nichts: keine geplante Aufgabe, keine Indizierung, keine Telemetrie
-
-Da ein Assistent Ihre Inhalte liest, gehen die gelesenen Daten an die Assistenz, die Sie verbinden, in den meisten Fällen an einen gehosteten Anbieter. Wählen Sie entsprechend.
+- **Echte Anmeldung**: OAuth über Nextcloud, kein App-Passwort in einer Konfigurationsdatei
+- **Ihr eigener Schalter**: Zugang pausieren oder eine einzelne Assistenz trennen, pro Konto
+- **Nichts im Hintergrund**: keine geplante Aufgabe, keine Indizierung, keine Telemetrie
+- **Ihre Daten bleiben Ihre**: was eine Assistenz liest, geht an genau diese Assistenz, meist an einen gehosteten Anbieter
 
 ### Weiterführendes
 
@@ -97,30 +99,31 @@ Da ein Assistent Ihre Inhalte liest, gehen die gelesenen Daten an die Assistenz,
 Die verlinkten Seiten sind auf Englisch.
 	]]></description>
 	<description lang="fr"><![CDATA[
-**MCP Connector** relie votre Nextcloud aux assistants IA qui parlent le [Model Context Protocol](https://modelcontextprotocol.io), comme Claude, Claude Code ou votre propre agent. Chaque requête s'exécute sous l'identité de l'utilisateur connecté : un assistant ne voit jamais plus que ce que cette personne voit dans l'interface web.
+**MCP Connector** relie votre Nextcloud aux assistants IA qui parlent le [Model Context Protocol](https://modelcontextprotocol.io) : Claude, Claude Code ou votre propre agent. Chaque requête s'exécute sous l'identité de l'utilisateur connecté.
 
 ### Ce qu'un assistant peut faire
 
-- **Fichiers** : parcourir, rechercher, lire et téléverser
-- **Agenda** : lire les événements et en créer un
-- **Notes** : rechercher, lire et écrire
+- **Fichiers** : parcourir, rechercher, lire, téléverser
+- **Agenda** : lire les événements, en créer un
+- **Notes** : rechercher, lire, écrire
 - **Deck** : parcourir les tableaux et les cartes, ajouter une carte
 - **Contacts** : rechercher dans le carnet d'adresses
 - **Tables** : lire les tables, les colonnes et les lignes, ajouter une ligne
-- **Talk** : lire les conversations et leur historique, envoyer un message
-- **Recherche** : une seule question sur tout cela, puis une seconde étape pour le texte complet
+- **Talk** : lire les conversations, envoyer un message
+- **Recherche** : une seule question sur tout cela, texte complet à la demande
 
 ### Ce qu'il ne fera pas
 
-Aucune suppression, aucun déplacement, aucun partage : l'ensemble d'outils n'offre aucun moyen de détruire quoi que ce soit ni de le confier à quelqu'un d'autre. Lire une conversation Talk ne laisse aucune trace, pas même un marqueur de lecture. Envoyer un message Talk est la seule action vers l'extérieur, elle ne peut jamais modifier ni retirer ce qui a été envoyé, et un administrateur peut la désactiver pour toute l'instance.
+- **Rien de destructeur** : aucune suppression, aucun déplacement, aucun partage
+- **Aucune trace à la lecture** : Talk ne pose pas de marqueur de lecture
+- **Une seule sortie** : envoyer un message Talk, et un administrateur peut la désactiver
 
-### L'interrupteur appartient au compte
+### Sous votre contrôle
 
-- Les assistants s'authentifient via Nextcloud elle-même : aucun mot de passe de compte n'est jamais collé dans un fichier de configuration
-- Chaque compte dispose de sa propre page pour suspendre l'accès ou déconnecter un seul assistant, sans passer par l'administration
-- Rien ne tourne en arrière-plan : ni tâche planifiée, ni indexation, ni télémétrie
-
-Comme un assistant lit vos contenus, les données lues sont transmises à l'assistant que vous connectez, dans la plupart des cas un fournisseur hébergé. Choisissez le vôtre en conséquence.
+- **Une vraie authentification** : OAuth via Nextcloud, aucun mot de passe d'application dans un fichier de configuration
+- **Votre propre interrupteur** : suspendre l'accès ou déconnecter un seul assistant, par compte
+- **Rien en arrière-plan** : ni tâche planifiée, ni indexation, ni télémétrie
+- **Vos données restent les vôtres** : ce qu'un assistant lit va à cet assistant, dans la plupart des cas un fournisseur hébergé
 
 ### Pour aller plus loin
 
@@ -132,7 +135,7 @@ Comme un assistant lit vos contenus, les données lues sont transmises à l'assi
 
 Les pages liées sont en anglais.
 	]]></description>
-	<version>0.1.5</version>
+	<version>0.1.6</version>
 	<licence>agpl</licence>
 	<author mail="k.cherif@outlook.de">street1983nk</author>
 	<namespace>McpConnector</namespace>
@@ -199,7 +202,7 @@ Les pages liées sont en anglais.
 			-->
 			<registry>ghcr.io</registry>
 			<image>street1983nk/mcp_connector</image>
-			<image-tag>0.1.5</image-tag>
+			<image-tag>0.1.6</image-tag>
 		</docker-install>
 		<!--
 		  - Exactly thirteen routes, and they are the whole external attack surface of this app.
