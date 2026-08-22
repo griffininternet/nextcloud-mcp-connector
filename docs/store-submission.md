@@ -334,17 +334,31 @@ info.xml, already in place:
 Measured on 2026-08-22 against the live store search, because guessing here is expensive.
 
 The search matches the app name, the summary and the description as substrings, and every
-term of a multi word query has to appear somewhere in that text. That single sentence
-explains every result below.
+term of a multi word query has to appear somewhere in that text.
 
-| Query | Before 0.1.7 | Why |
-|-------|--------------|-----|
-| `mcp` | first | the name carries it |
-| `mcp server` | not found at all | the word `server` appeared nowhere in name, summary or description |
-| `chatgpt` | not found | the word appeared nowhere, although `docs/client-setup.md` has a ChatGPT walkthrough |
-| `claude` | fourth | behind `claudebot`, `aiquila` and `ktec_talkbot` |
-| `model context protocol` | first | the summary carries it |
-| `ai` | not found in the first twelve | substring search, so every app with `mail` in it matches too |
+**Measure it with `%20`, never with `+`.** The store takes a `+` in the query string
+literally, so `?search=mcp+server` searches for the string `mcp+server`, finds nothing and
+looks exactly like a missing keyword. This cost one wrong conclusion on 2026-08-22, written
+into this file and corrected an hour later. Use
+`curl -sS "https://apps.nextcloud.com/?search=mcp%20server"`, and read the whole result
+list, not the first page of it: a common word like `ai` answers with 374 apps.
+
+| Query | Before 0.1.7 | After 0.1.7 |
+|-------|--------------|-------------|
+| `mcp` | first | first |
+| `mcp server` | not found, the word `server` was nowhere in the text | **first** |
+| `ChatGPT` | not found, the word was nowhere in the text | **first of two** |
+| `model context protocol` | first | first |
+| `ai assistant` | not measured | first |
+| `claude` | fourth | fourth, behind `claudebot`, `aiquila` and `ktec_talkbot` |
+| `ai` | buried | 54th of 374 |
+
+One oddity, measured three times and not explained: `chatgpt` in lower case answers with one
+app and it is not this one, while `ChatGPT` answers with two and this app is first. Case does
+not matter for other terms of this app, `tables`, `talk` and `nextcloud` each answer the same
+in both spellings, and the word is present in the catalogue text in both the summary and the
+description. So this is a store side asymmetry, not a gap in the manifest, and no wording
+change here can close it.
 
 Two conclusions that outlast this release. First, the summary is the highest value real
 estate in the manifest: it is short, it is indexed, and it is the only place where the words
