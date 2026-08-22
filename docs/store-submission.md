@@ -328,3 +328,41 @@ info.xml, already in place:
 - The store does not host the archive and does not mirror the image. It stores the URL
   and the metadata it validated once, which is why the two production dependencies
   above are permanent.
+
+## Being found in the store
+
+Measured on 2026-08-22 against the live store search, because guessing here is expensive.
+
+The search matches the app name, the summary and the description as substrings, and every
+term of a multi word query has to appear somewhere in that text. That single sentence
+explains every result below.
+
+| Query | Before 0.1.7 | Why |
+|-------|--------------|-----|
+| `mcp` | first | the name carries it |
+| `mcp server` | not found at all | the word `server` appeared nowhere in name, summary or description |
+| `chatgpt` | not found | the word appeared nowhere, although `docs/client-setup.md` has a ChatGPT walkthrough |
+| `claude` | fourth | behind `claudebot`, `aiquila` and `ktec_talkbot` |
+| `model context protocol` | first | the summary carries it |
+| `ai` | not found in the first twelve | substring search, so every app with `mail` in it matches too |
+
+Two conclusions that outlast this release. First, the summary is the highest value real
+estate in the manifest: it is short, it is indexed, and it is the only place where the words
+a person types can be placed without bending the description out of shape. Second, a term
+that is true of this app and missing from its text is a self inflicted wound, so a new
+capability belongs in the summary or the description on the day it ships, not later.
+
+The categories are the other half. The store has an `ai` category, this app was in
+`integration` only, so nobody browsing AI ever saw it. `info.xsd` allows `category`
+unbounded; since 0.1.7 the app is in `ai`, `integration` and `tools`.
+
+What cannot be promised: a position. Presence in the result set follows from the text and
+is under our control. The order does not: it depends on the store's ranking and on what
+every other app is called. `claude` is the honest example, where an app literally named
+`claudebot` will outrank a connector whatever we write.
+
+Cache note, measured twice on 2026-08-22: an upload answers 201 immediately, but the store
+serves the app detail page, the catalogue endpoint and the search index from caches that
+refresh minutes apart. A change is not lost when it is not visible one minute after the
+upload, and it must not be chased with another release. Version 0.1.5 and 0.1.6 were both
+spent on that mistake.
