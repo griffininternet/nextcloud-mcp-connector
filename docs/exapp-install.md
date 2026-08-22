@@ -1,5 +1,58 @@
 # ExApp installation
 
+## Install the published app (start here)
+
+Two ways, and the second one works on every version. `mcp_connector` is the app id.
+
+**From the app store**, on Nextcloud 34.0.3 and later: open Apps, find MCP Connector, press
+**Deploy and enable**. Earlier versions of Nextcloud list no external app in that interface
+at all, which is an upstream bug, so there use the command below.
+
+**With occ**, on any version:
+
+```
+occ app_api:app:register mcp_connector
+```
+
+The daemon is optional in that command: AppAPI takes the one marked default. If the
+instance has several, name the one to deploy into, and `occ app_api:daemon:list` prints
+their names with the default marked `*`:
+
+```
+occ app_api:app:register mcp_connector <daemon-config-name> --wait-finish
+```
+
+Then give the app the one thing it cannot know by itself: the address it is reachable under
+from the internet, without a trailing slash. Left unset it names a loopback default and no
+assistant can complete a connection.
+
+- **Installed from the app store:** enter it in Nextcloud, under Administration settings,
+  MCP Connector. A store installation has no way to pass a deploy variable, so this is the
+  way there, and the value entered here wins over the variable.
+- **Registered with occ:** pass it right away, because the daemon injects a variable only at
+  registration time:
+
+```
+occ app_api:app:register mcp_connector \
+  --env "NC_MCP_PUBLIC_URL=https://cloud.example.com/exapps/mcp_connector"
+```
+
+The other switches, all optional, are in [oauth-setup.md](./oauth-setup.md).
+
+Check that it came up:
+
+```
+occ app_api:app:list
+```
+
+It answers `mcp_connector (MCP Connector): <version> [enabled]`. Removing the app again is
+[uninstall.md](./uninstall.md).
+
+Everything below this section is about building and running the app from source in a local
+test topology. An administrator installing the published app does not need it.
+
+---
+
 **Status:** proven on a local HaRP topology
 **Measured on:** 2026-08-15; the credential flood numbers in the Security notes on 2026-08-19
 **Scope:** installing this app as an AppAPI ExApp with the HaRP deploy daemon, on
@@ -554,7 +607,8 @@ invisible to the list as well, because the core app manager never learns about i
 (`occ app:list | grep -c mcp_connector` is `0` while the app is enabled and healthy).
 
 **What that means for an administrator on 34.0.2 and earlier:** install with `occ` as
-described above, and remove with `occ` as described in [uninstall.md](./uninstall.md). Both
+described in [Install the published app](#install-the-published-app-start-here) at the top
+of this page, and remove with `occ` as described in [uninstall.md](./uninstall.md). Both
 are the documented paths of AppAPI and work on 32, 33 and 34 alike; on those versions the
 interface is the part that is missing, not the mechanism. Nothing about that changed on
 34.0.3: the interface arrived, `occ` stayed the path that works on every version.
