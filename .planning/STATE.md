@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Kuratierte Breite
 status: executing
-stopped_at: Completed 11-07-PLAN.md
-last_updated: "2026-08-24T22:24:33.181Z"
+stopped_at: Completed 11-09-PLAN.md
+last_updated: "2026-08-24T22:42:57.707Z"
 last_activity: 2026-08-24
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 28
-  completed_plans: 26
+  completed_plans: 27
   percent: 75
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 11 (Bündelung, Budget und Release 0.1.8) — EXECUTING
-Plan: 9 of 10
+Plan: 10 of 10
 Status: Ready to execute
 Last activity: 2026-08-24
 
@@ -143,6 +143,7 @@ Last activity: 2026-08-24
 | Phase 11 P06 | 27 min | 2 tasks tasks | 3 files files |
 | Phase 11 P07 | 19 min | 2 tasks tasks | 5 files files |
 | Phase 11 P08 | 30 min | 3 tasks tasks | 9 files files |
+| Phase 11 P09 | 25 min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -515,6 +516,9 @@ Recent decisions affecting current work:
 - [Phase ?]: 11-08: Die Werkzeugoberflaeche hat eine Wahrheit: das Abnahmeskript liest die erwartete Menge aus client.list_tools(), die literale 21er-Liste und EXPECTED_TOOLS sind weg; die Zahl lebt in tests/contract/test_tool_surface.py
 - [Phase ?]: 11-08: Ein Antwortschluessel traegt je Ebene genau eine Bedeutung: die Eintragsebene der Mail-Antwort heisst preview_truncated, die Antwortebene behaelt truncated (IN-01); dieselbe Doppelbedeutung in talk.py ist als DF-11-01 zurueckgestellt
 - [Phase ?]: 11-08: Ein Docstring nennt keine Zahl, die ein Test derselben Datei pinnt: variable_problems verweist auf die Gate-Funktion statt auf vier oder sechs Variablen (IN-03)
+- [Phase ?]: 11-09: Release-Nummer ist 0.1.8 (0.1.4 bis 0.1.7 liegen im Store); die 0.1.6 im Phasentitel ist ueberholt
+- [Phase ?]: 11-09: IN-02 geschlossen durch die nachgetragene CHANGELOG-Sektion 0.1.5, nicht durch Linkkorrektur: der Tag v0.1.5 existiert (Run 32569019469)
+- [Phase ?]: 11-09: uv.lock wird bei einem Versions-Bump mitcommittet: uv schreibt die eigene Projektversion hinein, so wie in den Release-Commits 0.1.5, 0.1.6 und 0.1.7
 
 ### Pending Todos
 
@@ -549,8 +553,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-24T22:24:16.800Z
-Stopped at: Completed 11-07-PLAN.md
+Last session: 2026-08-24T22:42:50.875Z
+Stopped at: Completed 11-09-PLAN.md
 Naechster Schritt: /gsd:plan-phase 8
 Resume file: None
 

@@ -331,6 +331,12 @@ Keine. Dieser Plan berührt keinen fremden Dienst; alles lief lokal.
 6. Zwei Proof-Zeilen mit Datum inklusive Zeit in Z, Behauptung als ganzer Satz und Befehl.
 7. `git tag --list v0.1.8`: leer.
 
+## Self-Check: PASSED
+
+Alle fünf geänderten Dateien und die Zusammenfassung existieren auf der Platte, alle vier
+Commits (`8392680`, `346ac33`, `5c51c19`, `8c553e2`) sind in `git log`, und
+`uv run pytest tests/unit/test_exapp_env_setup.py` meldet 148 bestandene Fälle.
+
 ## Next
 
 Plan 11-10: der Owner-Checkpoint, danach Tag `v0.1.8`, Workflow, Signatur über das
