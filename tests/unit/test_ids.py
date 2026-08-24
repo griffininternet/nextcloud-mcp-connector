@@ -2,7 +2,7 @@
 
 The codec is the only place that builds or reads prefixed IDs. A wrong prefix would
 make ``fetch`` resolve a card as a note (silently), so the roundtrip property is
-pinned here for all six kinds.
+pinned here for all eight kinds.
 
 ``mail`` is the one kind with a guard of its own, and the tests below are written against
 the reason for it rather than against its shape: a mail id that is not a number has to be
@@ -17,13 +17,15 @@ from mcp_connector import ids
 from mcp_connector.errors import ToolError
 
 
-def test_roundtrip_for_all_six_kinds() -> None:
+def test_roundtrip_for_all_eight_kinds() -> None:
     cases = [
         (ids.encode_file("12345"), ("file", ("12345",))),
         (ids.encode_note("42"), ("note", ("42",))),
         (ids.encode_card("7", "13", "99"), ("card", ("7", "13", "99"))),
         (ids.encode_event("personal", "abcd-1234.ics"), ("event", ("personal", "abcd-1234.ics"))),
         (ids.encode_mail("4711"), ("mail", ("4711",))),
+        (ids.encode_message("abcd1234", "42"), ("message", ("abcd1234", "42"))),
+        (ids.encode_table("7"), ("table", ("7",))),
         (
             ids.encode_url("https://nc.test/index.php/apps/notes/note/42"),
             ("url", ("https://nc.test/index.php/apps/notes/note/42",)),
@@ -39,6 +41,8 @@ def test_encoded_prefixes_are_stable() -> None:
     assert ids.encode_card("1", "2", "3") == "card:1:2:3"
     assert ids.encode_event("personal", "x.ics") == "event:personal:x.ics"
     assert ids.encode_mail("1") == "mail:1"
+    assert ids.encode_message("abcd1234", "1") == "message:abcd1234:1"
+    assert ids.encode_table("1") == "table:1"
     assert ids.encode_url("https://nc.test/x") == "url:https://nc.test/x"
 
 
@@ -85,9 +89,82 @@ def test_a_mail_id_that_is_not_a_number_is_refused_with_the_format_list(raw: str
     assert "mail:" in excinfo.value.hint, "the rejection hands back the form that works"
 
 
-def test_the_hint_every_tool_prints_names_all_six_forms() -> None:
+def test_a_message_id_reads_the_same_from_a_number_and_from_a_string() -> None:
+    """A search hit builds the id from the int the app sent and a model hands it back as text."""
+    assert (
+        ids.encode_message("abcd1234", 42)
+        == "message:abcd1234:42"
+        == ids.encode_message("abcd1234", "42")
+    )
+    assert ids.parse("message:abcd1234:42") == ("message", ("abcd1234", "42"))
+
+
+def test_a_table_id_reads_the_same_from_a_number_and_from_a_string() -> None:
+    """``tables_browse`` builds the id from an int and a model hands it back as text."""
+    assert ids.encode_table(7) == "table:7" == ids.encode_table("7")
+    assert ids.parse("table:7") == ("table", ("7",))
+
+
+def test_a_zero_is_a_number_for_both_new_kinds_and_the_app_decides_the_rest() -> None:
+    """Refusing a zero would be a statement about a database, not about a form (as with mail)."""
+    assert ids.parse("table:0") == ("table", ("0",))
+    assert ids.parse("message:abcd1234:0") == ("message", ("abcd1234", "0"))
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "message:abcd1234",
+        "message:abcd1234:x",
+        "message:abcd1234:-1",
+        "message:ABC:1",
+        "message:abc:1",
+        "message::1",
+        "message:abcd1234:1:2",
+        "message:",
+        "message:abcd1234:٤٢",
+        "message:abcd1234:²",
+    ],
+)
+def test_a_talk_message_id_of_the_wrong_shape_is_refused_without_a_request(raw: str) -> None:
+    """Not a single request may leave for one of these (threat T-11-03).
+
+    ``message:ABC:1`` and ``message:abc:1`` are the two halves of the token guard: the token
+    alphabet is lowercase and at least four characters long, so an uppercase or a three
+    character segment is not a token the Talk app ever handed out. ``message:abcd1234:1:2``
+    shows why the split has ``maxsplit=1``: a third segment must not silently disappear.
+    """
+    with pytest.raises(ToolError) as excinfo:
+        ids.parse(raw)
+
+    assert "message:" in excinfo.value.hint, "the rejection hands back the form that works"
+    assert "table:" in excinfo.value.hint
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "table:abc",
+        "table:7a",
+        "table:-1",
+        "table:",
+        "table:7:8",
+        "table:٤٢",
+        "table:²",
+    ],
+)
+def test_a_table_id_that_is_not_a_number_is_refused_without_a_request(raw: str) -> None:
+    """The WR-04 pair applies here too: ``str.isdigit`` is true for both of the last two."""
+    with pytest.raises(ToolError) as excinfo:
+        ids.parse(raw)
+
+    assert "table:" in excinfo.value.hint
+    assert "message:" in excinfo.value.hint
+
+
+def test_the_hint_every_tool_prints_names_all_eight_forms() -> None:
     """The hint is contract: it is what a caller reads after any id was refused anywhere."""
-    for form in ("file:", "note:", "card:", "event:", "mail:", "url:"):
+    for form in ("file:", "note:", "card:", "event:", "mail:", "message:", "table:", "url:"):
         assert form in ids._HINT, form
 
 
@@ -131,6 +208,9 @@ def test_encode_rejects_empty_parts() -> None:
         lambda: ids.encode_card("1", "", "3"),
         lambda: ids.encode_event("", "x.ics"),
         lambda: ids.encode_mail(""),
+        lambda: ids.encode_message("", "42"),
+        lambda: ids.encode_message("abcd1234", ""),
+        lambda: ids.encode_table(""),
         lambda: ids.encode_url(""),
     ):
         with pytest.raises(ToolError):

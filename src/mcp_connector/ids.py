@@ -14,6 +14,15 @@ Formats::
                                             number: one message carries uid, remoteId,
                                             messageId and, in the full answer, id as well,
                                             and all four of them address nothing here)
+    message:<token>:<messageId>            (the conversation token plus the message id of
+                                            that same conversation: a Talk search entry
+                                            carries threadId and the client knows
+                                            referenceId, and neither of them addresses a
+                                            single message on the context route)
+    table:<tableId>                        (a table, never a view: the tables search
+                                            provider builds #/view/<id> for views, and a
+                                            view id used as a table id reads a foreign
+                                            table or answers 404)
     url:<absolute-url>                     (honest rest category, see pitfall 10)
 """
 
@@ -25,8 +34,8 @@ SEPARATOR = ":"
 
 _HINT = (
     "Use an id exactly as returned by a search tool: file:<fileid>, note:<id>, "
-    "card:<board>:<stack>:<card>, event:<calendar>:<object>, mail:<databaseId> or "
-    "url:<absolute-url>."
+    "card:<board>:<stack>:<card>, event:<calendar>:<object>, mail:<databaseId>, "
+    "message:<token>:<messageId>, table:<tableId> or url:<absolute-url>."
 )
 
 #: The digits a mail id may consist of, and only those. ``str.isdigit`` would accept a
@@ -34,6 +43,12 @@ _HINT = (
 #: checks its timestamps with this pattern), and both would build a URL the app answers
 #: with a cast-to-zero 404 instead of stopping here (review finding WR-04).
 _DIGITS = re.compile(r"[0-9]+")
+
+#: The token alphabet of a Talk conversation, four to thirty lowercase letters and digits.
+#: This is the same expression as ``nextcloud/clients/talk.py::_TOKEN``, written out a second
+#: time on purpose: this module is the codec every tool imports, and it must not depend on the
+#: client layer (a codec that imports a client turns one wrong id into an import cycle).
+_TOKEN = re.compile(r"[a-z0-9]{4,30}")
 
 
 def encode_file(fileid: str | int) -> str:
@@ -52,6 +67,26 @@ def encode_mail(message_id: str | int) -> str:
     full text route, which is why only one function of this module builds a mail id at all.
     """
     return _join("mail", str(message_id))
+
+
+def encode_message(token: str, message_id: str | int) -> str:
+    """One message of one conversation: the token names the room, the number the message.
+
+    A Talk search entry ships ``threadId`` beside ``messageId``, and the chat client knows a
+    ``referenceId`` as well. Neither of them addresses a single message on the context route,
+    which is why only this function builds a message id.
+    """
+    return _join("message", token, str(message_id))
+
+
+def encode_table(table_id: str | int) -> str:
+    """The id of a table, and deliberately never the id of a view.
+
+    The tables search provider builds ``#/table/<id>`` and ``#/view/<id>`` from the same
+    template, and the client of this project reads tables only. A view id handed in here would
+    address a different table or answer 404 (threat T-11-01).
+    """
+    return _join("table", str(table_id))
 
 
 def encode_card(board_id: str | int, stack_id: str | int, card_id: str | int) -> str:
@@ -91,6 +126,24 @@ def parse(raw: str) -> tuple[str, tuple[str, ...]]:
         # routing error that would stop a wrong value on the way out (pitfall 11).
         if not _DIGITS.fullmatch(rest):
             raise ToolError(message=f"{raw!r} is not a valid mail id.", hint=_HINT)
+    elif kind == "message":
+        parts = tuple(rest.split(SEPARATOR, 1))
+        if len(parts) != 2:
+            raise ToolError(message=f"{raw!r} is not a valid Talk message id.", hint=_HINT)
+        # Both guards stand here and not only in the Talk client, for the same reason the mail
+        # guard does: an id out of a model answer becomes part of the URL path of the context
+        # route, so ``message:ABC:1`` has to be refused without a single request. The token
+        # alphabet is the cheap half of that (a wrong token is a request against a room that
+        # never existed), the digit check is the other one (the app casts a non numeric message
+        # id to 0 and answers with the oldest messages instead of refusing it).
+        if not _TOKEN.fullmatch(parts[0]) or not _DIGITS.fullmatch(parts[1]):
+            raise ToolError(message=f"{raw!r} is not a valid Talk message id.", hint=_HINT)
+    elif kind == "table":
+        parts = (rest,)
+        # Same reason as ``mail``: a non numeric table id would reach the URL path, and the app
+        # casts it to 0 and answers 404 instead of refusing it.
+        if not _DIGITS.fullmatch(rest):
+            raise ToolError(message=f"{raw!r} is not a valid table id.", hint=_HINT)
     elif kind == "card":
         parts = tuple(rest.split(SEPARATOR))
         if len(parts) not in (1, 3):
