@@ -36,8 +36,13 @@ through AppAPI. What is in place today, and where each of these claims is writte
 - Per user management: every account pauses or resumes its own MCP access and disconnects any
   single connected assistant on this app's own connections page, which Nextcloud links under
   Settings, Security, MCP Connector.
-- `prepare_context` bundles a search and the coming week of events into one call, so one
-  question costs one round trip instead of several.
+- `prepare_context` bundles a search, the coming week of events, the Talk conversations that are
+  waiting and the unread mail counts into one call, so one question costs one round trip instead
+  of several. Every source has its own time budget and its own `degraded` entry, so a slow one
+  shortens the bundle and never the answer. Three caps keep the size predictable: at most three
+  conversations, a chat preview cut at 200 bytes, and at most three mail accounts. Mail arrives
+  as a counter, which is the point of it: the standard bundle carries no subject and no mail
+  content at all.
 
 Since 0.1.4: Tables and Talk. An assistant looks through the tables of the account and adds a
 row to one of them by column titles, reads the conversations of the account and the history of
@@ -211,9 +216,9 @@ new objects but can never modify or remove existing ones.
 | `mail_browse` | read | Browse Mail: the accounts of this user, the mailboxes of one, or the message envelopes of one; strictly read only, there is no way to send, draft, move, flag or delete a mail |
 | `contacts_search` | read | Search address book contacts |
 | `unified_search` | read | Query the Nextcloud unified search across providers, permission aware |
-| `prepare_context` | read | Bundle matching files, notes and cards with the next week of events for one question |
+| `prepare_context` | read | Bundle matching files, notes and cards with the next week of events, the waiting Talk conversations and the unread mail counts for one question |
 | `search` | read | OpenAI compatible search entry point, delegates to unified search |
-| `fetch` | read | OpenAI compatible fetch entry point, resolves an id to a file, note, card, event or mail |
+| `fetch` | read | OpenAI compatible fetch entry point, resolves an id to a file, note, card, event, mail, Talk message or table |
 
 `search` and `fetch` exist because the ChatGPT connector profile requires exactly these two names
 and schemas. They are thin wrappers over the tools above, not a second implementation.
@@ -399,10 +404,18 @@ ship an output schema, because ChatGPT reads the payload as structured content:
   answer the same question the same way.
 - Every hit carries a non-empty, absolute URL on the configured instance. ChatGPT creates citation
   metadata only while `url` is a non-empty string, so an empty one would silently drop the source.
-- `fetch` resolves the five id kinds the read tools understand: `file:<fileid>` (looked up by a
+- `fetch` resolves the seven id kinds the read tools understand: `file:<fileid>` (looked up by a
   single WebDAV search on `oc:fileid`), `note:<id>`, `card:<board>:<stack>:<card>` including the
-  short `card:<cardId>` form from the Deck search provider, `event:<calendar>:<object>`, and
-  `mail:<databaseId>` (the full text of one message, cut at 32 KiB with the cut marked).
+  short `card:<cardId>` form from the Deck search provider, `event:<calendar>:<object>`,
+  `mail:<databaseId>` (the full text of one message, cut at 32 KiB with the cut marked),
+  `message:<token>:<messageId>` (one single Talk message, read over the same context route that
+  leaves no trace; the message has to be readable in that conversation, otherwise the answer is a
+  refusal and never a neighbouring message) and `table:<tableId>` (the title, the row count and
+  the first rows of a table; a view is not a table, so a view stays a URL).
+- A hit from Mail stays a `url:` id even though the full text route exists, and that is a
+  measurement rather than an omission: a Mail search entry carries a deep link with an RFC
+  message id, and resolving that to the `databaseId` this route needs is untested. An id that is
+  right most of the time is an answer about somebody else's mail the rest of the time.
 - A `url:` id is answered honestly: this server never requests a URL that came out of a search
   entry, and it says so instead of inventing content. An unknown prefix is refused with the list of
   the valid ones, because resolving a chat message as a note is worse than an error.

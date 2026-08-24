@@ -42,8 +42,13 @@ consignée :
 - Gestion par compte : chaque compte met en pause ou reprend son propre accès MCP et déconnecte
   individuellement chaque assistant connecté sur la page des connexions de cette application, que
   Nextcloud référence sous Paramètres, Sécurité, MCP Connector.
-- `prepare_context` regroupe une recherche et la semaine à venir en un seul appel, de sorte
-  qu'une question coûte un aller-retour au lieu de plusieurs.
+- `prepare_context` regroupe une recherche, la semaine à venir, les conversations Talk en attente
+  et les compteurs de courriels non lus en un seul appel, de sorte qu'une question coûte un
+  aller-retour au lieu de plusieurs. Chaque source a son propre budget de temps et sa propre
+  entrée `degraded` : une source lente raccourcit le paquet et jamais la réponse. Trois plafonds
+  gardent la taille prévisible : au plus trois conversations, un aperçu de chat coupé à 200 octets,
+  et au plus trois comptes de courriel. Le courriel arrive sous forme de compteur, et c'est tout
+  l'intérêt : le paquet standard ne contient ni objet ni contenu de courriel.
 
 Depuis la 0.1.4 : Tables et Talk. Un assistant parcourt les tableaux du compte et ajoute
 une ligne à l'un d'eux en nommant les titres de colonnes, il lit les conversations du compte et
@@ -223,9 +228,9 @@ l'outil peut créer de nouveaux objets mais ne peut jamais modifier ni supprimer
 | `mail_browse` | read | Parcourt Mail : les comptes de cet utilisateur, les boîtes aux lettres de l'un d'eux, ou les en-têtes de messages de l'une d'elles ; strictement en lecture seule, aucun moyen d'envoyer, de rédiger un brouillon, de déplacer, de marquer ou de supprimer un courriel |
 | `contacts_search` | read | Recherche des contacts dans les carnets d'adresses |
 | `unified_search` | read | Interroge la recherche unifiée de Nextcloud à travers les fournisseurs, en respectant les permissions |
-| `prepare_context` | read | Regroupe fichiers, notes et cartes correspondants avec la semaine d'événements à venir pour une même question |
+| `prepare_context` | read | Regroupe fichiers, notes et cartes correspondants avec la semaine d'événements à venir, les conversations Talk en attente et les compteurs de courriels non lus pour une même question |
 | `search` | read | Point d'entrée de recherche compatible OpenAI, délègue à la recherche unifiée |
-| `fetch` | read | Point d'entrée de récupération compatible OpenAI, résout un id vers un fichier, une note, une carte, un événement ou un courriel |
+| `fetch` | read | Point d'entrée de récupération compatible OpenAI, résout un id vers un fichier, une note, une carte, un événement, un courriel, un message Talk ou un tableau |
 
 `search` et `fetch` existent parce que le profil de connecteur ChatGPT exige exactement ces deux noms
 et schémas. Ce sont de fines enveloppes autour des outils ci-dessus, pas une seconde implémentation.
@@ -421,11 +426,20 @@ livrer un output schema, car ChatGPT lit la charge utile comme contenu structur�
 - Chaque résultat porte une URL absolue et non vide sur l'instance configurée. ChatGPT ne crée des
   métadonnées de citation que tant que `url` est une chaîne non vide, si bien qu'une URL vide ferait
   discrètement disparaître la source.
-- `fetch` résout les cinq types d'id que les outils de lecture comprennent : `file:<fileid>`
+- `fetch` résout les sept types d'id que les outils de lecture comprennent : `file:<fileid>`
   (recherché par une seule WebDAV search sur `oc:fileid`), `note:<id>`,
   `card:<board>:<stack>:<card>` y compris la forme courte `card:<cardId>` du fournisseur de recherche
-  Deck, `event:<calendar>:<object>` et `mail:<databaseId>` (le texte complet d'un seul message,
-  coupé à 32 Kio, la coupe étant marquée).
+  Deck, `event:<calendar>:<object>`, `mail:<databaseId>` (le texte complet d'un seul message,
+  coupé à 32 Kio, la coupe étant marquée), `message:<token>:<messageId>` (un seul message Talk, lu
+  par la même route de contexte qui ne laisse aucune trace ; le message doit être lisible dans cette
+  conversation, sinon la réponse est un refus et jamais un message voisin) et `table:<tableId>` (le
+  titre, le nombre de lignes et les premières lignes d'un tableau ; une vue n'est pas un tableau et
+  reste une URL).
+- Un résultat de recherche venant de Mail reste un id `url:` bien que la route du texte complet
+  existe, et c'est une mesure et non un oubli : une entrée de recherche de l'application Mail porte
+  un lien profond avec un identifiant de message RFC, et sa résolution vers le `databaseId` dont
+  cette route a besoin n'est pas mesurée. Un id juste la plupart du temps est, le reste du temps,
+  une réponse sur le courrier de quelqu'un d'autre.
 - Un id `url:` reçoit une réponse honnête : ce serveur ne requête jamais une URL issue d'un résultat
   de recherche, et il le dit au lieu d'inventer du contenu. Un préfixe inconnu est refusé avec la
   liste de ceux qui sont valides, car résoudre un message de chat comme une note est pire qu'une

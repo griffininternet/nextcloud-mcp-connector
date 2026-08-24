@@ -39,8 +39,13 @@ installierbar. Was heute vorliegt und wo jede dieser Aussagen festgehalten ist:
 - Verwaltung pro Konto: jedes Konto pausiert oder setzt seinen eigenen MCP-Zugriff fort und
   trennt jede einzelne verbundene Assistenz auf der Verbindungsseite dieser App, die Nextcloud
   unter Einstellungen, Sicherheit, MCP Connector verlinkt.
-- `prepare_context` bündelt eine Suche und die kommende Woche an Terminen in einem Aufruf, eine
-  Frage kostet damit einen Rundlauf statt mehrerer.
+- `prepare_context` bündelt eine Suche, die kommende Woche an Terminen, die wartenden
+  Talk-Konversationen und die Ungelesen-Zähler der Mail-Konten in einem Aufruf, eine Frage kostet
+  damit einen Rundlauf statt mehrerer. Jede Quelle hat ihr eigenes Zeitbudget und ihren eigenen
+  `degraded`-Eintrag, eine langsame Quelle kürzt also das Bündel und nie die Antwort. Drei
+  Kappungen halten die Größe vorhersagbar: höchstens drei Konversationen, eine Chat-Vorschau
+  geschnitten bei 200 Bytes, und höchstens drei Mail-Konten. Mail kommt als Zähler, und genau das
+  ist der Punkt: im Standardbündel steht kein Betreff und kein Mailinhalt.
 
 Seit 0.1.4: Tables und Talk. Eine Assistenz durchsucht die Tabellen des Kontos und legt in
 einer davon eine Zeile an, über die Spaltentitel, sie liest die Unterhaltungen des Kontos und
@@ -219,9 +224,9 @@ neue Objekte anlegen, aber niemals bestehende ändern oder entfernen.
 | `mail_browse` | read | Durchsucht Mail: die Konten dieses Nutzers, die Postfächer eines Kontos oder die Nachrichtenköpfe eines Postfachs; strikt lesend, es gibt keinen Weg zu senden, einen Entwurf anzulegen, zu verschieben, zu markieren oder zu löschen |
 | `contacts_search` | read | Durchsucht Adressbuch-Kontakte |
 | `unified_search` | read | Fragt die Nextcloud-Unified-Search über alle Provider ab, berechtigungsbewusst |
-| `prepare_context` | read | Bündelt passende Dateien, Notizen und Karten mit den Terminen der kommenden Woche zu einer Frage |
+| `prepare_context` | read | Bündelt passende Dateien, Notizen und Karten mit den Terminen der kommenden Woche, den wartenden Talk-Konversationen und den Ungelesen-Zählern der Mail-Konten zu einer Frage |
 | `search` | read | OpenAI-kompatibler Sucheinstiegspunkt, delegiert an die Unified-Search |
-| `fetch` | read | OpenAI-kompatibler Abrufeinstiegspunkt, löst eine ID zu einer Datei, Notiz, Karte, einem Termin oder einer Mail auf |
+| `fetch` | read | OpenAI-kompatibler Abrufeinstiegspunkt, löst eine ID zu einer Datei, Notiz, Karte, einem Termin, einer Mail, einer Talk-Nachricht oder einer Tabelle auf |
 
 `search` und `fetch` existieren, weil das ChatGPT-Connector-Profil genau diese beiden Namen und Schemata
 verlangt. Sie sind dünne Hüllen über den obigen Tools, keine zweite Implementierung.
@@ -411,11 +416,18 @@ ein Output-Schema mitliefern, weil ChatGPT die Nutzlast als strukturierten Inhal
 - Jeder Treffer trägt eine nicht-leere, absolute URL auf der konfigurierten Instanz. ChatGPT erzeugt nur
   dann Zitations-Metadaten, solange `url` ein nicht-leerer String ist, sodass eine leere die Quelle still
   fallenlassen würde.
-- `fetch` löst die fünf ID-Arten auf, die die Lese-Tools verstehen: `file:<fileid>` (nachgeschlagen über
-  eine einzige WebDAV-Suche auf `oc:fileid`), `note:<id>`, `card:<board>:<stack>:<card>` inklusive der
-  kurzen Form `card:<cardId>` aus dem Deck-Suchprovider, `event:<calendar>:<object>` und
+- `fetch` löst die sieben ID-Arten auf, die die Lese-Tools verstehen: `file:<fileid>` (nachgeschlagen
+  über eine einzige WebDAV-Suche auf `oc:fileid`), `note:<id>`, `card:<board>:<stack>:<card>` inklusive
+  der kurzen Form `card:<cardId>` aus dem Deck-Suchprovider, `event:<calendar>:<object>`,
   `mail:<databaseId>` (der Volltext einer einzelnen Nachricht, geschnitten bei 32 KiB, mit markiertem
-  Schnitt).
+  Schnitt), `message:<token>:<messageId>` (eine einzelne Talk-Nachricht, gelesen über dieselbe
+  nebenwirkungsfreie Kontextroute; die Nachricht muss in dieser Konversation lesbar sein, sonst gibt es
+  eine Ablehnung und nie eine Nachbarnachricht) und `table:<tableId>` (Titel, Zeilenzahl und die ersten
+  Zeilen einer Tabelle; eine View ist keine Tabelle und bleibt eine URL).
+- Ein Mail-Suchtreffer bleibt eine `url:`-ID, obwohl es die Volltextroute gibt, und das ist eine Messung
+  und kein Versäumnis: ein Sucheintrag der Mail-App trägt einen Deep-Link mit einer RFC-Message-Id, und
+  deren Auflösung auf die `databaseId`, die diese Route braucht, ist ungemessen. Eine ID, die meistens
+  stimmt, ist in den übrigen Fällen eine Antwort über fremde Post.
 - Eine `url:`-ID wird ehrlich beantwortet: dieser Server fordert nie eine URL an, die aus einem
   Sucheintrag stammt, und sagt das, statt Inhalt zu erfinden. Ein unbekanntes Präfix wird mit der Liste
   der gültigen abgelehnt, weil eine Chat-Nachricht als Notiz aufzulösen schlimmer ist als ein Fehler.
