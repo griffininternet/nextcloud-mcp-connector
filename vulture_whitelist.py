@@ -103,6 +103,20 @@ spreed_features
 # entry_exapp.main, and its production caller is now the first executable line of
 # tools.talk.send.
 
+# --- The transport layer of the Mail family (plan 10-02, to be dissolved in plan 10-04) --
+# The same parked-caller case as Tables in 08-02 and Talk in 09-01: the transport of
+# nextcloud/clients/mail.py was written and tested in one piece before its caller existed, so
+# these three have no production call site yet. Every one of them is exercised by
+# tests/unit/test_mail_client.py today, and plan 10-04 adds tools/mail.py, which calls all
+# three; they leave this list with that plan, not with a later cleanup.
+#
+# get_messages is deliberately absent: the name already has a production caller in the Talk
+# family, so vulture never reports it, and an entry here would be a line nobody could ever
+# check.
+get_accounts
+get_mailboxes
+get_message
+
 # --- The store API of phase 3 ----------------------------------------------------------
 # oauth/store.py was built in one piece in plan 03-02, because its schema and its
 # transactions only make sense together, and its callers arrived plan by plan afterwards.
