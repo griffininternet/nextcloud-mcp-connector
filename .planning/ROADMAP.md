@@ -133,7 +133,7 @@ Plans:
 **Wave 1**
 
 - [x] 10-01-PLAN.md: GreenMail-Dienst und die Stufe-2-Messung (blockierend): A1 bis A4 werden Messwerte, Byte-Kappe entschieden, Korrektur K1 in docs/spike-mail.md
-- [ ] 10-02-PLAN.md: Mail-Client mit den vier deklarierten OCS-Leseformen und der zweite Erkennungskanal in derselben Cache-Zeile
+- [x] 10-02-PLAN.md: Mail-Client mit den vier deklarierten OCS-Leseformen und der zweite Erkennungskanal in derselben Cache-Zeile
 - [ ] 10-03-PLAN.md: HTML zu Text mit lxml und der dritte Kappungsmarker, der für eine Mail wahr ist
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -224,7 +224,7 @@ Plans:
 | 7. Verwaltungs-Clients live verprobt | v1.1 | 0/0 | Deferred (extern getaktet) | - |
 | 8. Erreichbarkeits-Spike und Tables | v1.2 | 5/5 | Complete    | 2026-08-21 |
 | 9. Talk | v1.2 | 5/5 | Complete    | 2026-08-21 |
-| 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 1/8 | In Progress|  |
+| 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 2/8 | In Progress|  |
 | 11. Bündelung, Budget und Release 0.1.6 | v1.2 | 0/? | Not started | - |
 
 ## Next

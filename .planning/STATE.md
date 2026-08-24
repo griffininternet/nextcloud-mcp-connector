@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Kuratierte Breite
 status: executing
-stopped_at: Completed 10-01-PLAN.md
-last_updated: "2026-08-24T13:01:52.588Z"
-last_activity: 2026-08-24 -- Plan 10-01 abgeschlossen (GreenMail plus Stufe-2-Messung)
+stopped_at: Completed 10-02-PLAN.md
+last_updated: "2026-08-24T13:21:34.949Z"
+last_activity: 2026-08-24 -- Plan 10-02 abgeschlossen (Mail-Client plus zweiter Erkennungskanal)
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 18
-  completed_plans: 11
-  percent: 61
+  completed_plans: 12
+  percent: 67
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 10 (Mail strikt lesend und die Trifecta-Grenze) — EXECUTING
-Plan: 2 of 8
+Plan: 3 of 8
 Status: Ready to execute
-Last activity: 2026-08-24 -- Plan 10-01 abgeschlossen (GreenMail plus Stufe-2-Messung)
+Last activity: 2026-08-24 -- Plan 10-02 abgeschlossen (Mail-Client plus zweiter Erkennungskanal)
 
 ## Performance Metrics
 
@@ -127,6 +127,7 @@ Last activity: 2026-08-24 -- Plan 10-01 abgeschlossen (GreenMail plus Stufe-2-Me
 | Phase 09-talk P04 | 33 min | 3 tasks | 15 files |
 | Phase 09-talk P05 | 29 min | 3 tasks tasks | 6 files files |
 | Phase 10-mail P01 | 42 min | 3 tasks tasks | 3 files files |
+| Phase 10-mail P02 | 17 min | 3 tasks tasks | 5 files files |
 
 ## Accumulated Context
 
@@ -447,6 +448,10 @@ Recent decisions affecting current work:
 - [Phase 10]: start: mit ISO-Datum liefert NULL Treffer statt praktisch allem (Zeichenkettenvergleich gegen die Integer-Spalte sent_at); K4 bleibt richtig, nur schaerfer: ein ISO-Wert gehoert abgelehnt
 - [Phase 10]: MAIL-01 bis MAIL-03 bleiben nach Plan 10-01 Pending: der Plan liefert Messwerte, kein Werkzeug; dieselben Requirement-Ids stehen in sechs weiteren Plaenen der Phase
 - [Phase 10]: previewText ist an echten Daten immer gesetzt und von der App selbst bei etwa 250 Zeichen gekappt; die leere Zeichenkette heisst 'kein Textkoerper' und nicht 'Vorschau fehlt'
+- [Phase 10-mail]: get_message gibt (Nutzlast, body_missing) zurueck; body_missing ist genau bei HTTP 206 True, also Erfolg ohne body, und ist bewusst kein Sentinel im Dictionary, weil eine Mail ohne Textkoerper body als leeren String liefert
+- [Phase 10-mail]: Der zweite Erkennungskanal heisst load_mail, laeuft ueber /core/navigation/apps und fuellt dieselbe Cache-Zeile mit dem urspruenglichen Zeitstempel; ein eigener Cache waere ein dritter Modulzustand und damit eine Review-Entscheidung (D-20)
+- [Phase 10-mail]: ocs._OK_STATUS bleibt frozenset({100, 200, 201}); 206 wird lokal im Mail-Client behandelt, wie Phase 9 die 304 lokal gehalten hat
+- [Phase 10-mail]: Eine leere oder deformierte Navigationsliste ist ein ToolError mit Ausweg und nie die Aussage Mail fehlt; jede Instanz hat Navigation
 
 ### Pending Todos
 
@@ -481,8 +486,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-24T13:01:52.570Z
-Stopped at: Completed 10-01-PLAN.md
+Last session: 2026-08-24T13:21:08.454Z
+Stopped at: Completed 10-02-PLAN.md
 Naechster Schritt: /gsd:plan-phase 8
 Resume file: None
 
