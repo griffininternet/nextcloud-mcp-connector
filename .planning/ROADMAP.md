@@ -39,6 +39,7 @@ Audit: [milestones/v1.1-MILESTONE-AUDIT.md](milestones/v1.1-MILESTONE-AUDIT.md) 
 - [x] **Phase 9: Talk** - Konversationen und Verlauf nachweislich nebenwirkungsfrei lesen, Nachricht senden als risikoarmer Create, Ausgangskanal per Admin-Schalter abschaltbar (completed 2026-08-21)
 - [x] **Phase 10: Mail strikt lesend und die Trifecta-Grenze** - Konten, Postfächer, Envelopes und Volltext lesen ohne jeden Schreibpfad, App-Erkennung für alle drei Familien, Exfiltrationskette benannt statt beschwiegen
  (completed 2026-08-24)
+
 - [ ] **Phase 11: Bündelung, Budget und Release 0.1.6** - Talk- und Mail-Anteil in prepare_context, Suchtreffer auflösbar, Budget-Gate neu verankert, Fassung im Store
 
 ## Phase Details
@@ -172,15 +173,35 @@ Plans:
 **Plans**: 10 plans in 7 waves
 
 Plans:
+**Wave 1**
+
 - [ ] 11-01-PLAN.md: Zwei neue Id-Kinds (message, table) und zwei neue Provider in der Übersetzungstabelle
 - [ ] 11-02-PLAN.md: Die nebenwirkungsfreie Talk-Kontextroute im Client
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 11-03-PLAN.md: fetch löst eine einzelne Talk-Nachricht und eine Tabelle auf
 - [ ] 11-04-PLAN.md: Talk-Digest im Bündel plus die eine Zeile, die TOOL-16 dort wirksam macht
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 11-05-PLAN.md: Mail-Ungelesen-Zähler im Bündel und die ehrliche Werkzeugbeschreibung
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 11-06-PLAN.md: Live-Messung der vier Beine und das Nachweisdokument
 - [ ] 11-07-PLAN.md: Schema-Diät der fünf Werkzeuge und das neu verankerte Budget-Gate
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 11-08-PLAN.md: Abnahmeskript aus der Registry, drei Info-Befunde, drei READMEs
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 11-09-PLAN.md: Release-Vorbereitung 0.1.8, Version, Changelog, Store-Texte, Gates
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
 - [ ] 11-10-PLAN.md: Release 0.1.8 veröffentlichen, Tag nach Owner-Freigabe, Signatur, Store, Nachweise
 
 **UI hint**: nein (kein eigenes Frontend)

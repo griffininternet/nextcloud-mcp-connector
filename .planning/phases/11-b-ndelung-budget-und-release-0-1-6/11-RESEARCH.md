@@ -658,7 +658,9 @@ uv run --no-sync pytest tests/integration/test_srv06_degradation.py -m integrati
 | A6 | Die Kontenzahl im Mail-Bein sollte gekappt werden | Pattern 3 | Ohne Kappung ist die Wanduhr von der Kontenzahl des Nutzers abhängig; mit Kappung braucht es einen `degraded`-Eintrag |
 | A7 | IN-01 (Doppelbedeutung von `truncated`) wird in dieser Phase mit erledigt | Owner-Vorgabe 5 | Es ist eine Antwortformat-Änderung; wenn sie kommt, gehört sie in den Changelog von 0.1.8 |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+Alle fünf Fragen sind in den Plänen entschieden: Frage 1 in 11-04 Task 1 (`_short` minimal, Buckets unverändert, neue Konstante `EXCERPT_KINDS`), Frage 2 in 11-05 Task 1 (alle Konten, Kappe `MAX_MAIL_ACCOUNTS = 3`), Frage 3 in 11-07 Task 2 (senken nur mit neuer Messzeile, sonst begründet unverändert), Frage 4 in 11-08 Task 1 (Liste aus `client.list_tools()`, erledigt IN-04 mit), Frage 5 in 11-10 Task 1 (`checkpoint:human-approve` vor dem Tag-Push).
 
 1. **Wachsen `KIND_BUCKETS` oder wird `_short` geändert?**
    - Bekannt: Beide Wege lösen Pitfall 1. Wachsende Buckets verteilen die 25 Treffer um, blasen die Antwort also kaum auf (Rechnung in `ARCHITECTURE.md:300`).
