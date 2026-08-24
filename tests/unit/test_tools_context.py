@@ -33,7 +33,7 @@ import httpx
 import pytest
 
 from mcp_connector.errors import ToolError
-from mcp_connector.nextcloud import NcClients
+from mcp_connector.nextcloud import NcClients, capabilities
 from mcp_connector.nextcloud.credentials import Credentials
 from mcp_connector.tools import calendar as calendar_tools
 from mcp_connector.tools import chatgpt as chatgpt_tools
@@ -1365,6 +1365,332 @@ async def test_the_talk_key_is_there_and_a_list_in_every_situation(
     assert "talk" in result, situation
     assert isinstance(result["talk"], list), situation
     assert set(result) - {"degraded"} == ANSWER_KEYS, situation
+
+
+# ---------------------------------------------------------------------------
+# The mail counters: the fourth leg, 1 plus N, numbers only (plan 11-05, CTX-02)
+# ---------------------------------------------------------------------------
+
+#: The two texts a stranger writes, and the two this bundle may never carry. A mail needs no
+#: account on this Nextcloud, so a subject is the cheapest foreign sentence there is (T-11-29).
+SUBJECT = "Rechnung Mai von Jörg"
+SENDER = "unbekannt@absender.test"
+
+#: One account, one inbox, six unread. The six is the number of the phase 10 measurement, the
+#: one the navigation entry reported as 0 at the same moment (owner instruction 3).
+INBOX = mailbox(1, "INBOX", unread=6, role="inbox")
+
+
+def only_inbox(account_id: str = "7") -> dict[str, list[dict[str, Any]]]:
+    """The mailbox map of a single account whose inbox is the only mailbox it has."""
+    return {account_id: [INBOX]}
+
+
+def test_the_two_numbers_of_the_mail_leg_are_a_setting_and_a_cap() -> None:
+    """Wider than Talk because the leg is 1 plus N, and capped because N is not ours."""
+    assert context_tools.MAIL_BUDGET == 10.0
+    assert context_tools.MAIL_BUDGET > context_tools.TALK_BUDGET, (
+        "one request against one route is cheaper than one account list plus N mailbox lists"
+    )
+    assert context_tools.MAX_MAIL_ACCOUNTS == 3
+    assert context_tools.MAX_MAIL_ACCOUNTS == context_tools.MAX_DIGEST, (
+        "the same three as the digest, so the bundle has one answer size and not two"
+    )
+
+
+@pytest.mark.anyio
+async def test_one_account_with_an_inbox_costs_one_account_list_and_one_mailbox_list(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The 1 plus N contract at N equal one, counted rather than claimed (CTX-02)."""
+    mail = FakeMail(accounts=[account(7, "büro@example.test")], mailboxes=only_inbox())
+    wire(monkeypatch, mail=mail)
+
+    result = await context_tools.prepare_context(clients, query="budget")
+
+    assert len(mail.calls) == 2, "one account list plus one mailbox list, and nothing else"
+    assert len(mail.of("accounts")) == 1
+    assert len(mail.of("mailboxes")) == 1
+    assert mail.of("mailboxes")[0]["account_id"] == "7", "the account travels explicitly"
+    assert result["mail"] == [{"account_id": 7, "email": "büro@example.test", "inbox_unread": 6}], (
+        "three fields, all of them numbers or the address of this very account"
+    )
+    assert "degraded" not in result, "one of one account is not a cut"
+
+
+@pytest.mark.anyio
+async def test_three_accounts_cost_three_mailbox_lists_with_three_different_accounts(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """1 plus 3, and no account is asked for twice or guessed (T-11-34)."""
+    mail = FakeMail(
+        accounts=[
+            account(7, "büro@example.test"),
+            account(8, "privat@example.test"),
+            account(9, "verein@example.test"),
+        ],
+        mailboxes={
+            "7": [INBOX],
+            "8": [mailbox(2, "INBOX", unread=0, role="inbox")],
+            "9": [mailbox(3, "INBOX", unread=12, role="inbox")],
+        },
+    )
+    wire(monkeypatch, mail=mail)
+
+    result = await context_tools.prepare_context(clients, query="budget")
+
+    assert len(mail.of("accounts")) == 1, "one account list per bundle, never one per account"
+    assert [kwargs["account_id"] for kwargs in mail.of("mailboxes")] == ["7", "8", "9"]
+    assert [entry["inbox_unread"] for entry in result["mail"]] == [6, 0, 12], (
+        "the order of the app is the order of the answer, and zero unread is a counter too"
+    )
+    assert "degraded" not in result
+
+
+@pytest.mark.anyio
+async def test_a_fourth_account_is_not_read_and_the_cap_names_the_total(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T-11-30: the wall clock of a bundle may not hang on how many accounts somebody has."""
+    mail = FakeMail(
+        accounts=[account(index, f"konto{index}@example.test") for index in (7, 8, 9, 10)],
+        mailboxes={str(index): [INBOX] for index in (7, 8, 9, 10)},
+    )
+    wire(monkeypatch, mail=mail)
+
+    result = await context_tools.prepare_context(clients, query="budget")
+
+    assert len(mail.of("mailboxes")) == context_tools.MAX_MAIL_ACCOUNTS == 3, (
+        "the fourth account costs no request at all, which is the point of the cap"
+    )
+    assert [entry["account_id"] for entry in result["mail"]] == [7, 8, 9]
+    assert result["degraded"] == [
+        {"source": "mail", "reason": "Only the first 3 of 4 mail accounts are counted."}
+    ]
+
+
+@pytest.mark.anyio
+async def test_no_mail_account_is_a_success_and_not_the_same_as_a_missing_app(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zero accounts is answered by setting one up, a missing app by an administrator."""
+    mail = FakeMail(accounts=[])
+    wire(monkeypatch, mail=mail)
+
+    result = await context_tools.prepare_context(clients, query="budget")
+
+    assert result["mail"] == []
+    assert "degraded" not in result, "nothing failed, so nothing claims that it did"
+    assert mail.of("mailboxes") == [], "no account, no mailbox request: 1 plus 0"
+
+
+@pytest.mark.anyio
+async def test_a_missing_mail_app_is_one_named_entry_and_reads_no_mailbox(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The sentence of the capabilities layer, and the mailbox level is never reached."""
+    mail = FakeMail(error=capabilities.app_missing("mail"))
+    wire(monkeypatch, search=FakeCall(search_answer([FILE_HIT])), mail=mail)
+
+    result = await context_tools.prepare_context(clients, query="budget")
+
+    assert result["mail"] == []
+    assert result["degraded"] == [
+        {"source": "mail", "reason": "The Mail app is not available on this Nextcloud."}
+    ], "one sentence for one problem, written where the app is detected and not here"
+    assert mail.of("mailboxes") == [], "a missing app costs zero mailbox requests"
+    assert [entry["id"] for entry in result["results"]["file"]] == ["file:4711"]
+
+
+@pytest.mark.anyio
+async def test_an_account_without_an_inbox_carries_no_counter_and_is_named(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T-11-32: a missing inbox as 0 would be a number that looks like a measurement."""
+    wire(
+        monkeypatch,
+        mail=FakeMail(
+            accounts=[account(7, "büro@example.test")],
+            mailboxes={"7": [mailbox(2, "Gesendet", unread=0, role="sent")]},
+        ),
+    )
+
+    result = await context_tools.prepare_context(clients, query="budget")
+
+    assert result["mail"] == [{"account_id": 7, "email": "büro@example.test"}]
+    assert "inbox_unread" not in result["mail"][0], "no inbox, no number about one"
+    assert result["degraded"] == [
+        {
+            "source": "mail",
+            "reason": (
+                "The mail account büro@example.test has no mailbox with the inbox role, so "
+                "it carries no counter here."
+            ),
+        }
+    ]
+
+
+@pytest.mark.anyio
+async def test_a_mailbox_without_a_role_or_with_another_one_is_not_read_as_the_inbox(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``_special_role`` answers the number zero with nothing, so the field can be absent."""
+    wire(
+        monkeypatch,
+        mail=FakeMail(
+            accounts=[account(7, "büro@example.test")],
+            mailboxes={
+                "7": [
+                    mailbox(2, "Ohne Rolle", unread=99),
+                    mailbox(3, "Gesendet", unread=42, role="sent"),
+                    mailbox(4, "Papierkorb", unread=7, role="trash"),
+                ]
+            },
+        ),
+    )
+
+    result = await context_tools.prepare_context(clients, query="budget")
+
+    assert "inbox_unread" not in result["mail"][0], (
+        "none of these three is an inbox, and a mailbox without the field does not raise"
+    )
+    assert "99" not in json.dumps(result["mail"], ensure_ascii=False), (
+        "the counter of a mailbox that is not the inbox is not the counter of this bundle"
+    )
+
+
+@pytest.mark.anyio
+async def test_a_stalling_mail_leg_is_named_and_the_rest_of_the_bundle_still_arrives(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T-11-30 and T-11-25: the ceiling belongs to the leg, never to the bundle."""
+    monkeypatch.setattr(context_tools, "MAIL_BUDGET", 0.05)
+    wire(
+        monkeypatch,
+        search=FakeCall(search_answer([FILE_HIT, NOTE_HIT])),
+        calendar=FakeCall(calendar_answer([event("Standup", "2026-08-18T09:00:00+00:00")])),
+        talk=FakeCall(talk_answer([conversation("aaaa1111", "Küche", unread=1)])),
+        mail=FakeMail(hang=True),
+    )
+
+    result = await asyncio.wait_for(
+        context_tools.prepare_context(clients, query="budget"), timeout=10
+    )
+
+    assert result["mail"] == [], "no counters, and the reason is spelled out"
+    assert result["degraded"] == [
+        {"source": "mail", "reason": "The mail did not answer within 0.05 seconds."}
+    ]
+    assert [entry["id"] for entry in result["results"]["file"]] == ["file:4711"]
+    assert [item["summary"] for item in result["events"]] == ["Standup"]
+    assert [item["token"] for item in result["talk"]] == ["aaaa1111"]
+
+
+@pytest.mark.anyio
+async def test_both_mail_levels_ask_for_the_honest_limit_of_that_tool(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T-11-35: the envelope of that tool cuts at 20 without a limit, and an inbox can be behind
+    the cut. The account list is asked the same way for the same reason, and three is far below
+    fifty, so the cut that decides this answer is always this module's own."""
+    mail = FakeMail(accounts=[account(7, "büro@example.test")], mailboxes=only_inbox())
+    wire(monkeypatch, mail=mail)
+
+    await context_tools.prepare_context(clients, query="budget")
+
+    assert mail.of("mailboxes")[0]["limit"] == mail_tools.MAX_LIMIT == 50
+    assert mail.of("accounts")[0]["limit"] == mail_tools.MAX_LIMIT
+    for kwargs in mail.calls:
+        assert "filter" not in kwargs[1], "this leg filters nothing, it counts"
+        assert "cursor" not in kwargs[1], "and neither of these two levels hands one out"
+
+
+@pytest.mark.anyio
+async def test_no_subject_and_no_sender_can_reach_the_bundle_through_this_leg(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T-11-29: the message level is never asked for, so foreign text has no way in here."""
+    mail = FakeMail(
+        accounts=[account(7, "büro@example.test", aliases=2)],
+        mailboxes={
+            "7": [
+                mailbox(
+                    1,
+                    "INBOX",
+                    unread=6,
+                    role="inbox",
+                    display_name="Posteingang",
+                    messages=[{"subject": SUBJECT, "from": SENDER}],
+                )
+            ]
+        },
+    )
+    wire(monkeypatch, search=FakeCall(search_answer([])), mail=mail)
+
+    result = await context_tools.prepare_context(clients, query="budget", detail="full")
+
+    dumped = json.dumps(result, ensure_ascii=False)
+    assert SUBJECT not in dumped, "a subject is foreign text and has no field in this answer"
+    assert SENDER not in dumped, "and neither has a sender address"
+    assert "Posteingang" not in dumped, "not even the name of the mailbox travels"
+    assert "INBOX" not in dumped, "the role answers the question the name would have answered"
+    assert mail.of("messages") == [], "the level that reads messages is never called"
+    assert result["mail"] == [{"account_id": 7, "email": "büro@example.test", "inbox_unread": 6}]
+
+
+@pytest.mark.parametrize(
+    ("situation", "mail"),
+    [
+        (
+            "success",
+            FakeMail(accounts=[account(7, "büro@example.test")], mailboxes=only_inbox()),
+        ),
+        ("failure", FakeMail(error=httpx.ConnectError("no route"))),
+        ("missing app", FakeMail(error=capabilities.app_missing("mail"))),
+        ("no account", FakeMail(accounts=[])),
+        (
+            "account without inbox",
+            FakeMail(accounts=[account(7, "büro@example.test")], mailboxes={"7": []}),
+        ),
+    ],
+)
+@pytest.mark.anyio
+async def test_the_mail_key_is_there_and_a_list_in_every_situation(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch, situation: str, mail: FakeMail
+) -> None:
+    """Five situations, one answer shape: a key that comes and goes depends on foreign text."""
+    wire(monkeypatch, mail=mail)
+
+    result = await context_tools.prepare_context(clients, query="budget")
+
+    assert "mail" in result, situation
+    assert isinstance(result["mail"], list), situation
+    assert set(result) - {"degraded"} == ANSWER_KEYS, situation
+
+
+@pytest.mark.anyio
+async def test_talk_and_mail_failing_together_is_still_a_successful_bundle(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T-11-26: the double failure rule belongs to the search and the calendar, to those two."""
+    wire(
+        monkeypatch,
+        search=FakeCall(search_answer([FILE_HIT])),
+        calendar=FakeCall(calendar_answer([event("Standup", "2026-08-18T09:00:00+00:00")])),
+        talk=FakeCall(error=httpx.ConnectError("no route")),
+        mail=FakeMail(error=httpx.ConnectError("no route")),
+    )
+
+    result = await context_tools.prepare_context(clients, query="budget")
+
+    assert result["talk"] == []
+    assert result["mail"] == []
+    assert result["degraded"] == [
+        {"source": "talk", "reason": "The talk could not be reached."},
+        {"source": "mail", "reason": "The mail could not be reached."},
+    ], "two legs, two sentences, and the bundle is still an answer"
+    assert [entry["id"] for entry in result["results"]["file"]] == ["file:4711"]
+    assert [item["summary"] for item in result["events"]] == ["Standup"]
 
 
 def test_no_sentence_of_this_module_frames_foreign_text_as_a_wish_of_the_user() -> None:
