@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Kuratierte Breite
 status: executing
-stopped_at: Completed 09-05-PLAN.md
-last_updated: "2026-08-24T12:30:24.510Z"
-last_activity: 2026-08-24 -- Phase 10 planning complete
+stopped_at: Completed 10-01-PLAN.md
+last_updated: "2026-08-24T13:01:52.588Z"
+last_activity: 2026-08-24 -- Plan 10-01 abgeschlossen (GreenMail plus Stufe-2-Messung)
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 18
-  completed_plans: 10
-  percent: 50
+  completed_plans: 11
+  percent: 61
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Current focus:** Phase 10 — mail strikt lesend und die trifecta grenze
+**Current focus:** Phase 10 — Mail strikt lesend und die Trifecta-Grenze
 
 ## Current Position
 
-Phase: 10
-Plan: Not started
+Phase: 10 (Mail strikt lesend und die Trifecta-Grenze) — EXECUTING
+Plan: 2 of 8
 Status: Ready to execute
-Last activity: 2026-08-24 -- Phase 10 planning complete
+Last activity: 2026-08-24 -- Plan 10-01 abgeschlossen (GreenMail plus Stufe-2-Messung)
 
 ## Performance Metrics
 
@@ -126,6 +126,7 @@ Last activity: 2026-08-24 -- Phase 10 planning complete
 | Phase 09-talk P03 | 26 min | 3 tasks | 3 files |
 | Phase 09-talk P04 | 33 min | 3 tasks | 15 files |
 | Phase 09-talk P05 | 29 min | 3 tasks tasks | 6 files files |
+| Phase 10-mail P01 | 42 min | 3 tasks tasks | 3 files files |
 
 ## Accumulated Context
 
@@ -441,6 +442,11 @@ Recent decisions affecting current work:
 - [Phase 09-talk]: Erfolgskriterium 3 ist live gemessen: lastReadMessage 23 zu 23, unreadMessages 0 zu 0, unreadMention False zu False, lastCommonReadMessage 23 zu 23 um einen Verlauf-Lesevorgang mit einer Nachricht im Fenster; die Messung fuellt vorher, weil setReadMarker nur einen Marker bewegen kann, der ein Ziel hat
 - [Phase 09-talk]: Bobs Zugriff auf eine fremde Talk-Konversation: die Instanz antwortet GET 404 und POST 404 und gibt die Existenz nicht preis; der Connector kommt nie so weit, seine Absage entsteht aus der eigenen Konversationsliste vor jedem Talk-Pfad
 - [Phase 09-talk]: Der Admin-Schalter talk_send ist auf beiden Topologien an (NC_MCP_TALK_SEND ungesetzt); der Integrationstest stellt den Zustand fest und behauptet zusaetzlich beide Enden des Schalters, weil ein einmal gespeicherter Wert jedes Neubauen des Containers ueberlebt
+- [Phase 10]: Byte-Kappe des Volltexts auf 32 KiB (32768 Bytes) entschieden statt der 16 KiB des Startwerts: der gemessene Newsletter ergibt nach der Wandlung 25582 Bytes und waere bei 16 KiB gekappt, obwohl er der Normalfall ist; gesetzt wird die Zahl in Plan 10-05
+- [Phase 10]: tags: der Mail-Filtergrammatik nimmt die numerische Tag-Id, nicht das IMAP-Label; MessageMapper vergleicht tags.tag_id, gemessen: tags:1 trifft, tags mit $label1 trifft nicht (korrigiert 10-RESEARCH.md)
+- [Phase 10]: start: mit ISO-Datum liefert NULL Treffer statt praktisch allem (Zeichenkettenvergleich gegen die Integer-Spalte sent_at); K4 bleibt richtig, nur schaerfer: ein ISO-Wert gehoert abgelehnt
+- [Phase 10]: MAIL-01 bis MAIL-03 bleiben nach Plan 10-01 Pending: der Plan liefert Messwerte, kein Werkzeug; dieselben Requirement-Ids stehen in sechs weiteren Plaenen der Phase
+- [Phase 10]: previewText ist an echten Daten immer gesetzt und von der App selbst bei etwa 250 Zeichen gekappt; die leere Zeichenkette heisst 'kein Textkoerper' und nicht 'Vorschau fehlt'
 
 ### Pending Todos
 
@@ -475,8 +481,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-21T13:07:31.781Z
-Stopped at: Completed 09-05-PLAN.md
+Last session: 2026-08-24T13:01:52.570Z
+Stopped at: Completed 10-01-PLAN.md
 Naechster Schritt: /gsd:plan-phase 8
 Resume file: None
 
