@@ -17,6 +17,22 @@ The two API versions of the family stand below as frozen literals: conversations
 the chat is v1, and mixing the two yields a 404 out of the routing layer that reads like
 "conversation not found".
 
+The second reading route of the chat, the context around one single message, is nailed down
+in its own block at the bottom of this file, because every place it could be wrong is
+invisible in a parsed answer as well:
+
+*   the route hangs on the v1 chat URL and ends in ``/context``, frozen as a literal like the
+    two above it;
+*   ``limit`` is in the query string and none of the four read parameters is, which is the
+    counter check to the reasoned omission in the client: that route does not accept them and
+    takes its freedom from side effects out of its own construction;
+*   an empty context is 304, and 304 is a success with an empty window here, not the redirect
+    the shared parser would report;
+*   neither a token outside the declared pattern nor a message id that is not a number
+    produces a single request, and the call count says so;
+*   one call is exactly one request, and a refusing status stays a refusal instead of turning
+    into an empty window.
+
 The rest is the usual catalogue: the created status on the send, which is a success here and
 not an unexpected answer (T1), an empty conversation without messages that answers 304, an
 instance without a single conversation, a token that never reaches Nextcloud, an answer shape
@@ -46,6 +62,12 @@ TOKEN = "abcd1234"
 # one app: a route that changes its version here has to be changed on purpose.
 ROOM_URL = f"{BASE}/ocs/v2.php/apps/spreed/api/v4/room"
 CHAT_URL = f"{BASE}/ocs/v2.php/apps/spreed/api/v1/chat/{TOKEN}"
+
+# The id of the one message the context tests below ask for, and the third frozen literal:
+# the context of a single message is a route of the chat API, so it is derived from CHAT_URL
+# and a version change of it has to be a deliberate edit here.
+MESSAGE_ID = "5103"
+CONTEXT_URL = f"{CHAT_URL}/{MESSAGE_ID}/context"
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
@@ -433,3 +455,231 @@ def test_the_four_read_parameters_are_exactly_these_four_values() -> None:
         "markNotificationsAsRead": 0,
         "noStatusUpdate": 1,
     }
+
+
+def message(message_id: int, text: str) -> dict[str, Any]:
+    """One message of a context answer, reduced to the fields these tests read."""
+    return {
+        "id": message_id,
+        "token": TOKEN,
+        "actorType": "users",
+        "actorId": "alice",
+        "actorDisplayName": "Alice Beispiel",
+        "timestamp": 1755180000 + message_id,
+        "message": text,
+        "messageType": "comment",
+        "systemMessage": "",
+    }
+
+
+CONTEXT_WINDOW = [
+    message(5102, "Vorher: Maße noch offen"),
+    message(int(MESSAGE_ID), "Die gesuchte Nachricht, Größe geprüft"),
+    message(5104, "Danach: übernommen"),
+]
+
+
+@pytest.mark.anyio
+async def test_the_context_window_carries_the_wanted_message_itself(
+    client: httpx.AsyncClient, creds: Credentials
+) -> None:
+    """The reason this route exists at all: ``includeLastKnown`` is true in the app.
+
+    Reading history below ``messageId + 1`` with a window of one would answer the highest id
+    under that bound, so a deleted or filtered target would silently become a neighbour. The
+    window comes back in the order of the answer, because picking the right entry is the
+    caller's job and reordering here would take that decision away.
+    """
+    with respx.mock(assert_all_called=True) as mock:
+        route = mock.get(CONTEXT_URL).mock(
+            return_value=httpx.Response(200, json=envelope(CONTEXT_WINDOW))
+        )
+        messages = await talk_client.get_message_context(client, creds, TOKEN, MESSAGE_ID, limit=1)
+
+    assert [entry["id"] for entry in messages] == [5102, 5103, 5104]
+    assert int(MESSAGE_ID) in [entry["id"] for entry in messages]
+    assert str(route.calls.last.request.url).startswith(CONTEXT_URL)
+
+
+@pytest.mark.anyio
+async def test_an_empty_context_answers_304_and_that_is_a_success_not_a_redirect(
+    client: httpx.AsyncClient, creds: Credentials, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The unspectacular case with its own test: 304 without a body is an empty window.
+
+    The shared parser turns every 3xx into "Nextcloud answered with a redirect, check the
+    base URL", which would send the reader of a vanished message after a configuration
+    problem that does not exist. The monkeypatch is the assertion: reaching ``parse_ocs`` at
+    all would already be the bug.
+    """
+
+    def never(*args: object, **kwargs: object) -> object:
+        raise AssertionError("a 304 must be answered before parse_ocs sees it")
+
+    monkeypatch.setattr(ocs, "parse_ocs", never)
+    with respx.mock(assert_all_called=True) as mock:
+        mock.get(CONTEXT_URL).mock(return_value=httpx.Response(304))
+        messages = await talk_client.get_message_context(client, creds, TOKEN, MESSAGE_ID, limit=1)
+
+    assert messages == []
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("payload", [{"unexpected": True}, "a sentence instead of a window"])
+async def test_a_context_answer_of_the_wrong_shape_is_refused_with_a_sentence(
+    client: httpx.AsyncClient, creds: Credentials, payload: object
+) -> None:
+    """An unexpected shape is one sentence plus a next step, never a TypeError.
+
+    Both forms would otherwise be read as "no messages", and an empty window is exactly the
+    answer that invites a model to fill the gap itself.
+    """
+    with respx.mock(assert_all_called=True) as mock:
+        mock.get(CONTEXT_URL).mock(return_value=httpx.Response(200, json=envelope(payload)))
+        with pytest.raises(ToolError) as excinfo:
+            await talk_client.get_message_context(client, creds, TOKEN, MESSAGE_ID, limit=1)
+
+    assert "not a list of messages" in excinfo.value.message
+    assert "Talk app" in excinfo.value.hint
+
+
+@pytest.mark.anyio
+async def test_an_entry_that_is_not_a_message_is_dropped_and_never_invented(
+    client: httpx.AsyncClient, creds: Credentials
+) -> None:
+    """The shared shape helper of this module drops entries it cannot read, as everywhere.
+
+    A window whose only entry is unreadable therefore comes back empty, and that is the
+    honest half of it: the caller in ``tools/chatgpt.py`` filters on the id it asked for and
+    refuses when it is missing, so an empty window never reaches a model as a message.
+    """
+    with respx.mock(assert_all_called=True) as mock:
+        mock.get(CONTEXT_URL).mock(
+            return_value=httpx.Response(200, json=envelope(["not a message", CONTEXT_WINDOW[1]]))
+        )
+        messages = await talk_client.get_message_context(client, creds, TOKEN, MESSAGE_ID, limit=1)
+
+    assert [entry["id"] for entry in messages] == [int(MESSAGE_ID)]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("token", ["ABC", "abc", "ab cd", "../../etc", ""])
+async def test_a_context_token_outside_the_pattern_never_reaches_nextcloud(
+    client: httpx.AsyncClient, creds: Credentials, token: str
+) -> None:
+    """Tokens go into the path, and an invented one is not just a 404 (threat T-11-08).
+
+    The count is the assertion: an unknown token on a single-conversation route registers a
+    brute force attempt against the address of this container, which is one address for
+    every user of the instance, so the guard has to refuse before anything goes out.
+    """
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.route(url__startswith=BASE)
+        with pytest.raises(ToolError) as excinfo:
+            await talk_client.get_message_context(client, creds, token, MESSAGE_ID, limit=1)
+
+    assert route.call_count == 0
+    assert excinfo.value.hint
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("message_id", ["abc", "-1", "", "4711abc", "٤٧"])
+async def test_a_context_message_id_that_is_not_a_number_never_reaches_nextcloud(
+    client: httpx.AsyncClient, creds: Credentials, message_id: str
+) -> None:
+    """The second path segment gets the same treatment as the first one.
+
+    The last case is an Arabic-Indic pair of digits: ``str.isdigit`` would accept it, and it
+    would reach an app that declares this segment as an integer.
+    """
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.route(url__startswith=BASE)
+        with pytest.raises(ToolError) as excinfo:
+            await talk_client.get_message_context(client, creds, TOKEN, message_id, limit=1)
+
+    assert route.call_count == 0
+    assert "message id" in excinfo.value.message
+    assert excinfo.value.hint
+
+
+@pytest.mark.anyio
+async def test_the_context_url_carries_the_limit_and_none_of_the_read_parameters(
+    client: httpx.AsyncClient, creds: Credentials
+) -> None:
+    """The counter check to the reasoned omission in the client (threat T-11-07).
+
+    This route does not accept the four read parameters at all, and its freedom from side
+    effects comes from its own construction: timeout 0, ``markNotificationsAsRead: false``
+    and no read marker at all, verified in the source of spreed 24.0.4. Sending one of them
+    anyway would be an argument the app answers with a 400.
+    """
+    with respx.mock(assert_all_called=True) as mock:
+        route = mock.get(CONTEXT_URL).mock(
+            return_value=httpx.Response(200, json=envelope(CONTEXT_WINDOW))
+        )
+        await talk_client.get_message_context(client, creds, TOKEN, MESSAGE_ID, limit=1)
+
+    params = route.calls.last.request.url.params
+    assert params["limit"] == "1"
+    assert "noStatusUpdate" not in params
+    assert "lookIntoFuture" not in params
+    assert "setReadMarker" not in params
+    assert "markNotificationsAsRead" not in params
+    assert "lastKnownMessageId" not in params
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(("wanted", "sent"), [(999, "50"), (0, "1")])
+async def test_a_context_limit_is_capped_and_lifted_in_the_url(
+    client: httpx.AsyncClient, creds: Credentials, wanted: int, sent: str
+) -> None:
+    """One message may carry 32.000 characters, so the window is capped here, not asked for."""
+    with respx.mock(assert_all_called=True) as mock:
+        route = mock.get(CONTEXT_URL).mock(
+            return_value=httpx.Response(200, json=envelope(CONTEXT_WINDOW))
+        )
+        await talk_client.get_message_context(client, creds, TOKEN, MESSAGE_ID, limit=wanted)
+
+    assert route.calls.last.request.url.params["limit"] == sent
+    assert talk_client.MAX_MESSAGES == 50
+
+
+@pytest.mark.anyio
+async def test_one_context_call_is_exactly_one_request(
+    client: httpx.AsyncClient, creds: Credentials
+) -> None:
+    """The guard against a second read: no follow up window, no loop (threat T-11-10)."""
+    with respx.mock(assert_all_called=True) as mock:
+        route = mock.get(CONTEXT_URL).mock(
+            return_value=httpx.Response(200, json=envelope(CONTEXT_WINDOW))
+        )
+        await talk_client.get_message_context(client, creds, TOKEN, MESSAGE_ID, limit=1)
+
+    assert route.call_count == 1
+
+
+@pytest.mark.anyio
+async def test_a_403_on_the_context_route_stays_a_refusal_and_never_an_empty_window(
+    client: httpx.AsyncClient, creds: Credentials
+) -> None:
+    """A conversation without chat permission is a sentence of the shared parser (T-11-11).
+
+    Read as an empty window it would say "that message does not exist", which is a different
+    and untrue statement about somebody else's conversation.
+    """
+    with respx.mock(assert_all_called=True) as mock:
+        mock.get(CONTEXT_URL).mock(
+            return_value=httpx.Response(403, headers={"content-type": "text/html"}, text="")
+        )
+        with pytest.raises(ToolError) as excinfo:
+            await talk_client.get_message_context(client, creds, TOKEN, MESSAGE_ID, limit=1)
+
+    assert "No permission" in excinfo.value.message
+    assert excinfo.value.hint
+
+
+def test_the_context_reader_takes_its_limit_as_a_keyword_without_a_default() -> None:
+    """Same rule as the two readers above: an omitted decision does not compile away."""
+    limit = inspect.signature(talk_client.get_message_context).parameters["limit"]
+    assert limit.default is inspect.Parameter.empty
+    assert limit.kind is inspect.Parameter.KEYWORD_ONLY
