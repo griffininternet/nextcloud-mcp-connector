@@ -175,7 +175,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 11-01-PLAN.md: Zwei neue Id-Kinds (message, table) und zwei neue Provider in der Übersetzungstabelle
+- [x] 11-01-PLAN.md: Zwei neue Id-Kinds (message, table) und zwei neue Provider in der Übersetzungstabelle
 - [ ] 11-02-PLAN.md: Die nebenwirkungsfreie Talk-Kontextroute im Client
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -260,7 +260,7 @@ Plans:
 | 8. Erreichbarkeits-Spike und Tables | v1.2 | 5/5 | Complete    | 2026-08-21 |
 | 9. Talk | v1.2 | 5/5 | Complete    | 2026-08-21 |
 | 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 8/8 | Complete    | 2026-08-24 |
-| 11. Bündelung, Budget und Release 0.1.6 | v1.2 | 0/? | Not started | - |
+| 11. Bündelung, Budget und Release 0.1.6 | v1.2 | 1/10 | In Progress|  |
 
 ## Next
 

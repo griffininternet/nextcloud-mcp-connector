@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Kuratierte Breite
 status: executing
-stopped_at: Completed 10-06-PLAN.md
-last_updated: "2026-08-24T19:24:54.884Z"
-last_activity: 2026-08-24 -- Phase 11 planning complete
+stopped_at: Completed 11-01-PLAN.md
+last_updated: "2026-08-24T19:43:58.888Z"
+last_activity: 2026-08-24
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 28
-  completed_plans: 18
-  percent: 64
+  completed_plans: 19
+  percent: 68
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Current focus:** Phase 11 — bündelung, budget und release 0.1.6
+**Current focus:** Phase 11 — Bündelung, Budget und Release 0.1.8
 
 ## Current Position
 
-Phase: 11
-Plan: Not started
+Phase: 11 (Bündelung, Budget und Release 0.1.8) — EXECUTING
+Plan: 2 of 10
 Status: Ready to execute
-Last activity: 2026-08-24 -- Phase 11 planning complete
+Last activity: 2026-08-24
 
 ## Performance Metrics
 
@@ -135,6 +135,7 @@ Last activity: 2026-08-24 -- Phase 11 planning complete
 | Phase 10 P06 | 15 min | 3 tasks tasks | 7 files files |
 | Phase 10 P07 | 13min | 3 tasks | 8 files |
 | Phase 10 P08 | 22 min | 2 tasks tasks | 2 files files |
+| Phase 11 P01 | 25min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -478,6 +479,8 @@ Recent decisions affecting current work:
 - [Phase ?]: 10-07: Trifecta-Text in drei Laengen (lang in docs/privacy.md, gekuerzt in den READMEs, nur der Ausgangskanal-Absatz im Store-Text)
 - [Phase ?]: 10-07: Store-Beschreibung nennt Mail-Ebenen statt Postfachnamen; die Vokabular-Falle ist als Test mit Begruendung eingefroren
 - [Phase ?]: 10-07: Werkzeugzahlen in der Doku als Wort, weil der Zaehlwaechter Ziffern vor 'tools' liest
+- [Phase ?]: 11-01: Id-Kinds heissen message:<token>:<messageId> und table:<tableId> (eine Id adressiert ein Objekt, keine App); PROVIDER_KINDS hat jetzt sechs Eintraege inklusive talk-message-current, belegt statt vermutet (CurrentMessageSearch erbt performSearch von MessageSearch)
+- [Phase ?]: 11-01: Ein Tables-Treffer auf eine View, jeder Mail-Treffer und talk-conversations bleiben bewusst kind=url; der Grund steht je namentlich im Modul-Docstring von provider_map.py
 
 ### Pending Todos
 
@@ -512,8 +515,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-24T15:19:08.978Z
-Stopped at: Completed 10-06-PLAN.md
+Last session: 2026-08-24T19:43:58.870Z
+Stopped at: Completed 11-01-PLAN.md
 Naechster Schritt: /gsd:plan-phase 8
 Resume file: None
 
