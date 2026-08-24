@@ -4,13 +4,13 @@ milestone: v1.2
 milestone_name: Kuratierte Breite
 status: executing
 stopped_at: Completed 11-07-PLAN.md
-last_updated: "2026-08-24T21:57:44.729Z"
+last_updated: "2026-08-24T22:24:33.181Z"
 last_activity: 2026-08-24
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 28
-  completed_plans: 25
+  completed_plans: 26
   percent: 75
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 11 (Bündelung, Budget und Release 0.1.8) — EXECUTING
-Plan: 8 of 10
+Plan: 9 of 10
 Status: Ready to execute
 Last activity: 2026-08-24
 
@@ -142,6 +142,7 @@ Last activity: 2026-08-24
 | Phase 11 P05 | 17 min | 3 tasks tasks | 4 files files |
 | Phase 11 P06 | 27 min | 2 tasks tasks | 3 files files |
 | Phase 11 P07 | 19 min | 2 tasks tasks | 5 files files |
+| Phase 11 P08 | 30 min | 3 tasks tasks | 9 files files |
 
 ## Accumulated Context
 
@@ -511,6 +512,9 @@ Recent decisions affecting current work:
 - [Phase 11]: 11-07: Verschieben ist keine Diaet: Tool-Docstring und Field-Beschreibung sind zwei Schluessel desselben tools/list-Payloads, ein Docstring-Umbruch kostet zwei Bytes; nur Komprimieren spart (die vom Plan verlangte Verschiebung war gemessen +4 Bytes)
 - [Phase 11]: 11-07: BUDGET_BYTES 18500 -> 18000, verankert auf 15612 gemessenen Bytes bei 21 Werkzeugen; 17500 haette 395 Bytes mehr gebraucht, also 23 Prozent der verbliebenen Prosa der fuenf Werkzeuge
 - [Phase 11]: 11-07: MAX_TOOL_BYTES bleibt 1400 mit eigener Messzeile; groesstes Werkzeug ist jetzt calendar_create_event (1351) statt mail_browse (1331), und die 15-Prozent-Regel ergaebe hier eine verbotene Anhebung auf 1553
+- [Phase ?]: 11-08: Die Werkzeugoberflaeche hat eine Wahrheit: das Abnahmeskript liest die erwartete Menge aus client.list_tools(), die literale 21er-Liste und EXPECTED_TOOLS sind weg; die Zahl lebt in tests/contract/test_tool_surface.py
+- [Phase ?]: 11-08: Ein Antwortschluessel traegt je Ebene genau eine Bedeutung: die Eintragsebene der Mail-Antwort heisst preview_truncated, die Antwortebene behaelt truncated (IN-01); dieselbe Doppelbedeutung in talk.py ist als DF-11-01 zurueckgestellt
+- [Phase ?]: 11-08: Ein Docstring nennt keine Zahl, die ein Test derselben Datei pinnt: variable_problems verweist auf die Gate-Funktion statt auf vier oder sechs Variablen (IN-03)
 
 ### Pending Todos
 
@@ -545,7 +549,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-24T21:57:44.712Z
+Last session: 2026-08-24T22:24:16.800Z
 Stopped at: Completed 11-07-PLAN.md
 Naechster Schritt: /gsd:plan-phase 8
 Resume file: None

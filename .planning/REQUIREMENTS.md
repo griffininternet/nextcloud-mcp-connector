@@ -36,8 +36,8 @@
 
 ### Tool-Infrastruktur (TOOL)
 
-- [ ] **TOOL-15**: Das Budget-Gate ist auf die neue Messung angehoben (Regel Messung plus 15 Prozent, aufgerundet auf die nächsten 500, erwartet 17.500 bis 18.000 Bytes) mit neuer Messzeile im Skript; alle fünf neuen Tools sind schema-diätet, die Annotationen sind ehrlich (drei READ_ONLY, zwei CREATE_ONLY), und README-Tool-Tabelle plus Contract-Tests (Tool-Zahl 21) sind nachgezogen.
-- [ ] **TOOL-16**: Unified-Search-Treffer aus Talk und Tables sind auflösbar statt `kind=url`: `provider_map`-Einträge für `talk-message` (über die mitgelieferten Attribute `conversation`/`messageId`) und `tables-search-tables` (Id steckt im URL-Fragment, nicht im Pfad); Mail-Treffer bleiben ehrlich `kind=url`, weil die Deep-Link-Auflösung ungemessen ist.
+- [x] **TOOL-15**: Das Budget-Gate ist auf die neue Messung angehoben (Regel Messung plus 15 Prozent, aufgerundet auf die nächsten 500, erwartet 17.500 bis 18.000 Bytes) mit neuer Messzeile im Skript; alle fünf neuen Tools sind schema-diätet, die Annotationen sind ehrlich (drei READ_ONLY, zwei CREATE_ONLY), und README-Tool-Tabelle plus Contract-Tests (Tool-Zahl 21) sind nachgezogen.
+- [x] **TOOL-16**: Unified-Search-Treffer aus Talk und Tables sind auflösbar statt `kind=url`: `provider_map`-Einträge für `talk-message` (über die mitgelieferten Attribute `conversation`/`messageId`) und `tables-search-tables` (Id steckt im URL-Fragment, nicht im Pfad); Mail-Treffer bleiben ehrlich `kind=url`, weil die Deep-Link-Auflösung ungemessen ist.
 
 ### Sicherheit (SEC)
 
@@ -92,8 +92,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SRV-06 | Phase 10 | Complete |
 | CTX-01 | Phase 11 | Complete |
 | CTX-02 | Phase 11 | Complete |
-| TOOL-15 | Phase 11 | Pending |
-| TOOL-16 | Phase 11 | Pending |
+| TOOL-15 | Phase 11 | Complete |
+| TOOL-16 | Phase 11 | Complete |
 | SEC-01 | Phase 10 | Complete |
 | EXAPP-07 | Phase 11 | Pending |
 

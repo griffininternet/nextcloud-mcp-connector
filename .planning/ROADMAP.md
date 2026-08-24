@@ -194,7 +194,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 11-08-PLAN.md: Abnahmeskript aus der Registry, drei Info-Befunde, drei READMEs
+- [x] 11-08-PLAN.md: Abnahmeskript aus der Registry, drei Info-Befunde, drei READMEs
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -260,7 +260,7 @@ Plans:
 | 8. Erreichbarkeits-Spike und Tables | v1.2 | 5/5 | Complete    | 2026-08-21 |
 | 9. Talk | v1.2 | 5/5 | Complete    | 2026-08-21 |
 | 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 8/8 | Complete    | 2026-08-24 |
-| 11. Bündelung, Budget und Release 0.1.6 | v1.2 | 7/10 | In Progress|  |
+| 11. Bündelung, Budget und Release 0.1.6 | v1.2 | 8/10 | In Progress|  |
 
 ## Next
 
