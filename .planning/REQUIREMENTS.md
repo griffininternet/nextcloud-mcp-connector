@@ -27,7 +27,7 @@
 
 ### Server und Erkennung (SRV)
 
-- [ ] **SRV-06**: Alle drei neuen Familien degradieren sauber, wenn die App fehlt: Talk und Tables über den bestehenden Capabilities-Weg (`spreed`, `tables`), Mail über `GET /ocs/v2.php/core/navigation/apps` (Mail hat keinen Capabilities-Eintrag), gecacht wie das bestehende Modul; ein Tool gegen eine fehlende App antwortet mit einem Fehlersatz samt konkretem nächsten Schritt, nie mit Stacktrace oder Loginseite.
+- [x] **SRV-06**: Alle drei neuen Familien degradieren sauber, wenn die App fehlt: Talk und Tables über den bestehenden Capabilities-Weg (`spreed`, `tables`), Mail über `GET /ocs/v2.php/core/navigation/apps` (Mail hat keinen Capabilities-Eintrag), gecacht wie das bestehende Modul; ein Tool gegen eine fehlende App antwortet mit einem Fehlersatz samt konkretem nächsten Schritt, nie mit Stacktrace oder Loginseite.
 
 ### prepare_context (CTX)
 
@@ -89,7 +89,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MAIL-02 | Phase 10 | Complete |
 | MAIL-03 | Phase 10 | Complete |
 | MAIL-04 | Phase 8 | Complete |
-| SRV-06 | Phase 10 | Pending |
+| SRV-06 | Phase 10 | Complete |
 | CTX-01 | Phase 11 | Pending |
 | CTX-02 | Phase 11 | Pending |
 | TOOL-15 | Phase 11 | Pending |
