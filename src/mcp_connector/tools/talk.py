@@ -528,6 +528,34 @@ def _message(raw: dict[str, Any]) -> dict[str, Any]:
     return entry
 
 
+def one_message(window: list[dict[str, Any]], message_id: str) -> dict[str, Any] | None:
+    """One named message out of a context window, or ``None`` if it cannot be read.
+
+    ``None`` has two reasons, and they are named separately here rather than distinguished in
+    the return value. Either the message is not in the window at all, because it was deleted,
+    expired or never existed; or it stands in the window with a type outside
+    :data:`KEPT_TYPES`, which is a system message this server does not pass on as content.
+    Two reasons, one return value: the sentence a caller says about it depends on what that
+    caller wants to tell a model, and both reasons end in the same next step.
+
+    **Never a neighbour.** The context route answers a window *around* the wanted message, so
+    the entry with the closest id is a different message, and handing it over would be a wrong
+    answer nobody can see (threat T-11-13). The comparison therefore runs on the ``id`` as a
+    string, which is the form the id codec hands over.
+
+    Placeholder resolution and the marker filter are deliberately **not** implemented a second
+    time here. :func:`_message` runs the text through :func:`_resolve` and :func:`_capped`, so
+    going through it inherits both; a copy of either step would be a second truth about
+    foreign text (ME-03).
+    """
+    wanted = str(message_id).strip()
+    for raw in window:
+        if str(raw.get("id")) != wanted:
+            continue
+        return _message(raw) if _is_kept(raw) else None
+    return None
+
+
 def _resolve(message: Any, parameters: Any) -> str:
     """Put the values of ``messageParameters`` into the ``{placeholder}`` text of a message.
 
