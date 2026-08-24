@@ -29,6 +29,7 @@ honest rather than a promise. The full text of a single mail travels through the
 decision).
 """
 
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -90,6 +91,71 @@ _CURSOR_HINT = (
     "with truncated that it was cut."
 )
 
+#: The filter types this connector passes on, as a **positive** list. Three things are decided
+#: here, and each of them costs an answer if it is decided the other way round.
+#:
+#: (a) The parser of the app drops an unknown type **in silence**: ``parseFilterToken``
+#: returns ``false`` and nobody reads that answer, so ``is:ungelesen`` comes back as the
+#: **unfiltered** list rather than as an error, measured on a live instance in plan 10-01 (six
+#: of six messages, exactly like no filter at all). A model cannot tell that answer from a
+#: correct one, which is why this is a positive list and not a negative one: a negative list
+#: would let the next new verb of the app through by itself.
+#:
+#: (b) ``body:`` exists in the app and is missing here on purpose. It is the one filter that
+#: leaves the database and searches over IMAP, so it costs one round trip to the mail server
+#: of the user per call. The reason stands here so the omission is not repaired later as an
+#: oversight.
+#:
+#: (c) Two properties of the app's parser are part of the documented grammar, because a caller
+#: cannot guess them: the filter is split on **spaces**, and each token is split at the
+#: **first** colon with everything after the second part falling away. A value that contains a
+#: space or a colon therefore has to be percent encoded: ``subject:Rechnung%20Mai`` is the
+#: only spelling that filters on both words, and ``subject:Rechnung Mai`` filters on
+#: ``Rechnung`` and drops ``Mai`` without saying so (measured, plan 10-01).
+#:
+#: ``tags:`` takes the **numeric tag id** and not the IMAP label. That is a measurement of
+#: plan 10-01 which corrects the research: ``tags:1`` matched one message and ``tags:$label1``
+#: matched none.
+FILTER_TYPES = frozenset({"is", "not", "from", "subject", "tags", "start", "end"})
+
+#: The two types whose value is a flag name, and the values they take. ``unread`` and ``read``
+#: are measured (plan 10-01: six hits and zero hits on the same six messages); ``starred``,
+#: ``answered`` and ``important`` are read out of the parser of the app. The three special
+#: forms of the importance classification (``is_important``, ``pi-important``, ``pi-other``)
+#: are deliberately absent: they are undocumented internals of that classification, and this
+#: connector does not pass on a filter it cannot describe in one sentence.
+_FLAG_TYPES = frozenset({"is", "not"})
+FLAG_VALUES = frozenset({"unread", "read", "starred", "answered", "important"})
+
+#: The two types whose value is a point in time, and the shape that value has to have.
+#: ``str.isdigit`` would accept a superscript two and an Arabic-Indic digit as well, and both
+#: would reach the app as text it compares against an integer column.
+_TIMESTAMP_TYPES = frozenset({"start", "end"})
+_DIGITS = re.compile(r"[0-9]+")
+
+_FILTER_HINT = (
+    "Write every condition as type:value and separate them with spaces, using one of: "
+    f"{', '.join(sorted(FILTER_TYPES))}. A value that contains a space or a colon has to be "
+    "percent encoded (subject:Rechnung%20Mai), because the Mail app splits the filter on "
+    "spaces and every token at its first colon."
+)
+
+_SECONDS_HINT = (
+    "start: and end: are compared against the integer column sent_at, so they take Unix "
+    "seconds and nothing else (start:1756000000). An ISO date is compared as text there: it "
+    "filters everything away instead of failing, and a timestamp with a time of day would be "
+    "cut at its first colon on top of that."
+)
+
+_FLAG_HINT = f"is: and not: take one of: {', '.join(sorted(FLAG_VALUES))}."
+
+#: The way out of a filter on a level that reads no messages. Refused rather than ignored, for
+#: the same reason as the cursor: an ignored parameter answers as if it had been applied.
+_FILTER_LEVEL_HINT = (
+    "Only level=messages takes a filter. Call mail_browse with level=messages and a "
+    "mailbox_id, or leave filter out."
+)
+
 
 async def browse(
     clients: NcClients,
@@ -112,7 +178,14 @@ async def browse(
     message level hands one out, so a handle on either of the other two is either a handle of
     that level or one somebody invented; answering it with the first page again would look
     like a page that happens to repeat the previous one, and a model has no way to notice
-    that its paging went in a circle (review finding IN-04).
+    that its paging went in a circle (review finding IN-04). A ``filter`` on one of those two
+    levels is refused for the same reason and in the same place: neither of them reads
+    messages, so applying it is impossible and ignoring it answers as if it had been applied.
+
+    The whole filter is checked against :data:`FILTER_TYPES` **before** the app detection,
+    which puts the most valuable refusal of this family at zero requests. The app would take a
+    filter with a typo, drop the token it does not understand and answer with the unfiltered
+    list, and that answer is more expensive than any error.
     """
     if level not in LEVELS:
         raise ToolError(message=f"{level!r} is not a Mail level.", hint=_LEVEL_HINT)
@@ -121,6 +194,12 @@ async def browse(
             message=f"level={level!r} has no next page, so a cursor cannot be applied here.",
             hint=_CURSOR_HINT,
         )
+    if str(filter or "").strip() and level != "messages":
+        raise ToolError(
+            message=f"level={level!r} reads no messages, so a filter cannot be applied here.",
+            hint=_FILTER_LEVEL_HINT,
+        )
+    wanted = _checked_filter(filter)
     capped = min(max(limit, 1), MAX_LIMIT)
 
     await capabilities.require_app(clients, APP)
@@ -137,7 +216,66 @@ async def browse(
     mailbox = str(mailbox_id or "").strip()
     if not mailbox:
         raise ToolError(message=f"level={level!r} needs a mailbox_id.", hint=_MAILBOX_HINT)
-    return await _messages(clients, mailbox, capped, filter, cursor)
+    return await _messages(clients, mailbox, capped, wanted, cursor)
+
+
+def _checked_filter(raw: str | None) -> str | None:
+    """The filter string, checked token by token, or ``None`` for "no filter at all".
+
+    Empty and whitespace only are a filter nobody asked for and become ``None``; the client
+    then leaves the parameter out of the URL entirely, which is what the app makes of an empty
+    string anyway, one round trip earlier and with a shorter URL.
+
+    Four refusals, and every one of them replaces a right looking answer with a sentence:
+
+    *   a token without a colon. The app drops it silently, so ``unread`` alone filters
+        nothing and reads like ``is:unread``.
+    *   a type outside :data:`FILTER_TYPES`. The message names the type that was refused and
+        the hint names the ones that work, because "invalid filter" without a list costs a
+        round trip a single sentence prevents.
+    *   an empty value. ``subject:`` reaches the app as a filter on the empty string.
+    *   an ISO value on ``start:`` or ``end:``. Those two are compared against the integer
+        column ``sent_at``, so ``start:2026-08-01`` filtered **all six** messages of the test
+        instance away rather than filtering nothing (measured, plan 10-01), and
+        ``start:2026-08-01T10:00:00Z`` would additionally be cut at its first colon. A filter
+        that quietly removes everything is the worse answer of the two.
+
+    The split is on any whitespace and not on the space alone. The app splits on spaces, so
+    this reading is one shade stricter: a tab inside a value is checked as two tokens here and
+    refused, while the app would have passed it on as one. That is the safe direction, and a
+    value with whitespace in it has to be percent encoded either way.
+    """
+    wanted = str(raw or "").strip()
+    if not wanted:
+        return None
+
+    for token in wanted.split():
+        kind, separator, value = token.partition(":")
+        if not separator:
+            raise ToolError(
+                message=f"{token!r} is not a filter condition: it carries no colon.",
+                hint=_FILTER_HINT,
+            )
+        if kind not in FILTER_TYPES:
+            raise ToolError(
+                message=f"{kind!r} is not a filter type this connector passes on.",
+                hint=_FILTER_HINT,
+            )
+        if not value:
+            raise ToolError(
+                message=f"The filter condition {token!r} has no value.", hint=_FILTER_HINT
+            )
+        if kind in _TIMESTAMP_TYPES and not _DIGITS.fullmatch(value):
+            raise ToolError(
+                message=f"{value!r} is not a Unix timestamp, so {kind}: cannot use it.",
+                hint=_SECONDS_HINT,
+            )
+        if kind in _FLAG_TYPES and value not in FLAG_VALUES:
+            raise ToolError(
+                message=f"{value!r} is not a message state this connector filters on.",
+                hint=_FLAG_HINT,
+            )
+    return wanted
 
 
 async def _accounts(clients: NcClients) -> list[dict[str, Any]]:
@@ -254,6 +392,20 @@ async def _messages(
     integer and a Unix timestamp is one.
 
     The order is the order of the app, newest first, and there is no sort parameter at all.
+
+    Two honest limits of this level, and neither of them is repaired here.
+
+    The cursor of the app filters ``sent_at <`` **strictly**. Two mails that carry the same
+    second across a page boundary therefore mean that the second one falls out, for good. The
+    project made the same decision for the half open calendar window ("the time window is
+    never corrected"), and for the same reason: a correction of our own (ask for one second
+    more and de-duplicate here) would be a second truth about the order of the app, and two
+    callers with the same window would see different lists depending on which of the two
+    truths answered them.
+
+    The app applies two filters by itself, whatever the ``filter`` parameter says: inside a
+    flagged mailbox only flagged messages, and outside the trash no deleted ones. A window of
+    this level is therefore the app's idea of that mailbox and not the raw IMAP folder.
     """
     position: int | None = None
     if cursor:
