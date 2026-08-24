@@ -1140,6 +1140,17 @@ def test_the_deploy_daemon_publishes_no_port() -> None:
     assert "ports:" not in services["appapi-harp"]
 
 
+def test_the_mail_server_publishes_no_port() -> None:
+    """T-10-01: GreenMail runs without authentication, so its reach must end at the
+    compose network. The loopback-only test above iterates over ports that ARE
+    published and passes silently for a service without any, so a later
+    `ports: ["127.0.0.1:3143:3143"]` on greenmail would slip through it; this
+    service-specific assertion is the half of the mitigation the plan asked for."""
+    services = compose_services(COMPOSE_EXAPP.read_text(encoding="utf-8"))
+    assert "greenmail" in services, f"services found: {sorted(services)}"
+    assert "ports:" not in services["greenmail"]
+
+
 def test_the_bootstrap_never_reaches_into_the_other_topology() -> None:
     """T-02-34, WR-07: the other test instance is in daily use and must survive this
     script. Naming the file is not enough, because the name used to be overridable: a
