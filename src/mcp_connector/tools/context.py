@@ -3,10 +3,10 @@
 This tool owns no data source. It composes the fan-outs that already exist, and every
 property that makes it trustworthy comes from that decision.
 
-**Three ways, by the kind of question.** Content comes from the unified search, appointments
-from the calendar with a computed window, and what is waiting from the conversation list of
-Talk: "this week" is not a full text question, and a bundle without the next appointments
-misses its purpose (D-52).
+**Four ways, by the kind of question.** Content comes from the unified search, appointments
+from the calendar with a computed window, what is waiting from the conversation list of
+Talk, and how much is unread from the mailbox list of Mail: "this week" is not a full text
+question, and a bundle without the next appointments misses its purpose (D-52).
 
 **The Talk digest costs one request.** The conversation list carries ``unread``,
 ``unread_mention``, ``unread_mention_direct``, ``last_activity`` and the preview of the last
@@ -15,11 +15,28 @@ conversations (CTX-01). It is asked through :mod:`mcp_connector.tools.talk` and 
 client of its own, which is what makes it inherit the marker filter and the sorting rule of
 that module instead of building either a second time.
 
-**The key ``talk`` is always there, and always a list.** A key that appears only sometimes
-would depend on foreign text. An empty list without an entry under ``degraded`` means
-"nothing is waiting"; an empty list with one means "this could not be read". The two
-statements stay distinguishable, because a model that reads the first where the second is
-true reports that there are no messages.
+**The mail counters cost one account list plus N mailbox lists.** Literally: 1 account list
+plus N mailbox lists (N at most :data:`MAX_MAIL_ACCOUNTS`), plus up to two detection requests
+on a cold cache, because ``mail_tools.browse`` asks ``capabilities.require_app("mail")``
+first and Mail is the one optional app that is recognised through the navigation of the
+signed in account instead of through the capabilities document. Both detection answers live
+in one cache entry for ``capabilities.TTL_SECONDS`` seconds, so a second bundle inside a
+minute pays neither of them again. This sentence is measured and not estimated, and that
+difference is the reason it is written out here rather than rounded to "a few requests".
+
+**The counters are numbers, and nothing anybody wrote.** No subject, no sender, no message
+body and no mailbox name beyond the role: a counter is what CTX-02 asks for, and a subject in
+the standard bundle would be the cheapest reach extension this project has to give away,
+foreign text from somebody who needs no account on this Nextcloud to write it. The counters
+come from the mailbox list of each account and never from the ``unread`` field of the
+navigation entry of the Mail app: that field was measured as 0 while six messages were
+unread, and while the meaning of the field stays unclear, the measurement does not.
+
+**The keys ``talk`` and ``mail`` are always there, and always lists.** A key that appears
+only sometimes would depend on foreign text. An empty list without an entry under
+``degraded`` means "nothing is waiting"; an empty list with one means "this could not be
+read". The two statements stay distinguishable, because a model that reads the first where
+the second is true reports that there are no messages.
 
 **The search is asked without a provider restriction.** Naming ``files,notes,deck`` here
 would lock out an installed Findling and every future provider, and with it the one side
@@ -63,6 +80,7 @@ from ..errors import ToolError
 from ..nextcloud import NcClients
 from . import calendar as calendar_tools
 from . import chatgpt as chatgpt_tools
+from . import mail as mail_tools
 from . import marks
 from . import search as search_tools
 from . import talk as talk_tools
@@ -114,6 +132,22 @@ MAX_DIGEST = 3
 #: the cheaper connection is the byte cut with tolerant decoding that ``talk.py`` already
 #: makes. Hence the name ``..._BYTES`` and not ``..._CHARS``: the unit is part of the promise.
 DIGEST_PREVIEW_BYTES = 200
+
+#: Own ceiling for the Mail leg, and a setting rather than a measurement, said out loud here
+#: for the same reason as at :data:`TALK_BUDGET`: plan 11-06 measures this leg on the live
+#: topology, and when it does, this comment gets a measurement line like the one at
+#: :data:`CALENDAR_BUDGET` and the number moves only together with it. Wider than the Talk
+#: budget on purpose, and the reason is the shape of the leg rather than the speed of the app:
+#: the digest is **one** request against one route, while this leg is 1 plus N, one account
+#: list plus one mailbox list per account, and N belongs to the account of a stranger.
+MAIL_BUDGET = 10.0
+
+#: How many mail accounts of an account reach the counters, and the cap is the point rather
+#: than the number: without it the wall clock of every bundle call hangs on how many mail
+#: accounts somebody else set up, and a tool whose answer time a user can extend by adding an
+#: account is a tool a client aborts. Three, like :data:`MAX_DIGEST`, and the cap writes its
+#: own ``degraded`` entry with the total, so "three" is never mistaken for "all".
+MAX_MAIL_ACCOUNTS = 3
 
 #: The three kinds this answer groups by name. Everything else lands in one bucket together,
 #: and since TOOL-16 that bucket is no longer the same thing as "cannot be read": a Talk
@@ -169,7 +203,13 @@ _QUERY_HINT = (
 
 
 async def prepare_context(clients: NcClients, query: str, detail: str = SHORT) -> dict[str, Any]:
-    """Bundle the hits and the upcoming appointments for one question."""
+    """Bundle the hits, the upcoming appointments, the digest and the counters for one question.
+
+    Four legs, four ceilings, one wall clock: the cost of the two composed legs is one request
+    for the digest and, for the counters, 1 account list plus N mailbox lists (N at most
+    :data:`MAX_MAIL_ACCOUNTS`), plus up to two detection requests on a cold cache
+    (``capabilities.TTL_SECONDS``).
+    """
     term = (query or "").strip()
     if not term:
         raise ToolError(message="The query is empty.", hint=_QUERY_HINT)
@@ -179,10 +219,11 @@ async def prepare_context(clients: NcClients, query: str, detail: str = SHORT) -
         raise ToolError(message=f"{detail!r} is not a known detail level.", hint=_DETAIL_HINT)
 
     start, end = _window()
-    search_out, calendar_out, talk_out = await asyncio.gather(
+    search_out, calendar_out, talk_out, mail_out = await asyncio.gather(
         search_tools.unified_search(clients, query=term, limit=SEARCH_LIMIT),
         _events(clients, start, end),
         _talk(clients),
+        _mail(clients),
         return_exceptions=True,
     )
 
@@ -190,11 +231,12 @@ async def prepare_context(clients: NcClients, query: str, detail: str = SHORT) -
     results = _bundle(_hits(search_out, degraded), degraded)
     events = _schedule(calendar_out, degraded)
     talk = _digest(talk_out, degraded)
+    mail = _counters(mail_out, degraded)
 
-    # The rule names the search and the calendar and no third leg, and that is a decision
-    # rather than an oversight: a bundle in which only Talk answered is not a success, and a
-    # bundle without Talk on an instance without Talk is not a failure. A leg added later
-    # belongs under ``degraded`` and not into this condition.
+    # The rule names the search and the calendar and neither of the two composed legs, and
+    # that is a decision rather than an oversight: a bundle in which only Talk answered is not
+    # a success, and a bundle without Talk or without Mail on an instance without either is
+    # not a failure. A leg added later belongs under ``degraded`` and not into this condition.
     if isinstance(search_out, BaseException) and isinstance(calendar_out, BaseException):
         # Neither source answered. An empty bundle here would be read as "there is
         # nothing", which is the one statement this situation does not support.
@@ -212,6 +254,7 @@ async def prepare_context(clients: NcClients, query: str, detail: str = SHORT) -
         "events": events,
         "results": results,
         "talk": talk,
+        "mail": mail,
     }
     if degraded:
         result["degraded"] = degraded
@@ -237,6 +280,149 @@ async def _talk(clients: NcClients) -> dict[str, Any]:
         return await talk_tools.browse(
             clients, level="conversations", limit=talk_tools.MAX_CONVERSATIONS
         )
+
+
+async def _mail(clients: NcClients) -> dict[str, Any]:
+    """The unread counters of the mail accounts, under one ceiling and through the tool layer.
+
+    The cost is 1 plus N: one account list, then one mailbox list per account, plus up to two
+    detection requests on a cold cache, because ``mail_tools.browse`` asks
+    ``capabilities.require_app("mail")`` first and Mail is recognised through the navigation of
+    the signed in account (``capabilities.TTL_SECONDS`` is how long both answers are reused).
+
+    The mailbox lists run in an inner ``gather`` under the same outer ceiling. A sequential
+    round over three accounts would be three times the time of one, and the rule of this module
+    is "wall clock equals the maximum of the parts, never their sum".
+
+    Both calls ask for ``mail_tools.MAX_LIMIT`` because both lists are capped in the envelope
+    of that tool, at 20 without a limit: an account with more than twenty folders can lose its
+    inbox when the inbox is not near the front. The account list is asked the same way for the
+    same reason, and :data:`MAX_MAIL_ACCOUNTS` is far below that ceiling, so the cut that
+    decides this answer is always this module's own and never the one of the tool layer.
+
+    ``account_id`` is explicit for every single mailbox list, never the first account of the
+    list and never a default: "the first account of the list is not the account somebody
+    meant", which is the sentence ``mail_tools._mailboxes`` refuses without one for.
+
+    What this leg does **not** ask for is the point of it: no message level, no subject, no
+    sender, no body. CTX-02 asks for numbers, and foreign text in the standard bundle is text
+    from somebody who needed no account here to write it.
+
+    The counters come from the mailbox list of every account. The ``unread`` field of the
+    navigation entry of the Mail app is **not** read and must not be: it was measured as 0
+    while six messages were unread, and a counter that reads 0 when something is waiting is
+    worse than no counter at all.
+    """
+    async with asyncio.timeout(MAIL_BUDGET):
+        listed = await mail_tools.browse(clients, level="accounts", limit=mail_tools.MAX_LIMIT)
+        # An account without a usable number is dropped rather than asked about: a mailbox
+        # list for the account 0 would be a request about an account nobody has. It is the
+        # same decision ``mail_tools._messages`` makes for an envelope without a database id.
+        accounts = [item for item in _entries(listed) if _count(item.get("id")) > 0]
+        kept = accounts[:MAX_MAIL_ACCOUNTS]
+        # The order of the app is the order of the user. Sorting here would be a statement
+        # about which of somebody's mail accounts matters more, and this module has nothing
+        # to base such a statement on.
+        boxes = await asyncio.gather(
+            *(
+                mail_tools.browse(
+                    clients,
+                    level="mailboxes",
+                    account_id=str(_count(account.get("id"))),
+                    limit=mail_tools.MAX_LIMIT,
+                )
+                for account in kept
+            )
+        )
+    return {
+        "results": [_counter(account, answer) for account, answer in zip(kept, boxes, strict=True)],
+        "total": len(accounts),
+    }
+
+
+def _counter(account: dict[str, Any], answer: dict[str, Any]) -> dict[str, Any]:
+    """One account as its number, its address and the counter of its inbox.
+
+    ``inbox_unread`` appears only when a mailbox with the inbox role is actually in the list.
+    Reporting a missing inbox as 0 would be a number that looks like a measurement and is
+    none; the missing field plus the sentence :func:`_counters` writes for it are the honest
+    pair.
+
+    The role is read with ``get`` and not with an index, because ``mail_tools._special_role``
+    answers the number zero with an empty string and leaves the field out entirely, so an
+    ``entry["special_role"]`` would raise on an ordinary mailbox without a role.
+    """
+    entry: dict[str, Any] = {
+        "account_id": _count(account.get("id")),
+        "email": str(account.get("email") or ""),
+    }
+    inbox = next(
+        (box for box in _entries(answer) if box.get("special_role") == "inbox"),
+        None,
+    )
+    if inbox is not None:
+        entry["inbox_unread"] = _count(inbox.get("unread"))
+    return entry
+
+
+def _counters(
+    outcome: dict[str, Any] | BaseException, degraded: list[dict[str, str]]
+) -> list[dict[str, Any]]:
+    """The counters of the accounts, or nothing plus one sentence about why.
+
+    A failure of this leg, and that includes an instance without Mail, is exactly one entry
+    under ``degraded`` and an empty list. The missing app arrives as a ``ToolError`` from
+    ``capabilities.require_app``, so it takes the first branch of :func:`_reason` and keeps the
+    sentence of that layer instead of getting a second one here.
+
+    An empty account list is a success with zero accounts and explicitly **not** the same
+    statement as a missing Mail app: one is answered by setting up an account in Mail, the
+    other by asking an administrator, and neither of them writes an entry that claims the
+    counters could not be read.
+
+    Two caps of this leg name themselves, both with a number: the account cap of this module,
+    and every account whose inbox is not in its mailbox list.
+    """
+    if isinstance(outcome, BaseException):
+        degraded.append({"source": "mail", "reason": _reason(outcome, "mail", MAIL_BUDGET)})
+        return []
+
+    degraded.extend(_degraded_of(outcome))
+    entries = _entries(outcome)
+    total = _count(outcome.get("total"))
+    if total > MAX_MAIL_ACCOUNTS:
+        degraded.append(
+            {
+                "source": "mail",
+                "reason": (
+                    f"Only the first {MAX_MAIL_ACCOUNTS} of {total} mail accounts are counted."
+                ),
+            }
+        )
+    for entry in entries:
+        if "inbox_unread" in entry:
+            continue
+        label = str(entry.get("email") or "") or f"#{entry.get('account_id')}"
+        degraded.append(
+            {
+                "source": "mail",
+                "reason": (
+                    f"The mail account {label} has no mailbox with the inbox role, so it "
+                    "carries no counter here."
+                ),
+            }
+        )
+    return entries
+
+
+def _entries(answer: dict[str, Any]) -> list[dict[str, Any]]:
+    """The ``results`` list of a composed answer, and an empty list for anything else.
+
+    One reader for the account level, the mailbox level and the account list of this leg: all
+    three are the same envelope, and the key is ``results`` on every level of that family.
+    """
+    raw = answer.get("results")
+    return [item for item in raw if isinstance(item, dict)] if isinstance(raw, list) else []
 
 
 def _hits(

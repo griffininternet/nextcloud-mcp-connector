@@ -38,6 +38,7 @@ from mcp_connector.nextcloud.credentials import Credentials
 from mcp_connector.tools import calendar as calendar_tools
 from mcp_connector.tools import chatgpt as chatgpt_tools
 from mcp_connector.tools import context as context_tools
+from mcp_connector.tools import mail as mail_tools
 from mcp_connector.tools import search as search_tools
 from mcp_connector.tools import talk as talk_tools
 
@@ -191,6 +192,105 @@ def talk_answer(
     return answer
 
 
+def mail_answer(
+    entries: list[dict[str, Any]],
+    level: str = "accounts",
+    truncated: bool = False,
+) -> dict[str, Any]:
+    """The envelope ``mail_browse`` answers with on the account and the mailbox level.
+
+    One shape for both levels, exactly as ``mail_tools._envelope`` builds it: ``level``,
+    ``count`` and ``results``, plus ``truncated`` when the projection had to cut.
+    """
+    answer: dict[str, Any] = {"level": level, "count": len(entries), "results": entries}
+    if truncated:
+        answer["truncated"] = True
+    return answer
+
+
+def account(identifier: int, email: str, **extra: Any) -> dict[str, Any]:
+    """One mail account in the shape ``mail_tools._account`` projects it."""
+    entry: dict[str, Any] = {"id": identifier, "email": email}
+    entry.update(extra)
+    return entry
+
+
+def mailbox(
+    identifier: int,
+    name: str,
+    *,
+    unread: int = 0,
+    role: str | None = None,
+    **extra: Any,
+) -> dict[str, Any]:
+    """One mailbox in the shape ``mail_tools._mailbox`` projects it.
+
+    ``special_role`` is left out entirely when there is none, because
+    ``mail_tools._special_role`` answers the number zero with an empty string and the
+    projection then drops the field. A fake that always carried the key would hide exactly
+    the mailbox shape the bundle has to read with ``get``.
+    """
+    entry: dict[str, Any] = {
+        "id": identifier,
+        "name": name,
+        "unread": unread,
+        "delimiter": ".",
+    }
+    if role is not None:
+        entry["special_role"] = role
+    entry.update(extra)
+    return entry
+
+
+class FakeMail:
+    """A stand in for ``mail_browse``, which the mail leg walks on two levels.
+
+    One fake for both, because one answer for both would hand the account list back as a
+    mailbox list and the test would measure a shape nothing produces: ``level="accounts"``
+    answers with the accounts, and the mailbox level with the mailboxes of the account that
+    was actually asked for. An account that is asked for and has no entry here answers with an
+    empty mailbox list, which is what an account without a readable mailbox looks like.
+
+    The barrier is only met on the account level. The mailbox calls happen after it, so
+    waiting there as well would deadlock the concurrency test against its own fake.
+    """
+
+    def __init__(
+        self,
+        accounts: list[dict[str, Any]] | None = None,
+        mailboxes: dict[str, list[dict[str, Any]]] | None = None,
+        error: BaseException | None = None,
+        hang: bool = False,
+        truncated: bool = False,
+        barrier: asyncio.Barrier | None = None,
+    ) -> None:
+        self.accounts = accounts if accounts is not None else []
+        self.mailboxes = mailboxes if mailboxes is not None else {}
+        self.error = error
+        self.hang = hang
+        self.truncated = truncated
+        self.barrier = barrier
+        self.calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+
+    async def __call__(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append((args, kwargs))
+        level = str(kwargs.get("level") or "")
+        if self.barrier is not None and level == "accounts":
+            await asyncio.wait_for(self.barrier.wait(), timeout=5)
+        if self.hang:
+            await asyncio.sleep(3600)
+        if self.error is not None:
+            raise self.error
+        if level == "accounts":
+            return mail_answer(self.accounts, truncated=self.truncated)
+        asked = str(kwargs.get("account_id") or "")
+        return mail_answer(self.mailboxes.get(asked, []), level="mailboxes")
+
+    def of(self, level: str) -> list[dict[str, Any]]:
+        """The keyword arguments of every call of one level, in the order they happened."""
+        return [kwargs for _args, kwargs in self.calls if kwargs.get("level") == level]
+
+
 class FakeCall:
     """A stand in for one of the composed tools that records how it was called."""
 
@@ -224,20 +324,24 @@ def wire(
     search: FakeCall | None = None,
     calendar: FakeCall | None = None,
     talk: FakeCall | None = None,
+    mail: FakeCall | FakeMail | None = None,
 ) -> tuple[FakeCall, FakeCall]:
     """Replace the composed tools, so these tests never touch the network.
 
-    The Talk leg gets a valid empty answer by default, so every test written before it keeps
-    its meaning: a bundle with nothing waiting and nothing degraded. Only two fakes are
-    returned, and the third is handed in by the tests that want to look at it; that keeps the
-    two element unpacking of every test above intact.
+    The Talk and the Mail leg get a valid empty answer by default, so every test written
+    before either of them keeps its meaning: a bundle with nothing waiting, no mail account
+    and nothing degraded. Only two fakes are returned, and the other two are handed in by the
+    tests that want to look at them; that keeps the two element unpacking of every test above
+    intact.
     """
     search = search if search is not None else FakeCall(search_answer([FILE_HIT]))
     calendar = calendar if calendar is not None else FakeCall(calendar_answer([]))
     talk = talk if talk is not None else FakeCall(talk_answer([]))
+    mail = mail if mail is not None else FakeCall(mail_answer([]))
     monkeypatch.setattr(search_tools, "unified_search", search)
     monkeypatch.setattr(calendar_tools, "list_events", calendar)
     monkeypatch.setattr(talk_tools, "browse", talk)
+    monkeypatch.setattr(mail_tools, "browse", mail)
     return search, calendar
 
 
@@ -307,11 +411,11 @@ async def test_the_search_is_asked_without_any_provider_restriction(
 
 
 @pytest.mark.anyio
-async def test_all_three_sources_run_at_the_same_time(
+async def test_all_four_sources_run_at_the_same_time(
     clients: NcClients, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Each fake waits for the other two: a sequential implementation cannot finish this."""
-    barrier = asyncio.Barrier(3)
+    """Each fake waits for the other three: a sequential implementation cannot finish this."""
+    barrier = asyncio.Barrier(4)
 
     async def fake_search(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
         await asyncio.wait_for(barrier.wait(), timeout=5)
@@ -328,6 +432,15 @@ async def test_all_three_sources_run_at_the_same_time(
     monkeypatch.setattr(search_tools, "unified_search", fake_search)
     monkeypatch.setattr(calendar_tools, "list_events", fake_calendar)
     monkeypatch.setattr(talk_tools, "browse", fake_talk)
+    monkeypatch.setattr(
+        mail_tools,
+        "browse",
+        FakeMail(
+            accounts=[account(7, "büro@example.test")],
+            mailboxes={"7": [mailbox(1, "INBOX", unread=6, role="inbox")]},
+            barrier=barrier,
+        ),
+    )
 
     result = await asyncio.wait_for(
         context_tools.prepare_context(clients, query="budget"), timeout=10
@@ -336,7 +449,8 @@ async def test_all_three_sources_run_at_the_same_time(
     assert [entry["id"] for entry in result["results"]["file"]] == ["file:4711"]
     assert [item["summary"] for item in result["events"]] == ["Standup"]
     assert [item["token"] for item in result["talk"]] == ["aaaa1111"]
-    assert "degraded" not in result, "all three legs met at the barrier, so none of them fell"
+    assert [item["inbox_unread"] for item in result["mail"]] == [6]
+    assert "degraded" not in result, "all four legs met at the barrier, so none of them fell"
 
 
 @pytest.mark.anyio
@@ -924,7 +1038,7 @@ def _without(value: Any, keys: tuple[str, ...]) -> Any:
 
 #: The keys of the answer that are there in every situation. ``degraded`` is deliberately not
 #: among them: it costs no bytes when nothing failed, and that contract is older than this leg.
-ANSWER_KEYS = {"query", "window", "events", "results", "talk", "note"}
+ANSWER_KEYS = {"query", "window", "events", "results", "talk", "mail", "note"}
 
 
 def test_the_three_numbers_of_the_digest_are_the_ones_ctx_01_asks_for() -> None:
