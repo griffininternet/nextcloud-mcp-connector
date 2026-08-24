@@ -32,10 +32,35 @@ from mcp_connector.server import mcp
 #   Measurement 2026-08-24, all 21 curated tools registered (mail_browse of phase 10): 15736
 #               bytes
 #   Budget      15736 + 15 percent = 18096, rounded up to the next 500 = 18500 bytes
-#   Zwischenstand: this raise is an intermediate one, and it is marked as such on purpose.
-#               TOOL-15 in phase 11 re-anchors the gate on the final measurement of that
-#               phase, so nobody raises an already generous number a second time out of
-#               habit (trap 14 of the phase 10 research).
+#               An intermediate raise, marked as such when it was made; the line below is
+#               the one that replaced it.
+#
+#   Measurement 2026-08-24, same 21 tools, schema diet of the five tools of milestone v1.2
+#               plus the more honest description of prepare_context: 15612 bytes
+#   Budget      15612 + 15 percent = 17953, rounded up to the next 500 = 18000 bytes
+#   Anchored    on a measurement of phase 11, so this number is no longer an intermediate
+#               one and there is no pending task left to point at. The way it got there is
+#               the whole point: the diet of the five tools took 157 bytes off the surface
+#               (mail_browse 1377 -> 1331, talk_browse 886 -> 858, tables_create_row
+#               780 -> 746, tables_browse 772 -> 751, talk_send 648 -> 620), and 33 of the
+#               15769 it started from had just been spent on naming Talk and Mail in the
+#               description of prepare_context. Anchoring on the old 15736 would have
+#               written 18500 a second time and called it work.
+#
+#               17500 was the other number TOOL-15 would have accepted, and it was not
+#               reached: it needs 15217 bytes, so 395 more than the diet found. The five
+#               tools carry 1729 bytes of prose inside 4306 bytes of tool, the rest being
+#               names, types, enums, defaults and the ``title`` keys pydantic generates. 395
+#               bytes is 23 percent of every word those five tools say, and the words left
+#               are the filter grammar, the two "a timeout does not mean nothing was
+#               written" warnings and the sentence that says mail is read only. Each of
+#               those is information a model has nowhere else, so the cut stopped here and
+#               the gate says 18000 instead of a number bought with an omission. The
+#               untaken cut worth naming is the ``title`` key of every schema property
+#               (~140 bytes in mail_browse alone, over a kilobyte across the surface): it
+#               is pure derivation of the parameter name, but removing it changes how every
+#               one of the 21 schemas is generated, which is a decision of its own and not
+#               a diet of five descriptions.
 #
 # The older lines stay where they are: a regression is only attributable when the number it
 # regressed from is still readable. The first 2026-08-21 line is the tables_browse and
@@ -47,13 +72,15 @@ from mcp_connector.server import mcp
 # model reads which level that is; it left 642 bytes of headroom. The fourth is the single
 # ``mail_browse`` of phase 10 at 1377 bytes, which is exactly the twenty-first tool the
 # paragraph below was written for: it tripped the gate at 15000, and the gate did its job.
+# The fifth is the first line of this file that lowers the number instead of raising it, and
+# it is the only kind of line that needs no justification beyond its own measurement.
 #
 # The headroom is for wording, not for a new tool: at ~4 bytes per token the whole surface
 # costs roughly 3.9k tokens in every single session of every client. A twenty-second tool or a
 # description that grows into a paragraph is supposed to trip this gate, so the decision
 # gets made on purpose instead of by accident. Raising the number is allowed, but only
 # together with a new measurement line above, so a regression stays attributable.
-BUDGET_BYTES = 18_500
+BUDGET_BYTES = 18_000
 
 # The second claim, and the one that actually reports a regression. A total with headroom
 # says nothing about a single tool: today's outlier ``calendar_create_event`` sits at 1351
@@ -75,6 +102,18 @@ BUDGET_BYTES = 18_500
 #   deliberately so. This ceiling is the real guard, so a tool that reaches it gets a shorter
 #   description and never a higher limit (A5 of the phase 10 research). ``mail_browse`` was
 #   1585 bytes when it was first written and it was cut, not exempted.
+#
+#   Measurement 2026-08-24 after the diet of plan 11-07: unchanged at 1400 on purpose, and
+#   the reason is arithmetic rather than habit. ``mail_browse`` fell to 1331 and is not the
+#   outlier any more; the biggest tool is ``calendar_create_event`` at 1351, a tool of phase 1
+#   that this milestone never touched. The rule this file uses for the total (measurement plus
+#   15 percent) would give 1553 here and therefore a raise, which the paragraph above forbids,
+#   so it does not apply to a ceiling that is already tighter than it: 1400 leaves 49 bytes
+#   over the biggest tool, 3.6 percent, against the 15 percent the total gets. The only
+#   lowering with any room in it would land just over 1351 and would freeze the wording of
+#   ``calendar_create_event`` in a phase that is not about it: the next honest sentence there
+#   would trip a per tool alarm while the total still has 2388 bytes free, which is a gate
+#   firing for the wrong reason. So the number stays, and it stays armed.
 MAX_TOOL_BYTES = 1400
 
 

@@ -14,9 +14,12 @@ the same door, and with them every other frozen number of this file, which is wh
 named in one place.
 """
 
+import importlib.util
 import re
+import sys
 from collections.abc import Iterator
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import pytest
@@ -514,6 +517,56 @@ async def test_the_curated_set_is_complete_and_only_the_chatgpt_profile_has_a_sc
     with_schema = {name for name, tool in tools.items() if tool.output_schema is not None}
     assert with_schema == STRUCTURED_TOOLS, (
         "an output schema exists exactly where a client reads it (D-14)"
+    )
+
+
+def _load_budget_gate() -> ModuleType:
+    """The CI byte gate, loaded from ``scripts/`` by path.
+
+    The same way ``tests/integration/test_oauth_flow_exapp.py`` loads its script half: by
+    path, so ``scripts/`` stays off ``sys.path`` and the dependency of this file is visible
+    in one place.
+    """
+    path = Path(__file__).resolve().parents[2] / "scripts" / "check_tool_budget.py"
+    spec = importlib.util.spec_from_file_location("check_tool_budget", path)
+    if spec is None or spec.loader is None:  # pragma: no cover - a missing gate is a red test
+        raise RuntimeError(f"{path} could not be loaded")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.anyio
+async def test_the_byte_gate_counts_exactly_as_many_tools_as_this_file_freezes() -> None:
+    """T-11-50: a tool can be registered and frozen nowhere, and then no gate holds it.
+
+    The two gates of this repository count differently on purpose. This file compares a set
+    of names against the registry, and ``scripts/check_tool_budget.py`` counts whatever the
+    registry answers and weighs it. A tool that reaches the second count without entering the
+    first slips past both: the set comparison never hears about it, and the byte gate measures
+    it without complaint as long as the total still fits under the budget. So the two numbers
+    are asserted to be one number, and the gate's own verdict is asserted next to it, because
+    the gate is the half of the pair that CI runs outside pytest.
+    """
+    gate = _load_budget_gate()
+
+    async with Client(mcp, raise_exceptions=True) as client:
+        result = await client.list_tools()
+
+    # The expression the gate uses, on the payload shape the gate builds. ``main`` returns an
+    # exit code and not a count, so the count is taken from the same path rather than from a
+    # second one that could drift away from it.
+    payload = result.model_dump(by_alias=True, exclude_none=True, mode="json")
+    counted = len(payload["tools"])
+
+    assert counted == len(EXPECTED_TOOLS), (
+        f"the byte gate measures {counted} tools, {len(EXPECTED_TOOLS)} are frozen here"
+    )
+    assert {tool["name"] for tool in payload["tools"]} == EXPECTED_TOOLS
+    assert await gate.main() == 0, (
+        "the surface is over its byte budget or one tool is over the per tool ceiling; "
+        "the gate prints which one"
     )
 
 
