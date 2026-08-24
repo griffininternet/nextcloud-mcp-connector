@@ -1,8 +1,9 @@
 """The markers this server writes into a text, and the filter that keeps them its own.
 
-Two answers of this package carry a sentence about themselves inside the text a document
-fills: ``chatgpt.fetch`` says that a file was cut and where to continue, and the excerpt of
-``context.prepare_context`` says that it is a preview of a longer document. Both are in
+Three answers of this package carry a sentence about themselves inside the text a document
+fills: ``chatgpt.fetch`` says that a file was cut and where to continue, the excerpt of
+``context.prepare_context`` says that it is a preview of a longer document, and a fetched
+mail says that it was cut and that there is nothing to continue it with. All three are in
 band signalling, and that is a deliberate trade: a model that reads only ``text`` has to be
 able to tell a whole document from the beginning of one, and the ChatGPT contract has no
 field for it.
@@ -27,8 +28,8 @@ was deliberately not chosen (owner decision 2026-08-20), because it changes the 
 in the text on purpose. This module is the interim step: the response schema of both tools
 stays exactly as it was.
 
-Both constants live here rather than in the two modules that use them, because a second
-copy of a sequence is a second chance for the filter to miss one of them. The two modules
+All three constants live here rather than in the modules that use them, because a second
+copy of a sequence is a second chance for the filter to miss one of them. Those modules
 re-export them under their established names.
 """
 
@@ -42,14 +43,25 @@ EXCERPT_TRUNCATION = "[excerpt truncated; call fetch with this id for the full t
 #: the sentence, because it is what a caller needs to continue.
 TRUNCATION_NOTE = "[truncated here; call files_read with offset {offset} to continue]"
 
+#: A cut with nothing behind it, for a text that exists only as the one answer that carried
+#: it: a mail. The two markers above are both untrue there. ``TRUNCATION_NOTE`` sends a model
+#: to ``files_read`` with an offset a message does not have, and ``EXCERPT_TRUNCATION`` sends
+#: it to ``fetch``, which is the very call that just did the cutting. One promises an API that
+#: does not exist, the other a loop, so this one names no tool and no offset and says the only
+#: thing that is true: this is where the text ends and no second call brings the rest.
+FINAL_TRUNCATION = "[truncated here; the rest was not returned and there is no way to continue]"
+
 _HEAD, _TAIL = TRUNCATION_NOTE.split("{offset}")
 
 #: One pattern per marker. The note is matched by its shape and not by one value: a forged
 #: copy carries whatever offset its author chose, so a filter that only knew the number this
-#: server would have written would remove none of them.
+#: server would have written would remove none of them. A marker without a pattern here is
+#: exactly the attack this module exists against (ME-03), and a mail is the cheapest place to
+#: mount it, because every stranger is allowed to write one.
 _PATTERNS = (
     re.compile(re.escape(EXCERPT_TRUNCATION)),
     re.compile(re.escape(_HEAD) + r"\d+" + re.escape(_TAIL)),
+    re.compile(re.escape(FINAL_TRUNCATION)),
 )
 
 
