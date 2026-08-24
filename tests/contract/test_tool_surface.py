@@ -459,6 +459,12 @@ async def test_prepare_context_is_listed_as_a_bundling_read() -> None:
     The description carries the D-57 sentence for the same reason the unverified client
     callout exists in the consent page: the bundle lifts text other people wrote into the
     context of an assistant, and the client deserves to know that before it calls.
+
+    Since phase 11 the enumeration itself is a contract as well. The bundle carries a Talk
+    digest and Mail counters, and a description that names neither is an untruth in a schema
+    rather than a wording detail: it is the only place a client learns that "what is waiting"
+    is part of this one call. A gate instead of a reminder, because the enumeration is exactly
+    the line that gets forgotten when the sixth source arrives.
     """
     async with Client(mcp, raise_exceptions=True) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
@@ -472,9 +478,14 @@ async def test_prepare_context_is_listed_as_a_bundling_read() -> None:
     assert annotations.open_world_hint is False
     assert tool.output_schema is None, "structured_output=False (schema diet)"
 
-    assert "third parties" in (tool.description or ""), (
+    description = tool.description or ""
+    assert "third parties" in description, (
         "D-57: the client is told that the bundle can contain content written by others"
     )
+    for source in ("talk", "mail"):
+        assert source in description.lower(), (
+            f"the enumeration names every source the bundle carries, {source} included"
+        )
 
     schema = tool.input_schema
     assert set(schema.get("required", [])) >= {"query"}
