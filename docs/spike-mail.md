@@ -100,6 +100,39 @@ SMTP-Hostnamen, Kontonamen und die Mailadresse eines echten Kontos.
 
 ## Replaceability
 
+### Korrektur K1 (nachgetragen am 2026-08-24): die vier benutzten Wege sind deklariert
+
+Der Rest dieses Abschnitts ist am 2026-08-21 unter einer Prämisse geschrieben worden, die
+sich in der Recherche zu Phase 10 als zu eng erwiesen hat, und die Korrektur steht deshalb
+vorne und nicht in einer Fussnote.
+
+Die mit der App ausgelieferte `openapi.json` von Mail 5.11.1 (im App-Verzeichnis der
+laufenden Instanz) deklariert **sieben** OCS-Routen, davon vier lesende, und diese vier decken
+alle drei Leseebenen plus den Volltext ab. Sie sind die Wege, die Phase 10 benutzt:
+
+```
+GET /ocs/v2.php/apps/mail/account/list
+GET /ocs/v2.php/apps/mail/ocs/mailboxes?accountId=<int>
+GET /ocs/v2.php/apps/mail/ocs/mailboxes/{mailboxId}/messages?limit=..&view=singleton[&filter=..][&cursor=..]
+GET /ocs/v2.php/apps/mail/message/{id}
+```
+
+Die drei `SCOPE_IGNORE`-Routen aus der Stufe-1-Messung werden damit **nicht** benutzt, und ein
+Rückfall auf sie wäre keine Notlösung, sondern eine Verschlechterung: `/api/messages` ist eine
+Resource-Route, auf der POST anlegt, PUT ändert und DELETE löscht, alles auf demselben Pfad,
+den ein Lesen benutzt. Ein pfadbasiertes Schreibverbot, wie es das Gate dieses Projekts
+formuliert, ist dort nicht mehr aussprechbar. Auf den deklarierten Wegen dagegen ist der
+Sendeweg ein eigener Pfad (`POST /ocs/v2.php/apps/mail/message/send`), gegen den sich ein
+Verbot formulieren und gegenprüfen lässt.
+
+Der Satz weiter unten, die OCS-Volltextroute sei "als einzige der vier eine deklarierte
+Route", bleibt stehen und ist **für die vier in Stufe 1 gemessenen Wege richtig**: von diesen
+vier war sie die einzige deklarierte. **Für die Familie ist er falsch**, weil Stufe 1 die drei
+`ocs`-Listenrouten gar nicht angefasst hat. Er wird deshalb gekennzeichnet und nicht gelöscht:
+das Protokoll eines Laufs bleibt, wie es aufgeschrieben wurde.
+
+### Der Stand vom 2026-08-21
+
 Die drei Listen-Routen `/api/accounts`, `/api/mailboxes` und `/api/messages` tragen auf
 Klassenebene `#[OpenAPI(scope: OpenAPI::SCOPE_IGNORE)]`. Sie sind damit keine zugesagte API,
 sondern das Innenleben des Mail-Frontends: eine Mail-Fassung darf sie ohne Ankündigung ändern
@@ -108,13 +141,16 @@ oder entfernen. Was Phase 10 darauf baut, muss ersetzbar bleiben.
 Der Ausweg ist benannt und nicht erst zu erfinden: Discovery über den Unified-Search-Provider
 `mail` plus die OCS-Volltextroute `GET /ocs/v2.php/apps/mail/message/{id}`, die als einzige der
 vier eine deklarierte Route ist und in dieser Messung 404 im OCS-Envelope geliefert hat, also
-antwortenden App-Code.
+antwortenden App-Code. (Genau dieser Halbsatz ist der oben gekennzeichnete: richtig für die
+vier gemessenen Wege, falsch für die Familie.)
 
 Dieser Hinweis gehört ein zweites Mal in das künftige
 `src/mcp_connector/nextcloud/clients/mail.py`, und zwar in dessen Modul-Docstring. Phase 10
 übernimmt das ausdrücklich: in Phase 8 existiert kein Produktionscode, der Mail-Routen
 aufruft, deshalb steht der Hinweis heute im Modul-Docstring von
-`tests/integration/test_exapp_mail_reach.py`.
+`tests/integration/test_exapp_mail_reach.py`. Der Hinweis ändert dabei seine Richtung: er sagt
+nicht mehr "unser Rückgrat ist unsicher", sondern "die unsichere Variante ist bewusst nicht
+genommen worden, und hier steht warum".
 
 ## Eskalationsregel und Stufe 2
 
@@ -141,15 +177,220 @@ Reichweite ohne Gegenwert (T-08-05). Danach wird das Spike-Konto auf Host `green
 3143 und `imapSslMode none` umgestellt, ein Testmail über SMTP 3025 eingeliefert,
 `occ mail:account:sync <id> -f` gerufen und die Messung wiederholt.
 
-Alle vier Messzeilen sind eindeutig, deshalb bleibt `compose.exapp.yml` unverändert und der
-GreenMail-Block oben ist eine Vorlage und kein eingebauter Dienst. Stufe 2 ist damit ein
-benannter, ausgeklammerter Folgeschritt für Phase 10: sie liefert nicht die Erreichbarkeit,
-die hier schon belegt ist, sondern die Envelope- und Volltextformen, die Phase 10 sonst
-annehmen müsste.
+Alle vier Messzeilen sind eindeutig. Die Eskalationsregel hat Stufe 2 also **nicht**
+ausgelöst.
+
+### Stufe 2 ist trotzdem ausgeführt worden, am 2026-08-24
+
+Der Auslöser war ein anderer als der oben beschriebene. Phase 10 baut Werkzeuge auf den
+Feldformen dieser Antworten auf, und MAIL-03 verlangt wörtlich "dokumentiert wie getestet".
+Vier Annahmen der Phasenrecherche (A1 bis A4 in
+`.planning/phases/10-mail-strikt-lesend-und-die-trifecta-grenze/10-RESEARCH.md`) sind ohne
+echte IMAP-Daten nicht entscheidbar: die Wertemenge von `specialRole`, das Füllverhalten von
+`previewText`, die Länge einer gewandelten HTML-Mail und das Verhalten der Filtergrammatik.
+Plan 10-01 hat Stufe 2 deshalb als ersten, blockierenden Schritt der Phase ausgeführt, damit
+diese vier Zahlen vor dem Bau feststehen und nicht erst im Live-Lauf am Phasenende auffallen.
+
+Der Dienst `greenmail` steht seitdem in `compose.exapp.yml`, das Konto von alice zeigt auf
+`greenmail:3143`, und `scripts/bootstrap_exapp.sh` liefert sechs Testmails über SMTP 3025 ein
+und ruft danach `occ mail:account:sync <id> -f`. Zwei Abweichungen von der Vorlage oben, beide
+gemessen und nicht gewählt: das Passwort wird aus `NC_EXAPP_ALICE_IMAP_PASSWORD` interpoliert,
+weil sonst zwei Dateien dieselbe Zeichenkette getrennt pflegen müssten, und der
+`networks`-Schlüssel entfällt, weil `nc-mcp-exapp-net` in dieser Datei der Name des
+`default`-Netzes ist und eine zweite Nennung als undefiniertes Netz abgelehnt würde.
+
+**Warum hier Feldwerte stehen dürfen und in Stufe 1 nicht:** die Stufe-1-Kontoantwort trug die
+Mailadresse, den Kontonamen und die IMAP- und SMTP-Hostnamen eines echten Kontos, deshalb die
+Kappung auf 120 Zeichen (T-08-01). Alle Adressen unten liegen unter `example.test`, alle
+Inhalte sind von `scripts/bootstrap_exapp.sh` erfunden, und die Postfächer leben in einem
+Dienst, der alles im Arbeitsspeicher hält. Ein `APP_SECRET` und jeder Header, der es trägt,
+erscheint auch hier nirgends.
+
+Aufrufweg aller Zeilen unten: reine AppAPI-Impersonation gegen `http://127.0.0.1:8081`, also
+`AUTHORIZATION-APP-API` mit base64 von `alice:<APP_SECRET>` plus `EX-APP-ID` und
+`EX-APP-VERSION`, kein App-Passwort im Prozess. Nextcloud 34.0.3 (Build 34.0.3.2), Mail 5.11.1,
+GreenMail 2.1.12.
+
+#### A1: die Wertemenge von `specialRole`
+
+`GET /ocs/v2.php/apps/mail/ocs/mailboxes?accountId=4` antwortet 200 mit einem Postfach:
+
+| Feld | gemessener Wert | Typ |
+|------|-----------------|-----|
+| `databaseId` | `3` | int |
+| `name` | `INBOX` | str |
+| `displayName` | `INBOX` | str |
+| `specialRole` | `inbox` | **str**, nicht int |
+| `specialUse` | `['inbox']` | Liste |
+| `unread` | `6` | int |
+| `delimiter` | `.` | str |
+
+Vollständige Feldnamen der Antwort: `accountId, attributes, cacheBuster, databaseId,
+delimiter, displayName, id, mailboxes, myAcls, name, shared, specialRole, specialUse,
+syncInBackground, unread`.
+
+`specialRole` ist also der Kleinschreibungs-Special-Use ohne Backslash, wie A1 vermutet hat.
+Die Zahl 0 als Alternative ist an dieser Instanz nicht aufgetreten, weil GreenMail nur eine
+INBOX anlegt; ein Postfach ohne Special-Use ist hier nicht gemessen und bleibt die aus
+`getSpecialUseParsed()[0] ?? 0` gelesene Möglichkeit. Ein Werkzeug muss deshalb beide Typen
+vertragen. Der Vorher-Zustand dieser Zeile war die Antwort 500 mit `meta.statuscode` 996
+(Korrektur K6), solange das Konto auf einen Host zeigte, der nicht antwortet.
+
+#### A2: `previewText`
+
+`GET /ocs/v2.php/apps/mail/ocs/mailboxes/3/messages?limit=10&view=singleton` antwortet 200 mit
+sechs Nachrichten. `previewText` ist bei **allen sechs gesetzt und nie `null`**, aber bei der
+Mail ohne Textkörper ist es die leere Zeichenkette:
+
+| Nachricht | `previewText` gesetzt | Länge in Zeichen | Länge in Bytes |
+|-----------|-----------------------|------------------|----------------|
+| Textmail mit Umlauten | ja | 229 | 236 |
+| Newsletter, 45 KB HTML | ja | 251 | 255 |
+| Grosser Newsletter, 400 KB HTML | ja | 251 | 255 |
+| `Rechnung` | ja | 41 | 41 |
+| `Rechnung Mai` | ja | 38 | 39 |
+| Mail ohne Body, nur Anhang | ja, leer | 0 | 0 |
+
+Die App kappt selbst bei ungefähr 250 Zeichen: die beiden Newsletter, deren Text 25 KB
+beziehungsweise 229 KB lang ist, tragen beide genau 251 Zeichen Vorschau. Der Wert kommt ohne
+HTML an, Absätze sind zu Leerzeichen geworden, Fettdruck ist zu Grossschreibung geworden.
+`null` ist damit an echten Daten nicht aufgetreten; die leere Zeichenkette ist der Fall, den
+ein Werkzeug abfangen muss, und "kein Text" heisst hier "die Mail hat keinen Textkörper" und
+nicht "die Vorschau fehlt".
+
+#### A3: die Länge des Volltexts und die gewählte Byte-Kappe
+
+`GET /ocs/v2.php/apps/mail/message/{databaseId}`, alle sechs mit Status **200**. `body` ist der
+Wert, den die Route liefert; `Text` ist derselbe Körper nach der Wandlung, die Plan 10-05 baut
+(`lxml`, `script` und `style` entfernt, `text_content()`):
+
+| Nachricht | Status | `hasHtmlBody` | `body` | Text nach der Wandlung |
+|-----------|--------|---------------|--------|------------------------|
+| Textmail mit Umlauten | 200 | `false` | 243 B | 236 B |
+| Newsletter, 45 KB HTML | 200 | `true` | 48811 B | 25582 B |
+| Grosser Newsletter, 400 KB HTML | 200 | `true` | 431379 B | 228894 B |
+| `Rechnung` | 200 | `false` | 41 B | 41 B |
+| `Rechnung Mai` | 200 | `false` | 39 B | 39 B |
+| Mail ohne Body, nur Anhang | 200 | `false` | 0 B | 0 B |
+
+Die vier Vertrauens-Signale, die MAIL-02 verlangt, sind in jeder der sechs Antworten vorhanden:
+`isSenderTrusted` (`false`), `hasDkimSignature` (`false`), `phishingDetails` (Objekt mit
+`warning: false` und drei bis vier `checks`) und `smime` (`isSigned`, `signatureIsValid: null`,
+`isEncrypted`). `dkimValid` **fehlt in allen sechs Antworten**, wie die Recherche vorhergesagt
+hat: der Wert kommt aus `dkimService->getCached`, und ohne gecachtes Prüfergebnis ist das Feld
+gar nicht da. Ein Werkzeug muss "fehlt" als "nicht geprüft" lesen und nicht als "ungültig".
+
+Korrektur K2 ist an der Textmail belegt. Ihr `body` bei `hasHtmlBody: false`:
+
+```
+Moin,\n\nGrüße aus Hamburg. Die Maße des Regals sind 80 x 200 cm.\nDer Preis liegt bei 30
+Euro &amp; Versand, die Straße kennst du ja.\nDetails: https://example.test/regal?groesse=
+80x200\nEin spitzes Zeichen: 5 &lt; 7.\n\nViele Grüße\nDas Büro\n
+```
+
+`&amp;` und `&lt;` stehen dort, obwohl die Mail kein HTML enthält und `hasHtmlBody` falsch ist.
+Eine Wandlung, die an `hasHtmlBody` hängt, liefert diese Entities also unverändert an das
+Modell. Die Umlaute kommen dagegen roh an, und die URL ist nicht zu einem `a`-Element geworden.
+
+**Die Byte-Kappe des Volltexts: 32 KiB, also 32768 Bytes.** Die Begründung ist die Zeile
+darüber und nicht ein Gefühl. Der Startwert der Recherche war die Grössenordnung 16 KiB; der
+gemessene Newsletter in realistischer Grösse ergibt nach der Wandlung 25582 Bytes und wäre bei
+16 KiB gekappt worden, obwohl er der Normalfall ist, den die Familie tragen soll. 32 KiB lässt
+ihn ungekappt durch und kappt den 400-KB-Fall auf gut ein Siebtel. Nach oben ist die Grenze
+ebenso begründet: 512 KiB, die heutige Datei-Grenze `MAX_TEXT_BYTES`, wären 229 KB Fliesstext
+in einem Modellkontext, also genau der Totalschaden, gegen den die Kappe existiert. Die Zahl
+wird hier nur entschieden; gesetzt wird sie in Plan 10-05, als eigene Konstante und mit einer
+Markierung, die nur bei echter Kappung erscheint.
+
+Ein Nebenbefund zur Grössenordnung: der gemessene Newsletter ist textdicht (52 Prozent des
+HTML sind Text). Ein echter Werbe-Newsletter mit Tabellenlayout und Inline-Styles liegt
+deutlich darunter, seine gewandelte Länge also auch. 32 KiB ist damit eine obere Abschätzung
+und keine knappe.
+
+#### A4: die Filtergrammatik, zwölf Läufe an echten Nachrichten
+
+Alle Läufe gegen `GET /ocs/v2.php/apps/mail/ocs/mailboxes/3/messages?limit=50&view=singleton`,
+der Filterwert URL-kodiert im Parameter `filter`. Sechs Nachrichten liegen im Postfach, alle
+ungelesen, zwei tragen `Rechnung` im Betreff, eine trägt den IMAP-Keyword `$label1`.
+
+| Filter | Treffer | Bedeutung |
+|--------|---------|-----------|
+| (kein Filter) | 6 | die Grundlinie |
+| `is:unread` | 6 | wirkt, alle sechs sind ungelesen |
+| `is:read` | 0 | die Gegenprobe zu `is:unread` |
+| `not:unread` | 0 | die Invertierung wirkt |
+| `from:alice` | 0 | `from:` liest den Absender, nicht den Empfänger |
+| `from:buchhaltung` | 2 | Teilstring des Absenders genügt |
+| `subject:Rechnung` | 2 | Teilstring, `Rechnung` und `Rechnung Mai` |
+| `subject:Rechnung%20Mai` | 1 | **der einzige Weg zu einem Wert mit Leerzeichen** |
+| `subject:Rechnung Mai` | 2 | **stille Verwerfung**: `Mai` hat keinen Doppelpunkt und fällt weg |
+| `start:1787575636` | 6 | Unix-Sekunden wirken |
+| `end:1000000000` | 0 | Unix-Sekunden wirken auch in die andere Richtung |
+| `start:2026-08-01` | **0** | der ISO-Wert filtert alles weg |
+| `tags:1` | 1 | **`tags:` erwartet die Tag-Id, nicht das Label** |
+| `tags:$label1` | 0 | das IMAP-Label als Wert trifft nichts |
+| `is:ungelesen` | 6 | **stille Verwerfung**: der Tippfehler liefert die ungefilterte Liste |
+
+Drei dieser Zeilen sind für die Werkzeug-Ebene entscheidend:
+
+1. `is:ungelesen` liefert **dieselben sechs Treffer wie kein Filter**. Ein Tippfehler erzeugt
+   also eine Antwort, die richtig aussieht und falsch ist, und das Modell kann diesen Fehler
+   nicht erkennen. Das ist der Beleg für die Positivliste, die MAIL-03 verlangt.
+2. `subject:Rechnung Mai` liefert zwei Treffer statt einem: das zweite Wort wird stillschweigend
+   verworfen. Ein Werkzeug muss den Wert kodieren oder die Eingabe ablehnen.
+3. `start:2026-08-01` liefert **null** Treffer, nicht "praktisch alles", wie die Recherche unter
+   K4 vermutet hatte. Der Wert wird als Zeichenkette gegen die Integer-Spalte `sent_at`
+   verglichen, und `'1787575636' >= '2026-08-01'` ist im Zeichenkettenvergleich falsch. Die
+   Folge ist dieselbe, nur schärfer: ein ISO-Datum gehört abgelehnt, nicht durchgereicht.
+
+Und ein Befund, der in der Recherche noch anders stand: `tags:` nimmt die **numerische Id** des
+Tags, nicht sein IMAP-Label. `MessageMapper` verbindet `mail_message_tags` und vergleicht
+`tags.tag_id` mit den Werten des Filters. Die Nachricht mit dem Keyword `$label1` trägt in der
+Antwort das Tag-Objekt `{"id": 1, "displayName": "Important", "imapLabel": "$label1",
+"isDefaultTag": true}`, und nur `tags:1` findet sie.
+
+#### K3 und die Ansicht
+
+| Aufruf | Ergebnis |
+|--------|----------|
+| `...messages?view=singleton` (ohne `limit`) | **1 Nachricht**, K3 an echten Daten belegt |
+| `...messages?limit=10&view=singleton` | 6 Nachrichten |
+| `...messages?limit=10` (ohne `view`) | 6 Einträge, jeder mit gesetztem `threadRootId` |
+
+Der Lauf ohne `view` ist an dieser Instanz zahlenmässig nicht vom Lauf mit `view=singleton` zu
+unterscheiden, weil jede der sechs Testmails ihr eigener Thread ist. Erkennbar ist die
+Thread-Ansicht trotzdem: jeder Eintrag trägt ein `threadRootId`, das auf seine eigene
+`messageId` zeigt. Eine Antwortkette würde hier Einträge zusammenfassen, und genau deshalb
+sendet der Client immer `view=singleton`.
+
+#### Der `\Seen`-Nachweis in seiner Rohform
+
+| Schritt | `flags.seen` der Nachricht 14 | `unread` der INBOX |
+|---------|-------------------------------|--------------------|
+| vor dem Volltextabruf | `false` | 6 |
+| `GET /ocs/v2.php/apps/mail/message/14` | Status 200 | - |
+| nach dem Volltextabruf | `false` | 6 |
+
+Lesen setzt kein `\Seen`, wie der Quelltext (`'peek' => true` in jedem Fetch der App)
+vorhergesagt hat. Das ist eine Eigenschaft dieser Fassung und nicht des Protokolls; der
+ausgebaute Nachweis mit zwei Zuständen gehört zu Plan 10-08, hier steht die Zahl, die dort
+erwartet wird.
+
+#### Ein Befund über GreenMail, nicht über Nextcloud
+
+GreenMail 2.1.12 castet in `FetchCommand.handleBodyFetch` den Inhalt jeder Nachricht auf
+`MimeMultipart`. Eine nicht mehrteilige Nachricht, also eine reine `text/plain`-Mail, endet
+dort mit einer `ClassCastException`, der IMAP-FETCH scheitert, und Nextcloud antwortet die
+Volltextroute mit 500 und `"Could not connect to IMAP server."`. Das ist ein Fehler des
+Testservers und keine Eigenschaft der Mail-App: die drei betroffenen Nachrichten antworten mit
+200, sobald sie in einem `multipart/mixed` mit genau einem `text/plain`-Teil liegen.
+`scripts/bootstrap_exapp.sh` baut sie deshalb so. Wer diese Messung wiederholt und einen 500er
+sieht, prüft zuerst `docker logs nc-mcp-exapp-greenmail`.
 
 ## Reproduktion
 
 ```
+export HP_SHARED_KEY="$(openssl rand -hex 32)"   # oder der Wert aus .env.exapp
 docker compose -p nc-mcp-exapp -f compose.exapp.yml up -d --wait
 bash scripts/bootstrap_exapp.sh
 set -a && . ./.env.exapp && set +a
@@ -160,13 +401,42 @@ Mit `-s` statt `-q` gibt der letzte Befehl die vier Messzeilen aus, aus denen di
 besteht. Ohne die Topologie wird die Datei übersprungen und nicht ausgeführt: `exapp_env`
 skippt mit dem Namen der fehlenden Umgebungsvariable.
 
+Seit Plan 10-01 gehören zwei Schritte dazu, und beide macht `up -d --wait` zusammen mit dem
+Bootstrap von selbst:
+
+1. Der Dienst `greenmail` läuft in der Topologie mit, ohne veröffentlichten Port, erreichbar
+   nur im Netz `nc-mcp-exapp-net`.
+2. Das Mail-Konto von alice zeigt auf `greenmail:3143` (SMTP `greenmail:3025`, beides
+   `imapSslMode none`), trägt sechs eingelieferte Testmails und ist mit
+   `occ mail:account:sync <id> -f` synchronisiert.
+
+Beides ist prüfbar, ohne irgendetwas zu lesen, was ein Geheimnis trägt:
+
+```
+docker compose -p nc-mcp-exapp -f compose.exapp.yml exec -T --user www-data nextcloud \
+  php occ mail:account:export alice
+```
+
+Die Ausgabe nennt `IMAP host: greenmail:3143` und `SMTP host: greenmail:3025`. Steht dort ein
+anderer Host, hat der Bootstrap das Konto nicht ersetzt und meldet das laut; ein stilles
+"exists" auf dem alten Host ist seit Plan 10-01 ausgeschlossen, weil die Existenzprüfung die
+Adresse **und** den Endpunkt vergleicht.
+
+Ein zweiter Bootstrap-Lauf ist idempotent: er meldet `mail account alice: exists on
+greenmail:3143`, `test mails alice: already there (6 in INBOX)` und synchronisiert erneut, ohne
+etwas zu verdoppeln. Die Postfächer leben im Arbeitsspeicher von GreenMail, ein Neustart dieses
+Containers leert sie, und der nächste Bootstrap-Lauf liefert sie wieder ein. Genau deshalb
+hängt die Idempotenz an der Nachrichtenzahl im Postfach und nicht an einer Markierungsdatei.
+
 ## Was diese Messung nicht beweist
 
 - Sie lief gegen Nextcloud 34.0.3 mit SQLite in einer Wegwerf-Instanz und gegen Mail 5.11.1.
   Eine andere Mail-Fassung darf die drei `SCOPE_IGNORE`-Routen brechen, siehe
   "Replaceability".
 - Sie sagt nichts über die Feldformen der Antworten. `mailboxes` und `messages` haben in
-  dieser Messung keine echten Daten geliefert; wer Felder braucht, braucht Stufe 2.
+  dieser Messung keine echten Daten geliefert; wer Felder braucht, braucht Stufe 2. Stufe 2 ist
+  am 2026-08-24 ausgeführt worden, siehe den Abschnitt darüber: die Feldformen von
+  `specialRole`, `previewText`, dem Volltext und der Filtergrammatik stehen dort als Messwerte.
 - Sie sagt nichts über das Senden. `POST /ocs/v2.php/apps/mail/message/send` steht nicht in
   `routes.php`, sondern als `#[ApiRoute]` am Controller (Korrektur K2), wurde hier nicht
   angefasst, und ein Sendeweg ist ohnehin eine eigene Entscheidung und kein Nebenprodukt
@@ -175,3 +445,12 @@ skippt mit dem Namen der fehlenden Umgebungsvariable.
   er per Bootstrap abgeschaltet; die Regel, die OCS-Volltextroute nur einmal und nie in einer
   Schleife zu rufen, steht deshalb im Test und nicht in der Topologie, weil sie in Phase 10
   in Produktionscode wandert.
+
+  Nachtrag vom 2026-08-24 (Korrektur K5): `MessageApiController::get` trägt zwar
+  `#[BruteForceProtection('mailGetMessage')]`, aber im ganzen `lib/`-Baum von Mail 5.11.1 gibt
+  es **keinen einzigen `throttle()`-Aufruf** (gemessen: `grep` über
+  `/var/www/html/custom_apps/mail/lib`, null Treffer). Ohne diesen Aufruf registriert die
+  Middleware keinen Versuch, der Zähler bleibt leer und die Verzögerung ist null. Der Satz
+  oben bleibt trotzdem richtig, aber aus einem anderen Grund: jeder Volltextabruf öffnet eine
+  eigene IMAP-Sitzung, ist also teuer und nicht gefährlich. Ein Memo-Muster, das einen Zähler
+  schont, der nicht zählt, muss deshalb nicht in Produktionscode wandern.
