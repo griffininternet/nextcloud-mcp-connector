@@ -111,18 +111,12 @@ spreed_features
 # the list, because the name already has a production caller in the Talk family, so vulture
 # never reports it and an entry here would be a line nobody could ever check.
 #
-# get_message: the one that stays, and it is a parked caller rather than a permanent entry.
-#   The single full message route has no production call site until plan 10-05 adds the
-#   ``mail:`` branch of fetch; it is exercised today by tests/unit/test_mail_client.py and it
-#   leaves this list with that plan.
-get_message
-
-# to_text: the same parked-caller case one layer up. tools/html_text.py was written in plan
-# 10-03, because its four properties are measurements against lxml 6.1.1 and belong in one
-# piece with the tests that pin them; plan 10-05 is the one that converts a mail body with it
-# and appends marks.FINAL_TRUNCATION to the result. It is exercised today by the thirteen
-# cases of tests/unit/test_html_text.py, and it leaves this list with the plan that calls it.
-to_text
+# get_message and to_text: both gone from this list with plan 10-05, which is the plan that
+# calls them. The full message route was parked in plan 10-02 and the HTML to text converter in
+# plan 10-03, in both cases because the piece and the tests that pin it belong together and
+# the caller was one wave away; ``chatgpt._fetch_mail`` is that caller and it uses both in the
+# same three lines. Nothing of the Mail family is parked any more, which is what the empty
+# space below this paragraph says.
 
 # --- The store API of phase 3 ----------------------------------------------------------
 # oauth/store.py was built in one piece in plan 03-02, because its schema and its
