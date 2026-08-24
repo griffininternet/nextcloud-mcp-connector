@@ -404,6 +404,60 @@ def _row(titles: list[str], values: list[Any]) -> dict[str, Any]:
     return row
 
 
+def as_text(title: str, rows: list[list[Any]], total: int) -> list[str]:
+    """One table as the few lines that describe it: its name, its size, its first rows.
+
+    The line list is the shape of ``chatgpt._fetch_event``: the title first, then how many rows
+    the table has, then the rows themselves. The header row needs no special case, because the
+    compact form of the app ships the column titles as its **first** list (K8) and rendering it
+    like every other line is what makes the values below it readable.
+
+    The column titles are deliberately not resolved here. They already arrived with the rows, so
+    a second call for them would be a round trip for information that is in hand, and an order
+    built locally would be a second truth about the order of the app.
+
+    Every cell runs through the marker filter of this module, because a cell value is written by
+    whoever may write into that table and is therefore the place where a table could otherwise
+    claim to be this server talking (T-08-14, ME-03). The caller cuts and marks **after** this
+    function returned, which is what keeps that marker its own.
+
+    ``total`` is the number of rows the table has, and it comes from the caller because only the
+    caller read the table object. When it is larger than what this excerpt carries, the second
+    line says both numbers: a cut that names itself with the total is the rule of this project,
+    and here it is the only thing that turns twenty rows into an excerpt instead of a table.
+    """
+    shown = max(len(rows) - 1, 0)
+    size = f"Rows: {total}"
+    if shown < total:
+        size = f"{size}, and this excerpt carries the first {shown}"
+
+    lines = [_text(title), size]
+    lines.extend(" | ".join(_cell_text(cell) for cell in values) for values in rows)
+    return lines
+
+
+def _cell_text(value: Any) -> str:
+    """One cell of the compact form as one readable string, whatever shape it arrived in.
+
+    :func:`_clean` keeps the shape of a value, because the row level of ``tables_browse``
+    answers with data. A text line cannot keep it, so the two shapes that are not a scalar are
+    rendered rather than repr'd: a multi selection arrives as a list and becomes its values
+    separated by a comma, a selection option arrives as an object and becomes compact JSON.
+    Both run through :func:`_text` afterwards, so the filter covers the rendered form and not
+    only the leaves it was applied to.
+
+    ``None`` becomes the empty string, which is what the app itself sends for a missing value;
+    ``str(None)`` would put the word ``None`` into a table cell a person reads.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, list):
+        return ", ".join(_cell_text(item) for item in value)
+    if isinstance(value, dict):
+        return _text(json.dumps(value, ensure_ascii=False))
+    return _text(value)
+
+
 def _row_count(info: dict[str, Any]) -> int | None:
     """The row count of the table, or ``None`` when the app reported no usable one.
 
