@@ -1,11 +1,25 @@
-"""One bundle for one question: ``prepare_context`` (D-52 to D-57, TOOL-08).
+"""One bundle for one question: ``prepare_context`` (D-52 to D-57, TOOL-08, CTX-01).
 
-This tool owns no data source. It composes the two fan-outs that already exist, and every
+This tool owns no data source. It composes the fan-outs that already exist, and every
 property that makes it trustworthy comes from that decision.
 
-**Two ways, by the kind of question.** Content comes from the unified search, appointments
-from the calendar with a computed window: "this week" is not a full text question, and a
-bundle without the next appointments misses its purpose (D-52).
+**Three ways, by the kind of question.** Content comes from the unified search, appointments
+from the calendar with a computed window, and what is waiting from the conversation list of
+Talk: "this week" is not a full text question, and a bundle without the next appointments
+misses its purpose (D-52).
+
+**The Talk digest costs one request.** The conversation list carries ``unread``,
+``unread_mention``, ``unread_mention_direct``, ``last_activity`` and the preview of the last
+message in one answer, so the digest is a projection of that one read and never a walk over
+conversations (CTX-01). It is asked through :mod:`mcp_connector.tools.talk` and not through a
+client of its own, which is what makes it inherit the marker filter and the sorting rule of
+that module instead of building either a second time.
+
+**The key ``talk`` is always there, and always a list.** A key that appears only sometimes
+would depend on foreign text. An empty list without an entry under ``degraded`` means
+"nothing is waiting"; an empty list with one means "this could not be read". The two
+statements stay distinguishable, because a model that reads the first where the second is
+true reports that there are no messages.
 
 **The search is asked without a provider restriction.** Naming ``files,notes,deck`` here
 would lock out an installed Findling and every future provider, and with it the one side
@@ -51,6 +65,7 @@ from . import calendar as calendar_tools
 from . import chatgpt as chatgpt_tools
 from . import marks
 from . import search as search_tools
+from . import talk as talk_tools
 
 #: Hits requested from the search. Wider than any single bucket cap on purpose: the
 #: grouping below can only distribute what it was given.
@@ -78,6 +93,27 @@ CALENDAR_BUDGET = 10.0
 #: are named in ``degraded`` when they bite, so "five" is never mistaken for "all".
 MAX_PER_BUCKET = 5
 MAX_EVENTS = 10
+
+#: Own ceiling for the Talk leg, and a setting rather than a measurement, which is why it is
+#: said out loud here: plan 11-06 measures this leg on the live topology, and when it does,
+#: this comment gets a measurement line like the one at :data:`CALENDAR_BUDGET` above and the
+#: number moves only together with it. Tighter than the calendar on purpose: the digest is
+#: **one** request against one route, where the calendar fans out over every collection of the
+#: account, so five seconds are already generous for it.
+TALK_BUDGET = 5.0
+
+#: CTX-01, literally: at most three conversations reach the digest. The fourth costs every
+#: session that never needed it, and the cap names itself under ``degraded`` when it bites,
+#: so "three" is never mistaken for "all".
+MAX_DIGEST = 3
+
+#: Upper bound of one preview inside the digest, in **bytes**. CTX-01 says "~200 characters",
+#: and this is the one place where the wording is not followed to the letter: this project
+#: budgets in bytes everywhere (``MAX_MESSAGE_BYTES``, ``EXCERPT_MAX_BYTES``), a German
+#: preview with umlauts is fewer characters than bytes rather than the other way round, and
+#: the cheaper connection is the byte cut with tolerant decoding that ``talk.py`` already
+#: makes. Hence the name ``..._BYTES`` and not ``..._CHARS``: the unit is part of the promise.
+DIGEST_PREVIEW_BYTES = 200
 
 #: The three kinds this answer groups by name. Everything else lands in one bucket together,
 #: and since TOOL-16 that bucket is no longer the same thing as "cannot be read": a Talk
@@ -143,16 +179,22 @@ async def prepare_context(clients: NcClients, query: str, detail: str = SHORT) -
         raise ToolError(message=f"{detail!r} is not a known detail level.", hint=_DETAIL_HINT)
 
     start, end = _window()
-    search_out, calendar_out = await asyncio.gather(
+    search_out, calendar_out, talk_out = await asyncio.gather(
         search_tools.unified_search(clients, query=term, limit=SEARCH_LIMIT),
         _events(clients, start, end),
+        _talk(clients),
         return_exceptions=True,
     )
 
     degraded: list[dict[str, str]] = []
     results = _bundle(_hits(search_out, degraded), degraded)
     events = _schedule(calendar_out, degraded)
+    talk = _digest(talk_out, degraded)
 
+    # The rule names the search and the calendar and no third leg, and that is a decision
+    # rather than an oversight: a bundle in which only Talk answered is not a success, and a
+    # bundle without Talk on an instance without Talk is not a failure. A leg added later
+    # belongs under ``degraded`` and not into this condition.
     if isinstance(search_out, BaseException) and isinstance(calendar_out, BaseException):
         # Neither source answered. An empty bundle here would be read as "there is
         # nothing", which is the one statement this situation does not support.
@@ -169,6 +211,7 @@ async def prepare_context(clients: NcClients, query: str, detail: str = SHORT) -
         "window": {"start": start, "end": end},
         "events": events,
         "results": results,
+        "talk": talk,
     }
     if degraded:
         result["degraded"] = degraded
@@ -186,6 +229,14 @@ async def _events(clients: NcClients, start: str, end: str) -> dict[str, Any]:
     """The calendar leg, under the ceiling of this tool instead of the one of that tool."""
     async with asyncio.timeout(CALENDAR_BUDGET):
         return await calendar_tools.list_events(clients, start=start, end=end, limit=MAX_EVENTS)
+
+
+async def _talk(clients: NcClients) -> dict[str, Any]:
+    """The conversation list, under the ceiling of this tool and through the tool layer."""
+    async with asyncio.timeout(TALK_BUDGET):
+        return await talk_tools.browse(
+            clients, level="conversations", limit=talk_tools.MAX_CONVERSATIONS
+        )
 
 
 def _hits(
@@ -273,6 +324,114 @@ def _schedule(
     raw = outcome.get("events")
     events = [item for item in raw if isinstance(item, dict)] if isinstance(raw, list) else []
     return events[:MAX_EVENTS]
+
+
+def _digest(
+    outcome: dict[str, Any] | BaseException, degraded: list[dict[str, str]]
+) -> list[dict[str, Any]]:
+    """The conversations with something waiting, or nothing plus one sentence about why.
+
+    "Waiting" is unread messages or a mention, and a mention without unread messages counts:
+    somebody addressed this account and the conversation was opened afterwards, which is
+    still the thing a bundle is supposed to surface.
+
+    The order is by direct mention, then by any mention, then by the last activity, all
+    descending. Sorting by activity alone would let a loud group chat push a direct mention
+    out of three places, and a direct mention is the entry the account is most likely to be
+    the reason for.
+
+    ``unread`` is passed through as the counter of the app and is not a message count. A
+    conversation nobody ever opened reports 1 with an empty history, because the web
+    interface wants a dot on it; the sentence belongs to
+    :func:`mcp_connector.tools.talk._conversation` and is inherited here rather than
+    corrected, because correcting it would invent a second truth about somebody else's
+    number.
+
+    A failure of this leg, and that includes an instance without Talk, is exactly one entry
+    under ``degraded`` and an empty list. The missing app arrives as a ``ToolError`` from
+    ``capabilities.require_app``, so it takes the first branch of :func:`_reason` and keeps
+    the sentence of that layer instead of getting a second one here.
+    """
+    if isinstance(outcome, BaseException):
+        degraded.append({"source": "talk", "reason": _reason(outcome, "talk", TALK_BUDGET)})
+        return []
+
+    degraded.extend(_degraded_of(outcome))
+    raw = outcome.get("results")
+    entries = [item for item in raw if isinstance(item, dict)] if isinstance(raw, list) else []
+    waiting = sorted((item for item in entries if _waiting(item)), key=_urgency, reverse=True)
+    if len(waiting) > MAX_DIGEST:
+        found = len(waiting)
+        degraded.append(
+            {
+                "source": "talk",
+                "reason": (
+                    f"Only the first {MAX_DIGEST} of {found} conversations with something "
+                    "unread are listed."
+                ),
+            }
+        )
+    return [_digest_entry(item) for item in waiting[:MAX_DIGEST]]
+
+
+def _waiting(entry: dict[str, Any]) -> bool:
+    """Whether this conversation has something unread or a mention in it."""
+    return bool(
+        _count(entry.get("unread")) > 0
+        or entry.get("unread_mention")
+        or entry.get("unread_mention_direct")
+    )
+
+
+def _urgency(entry: dict[str, Any]) -> tuple[int, int, int]:
+    """The sort key of the digest, read in :func:`_digest`, descending in all three parts."""
+    return (
+        int(bool(entry.get("unread_mention_direct"))),
+        int(bool(entry.get("unread_mention"))),
+        _count(entry.get("last_activity")),
+    )
+
+
+def _digest_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    """One conversation as the four fields a follow up call needs, plus the preview."""
+    digest: dict[str, Any] = {
+        "token": str(entry.get("token") or ""),
+        "name": str(entry.get("name") or ""),
+        "unread": _count(entry.get("unread")),
+        "unread_mention": bool(entry.get("unread_mention")),
+    }
+    preview = _preview(str(entry.get("last_message") or ""))
+    if preview:
+        digest["last_message"] = preview
+    return digest
+
+
+def _preview(text: str) -> str:
+    """One preview at :data:`DIGEST_PREVIEW_BYTES`, cut without a marker of its own.
+
+    The second cut of the same text: the tool layer capped it at 800 bytes already, and this
+    one brings it down to the size a digest line may cost. Bytes, and a tolerant decode, so a
+    character the cut split in half disappears instead of arriving broken.
+
+    No marker is appended, and that follows the module this text comes from: "A cut preview
+    carries no marker of its own". A preview is a fragment by definition, the full text is
+    one ``talk_browse`` call away, and a marker this server writes next to somebody else's
+    sentence could not be told apart from a sentence of that somebody (ME-03).
+    """
+    blob = text.encode("utf-8")
+    if len(blob) <= DIGEST_PREVIEW_BYTES:
+        return text
+    return blob[:DIGEST_PREVIEW_BYTES].decode("utf-8", errors="ignore")
+
+
+def _count(value: Any) -> int:
+    """A counter of a composed answer as a number, and 0 for anything that is not one.
+
+    ``bool`` is excluded on purpose, exactly as in ``talk.py``: a ``True`` where a count
+    belongs is a deformed answer and not the number one. The sort key needs numbers of one
+    type, so this is also what keeps a foreign string out of :func:`sorted`.
+    """
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
 
 
 async def _excerpts(

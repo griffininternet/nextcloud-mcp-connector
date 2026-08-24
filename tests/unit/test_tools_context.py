@@ -34,6 +34,7 @@ from mcp_connector.tools import calendar as calendar_tools
 from mcp_connector.tools import chatgpt as chatgpt_tools
 from mcp_connector.tools import context as context_tools
 from mcp_connector.tools import search as search_tools
+from mcp_connector.tools import talk as talk_tools
 
 BASE = "http://nc.test"
 USER = "alice"
@@ -135,8 +136,58 @@ def calendar_answer(
     return answer
 
 
+def conversation(
+    token: str,
+    name: str,
+    *,
+    unread: int = 0,
+    unread_mention: bool = False,
+    unread_mention_direct: bool = False,
+    last_activity: int = 0,
+    last_message: str | None = None,
+) -> dict[str, Any]:
+    """One conversation in the shape ``tools/talk.py`` projects it (``_conversation``)."""
+    entry: dict[str, Any] = {
+        "token": token,
+        "name": name,
+        "type": 2,
+        "unread": unread,
+        "unread_mention": unread_mention,
+        "unread_mention_direct": unread_mention_direct,
+        "last_activity": last_activity,
+        "read_only": 0,
+        "can_send": True,
+        "url": f"{BASE}/index.php/call/{token}",
+    }
+    if last_message is not None:
+        entry["last_message"] = last_message
+    return entry
+
+
+def talk_answer(
+    conversations: list[dict[str, Any]],
+    degraded: list[dict[str, str]] | None = None,
+    truncated: bool = False,
+    total: int | None = None,
+) -> dict[str, Any]:
+    """The envelope ``talk_browse(level="conversations")`` answers with: ``results``, not a
+    key of its own per level."""
+    answer: dict[str, Any] = {
+        "level": "conversations",
+        "count": len(conversations),
+        "results": conversations,
+    }
+    if truncated:
+        answer["truncated"] = True
+    if total is not None:
+        answer["total"] = total
+    if degraded is not None:
+        answer["degraded"] = degraded
+    return answer
+
+
 class FakeCall:
-    """A stand in for one of the two composed tools that records how it was called."""
+    """A stand in for one of the composed tools that records how it was called."""
 
     def __init__(
         self,
@@ -167,12 +218,21 @@ def wire(
     monkeypatch: pytest.MonkeyPatch,
     search: FakeCall | None = None,
     calendar: FakeCall | None = None,
+    talk: FakeCall | None = None,
 ) -> tuple[FakeCall, FakeCall]:
-    """Replace the two composed tools, so these tests never touch the network."""
+    """Replace the composed tools, so these tests never touch the network.
+
+    The Talk leg gets a valid empty answer by default, so every test written before it keeps
+    its meaning: a bundle with nothing waiting and nothing degraded. Only two fakes are
+    returned, and the third is handed in by the tests that want to look at it; that keeps the
+    two element unpacking of every test above intact.
+    """
     search = search if search is not None else FakeCall(search_answer([FILE_HIT]))
     calendar = calendar if calendar is not None else FakeCall(calendar_answer([]))
+    talk = talk if talk is not None else FakeCall(talk_answer([]))
     monkeypatch.setattr(search_tools, "unified_search", search)
     monkeypatch.setattr(calendar_tools, "list_events", calendar)
+    monkeypatch.setattr(talk_tools, "browse", talk)
     return search, calendar
 
 
