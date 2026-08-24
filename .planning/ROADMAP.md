@@ -180,7 +180,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 11-03-PLAN.md: fetch löst eine einzelne Talk-Nachricht und eine Tabelle auf
+- [x] 11-03-PLAN.md: fetch löst eine einzelne Talk-Nachricht und eine Tabelle auf
 - [ ] 11-04-PLAN.md: Talk-Digest im Bündel plus die eine Zeile, die TOOL-16 dort wirksam macht
 
 **Wave 3** *(blocked on Wave 2 completion)*
@@ -260,7 +260,7 @@ Plans:
 | 8. Erreichbarkeits-Spike und Tables | v1.2 | 5/5 | Complete    | 2026-08-21 |
 | 9. Talk | v1.2 | 5/5 | Complete    | 2026-08-21 |
 | 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 8/8 | Complete    | 2026-08-24 |
-| 11. Bündelung, Budget und Release 0.1.6 | v1.2 | 2/10 | In Progress|  |
+| 11. Bündelung, Budget und Release 0.1.6 | v1.2 | 3/10 | In Progress|  |
 
 ## Next
 

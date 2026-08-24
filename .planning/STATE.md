@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Kuratierte Breite
 status: executing
-stopped_at: Completed 11-02-PLAN.md
-last_updated: "2026-08-24T20:01:59.342Z"
+stopped_at: Completed 11-03-PLAN.md
+last_updated: "2026-08-24T20:21:16.670Z"
 last_activity: 2026-08-24
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 28
-  completed_plans: 20
-  percent: 71
+  completed_plans: 21
+  percent: 75
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 11 (Bündelung, Budget und Release 0.1.8) — EXECUTING
-Plan: 3 of 10
+Plan: 4 of 10
 Status: Ready to execute
 Last activity: 2026-08-24
 
@@ -137,6 +137,7 @@ Last activity: 2026-08-24
 | Phase 10 P08 | 22 min | 2 tasks tasks | 2 files files |
 | Phase 11 P01 | 25min | 2 tasks | 4 files |
 | Phase 11 P02 | 22 min | 2 tasks tasks | 3 files files |
+| Phase 11 P03 | 34 min | 3 tasks tasks | 5 files files |
 
 ## Accumulated Context
 
@@ -485,6 +486,10 @@ Recent decisions affecting current work:
 - [Phase ?]: 11-02: Genau eine Talk-Nachricht wird ueber GET .../chat/{token}/{messageId}/context gelesen, nie ueber lastKnownMessageId-Arithmetik: die Kontextroute liefert die Zielnachricht mit (includeLastKnown=true), die Arithmetik gaebe bei geloeschter oder gefilterter Zielnachricht unsichtbar eine Nachbarnachricht aus
 - [Phase ?]: 11-02: READ_ONLY_PARAMS steht nicht in get_message_context, weil die Route sie nicht annimmt; die Nebenwirkungsfreiheit kommt aus der Route selbst (Timeout 0, markNotificationsAsRead false, kein updateLastReadMessage in spreed 24.0.4) und wird in 11-06 ueber die Konversationsliste gemessen
 - [Phase ?]: 11-02: get_message_context ist eine Welle vor seinem Aufrufer im vulture_whitelist geparkt (Muster Tables 08-02, Talk 09-01, Mail 10-02); Plan 11-03 entfernt den Eintrag mit dem fetch-Zweig, der ihn aufruft
+- [Phase 11]: 11-03: fetch loest jetzt message:<token>:<messageId> und table:<tableId> auf; TABLE_ROWS=20 und MAX_TABLE_BYTES=4096 sind ausdrueckliche Setzungen, MESSAGE_CONTEXT_LIMIT=1 traegt die spreed-Rechnung aus 11-02
+- [Phase 11]: 11-03: eine fehlende, geloeschte oder ausgefilterte Zielnachricht ist ein ToolError mit beiden Gruenden und talk_browse level=messages als Ausweg, nie eine Nachbarnachricht (T-11-13); ein leeres Fenster (304) ist derselbe Satz
+- [Phase 11]: 11-03: der Nachrichten-Zweig haengt keinen zweiten Kappungsmarker an (Phase 9, ME-03), die Kappung erscheint als metadata[truncated]=true; der Tabellen-Zweig kappt in der Reihenfolge Marker-Filter je Zelle, Byte-Kappe, FINAL_TRUNCATION
+- [Phase 11]: 11-03: TOOL-16 bleibt Pending, weil prepare_context dieselben Treffer noch als resolvable false ausweist (Pitfall 1) und die Live-Messung zu 11-06 gehoert
 
 ### Pending Todos
 
@@ -519,8 +524,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-24T20:01:59.316Z
-Stopped at: Completed 11-02-PLAN.md
+Last session: 2026-08-24T20:21:16.652Z
+Stopped at: Completed 11-03-PLAN.md
 Naechster Schritt: /gsd:plan-phase 8
 Resume file: None
 
