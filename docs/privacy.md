@@ -97,8 +97,10 @@ assemble it themselves:
    For a Talk message that somebody at least holds an account on this instance. For
    a mail they do not even need that: anybody with an internet connection can put
    text in front of the model, without ever being invited.
-3. **An outgoing channel.** `talk_send`, the one write tool of this server that puts
-   something in front of other people.
+3. **An outgoing channel.** `talk_send`, the one tool of this server that puts a
+   message directly in front of other people. It is the widest way out, not the only
+   one: a create-only write can leave content in a shared container, and the
+   countermeasures below treat the two separately.
 
 Those three together are what Simon Willison calls the
 [lethal trifecta](https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/):
@@ -119,8 +121,16 @@ protection incident.
 - `talk_send` sits behind the administration switch `NC_MCP_TALK_SEND`. Set to off,
   no assistant can send a Talk message through this connector, for the whole
   instance, whatever an account is allowed to do in Talk itself. Reading
-  conversations is not affected. That switch is the one control that takes the third
-  ingredient off the table completely.
+  conversations is not affected. That switch closes the one channel that can address
+  other people directly; it does not close every conceivable way out, and the next
+  bullet names the remainder rather than leaving it to be discovered.
+- The create-only writes (`files_upload`, `deck_create_card`, `tables_create_row`)
+  cannot address anyone, but a file, a card or a row can land in a folder, a board
+  or a table that is shared with other people, and content written there is visible
+  to everyone the container is shared with, activity notifications included. That is
+  a narrower and less reliable way out than a message, and it is one. An operator
+  who needs every path closed also reviews which folders, boards and tables the
+  connected accounts share.
 - **Mail is read only.** There is no way in this app to send a mail, to create a
   draft, to move, flag or delete a message, and the attachment route of the Mail app
   is never called. The new family adds reach into private data and untrusted
@@ -140,8 +150,10 @@ also the difference between two kinds of sentence in this document. "Mail is rea
 only" is a statement about a capability. The promise underneath it is narrower and
 checkable: there is no code path in this app that sends, drafts, moves, flags or
 deletes a mail, and a contract test asserts it against the source of the two mail
-modules on every run. An operator who needs the chain broken rather than narrowed
-sets `NC_MCP_TALK_SEND` to off.
+modules on every run. An operator who wants the direct messaging channel closed sets
+`NC_MCP_TALK_SEND` to off; one who needs every way out closed also reviews what the
+connected accounts share, because a create-only write into a shared container
+remains a path outwards that no switch of this app removes.
 
 ## Deletion and user control
 

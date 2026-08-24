@@ -476,18 +476,22 @@ uniquement lors d'un appel à Mail.
 Lire le courrier complète une combinaison qu'il vaut mieux nommer que décrire. Ce serveur a accès à des
 **données privées** (fichiers, agenda, notes, contacts, Tables et désormais le courrier), il absorbe du
 **contenu non fiable** (un courriel et un message Talk sont écrits par un tiers, et pour un courriel ce
-tiers n'a même pas besoin d'un compte sur votre instance), et il a exactement une **sortie**,
-`talk_send`. Ces trois éléments ensemble sont ce que Simon Willison appelle la
+tiers n'a même pas besoin d'un compte sur votre instance), et il a une **sortie** : `talk_send`, le
+seul outil qui place un message directement devant d'autres personnes, et derrière lui les écritures
+en création seule, qui peuvent laisser un fichier, une carte ou une ligne dans un conteneur partagé
+avec d'autres. Ces trois éléments ensemble sont ce que Simon Willison appelle la
 [lethal trifecta](https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/), et un modèle de langage
 ne sépare pas de façon fiable les données des instructions : un courriel peut donc porter une phrase
 destinée au modèle, et la réponse peut prendre le chemin de la sortie.
 
 Deux choses s'y opposent ici. `talk_send` se trouve derrière l'interrupteur d'administration
-`NC_MCP_TALK_SEND`, qui ferme la sortie pour toute l'instance tandis que la lecture reste intacte. Et
-**Mail est en lecture seule** : cette famille ajoute de la portée et, délibérément, aucune seconde
-sortie. Aucune des deux ne rend l'injection de prompt impossible. La version longue, avec chaque
-contre-mesure et le reste honnête, se trouve dans [docs/privacy.md](docs/privacy.md), section "The
-chain that mail closes".
+`NC_MCP_TALK_SEND`, qui ferme le canal de message direct pour toute l'instance tandis que la lecture
+reste intacte ; les écritures en création seule restent ouvertes, si bien qu'un opérateur qui veut
+fermer chaque chemin vérifie aussi quels dossiers, tableaux et tables les comptes connectés
+partagent. Et **Mail est en lecture seule** : cette famille ajoute de la portée et, délibérément,
+aucune sortie propre. Aucune des deux ne rend l'injection de prompt impossible. La version longue,
+avec chaque contre-mesure et le reste honnête, se trouve dans [docs/privacy.md](docs/privacy.md),
+section "The chain that mail closes".
 
 ## Limitations connues
 

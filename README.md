@@ -448,17 +448,21 @@ may actually open. That costs one additional request per cache window, and only 
 Reading mail completes a combination worth naming rather than describing. This server has access
 to **private data** (files, calendar, notes, contacts, Tables and now mail), it takes in
 **untrusted content** (a mail and a Talk message are written by somebody else, and for a mail that
-somebody needs no account on your instance at all), and it has exactly one **outgoing channel**,
-`talk_send`. Those three together are what Simon Willison calls the
+somebody needs no account on your instance at all), and it has an **outgoing channel**: `talk_send`,
+the one tool that puts a message directly in front of other people, and behind it the create-only
+writes, which can leave a file, a card or a row in a container that is shared with others. Those
+three together are what Simon Willison calls the
 [lethal trifecta](https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/), and a language model
 does not reliably separate data from instructions, so a mail can carry a sentence meant for the
 model and the answer can take the way out.
 
 Two things stand against it here. `talk_send` sits behind the administration switch
-`NC_MCP_TALK_SEND`, which closes the outgoing channel for the whole instance while reading stays
-untouched. And **mail is read only**: this family adds reach, and deliberately no second way out.
-Neither makes prompt injection impossible. The long form, with every countermeasure and the honest
-remainder, is in [docs/privacy.md](docs/privacy.md), section "The chain that mail closes".
+`NC_MCP_TALK_SEND`, which closes the direct messaging channel for the whole instance while reading
+stays untouched; the create-only writes stay open, so an operator who needs every path closed also
+reviews which folders, boards and tables the connected accounts share. And **mail is read only**:
+this family adds reach, and deliberately no way out of its own. Neither makes prompt injection
+impossible. The long form, with every countermeasure and the honest remainder, is in
+[docs/privacy.md](docs/privacy.md), section "The chain that mail closes".
 
 ## Known limitations
 

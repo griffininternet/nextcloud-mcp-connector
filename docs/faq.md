@@ -131,13 +131,21 @@ messages". With it off, no assistant can send a Talk message through this connec
 for the whole instance and whatever an account is allowed to do in Talk itself.
 Reading conversations and their history is not affected.
 
-That one switch closes the only way out this app has. It is worth setting for the
-reason [privacy.md](privacy.md), section "The chain that mail closes", spells out: a
-server that reads private data and takes in text written by strangers has a chain
-only as long as it can also communicate outwards, and prompt injection has no known
-cure, so the channel is the part that can actually be removed.
+That switch closes the only channel this app has that can address other people
+directly. It is worth setting for the reason [privacy.md](privacy.md), section "The
+chain that mail closes", spells out: a server that reads private data and takes in
+text written by strangers has a chain only as long as it can also communicate
+outwards, and prompt injection has no known cure, so the channel is the part that
+can actually be removed.
+
+One honest remainder stays with the switch off: the create-only writes (a file, a
+card, a row) cannot address anyone, but they can land in a folder, a board or a
+table that is shared with other people, and content written there is visible to
+everyone the container is shared with. Closing that path is not a setting of this
+app; it is a review of what the connected accounts share.
 
 Mail stays readable with the switch off, and that is the point rather than an
 oversight. Mail has no outgoing channel of its own: it is read only in this app,
 with no way to send, draft, move, flag or delete a message, so closing the Talk
-channel leaves the reading families intact and takes the exfiltration step away.
+channel leaves the reading families intact and takes the direct messaging step
+away.

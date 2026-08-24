@@ -61,9 +61,9 @@
 - **Nothing destructive**: no delete, no move, no share
 - **No trace when reading**: Talk sets no read marker
 - **Mail is read only**: no way to send, to draft, to move, to flag or to delete a message
-- **One way out only**: sending a Talk message, and an administrator can switch it off
+- **One direct messaging channel**: sending a Talk message, and an administrator can switch it off
 
-Reading text written by strangers next to private data would be a chain if there were a way out. There is exactly one, sending a Talk message, and an administrator can close it for the whole instance. That is what the switch is for.
+Reading text written by strangers next to private data would be a chain if there were a way out. The one channel that puts a message directly in front of other people is a Talk message, and an administrator can close it for the whole instance; that is what the switch is for. The create-only writes (a file, a card, a row) address nobody, but they can land in a folder, board or table that is shared with other people, so an operator who needs every path closed also reviews what the account shares.
 
 ### Under your control
 
@@ -100,9 +100,9 @@ Reading text written by strangers next to private data would be a chain if there
 - **Nichts Zerstörendes**: kein Löschen, kein Verschieben, kein Teilen
 - **Keine Spur beim Lesen**: Talk setzt keinen Lesemarker
 - **Mail nur lesen**: kein Weg, eine Nachricht zu senden, als Entwurf anzulegen, zu verschieben, zu markieren oder zu löschen
-- **Nur ein Weg nach außen**: eine Talk-Nachricht senden, und die Administration kann das abschalten
+- **Nur ein direkter Nachrichtenkanal**: eine Talk-Nachricht senden, und die Administration kann das abschalten
 
-Von Fremden geschriebenen Text neben privaten Daten zu lesen wäre eine Kette, wenn es einen Weg nach außen gäbe. Es gibt genau einen, das Senden einer Talk-Nachricht, und die Administration kann ihn für die ganze Instanz schließen. Dafür ist der Schalter da.
+Von Fremden geschriebenen Text neben privaten Daten zu lesen wäre eine Kette, wenn es einen Weg nach außen gäbe. Der einzige Kanal, der eine Nachricht direkt vor andere Menschen bringt, ist eine Talk-Nachricht, und die Administration kann ihn für die ganze Instanz schließen; dafür ist der Schalter da. Die nur anlegenden Schreibwege (eine Datei, eine Karte, eine Zeile) adressieren niemanden, aber sie können in einem Ordner, einem Board oder einer Tabelle landen, die mit anderen geteilt sind; wer jeden Weg geschlossen braucht, prüft daher auch, was das Konto teilt.
 
 ### In Ihrer Hand
 
@@ -141,9 +141,9 @@ Die verlinkten Seiten sind auf Englisch.
 - **Rien de destructeur** : aucune suppression, aucun déplacement, aucun partage
 - **Aucune trace à la lecture** : Talk ne pose pas de marqueur de lecture
 - **Mail en lecture seule** : aucun moyen d'envoyer, de rédiger un brouillon, de déplacer, de marquer ou de supprimer un message
-- **Une seule sortie** : envoyer un message Talk, et un administrateur peut la désactiver
+- **Un seul canal de message direct** : envoyer un message Talk, et un administrateur peut le désactiver
 
-Lire des textes écrits par des inconnus à côté de données privées formerait une chaîne s'il existait une sortie. Il en existe exactement une, l'envoi d'un message Talk, et un administrateur peut la fermer pour toute l'instance. C'est à cela que sert l'interrupteur.
+Lire des textes écrits par des inconnus à côté de données privées formerait une chaîne s'il existait une sortie. Le seul canal qui place un message directement devant d'autres personnes est un message Talk, et un administrateur peut le fermer pour toute l'instance ; c'est à cela que sert l'interrupteur. Les écritures en création seule (un fichier, une carte, une ligne) ne s'adressent à personne, mais elles peuvent atterrir dans un dossier, un tableau ou une table partagés avec d'autres personnes ; un opérateur qui veut fermer chaque chemin vérifie donc aussi ce que le compte partage.
 
 ### Sous votre contrôle
 

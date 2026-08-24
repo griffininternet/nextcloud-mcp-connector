@@ -462,17 +462,21 @@ bei einem Mail-Aufruf.
 Mail zu lesen vervollständigt eine Kombination, die man benennen sollte, statt sie zu umschreiben.
 Dieser Server hat Zugang zu **privaten Daten** (Dateien, Kalender, Notizen, Kontakte, Tables und jetzt
 Mail), er nimmt **fremde Inhalte** auf (eine Mail und eine Talk-Nachricht sind von Dritten geschrieben,
-und für eine Mail braucht dieser Dritte nicht einmal ein Konto auf Ihrer Instanz), und er hat genau
-einen **Ausgangskanal**, `talk_send`. Diese drei zusammen sind das, was Simon Willison
+und für eine Mail braucht dieser Dritte nicht einmal ein Konto auf Ihrer Instanz), und er hat einen
+**Ausgangskanal**: `talk_send`, das eine Tool, das eine Nachricht direkt vor andere Menschen bringt,
+und dahinter die nur anlegenden Schreibwege, die eine Datei, eine Karte oder eine Zeile in einem mit
+anderen geteilten Container hinterlassen können. Diese drei zusammen sind das, was Simon Willison
 [lethal trifecta](https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/) nennt, und ein
 Sprachmodell trennt Daten und Anweisungen nicht zuverlässig, also kann eine Mail einen Satz tragen,
 der dem Modell gilt, und die Antwort kann den Weg nach draußen nehmen.
 
 Zwei Dinge stehen dagegen. `talk_send` liegt hinter dem Admin-Schalter `NC_MCP_TALK_SEND`, der den
-Ausgangskanal für die ganze Instanz schließt, während das Lesen unberührt bleibt. Und **Mail ist
-strikt lesend**: diese Familie fügt Reichweite hinzu und bewusst keinen zweiten Weg nach draußen.
-Keines von beidem macht Prompt Injection unmöglich. Die lange Fassung, mit jeder Gegenmaßnahme und dem
-ehrlichen Rest, steht in [docs/privacy.md](docs/privacy.md), Abschnitt "The chain that mail closes".
+direkten Nachrichtenkanal für die ganze Instanz schließt, während das Lesen unberührt bleibt; die
+nur anlegenden Schreibwege bleiben offen, weshalb, wer jeden Weg geschlossen braucht, auch prüft,
+welche Ordner, Boards und Tabellen die verbundenen Konten teilen. Und **Mail ist strikt lesend**:
+diese Familie fügt Reichweite hinzu und bewusst keinen eigenen Weg nach draußen. Keines von beidem
+macht Prompt Injection unmöglich. Die lange Fassung, mit jeder Gegenmaßnahme und dem ehrlichen Rest,
+steht in [docs/privacy.md](docs/privacy.md), Abschnitt "The chain that mail closes".
 
 ## Bekannte Einschränkungen
 
