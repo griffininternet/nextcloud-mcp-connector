@@ -16,13 +16,17 @@ client of its own, which is what makes it inherit the marker filter and the sort
 that module instead of building either a second time.
 
 **The mail counters cost one account list plus N mailbox lists.** Literally: 1 account list
-plus N mailbox lists (N at most :data:`MAX_MAIL_ACCOUNTS`), plus up to two detection requests
-on a cold cache, because ``mail_tools.browse`` asks ``capabilities.require_app("mail")``
-first and Mail is the one optional app that is recognised through the navigation of the
-signed in account instead of through the capabilities document. Both detection answers live
-in one cache entry for ``capabilities.TTL_SECONDS`` seconds, so a second bundle inside a
-minute pays neither of them again. This sentence is measured and not estimated, and that
-difference is the reason it is written out here rather than rounded to "a few requests".
+plus N mailbox lists (N at most :data:`MAX_MAIL_ACCOUNTS`), plus the detection requests of a
+cold cache, because ``mail_tools.browse`` asks ``capabilities.require_app("mail")`` first and
+Mail is the one optional app that is recognised through the navigation of the signed in
+account instead of through the capabilities document. Two of those belong to this leg, and a
+whole bundle pays **three** on a cold cache, because the Talk leg starts at the same moment
+and races this one for the same empty cache entry, so the capabilities document is fetched
+twice. Every one of them lives in one cache entry for ``capabilities.TTL_SECONDS`` seconds
+afterwards, so a second bundle inside a minute pays none of them again: three cold, zero
+warm, measured on 2026-08-24 (see ``11-06-MEASUREMENTS.md``). This paragraph is measured and
+not estimated, and the third request is exactly what that difference is worth: the estimate
+said two.
 
 **The counters are numbers, and nothing anybody wrote.** No subject, no sender, no message
 body and no mailbox name beyond the role: a counter is what CTX-02 asks for, and a subject in
@@ -103,7 +107,14 @@ WINDOW_DAYS = 7
 #: ``degraded`` list. That closes assumption A2 of 04-RESEARCH from the other side: the
 #: healthy case is two orders of magnitude away from the thirty seconds a client grants, so
 #: these budgets only ever bite when a source is actually stalling, which is what they are
-#: for. Reproduce with the command in 04-04-MEASUREMENTS.md.
+#: for.
+#:
+#: Measured again on 2026-08-24 with four legs (Nextcloud 34.0.3, mail 5.11.1, spreed 24.0.4,
+#: tables 2.2.2, three runs of three calls each): this leg alone answered in a median of
+#: **0.07 s to 0.08 s**, a factor of more than 100 below this ceiling, and the whole bundle
+#: stayed at a median of 0.65 s to 1.13 s short and 0.85 s to 1.83 s full. Unchanged at 10.0:
+#: a ceiling that never bites in the healthy case is doing its job.
+#: Reproduce with the command in 11-06-MEASUREMENTS.md.
 CALENDAR_BUDGET = 10.0
 
 #: Token predictability over completeness (D-54): five hits per kind are enough for a model
@@ -112,12 +123,15 @@ CALENDAR_BUDGET = 10.0
 MAX_PER_BUCKET = 5
 MAX_EVENTS = 10
 
-#: Own ceiling for the Talk leg, and a setting rather than a measurement, which is why it is
-#: said out loud here: plan 11-06 measures this leg on the live topology, and when it does,
-#: this comment gets a measurement line like the one at :data:`CALENDAR_BUDGET` above and the
-#: number moves only together with it. Tighter than the calendar on purpose: the digest is
-#: **one** request against one route, where the calendar fans out over every collection of the
+#: Own ceiling for the Talk leg. Tighter than the calendar on purpose: the digest is **one**
+#: request against one route, where the calendar fans out over every collection of the
 #: account, so five seconds are already generous for it.
+#:
+#: Measured on 2026-08-24 on the live topology (Nextcloud 34.0.3, spreed 24.0.4, three runs of
+#: three calls each, one account with five conversations): this leg answered in a median of
+#: **0.04 s**, a factor of about 130 below this ceiling, and it is the fastest of the four.
+#: Unchanged at 5.0: the number was a setting until this line, and the measurement says the
+#: setting was right. Reproduce with the command in 11-06-MEASUREMENTS.md.
 TALK_BUDGET = 5.0
 
 #: CTX-01, literally: at most three conversations reach the digest. The fourth costs every
@@ -133,13 +147,17 @@ MAX_DIGEST = 3
 #: makes. Hence the name ``..._BYTES`` and not ``..._CHARS``: the unit is part of the promise.
 DIGEST_PREVIEW_BYTES = 200
 
-#: Own ceiling for the Mail leg, and a setting rather than a measurement, said out loud here
-#: for the same reason as at :data:`TALK_BUDGET`: plan 11-06 measures this leg on the live
-#: topology, and when it does, this comment gets a measurement line like the one at
-#: :data:`CALENDAR_BUDGET` and the number moves only together with it. Wider than the Talk
-#: budget on purpose, and the reason is the shape of the leg rather than the speed of the app:
-#: the digest is **one** request against one route, while this leg is 1 plus N, one account
-#: list plus one mailbox list per account, and N belongs to the account of a stranger.
+#: Own ceiling for the Mail leg. Wider than the Talk budget on purpose, and the reason is the
+#: shape of the leg rather than the speed of the app: the digest is **one** request against one
+#: route, while this leg is 1 plus N, one account list plus one mailbox list per account, and N
+#: belongs to the account of a stranger.
+#:
+#: Measured on 2026-08-24 on the live topology (Nextcloud 34.0.3, mail 5.11.1, three runs of
+#: three calls each, one mail account with one mailbox, so N is 1): this leg answered in a
+#: median of **0.06 s**, a factor of about 150 below this ceiling. Unchanged at 10.0, and the
+#: width stays justified by the shape rather than by this number: N is one on the measured
+#: instance and may be :data:`MAX_MAIL_ACCOUNTS` on somebody else's.
+#: Reproduce with the command in 11-06-MEASUREMENTS.md.
 MAIL_BUDGET = 10.0
 
 #: How many mail accounts of an account reach the counters, and the cap is the point rather
@@ -147,6 +165,13 @@ MAIL_BUDGET = 10.0
 #: accounts somebody else set up, and a tool whose answer time a user can extend by adding an
 #: account is a tool a client aborts. Three, like :data:`MAX_DIGEST`, and the cap writes its
 #: own ``degraded`` entry with the total, so "three" is never mistaken for "all".
+#:
+#: Measured on 2026-08-24 on the live topology: the account of the measurement owns **one**
+#: mail account, so the cap did not bite and the leg cost 1 account list plus **1** mailbox
+#: list, both on a cold and on a warm cache. Unchanged at 3, and the measurement is a lower
+#: bound rather than a confirmation: this instance cannot tell what three accounts cost, which
+#: is why the number keeps its reasoning above and does not lean on this line.
+#: Reproduce with the command in 11-06-MEASUREMENTS.md.
 MAX_MAIL_ACCOUNTS = 3
 
 #: The three kinds this answer groups by name. Everything else lands in one bucket together,
@@ -207,8 +232,9 @@ async def prepare_context(clients: NcClients, query: str, detail: str = SHORT) -
 
     Four legs, four ceilings, one wall clock: the cost of the two composed legs is one request
     for the digest and, for the counters, 1 account list plus N mailbox lists (N at most
-    :data:`MAX_MAIL_ACCOUNTS`), plus up to two detection requests on a cold cache
-    (``capabilities.TTL_SECONDS``).
+    :data:`MAX_MAIL_ACCOUNTS`), plus the detection requests of a cold cache, measured as three
+    for a whole bundle and zero inside ``capabilities.TTL_SECONDS`` afterwards
+    (``11-06-MEASUREMENTS.md``).
     """
     term = (query or "").strip()
     if not term:
@@ -289,6 +315,10 @@ async def _mail(clients: NcClients) -> dict[str, Any]:
     detection requests on a cold cache, because ``mail_tools.browse`` asks
     ``capabilities.require_app("mail")`` first and Mail is recognised through the navigation of
     the signed in account (``capabilities.TTL_SECONDS`` is how long both answers are reused).
+    Two is this leg's own share; a whole bundle was measured at three, because the Talk leg
+    races this one for the same empty cache entry and the capabilities document goes out twice
+    (2026-08-24, ``11-06-MEASUREMENTS.md``). Measured on this instance: 1 account list plus 1
+    mailbox list for one account, identical cold and warm.
 
     The mailbox lists run in an inner ``gather`` under the same outer ceiling. A sequential
     round over three accounts would be three times the time of one, and the rule of this module
