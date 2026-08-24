@@ -205,6 +205,10 @@ Keine. Keine neue Abhängigkeit, keine neue Umgebungsvariable, kein Werkzeug meh
 - **Bereit für Plan 11-08:** `_HINT` und die Zahl **acht** stehen oben wörtlich für die drei READMEs.
 - **Offen und bewusst offen:** TOOL-16 bleibt in `REQUIREMENTS.md` auf `Pending`. Die Anforderung verlangt auflösbare Treffer, nicht nur Ids: erfüllt ist sie erst, wenn `fetch` die zwei Kinds liest (11-03). Fünf Pläne der Phase tragen `TOOL-16` im Frontmatter; abgehakt wird sie im letzten davon.
 
+## Self-Check: PASSED
+
+Alle vier geänderten Dateien liegen auf der Platte, alle drei Commits (`9b0606e`, `a2a9039`, `7a86864`) sind im Log, und der Arbeitsbaum ist sauber.
+
 ---
 *Phase: 11-b-ndelung-budget-und-release-0-1-6*
 *Completed: 2026-08-24*
