@@ -434,7 +434,15 @@ async def _messages(
     }
     if len(raw) >= limit:
         answer["truncated"] = True
-        oldest = min((_number(item.get("dateInt")) for item in raw), default=0)
+        # The continuation is the oldest *valid* timestamp of the page. A single envelope
+        # with a missing or deformed ``dateInt`` reads as 0 through ``_number``, and taking
+        # the minimum over it would silently suppress the cursor: the answer would say
+        # "truncated" without a ``next``, and the rest of the mailbox would be unreachable
+        # (review finding WR-02). An envelope without a date falls out of the app's strict
+        # ``sent_at <`` cursor anyway, so it has no say in where the next page begins.
+        oldest = min(
+            (stamp for item in raw if (stamp := _number(item.get("dateInt"))) > 0), default=0
+        )
         if oldest > 0:
             answer["next"] = paging.encode_cursor({"o": oldest, _SCOPE: mailbox})
     return answer

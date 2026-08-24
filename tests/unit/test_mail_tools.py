@@ -728,6 +728,42 @@ async def test_a_full_window_hands_out_a_handle_with_the_oldest_date_of_the_page
 
 
 @pytest.mark.anyio
+async def test_one_deformed_date_does_not_suppress_the_handle_of_a_full_window(
+    clients: NcClients,
+) -> None:
+    """A single envelope without a usable ``dateInt`` must not swallow the continuation.
+
+    ``_number`` reads a missing, boolean or non integer date as 0, and a minimum over all
+    envelopes would let that one zero suppress ``next`` on a full page: truncated without a
+    way to continue, and the rest of the mailbox silently unreachable (review finding
+    WR-02). The cursor has to be the oldest *valid* timestamp of the page instead.
+    """
+    payload = [
+        message(),
+        message(databaseId=4712, dateInt=1755180000),
+        message(databaseId=4713, dateInt=None),
+    ]
+    with respx.mock(assert_all_called=True) as mock:
+        answer, _ = await browse_messages(clients, mock, payload, limit=3)
+
+    assert answer["truncated"] is True
+    assert paging.decode_cursor(answer["next"]) == {"o": 1755180000, "m": str(MAILBOX_ID)}
+
+
+@pytest.mark.anyio
+async def test_a_full_window_without_a_single_valid_date_stays_without_a_handle(
+    clients: NcClients,
+) -> None:
+    """No valid timestamp means no place a next page could start, and no invented one."""
+    payload = [message(dateInt=None), message(databaseId=4712, dateInt=True)]
+    with respx.mock(assert_all_called=True) as mock:
+        answer, _ = await browse_messages(clients, mock, payload, limit=2)
+
+    assert answer["truncated"] is True
+    assert "next" not in answer
+
+
+@pytest.mark.anyio
 async def test_that_handle_travels_back_into_the_url_as_the_cursor(clients: NcClients) -> None:
     handle = paging.encode_cursor({"o": 1755180000, "m": str(MAILBOX_ID)})
     with respx.mock(assert_all_called=True) as mock:
