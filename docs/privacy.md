@@ -56,6 +56,10 @@ both: see [Deletion and user control](#deletion-and-user-control).
   itself. The assistant, not this app, talks to the model.
 - No access beyond the signed in user's own permissions. A restricted user sees
   through the connector exactly what the web interface shows them, and no more.
+- No sending of mail. Mail is read only in this app: there is no way to send a
+  mail, to draft one, to move, flag or delete a message, and no attachment is
+  downloaded. A contract test holds that sentence, see
+  [The chain that mail closes](#the-chain-that-mail-closes).
 
 ## What leaves your control
 
@@ -80,6 +84,64 @@ but an operator has to account for this flow:
 - A self hosted or EU based model (for example an assistant that speaks to a local
   or European LLM) keeps this flow inside your own control and is the way to avoid
   the third country transfer entirely.
+
+### The chain that mail closes
+
+Since mail can be read, this server has all three ingredients of one chain at the
+same time, and an administrator deserves to read that sentence here rather than to
+assemble it themselves:
+
+1. **Private data.** Files, calendar entries, notes, contacts, Tables rows and now
+   the mail of the signed in user, all of it readable through the read tools.
+2. **Untrusted content.** A mail and a Talk message are written by somebody else.
+   For a Talk message that somebody at least holds an account on this instance. For
+   a mail they do not even need that: anybody with an internet connection can put
+   text in front of the model, without ever being invited.
+3. **An outgoing channel.** `talk_send`, the one write tool of this server that puts
+   something in front of other people.
+
+Those three together are what Simon Willison calls the
+[lethal trifecta](https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/):
+access to private data, exposure to untrusted content, and the ability to
+communicate outwards. This document uses his term instead of inventing one, because
+the pattern is older than this app and an administrator may already know it by name.
+
+**Why the three together are more than a list.** A language model does not reliably
+separate data from instructions. A mail can carry a sentence addressed at the model
+rather than at the reader, the model can follow it, and the answer can take the way
+out. That class of attack is called prompt injection, and no known method prevents
+it. The three ingredients are the condition under which a successful injection
+becomes an exfiltration, and that is the difference between an annoyance and a data
+protection incident.
+
+**What this project puts against it**, each with the place it lives in:
+
+- `talk_send` sits behind the administration switch `NC_MCP_TALK_SEND`. Set to off,
+  no assistant can send a Talk message through this connector, for the whole
+  instance, whatever an account is allowed to do in Talk itself. Reading
+  conversations is not affected. That switch is the one control that takes the third
+  ingredient off the table completely.
+- **Mail is read only.** There is no way in this app to send a mail, to create a
+  draft, to move, flag or delete a message, and the attachment route of the Mail app
+  is never called. The new family adds reach into private data and untrusted
+  content, and it deliberately adds no second way out.
+- There are no destructive write paths at all. Nothing is deleted, overwritten,
+  moved or re-shared, and the write tools that exist can only create.
+- The assistant never sees more than the signed in user. Every request runs under
+  that identity, so Nextcloud's own permissions decide what an injection could
+  reach at most.
+- The markers this server writes into its own answers are removed from foreign text
+  before it is passed on, so a stranger cannot frame their own text as if this
+  server had commented on it.
+
+**And the honest remainder.** None of these makes prompt injection impossible. What
+they do is keep the outgoing channel switchable and the write surface small. That is
+also the difference between two kinds of sentence in this document. "Mail is read
+only" is a statement about a capability. The promise underneath it is narrower and
+checkable: there is no code path in this app that sends, drafts, moves, flags or
+deletes a mail, and a contract test asserts it against the source of the two mail
+modules on every run. An operator who needs the chain broken rather than narrowed
+sets `NC_MCP_TALK_SEND` to off.
 
 ## Deletion and user control
 

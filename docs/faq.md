@@ -61,6 +61,25 @@ act with its own order of commands, which the administration runbook
 switch and your own disconnect do not depend on any of that: they act immediately
 and they are yours.
 
+### Can the assistant send or delete my mail?
+
+No. Mail is read only in this app, and that is not a setting somebody could have
+switched the other way: there is no code in this connector that sends a mail,
+creates a draft, moves a message into another mailbox, sets or clears a flag,
+deletes anything or downloads an attachment. A contract test reads the two mail
+modules on every run and asserts that not one such call exists, which is why the
+sentence can be stated instead of promised.
+
+What the assistant can do is read: the mail accounts of your own Nextcloud Mail, the
+mailboxes of one account, the message envelopes of one mailbox with a filter, and
+the full text of a single message. It reads exactly what you see in the Mail app,
+under your own identity, and nothing is marked as read by the reading.
+
+The one thing worth knowing about the other direction: a mail is written by
+somebody else, and for a mail that somebody does not even need an account on your
+instance. [privacy.md](privacy.md), section "The chain that mail closes", names what
+follows from that and what this app puts against it.
+
 ## For administrators
 
 ### Does the app need any configuration before a user can connect?
@@ -102,3 +121,23 @@ of its database and deletes its encryption key, then
 with its data volume. The second must not run first, because it deletes the only
 record of which app password belongs to which connection. The runbook with the
 verification steps is [uninstall.md](uninstall.md).
+
+### I want to close the outgoing channel completely. What do I set?
+
+`NC_MCP_TALK_SEND` to off. It is one of the variables the app declares for its
+deploy daemon, and in the ExApp mode the administration form writes it: Settings,
+Administration, Security, MCP Connector, the switch "Let assistants send Talk
+messages". With it off, no assistant can send a Talk message through this connector,
+for the whole instance and whatever an account is allowed to do in Talk itself.
+Reading conversations and their history is not affected.
+
+That one switch closes the only way out this app has. It is worth setting for the
+reason [privacy.md](privacy.md), section "The chain that mail closes", spells out: a
+server that reads private data and takes in text written by strangers has a chain
+only as long as it can also communicate outwards, and prompt injection has no known
+cure, so the channel is the part that can actually be removed.
+
+Mail stays readable with the switch off, and that is the point rather than an
+oversight. Mail has no outgoing channel of its own: it is read only in this app,
+with no way to send, draft, move, flag or delete a message, so closing the Talk
+channel leaves the reading families intact and takes the exfiltration step away.
