@@ -14,6 +14,14 @@ app is part of the bundle without a line of code here. Hits are grouped by their
 and never by the provider id, because the Deck provider is called
 ``search-deck-card-board`` and a grouping by name would silently never see a card.
 
+**The grouping stays at three named kinds.** Since TOOL-16 a Talk message and a Tables table
+are resolvable hits, and they are still grouped with the rest instead of getting a bucket of
+their own. The reason is not economy: the Talk digest of this bundle is its one statement
+about that app, and two statements about the same app in one answer, a bucket and a digest,
+would leave a model to decide which of them is the truth. What a hit says about itself is
+therefore the only source of ``resolvable`` (:func:`_short`), and what this server reads
+unasked is a list of its own (:data:`EXCERPT_KINDS`).
+
 **Each source has its own budget, the bundle has none.** A global ``asyncio.timeout``
 around the ``gather`` would throw away the answer that was already finished, so every
 source carries its own ceiling and a source that misses it becomes a named entry under
@@ -71,7 +79,10 @@ CALENDAR_BUDGET = 10.0
 MAX_PER_BUCKET = 5
 MAX_EVENTS = 10
 
-#: The three kinds a read tool can resolve. Everything else is honest rest (pitfall 10).
+#: The three kinds this answer groups by name. Everything else lands in one bucket together,
+#: and since TOOL-16 that bucket is no longer the same thing as "cannot be read": a Talk
+#: message and a Tables table are resolvable and stay in there anyway, for the reason named
+#: in the module docstring.
 KIND_BUCKETS = ("file", "note", "card")
 OTHER_BUCKET = "other"
 BUCKETS = (*KIND_BUCKETS, OTHER_BUCKET)
@@ -94,6 +105,14 @@ EXCERPT_READ_BYTES = EXCERPT_MAX_BYTES * 2
 #: Own budget per excerpt, for the same reason the calendar has one: three reads that
 #: cannot be finished must cost three sentences under ``degraded``, never the bundle.
 EXCERPT_TIMEOUT = 5.0
+
+#: Which kinds this server opens unasked at ``detail="full"``. The same three names as
+#: :data:`KIND_BUCKETS` today, and a tuple of its own on purpose: that one groups the answer,
+#: this one decides whose content is read without anybody asking for it. A mail body and a
+#: chat message are the texts an outsider can place into this account most easily, so the
+#: reach of the excerpts is a decision with a name instead of a side effect of a decision
+#: about buckets (T-11-24).
+EXCERPT_KINDS = ("file", "note", "card")
 
 #: Marked inside the text and not only beside it, exactly as ``chatgpt.fetch`` does it: a
 #: model that only reads the excerpt must still be able to tell it from a whole document.
@@ -196,7 +215,7 @@ def _bundle(
         bucket = kind if kind in KIND_BUCKETS else OTHER_BUCKET
         matched[bucket] += 1
         if len(grouped[bucket]) < MAX_PER_BUCKET:
-            grouped[bucket].append(_short(hit, bucket))
+            grouped[bucket].append(_short(hit))
 
     for name in BUCKETS:
         if matched[name] > MAX_PER_BUCKET:
@@ -210,16 +229,25 @@ def _bundle(
     return grouped
 
 
-def _short(hit: dict[str, Any], bucket: str) -> dict[str, Any]:
-    """One hit as origin plus title: the four fields a follow up call needs (D-54, D-57)."""
+def _short(hit: dict[str, Any]) -> dict[str, Any]:
+    """One hit as origin plus title: the four fields a follow up call needs (D-54, D-57).
+
+    Whether a hit can be read is the hit's own statement, and the bucket it was grouped into
+    says nothing about it any more. The grouping is a matter of presentation, the
+    resolvability a matter of the id, and TOOL-16 is what pulled the two apart.
+    """
     entry: dict[str, Any] = {
         "id": str(hit.get("id") or ""),
         "title": str(hit.get("title") or ""),
         "provider": str(hit.get("provider") or ""),
         "kind": str(hit.get("kind") or ""),
     }
-    if bucket == OTHER_BUCKET or hit.get("resolvable") is False:
+    if hit.get("resolvable") is False:
         # The honest half of pitfall 10: this id cannot be handed to a read tool as it is.
+        # "Not one of the three named kinds" used to be the same sentence and is not any
+        # more: since TOOL-16 the provider map resolves a Talk message and a Tables table,
+        # and ``fetch`` reads both, so a whole bucket can no longer answer this question.
+        # The hit answers it, and a hit that says nothing is taken at its word.
         entry["resolvable"] = False
     return entry
 
@@ -264,9 +292,16 @@ async def _excerpts(
     and are tested there (threat T-01-75, T-01-77). A second routing here would be a second
     place to get exactly those decisions wrong. The excerpt is a data field and nothing
     else: no sentence of this module turns it into a request or an instruction (D-57).
+
+    The kinds come from :data:`EXCERPT_KINDS` and deliberately not from the bucket list: a
+    later decision about how this answer is grouped must not silently widen what this server
+    reads unasked.
     """
     targets = [
-        hit for name in KIND_BUCKETS for hit in results[name] if hit.get("resolvable") is not False
+        hit
+        for name in EXCERPT_KINDS
+        for hit in results.get(name, [])
+        if hit.get("resolvable") is not False
     ][:MAX_EXCERPTS]
 
     outcomes = await asyncio.gather(

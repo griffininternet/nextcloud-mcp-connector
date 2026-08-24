@@ -18,6 +18,7 @@ foreign text as a request of the user.
 """
 
 import asyncio
+import inspect
 import json
 from datetime import timedelta
 from pathlib import Path
@@ -72,10 +73,19 @@ NOTE_HIT = hit("note:12", "Protokoll 2026-08-14", "notes", "note")
 CARD_HIT = hit(
     "card:57", "Übergabe vorbereiten", "search-deck-card-board", "card", resolvable=False
 )
-TALK_HIT = hit(
-    f"url:{BASE}/index.php/call/abc123#message_42",
-    "Khaled",
-    "spreed",
+#: A Talk hit as the provider map builds it since TOOL-16: an id ``fetch`` reads, so the
+#: bundle may not call it unresolvable any more (plan 11-01, plan 11-03).
+TALK_HIT = hit("message:abc123:42", "Khaled", "talk-message", "message")
+
+#: The same for a table. Both land in the ``other`` bucket and both are readable there.
+TABLE_HIT = hit("table:7", "Baustellen 2026", "tables-search-tables", "table")
+
+#: The honest half of pitfall 10, in the same bucket: a hit whose id addresses nothing a read
+#: tool takes. This one has to keep saying so.
+URL_HIT = hit(
+    f"url:{BASE}/index.php/apps/forms/1",
+    "Umfrage zur Kantine",
+    "forms",
     "url",
     resolvable=False,
 )
@@ -190,7 +200,9 @@ async def test_one_call_bundles_hits_by_kind_and_the_window_of_the_next_seven_da
     assert [entry["id"] for entry in result["results"]["note"]] == ["note:12"]
     assert [entry["id"] for entry in result["results"]["card"]] == ["card:57"]
     assert [entry["id"] for entry in result["results"]["other"]] == [TALK_HIT["id"]]
-    assert result["results"]["other"][0]["resolvable"] is False, "an url id resolves to nothing"
+    assert "resolvable" not in result["results"]["other"][0], (
+        "a Talk message is read by fetch, so the bucket says nothing about it (TOOL-16)"
+    )
     assert result["results"]["card"][0]["resolvable"] is False, "the short card form needs a sweep"
 
     assert result["results"]["file"][0] == {
@@ -510,7 +522,9 @@ async def test_full_loads_three_excerpts_in_bucket_order_and_at_the_same_time(
     assert result["results"]["file"][0]["excerpt"] == "content of file:1"
     assert result["results"]["note"][0]["excerpt"] == "content of note:12"
     assert "excerpt" not in result["results"]["card"][0], "the fourth hit stays short"
-    assert "excerpt" not in result["results"]["other"][0], "an url id is never fetched (T-01-75)"
+    assert "excerpt" not in result["results"]["other"][0], (
+        "a kind outside EXCERPT_KINDS is never read, resolvable or not (T-11-24)"
+    )
     assert "degraded" not in result
 
 
@@ -694,13 +708,86 @@ async def test_a_hit_without_a_resolvable_id_is_never_fetched(
     clients: NcClients, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The short card form and an url id cannot be read as they stand (pitfall 10)."""
-    wire(monkeypatch, search=FakeCall(search_answer([CARD_HIT, TALK_HIT])))
+    wire(monkeypatch, search=FakeCall(search_answer([CARD_HIT, URL_HIT])))
     fetch = wire_fetch(monkeypatch, FakeFetch())
 
     result = await context_tools.prepare_context(clients, query="budget", detail="full")
 
     assert fetch.ids == [], "an unresolvable id is never handed to a reader"
     assert "degraded" not in result, "not fetching what cannot be fetched is not a failure"
+
+
+@pytest.mark.anyio
+async def test_a_talk_and_a_tables_hit_are_no_longer_reported_as_unreadable(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """TOOL-16 in the bundle: fetch reads both of these ids, so nothing may deny it."""
+    wire(monkeypatch, search=FakeCall(search_answer([TALK_HIT, TABLE_HIT])))
+
+    result = await context_tools.prepare_context(clients, query="budget")
+
+    entries = result["results"]["other"]
+    assert [entry["id"] for entry in entries] == ["message:abc123:42", "table:7"]
+    for entry in entries:
+        assert set(entry) == {"id", "title", "provider", "kind"}, (
+            "no resolvable field at all: the hit said nothing and is taken at its word"
+        )
+    assert context_tools.KIND_BUCKETS == ("file", "note", "card"), (
+        "the grouping stays at three; the digest is the one statement about Talk"
+    )
+
+
+@pytest.mark.anyio
+async def test_an_url_hit_in_the_same_bucket_still_says_that_it_cannot_be_read(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The reduction may not take the honest half with it (pitfall 10)."""
+    wire(monkeypatch, search=FakeCall(search_answer([TALK_HIT, URL_HIT])))
+
+    result = await context_tools.prepare_context(clients, query="budget")
+
+    readable, unreadable = result["results"]["other"]
+    assert "resolvable" not in readable
+    assert unreadable["id"] == URL_HIT["id"]
+    assert unreadable["resolvable"] is False, "an url id resolves to nothing, and says so"
+
+
+@pytest.mark.anyio
+async def test_full_reads_no_talk_and_no_tables_content_even_though_it_could(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T-11-24: the reach of the excerpts is EXCERPT_KINDS and not what fetch can resolve."""
+    wire(monkeypatch, search=FakeCall(search_answer([TALK_HIT, TABLE_HIT])))
+    fetch = wire_fetch(monkeypatch, FakeFetch())
+
+    result = await context_tools.prepare_context(clients, query="budget", detail="full")
+
+    assert len(fetch.ids) == 0, "a resolvable Talk or Tables hit is still not an excerpt source"
+    for entry in result["results"]["other"]:
+        assert "excerpt" not in entry
+    assert "degraded" not in result, "reading nothing here is a decision, not a failure"
+
+
+def test_the_excerpt_kinds_are_a_list_of_their_own_and_name_no_foreign_text() -> None:
+    """The two tuples are equal today and separate on purpose (T-11-24)."""
+    assert context_tools.EXCERPT_KINDS == ("file", "note", "card")
+    for forbidden in ("message", "table", "mail"):
+        assert forbidden not in context_tools.EXCERPT_KINDS, (
+            f"{forbidden!r} is text a stranger can place into this account"
+        )
+
+    source = inspect.getsource(context_tools._excerpts)
+    code = "\n".join(line for line in source.splitlines() if not line.strip().startswith("#"))
+    assert "EXCERPT_KINDS" in code, "the targets come from the excerpt list"
+    assert "KIND_BUCKETS" not in code, "and never from the bucket list"
+
+
+def test_the_resolvability_of_a_hit_is_not_read_off_its_bucket() -> None:
+    """The source side of TOOL-16: the whole bucket cannot answer this question any more."""
+    source = inspect.getsource(context_tools._short)
+    code = "\n".join(line for line in source.splitlines() if not line.strip().startswith("#"))
+    assert "OTHER_BUCKET" not in code, "the bucket equivalence is gone from the executable part"
+    assert "resolvable" in code
 
 
 @pytest.mark.anyio
