@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Kuratierte Breite
 status: executing
-stopped_at: Completed 10-02-PLAN.md
-last_updated: "2026-08-24T13:21:34.949Z"
-last_activity: 2026-08-24 -- Plan 10-02 abgeschlossen (Mail-Client plus zweiter Erkennungskanal)
+stopped_at: Completed 10-03-PLAN.md
+last_updated: "2026-08-24T13:46:24.378Z"
+last_activity: 2026-08-24 -- Plan 10-03 abgeschlossen (HTML-zu-Text-Wandler plus dritter Kappungsmarker)
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 18
-  completed_plans: 12
-  percent: 67
+  completed_plans: 13
+  percent: 72
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 10 (Mail strikt lesend und die Trifecta-Grenze) — EXECUTING
-Plan: 3 of 8
+Plan: 4 of 8
 Status: Ready to execute
-Last activity: 2026-08-24 -- Plan 10-02 abgeschlossen (Mail-Client plus zweiter Erkennungskanal)
+Last activity: 2026-08-24 -- Plan 10-03 abgeschlossen (HTML-zu-Text-Wandler plus dritter Kappungsmarker)
 
 ## Performance Metrics
 
@@ -128,6 +128,7 @@ Last activity: 2026-08-24 -- Plan 10-02 abgeschlossen (Mail-Client plus zweiter 
 | Phase 09-talk P05 | 29 min | 3 tasks tasks | 6 files files |
 | Phase 10-mail P01 | 42 min | 3 tasks tasks | 3 files files |
 | Phase 10-mail P02 | 17 min | 3 tasks tasks | 5 files files |
+| Phase 10-mail PP03 | 25 min | 3 tasks tasks | 5 files files |
 
 ## Accumulated Context
 
@@ -452,6 +453,11 @@ Recent decisions affecting current work:
 - [Phase 10-mail]: Der zweite Erkennungskanal heisst load_mail, laeuft ueber /core/navigation/apps und fuellt dieselbe Cache-Zeile mit dem urspruenglichen Zeitstempel; ein eigener Cache waere ein dritter Modulzustand und damit eine Review-Entscheidung (D-20)
 - [Phase 10-mail]: ocs._OK_STATUS bleibt frozenset({100, 200, 201}); 206 wird lokal im Mail-Client behandelt, wie Phase 9 die 304 lokal gehalten hat
 - [Phase 10-mail]: Eine leere oder deformierte Navigationsliste ist ein ToolError mit Ausweg und nie die Aussage Mail fehlt; jede Instanz hat Navigation
+- [Phase 10-mail]: Der HTML-zu-Text-Wandler heisst html_text.to_text(html: str) -> str, kappt nie und wirft nie: die Byte-Kappe gehoert zur Aufrufstelle, wo der Schnitt markiert werden kann
+- [Phase 10-mail]: Fremdes Mail-HTML wird aus UTF-8-Bytes mit HTMLParser(no_network=True, encoding=utf-8) geparst statt aus dem String: gemessen identisches Ergebnis, aber eine XML-Deklaration wirft dann nicht mehr und ein widersprechendes meta charset luegt nicht mehr
+- [Phase 10-mail]: Der dritte Marker heisst FINAL_TRUNCATION und nennt kein Werkzeug und keinen Offset; er steht ab der ersten Zeile in _PATTERNS, damit without_marks ihn ohne Aenderung am Filter mitentfernt (ME-03)
+- [Phase 10-mail]: Der Rest eines internen DTD-Subsets (die Zeichen ]>) und ein Non-Breaking-Space bleiben im Text: eine zweite Reinigungsregel ueber fremdem Text waere eine zweite Wahrheit
+- [Phase 10-mail]: MAIL-02 bleibt Pending: Plan 10-03 baut nur die zwei Bausteine, das Volltext-Werkzeug entsteht in Plan 10-05
 
 ### Pending Todos
 
@@ -486,8 +492,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-24T13:21:08.454Z
-Stopped at: Completed 10-02-PLAN.md
+Last session: 2026-08-24T13:46:24.362Z
+Stopped at: Completed 10-03-PLAN.md
 Naechster Schritt: /gsd:plan-phase 8
 Resume file: None
 
