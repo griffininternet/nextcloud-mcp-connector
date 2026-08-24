@@ -55,6 +55,8 @@
 - **Talk**: read conversations, send a message
 - **Mail**: read the accounts, the mailboxes of one, the messages of one, and the full text of a single message, with filters
 - **Search**: one question across all of it, full text on demand
+- **One call**: prepare_context bundles a search, the coming week, the Talk conversations that are waiting and the unread mail counts into a single answer. Mail arrives as counts only, so the standard bundle carries no subject and no message content at all.
+- **Open a hit in place**: a Talk message and a table found by the search are read where they were found, without switching to the app. A mail hit deliberately stays a link, because resolving it to one single message is untested, and a wrong one would be somebody else's mail.
 
 ### What it will not do
 
@@ -94,6 +96,8 @@ Reading text written by strangers next to private data would be a chain if there
 - **Talk**: Konversationen lesen, eine Nachricht senden
 - **Mail**: die Konten, die Postfächer eines Kontos, die Nachrichten eines Postfachs und den Volltext einer einzelnen Nachricht lesen, mit Filtern
 - **Suche**: eine Frage über alles davon, Volltext auf Abruf
+- **Ein Aufruf**: prepare_context bündelt eine Suche, die kommende Woche, die wartenden Talk-Konversationen und die Ungelesen-Zähler der Mailkonten in einer einzigen Antwort. Mail kommt nur als Zahl, das Standardbündel enthält also weder einen Betreff noch einen Nachrichteninhalt.
+- **Einen Treffer direkt lesen**: eine Talk-Nachricht und eine Tabelle aus der Suche werden dort gelesen, wo sie gefunden wurden, ohne Wechsel in die App. Ein Mail-Treffer bleibt bewusst ein Link, weil seine Auflösung auf genau eine Nachricht ungeprüft ist und eine falsche die Mail eines anderen Menschen wäre.
 
 ### Was er nicht kann
 
@@ -135,6 +139,8 @@ Die verlinkten Seiten sind auf Englisch.
 - **Talk** : lire les conversations, envoyer un message
 - **Mail** : lire les comptes, les boîtes aux lettres de l'un d'eux, les messages de l'une d'elles et le texte complet d'un seul message, avec des filtres
 - **Recherche** : une seule question sur tout cela, texte complet à la demande
+- **Un seul appel** : prepare_context regroupe une recherche, la semaine à venir, les conversations Talk en attente et le nombre de messages non lus des comptes Mail dans une seule réponse. Mail n'arrive que sous forme de nombres, le paquet standard ne contient donc ni objet ni contenu de message.
+- **Lire un résultat sur place** : un message Talk et une table issus de la recherche se lisent là où ils ont été trouvés, sans passer dans l'application. Un résultat Mail reste volontairement un lien, car sa résolution vers un seul message n'est pas testée et un mauvais serait le courrier de quelqu'un d'autre.
 
 ### Ce qu'il ne fera pas
 
