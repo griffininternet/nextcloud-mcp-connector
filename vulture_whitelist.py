@@ -117,6 +117,13 @@ get_accounts
 get_mailboxes
 get_message
 
+# to_text: the same parked-caller case one layer up. tools/html_text.py was written in plan
+# 10-03, because its four properties are measurements against lxml 6.1.1 and belong in one
+# piece with the tests that pin them; plan 10-05 is the one that converts a mail body with it
+# and appends marks.FINAL_TRUNCATION to the result. It is exercised today by the thirteen
+# cases of tests/unit/test_html_text.py, and it leaves this list with the plan that calls it.
+to_text
+
 # --- The store API of phase 3 ----------------------------------------------------------
 # oauth/store.py was built in one piece in plan 03-02, because its schema and its
 # transactions only make sense together, and its callers arrived plan by plan afterwards.
