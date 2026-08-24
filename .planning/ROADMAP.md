@@ -146,7 +146,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 10-06-PLAN.md: Registrierung, das erweiterte Schreibverbot mit Gegenprobe, die Budget-Zwischenanhebung und die eingefrorenen Zahlen
+- [x] 10-06-PLAN.md: Registrierung, das erweiterte Schreibverbot mit Gegenprobe, die Budget-Zwischenanhebung und die eingefrorenen Zahlen
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -224,7 +224,7 @@ Plans:
 | 7. Verwaltungs-Clients live verprobt | v1.1 | 0/0 | Deferred (extern getaktet) | - |
 | 8. Erreichbarkeits-Spike und Tables | v1.2 | 5/5 | Complete    | 2026-08-21 |
 | 9. Talk | v1.2 | 5/5 | Complete    | 2026-08-21 |
-| 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 5/8 | In Progress|  |
+| 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 6/8 | In Progress|  |
 | 11. Bündelung, Budget und Release 0.1.6 | v1.2 | 0/? | Not started | - |
 
 ## Next

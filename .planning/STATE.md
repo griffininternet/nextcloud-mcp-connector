@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Kuratierte Breite
 status: executing
-stopped_at: Completed 10-05-PLAN.md
-last_updated: "2026-08-24T14:26:54.263Z"
+stopped_at: Completed 10-06-PLAN.md
+last_updated: "2026-08-24T14:44:29.799Z"
 last_activity: 2026-08-24
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 18
-  completed_plans: 15
+  completed_plans: 16
   percent: 50
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 10 (Mail strikt lesend und die Trifecta-Grenze) — EXECUTING
-Plan: 6 of 8
+Plan: 7 of 8
 Status: Ready to execute
 Last activity: 2026-08-24
 
@@ -131,6 +131,7 @@ Last activity: 2026-08-24
 | Phase 10-mail PP03 | 25 min | 3 tasks tasks | 5 files files |
 | Phase 10-mail P04 | 22 min | 3 tasks | 3 files |
 | Phase 10 P05 | 20min | 3 tasks | 5 files |
+| Phase 10 P06 | 15 min | 3 tasks tasks | 7 files files |
 
 ## Accumulated Context
 
@@ -468,6 +469,9 @@ Recent decisions affecting current work:
 - [Phase 10-mail]: 10-05: MAX_MAIL_BYTES = 32768 als eigene Byte-Kappe des Mail-Volltexts, begruendet durch die Messung aus 10-01
 - [Phase 10-mail]: 10-05: Vertrauens-Signale flach in metadata und nie im text; fehlendes dkimValid ergibt unchecked
 - [Phase 10-mail]: 10-05: url einer Mail ist die Mail-App-Route, nie eine Adresse aus der Antwort
+- [Phase ?]: Phase 10-06: BUDGET_BYTES 15000 -> 18500 auf der Messung 15736 Bytes bei 21 Werkzeugen (plus 15 Prozent, aufgerundet); ausdruecklich Zwischenstand, TOOL-15 in Phase 11 verankert neu
+- [Phase ?]: Phase 10-06: mail_browse war 1585 Bytes und damit ueber MAX_TOOL_BYTES 1400; gekuerzt wurde die Beschreibung, nicht die Grenze (A5); Endstand 1377 Bytes, groesstes Werkzeug der Oberflaeche
+- [Phase ?]: Phase 10-06: das Mail-Schreibverbot besteht aus neun Nadeln mit je einer Gegenprobe durch _violations, der Positivliste ALLOWED_MAIL_ROUTES mit vier Formen und dem Nur-GET-Test ueber clients/mail.py und tools/mail.py; CREATE_TOOLS bleibt bei sechs
 
 ### Pending Todos
 
@@ -502,8 +506,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-24T14:26:54.245Z
-Stopped at: Completed 10-05-PLAN.md
+Last session: 2026-08-24T14:44:11.645Z
+Stopped at: Completed 10-06-PLAN.md
 Naechster Schritt: /gsd:plan-phase 8
 Resume file: None
 
