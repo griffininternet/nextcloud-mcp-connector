@@ -1,20 +1,25 @@
-"""Unit tests for ``prepare_context``, the bundling read (TOOL-08, D-52 to D-57).
+"""Unit tests for ``prepare_context``, the bundling read (TOOL-08, D-52 to D-57, CTX-01).
 
-The tool owns no data source of its own: it composes the unified search and the calendar
-window, so the tests are written against the composition and never against a happy path.
+The tool owns no data source of its own: it composes the unified search, the calendar window
+and the Talk conversation list, so the tests are written against the composition and never
+against a happy path.
 
 Three of them are guards rather than checks. One proves that the search is asked **without**
 a provider restriction, because a hardcoded provider list would lock out an installed
-Findling and every future provider (D-53). One proves that a stalling calendar becomes a
-named degradation while the finished search hits still arrive, because a global timeout
-around the bundle would throw both away (pitfall 4 and 5). One proves that both sources
-run at the same time, by making each fake wait for the other: a sequential implementation
+Findling and every future provider (D-53). One proves that a stalling source becomes a
+named degradation while the finished parts still arrive, because a global timeout
+around the bundle would throw them away (pitfall 4 and 5). One proves that all three legs
+run at the same time, by making each fake wait for the other two: a sequential implementation
 deadlocks and the test fails on its own timeout.
 
 The fourth guard belongs to D-57: a hit whose title and content carry an instruction
 injection has to arrive character for character as a data field, without moving a single
 key of the answer. It is the test that has to stay red if anyone ever starts framing
 foreign text as a request of the user.
+
+The fifth is the pair around the digest: an empty ``talk`` list without a ``degraded`` entry
+means "nothing is waiting", and with one it means "this could not be read". A test for each,
+because a model that reads the first where the second is true says there are no messages.
 """
 
 import asyncio
@@ -302,31 +307,36 @@ async def test_the_search_is_asked_without_any_provider_restriction(
 
 
 @pytest.mark.anyio
-async def test_both_sources_run_at_the_same_time(
+async def test_all_three_sources_run_at_the_same_time(
     clients: NcClients, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Each fake waits for the other: a sequential implementation cannot finish this."""
-    search_started = asyncio.Event()
-    calendar_started = asyncio.Event()
+    """Each fake waits for the other two: a sequential implementation cannot finish this."""
+    barrier = asyncio.Barrier(3)
 
     async def fake_search(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
-        search_started.set()
-        await asyncio.wait_for(calendar_started.wait(), timeout=5)
+        await asyncio.wait_for(barrier.wait(), timeout=5)
         return search_answer([FILE_HIT])
 
     async def fake_calendar(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
-        calendar_started.set()
-        await asyncio.wait_for(search_started.wait(), timeout=5)
-        return calendar_answer([])
+        await asyncio.wait_for(barrier.wait(), timeout=5)
+        return calendar_answer([event("Standup", "2026-08-18T09:00:00+00:00")])
+
+    async def fake_talk(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        await asyncio.wait_for(barrier.wait(), timeout=5)
+        return talk_answer([conversation("aaaa1111", "Küche", unread=1)])
 
     monkeypatch.setattr(search_tools, "unified_search", fake_search)
     monkeypatch.setattr(calendar_tools, "list_events", fake_calendar)
+    monkeypatch.setattr(talk_tools, "browse", fake_talk)
 
     result = await asyncio.wait_for(
         context_tools.prepare_context(clients, query="budget"), timeout=10
     )
 
     assert [entry["id"] for entry in result["results"]["file"]] == ["file:4711"]
+    assert [item["summary"] for item in result["events"]] == ["Standup"]
+    assert [item["token"] for item in result["talk"]] == ["aaaa1111"]
+    assert "degraded" not in result, "all three legs met at the barrier, so none of them fell"
 
 
 @pytest.mark.anyio
@@ -906,6 +916,341 @@ def _without(value: Any, keys: tuple[str, ...]) -> Any:
     if isinstance(value, list):
         return [_without(item, keys) for item in value]  # type: ignore[misc]
     return value
+
+
+# ---------------------------------------------------------------------------
+# The Talk digest: the third leg, one request, its own budget (plan 11-04, CTX-01)
+# ---------------------------------------------------------------------------
+
+#: The keys of the answer that are there in every situation. ``degraded`` is deliberately not
+#: among them: it costs no bytes when nothing failed, and that contract is older than this leg.
+ANSWER_KEYS = {"query", "window", "events", "results", "talk", "note"}
+
+
+def test_the_three_numbers_of_the_digest_are_the_ones_ctx_01_asks_for() -> None:
+    """The budget is tighter than the calendar's on purpose: one request, not a fan out."""
+    assert context_tools.TALK_BUDGET == 5.0
+    assert context_tools.TALK_BUDGET < context_tools.CALENDAR_BUDGET
+    assert context_tools.MAX_DIGEST == 3
+    assert context_tools.DIGEST_PREVIEW_BYTES == 200, "bytes, and the name says so (pitfall 6)"
+
+
+@pytest.mark.anyio
+async def test_a_stalling_talk_leg_is_named_and_the_rest_of_the_bundle_still_arrives(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T-11-25: the ceiling belongs to the leg, so one stalling source cannot hold the bundle."""
+    monkeypatch.setattr(context_tools, "TALK_BUDGET", 0.05)
+    wire(
+        monkeypatch,
+        search=FakeCall(search_answer([FILE_HIT, NOTE_HIT])),
+        calendar=FakeCall(calendar_answer([event("Standup", "2026-08-18T09:00:00+00:00")])),
+        talk=FakeCall(hang=True),
+    )
+
+    result = await asyncio.wait_for(
+        context_tools.prepare_context(clients, query="budget"), timeout=10
+    )
+
+    assert [entry["id"] for entry in result["results"]["file"]] == ["file:4711"]
+    assert [entry["id"] for entry in result["results"]["note"]] == ["note:12"]
+    assert [item["summary"] for item in result["events"]] == ["Standup"]
+    assert result["talk"] == [], "no digest, and the reason is spelled out"
+    assert result["degraded"] == [
+        {"source": "talk", "reason": "The talk did not answer within 0.05 seconds."}
+    ]
+
+
+@pytest.mark.anyio
+async def test_a_missing_talk_app_is_one_named_entry_and_never_an_error_of_the_bundle(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An instance without Talk is a normal instance, and the sentence is the one of SRV-04."""
+    missing = ToolError(
+        message="The Talk app is not available on this Nextcloud.",
+        hint="Ask an administrator to enable the Talk app for this account.",
+    )
+    wire(monkeypatch, search=FakeCall(search_answer([FILE_HIT])), talk=FakeCall(error=missing))
+
+    result = await context_tools.prepare_context(clients, query="budget")
+
+    assert result["talk"] == []
+    assert result["degraded"] == [
+        {"source": "talk", "reason": "The Talk app is not available on this Nextcloud."}
+    ], "the sentence of the capabilities layer, not a second one written here"
+    assert [entry["id"] for entry in result["results"]["file"]] == ["file:4711"]
+
+
+@pytest.mark.anyio
+async def test_a_failing_talk_leg_alone_is_still_a_successful_bundle(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T-11-26, one direction: the new leg does not enter the double failure rule."""
+    wire(
+        monkeypatch,
+        search=FakeCall(search_answer([FILE_HIT])),
+        calendar=FakeCall(calendar_answer([])),
+        talk=FakeCall(error=httpx.ConnectError("no route")),
+    )
+
+    result = await context_tools.prepare_context(clients, query="budget")
+
+    assert result["talk"] == []
+    assert result["degraded"] == [{"source": "talk", "reason": "The talk could not be reached."}]
+
+
+@pytest.mark.anyio
+async def test_the_double_failure_rule_still_belongs_to_the_search_and_the_calendar(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T-11-26, the other direction: a working digest does not make an empty bundle a success."""
+    wire(
+        monkeypatch,
+        search=FakeCall(error=httpx.ConnectError("no route")),
+        calendar=FakeCall(
+            error=ToolError(message="None of the calendars could be read.", hint="x")
+        ),
+        talk=FakeCall(talk_answer([conversation("aaaa1111", "Küche", unread=2)])),
+    )
+
+    with pytest.raises(ToolError) as excinfo:
+        await context_tools.prepare_context(clients, query="budget")
+
+    assert "search" in excinfo.value.message.lower()
+    assert "calendar" in excinfo.value.message.lower()
+    assert "talk" not in excinfo.value.message.lower(), "the rule names the two legs it always did"
+
+
+@pytest.mark.anyio
+async def test_the_digest_lists_what_is_waiting_in_the_order_of_the_sort_rule(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A direct mention goes first, so a loud group chat cannot push it out of three places."""
+    wire(
+        monkeypatch,
+        talk=FakeCall(
+            talk_answer(
+                [
+                    conversation("aaaa1111", "Küche", unread=2, last_activity=300),
+                    conversation("bbbb2222", "Büro", unread=5, last_activity=900),
+                    conversation(
+                        "cccc3333",
+                        "Grüße von Jörg",
+                        unread=0,
+                        unread_mention=True,
+                        unread_mention_direct=True,
+                        last_activity=10,
+                    ),
+                    conversation("dddd4444", "Stille", last_activity=950),
+                    conversation("eeee5555", "Fahrgemeinschaft", last_activity=999),
+                ]
+            )
+        ),
+    )
+
+    result = await context_tools.prepare_context(clients, query="budget")
+
+    assert [item["token"] for item in result["talk"]] == ["cccc3333", "bbbb2222", "aaaa1111"], (
+        "direct mention, then the two unread ones by last activity"
+    )
+    assert result["talk"][0] == {
+        "token": "cccc3333",
+        "name": "Grüße von Jörg",
+        "unread": 0,
+        "unread_mention": True,
+    }, "exactly the fields a follow up call needs, and no preview where there is none"
+    assert "degraded" not in result, "three of three is not a cut"
+
+
+@pytest.mark.anyio
+async def test_the_digest_caps_at_three_and_names_the_number_behind_the_cap(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A list that is quietly three entries long is reported as "that is everything" (SC 4)."""
+    wire(
+        monkeypatch,
+        talk=FakeCall(
+            talk_answer(
+                [
+                    conversation(
+                        f"aaaa{index}111", f"Gespräch {index}", unread=1, last_activity=index
+                    )
+                    for index in range(6)
+                ]
+            )
+        ),
+    )
+
+    result = await context_tools.prepare_context(clients, query="budget")
+
+    assert len(result["talk"]) == context_tools.MAX_DIGEST == 3
+    assert [item["token"] for item in result["talk"]] == ["aaaa5111", "aaaa4111", "aaaa3111"]
+    assert result["degraded"] == [
+        {
+            "source": "talk",
+            "reason": "Only the first 3 of 6 conversations with something unread are listed.",
+        }
+    ]
+
+
+@pytest.mark.anyio
+async def test_a_cut_of_the_conversation_list_itself_is_named_as_well(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The tool layer reads at most fifty, and the ones behind that cut may be the mentioned."""
+    wire(
+        monkeypatch,
+        talk=FakeCall(
+            talk_answer([conversation("aaaa1111", "Küche", unread=1)], truncated=True, total=90)
+        ),
+    )
+
+    result = await context_tools.prepare_context(clients, query="budget")
+
+    assert [item["token"] for item in result["talk"]] == ["aaaa1111"]
+    assert result["degraded"] == [
+        {
+            "source": "talk",
+            "reason": "Only the first 1 of 90 conversations of this account were read.",
+        }
+    ]
+
+
+@pytest.mark.anyio
+async def test_nothing_unread_is_an_empty_digest_without_a_degraded_entry(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The two meanings of an empty list, kept apart: this one means "nothing is waiting"."""
+    wire(
+        monkeypatch,
+        talk=FakeCall(
+            talk_answer(
+                [
+                    conversation("aaaa1111", "Küche", last_activity=300),
+                    conversation("bbbb2222", "Büro", last_activity=900),
+                ]
+            )
+        ),
+    )
+
+    result = await context_tools.prepare_context(clients, query="budget")
+
+    assert result["talk"] == []
+    assert "degraded" not in result, (
+        "an empty digest with an entry would mean the opposite: it could not be read"
+    )
+
+
+@pytest.mark.anyio
+async def test_a_long_preview_is_cut_at_its_byte_ceiling_and_carries_no_marker(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pitfall 6: the unit is bytes, and a cut preview says nothing about itself."""
+    wire(
+        monkeypatch,
+        talk=FakeCall(
+            talk_answer([conversation("aaaa1111", "Küche", unread=1, last_message="ü" * 150)])
+        ),
+    )
+
+    result = await context_tools.prepare_context(clients, query="budget")
+
+    preview = result["talk"][0]["last_message"]
+    assert preview == "ü" * 100, "200 bytes are 100 umlauts, and not one character more"
+    assert len(preview.encode("utf-8")) <= context_tools.DIGEST_PREVIEW_BYTES == 200
+    assert context_tools.EXCERPT_TRUNCATION not in preview
+    assert "truncated" not in preview, "a preview is a fragment by definition (ME-03)"
+
+
+@pytest.mark.anyio
+async def test_the_digest_passes_no_marker_of_this_server_on(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T-11-23: a message that writes the sequence itself may not claim to be this server."""
+    forged = f"Moin{context_tools.EXCERPT_TRUNCATION} und Grüße"
+    wire(
+        monkeypatch,
+        talk=FakeCall(
+            talk_answer([conversation("aaaa1111", "Küche", unread=1, last_message=forged)])
+        ),
+    )
+
+    result = await context_tools.prepare_context(clients, query="budget")
+
+    preview = result["talk"][0]["last_message"]
+    assert context_tools.EXCERPT_TRUNCATION not in preview, "the sequence stays the server's own"
+    assert "Moin" in preview, "every word the message wrote arrives"
+    assert "und Grüße" in preview, "and the words behind the forged sequence as well"
+
+
+@pytest.mark.anyio
+async def test_the_digest_costs_exactly_one_call_of_the_conversation_level(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CTX-01 asks for one request, so the leg asks for one level and never walks into one."""
+    talk = FakeCall(talk_answer([conversation("aaaa1111", "Küche", unread=1)]))
+    wire(monkeypatch, talk=talk)
+
+    await context_tools.prepare_context(clients, query="budget")
+
+    assert len(talk.calls) == 1, "one call per bundle, never one per conversation"
+    args, kwargs = talk.calls[0]
+    assert len(args) == 1, "only the clients travel positionally"
+    assert kwargs["level"] == "conversations"
+    assert kwargs["limit"] == talk_tools.MAX_CONVERSATIONS
+    assert "token" not in kwargs, "the digest never opens a single conversation"
+    assert "cursor" not in kwargs, "and this level hands out no page handle anyway"
+
+
+@pytest.mark.anyio
+async def test_full_changes_nothing_about_the_digest_and_reads_none_of_it(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The digest is not an excerpt source: nothing in it is opened, at either detail level."""
+    talk_out = talk_answer(
+        [conversation("aaaa1111", "Küche", unread=1, last_message="Wer bringt Löffel mit?")]
+    )
+    wire(monkeypatch, search=FakeCall(search_answer([])), talk=FakeCall(talk_out))
+    fetch = wire_fetch(monkeypatch, FakeFetch())
+
+    result = await context_tools.prepare_context(clients, query="budget", detail="full")
+
+    assert len(fetch.ids) == 0, "no digest entry is handed to a reader"
+    assert result["talk"] == [
+        {
+            "token": "aaaa1111",
+            "name": "Küche",
+            "unread": 1,
+            "unread_mention": False,
+            "last_message": "Wer bringt Löffel mit?",
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    ("situation", "talk"),
+    [
+        ("success", FakeCall(talk_answer([conversation("aaaa1111", "Küche", unread=1)]))),
+        ("failure", FakeCall(error=httpx.ConnectError("no route"))),
+        (
+            "missing app",
+            FakeCall(error=ToolError(message="The Talk app is not available.", hint="x")),
+        ),
+        ("nothing waiting", FakeCall(talk_answer([]))),
+    ],
+)
+@pytest.mark.anyio
+async def test_the_talk_key_is_there_and_a_list_in_every_situation(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch, situation: str, talk: FakeCall
+) -> None:
+    """A key that appears only sometimes would depend on foreign text (D-57)."""
+    wire(monkeypatch, talk=talk)
+
+    result = await context_tools.prepare_context(clients, query="budget")
+
+    assert "talk" in result, situation
+    assert isinstance(result["talk"], list), situation
+    assert set(result) - {"degraded"} == ANSWER_KEYS, situation
 
 
 def test_no_sentence_of_this_module_frames_foreign_text_as_a_wish_of_the_user() -> None:

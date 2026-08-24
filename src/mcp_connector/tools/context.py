@@ -359,6 +359,20 @@ def _digest(
     degraded.extend(_degraded_of(outcome))
     raw = outcome.get("results")
     entries = [item for item in raw if isinstance(item, dict)] if isinstance(raw, list) else []
+    if outcome.get("truncated"):
+        # The cut of the tool layer, said out loud here as well. Without this sentence a
+        # digest of three out of fifty read conversations would look like three out of all
+        # of them, and the ones behind the cut can be exactly the ones with a mention.
+        total = _count(outcome.get("total")) or len(entries)
+        degraded.append(
+            {
+                "source": "talk",
+                "reason": (
+                    f"Only the first {len(entries)} of {total} conversations of this account "
+                    "were read."
+                ),
+            }
+        )
     waiting = sorted((item for item in entries if _waiting(item)), key=_urgency, reverse=True)
     if len(waiting) > MAX_DIGEST:
         found = len(waiting)
@@ -417,7 +431,13 @@ def _preview(text: str) -> str:
     carries no marker of its own". A preview is a fragment by definition, the full text is
     one ``talk_browse`` call away, and a marker this server writes next to somebody else's
     sentence could not be told apart from a sentence of that somebody (ME-03).
+
+    A marker the message wrote itself goes first, exactly as in :func:`_capped`. The tool
+    layer has already done it, and doing it again is neither a second truth nor expensive: it
+    is the same removal at the boundary where the text actually leaves this module, and it
+    runs before the measurement, so the ceiling applies to what is handed out.
     """
+    text = marks.without_marks(text)
     blob = text.encode("utf-8")
     if len(blob) <= DIGEST_PREVIEW_BYTES:
         return text
