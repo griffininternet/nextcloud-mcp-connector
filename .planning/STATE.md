@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Kuratierte Breite
 status: executing
-stopped_at: Completed 11-01-PLAN.md
-last_updated: "2026-08-24T19:43:58.888Z"
+stopped_at: Completed 11-02-PLAN.md
+last_updated: "2026-08-24T20:01:59.342Z"
 last_activity: 2026-08-24
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 28
-  completed_plans: 19
-  percent: 68
+  completed_plans: 20
+  percent: 71
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 11 (Bündelung, Budget und Release 0.1.8) — EXECUTING
-Plan: 2 of 10
+Plan: 3 of 10
 Status: Ready to execute
 Last activity: 2026-08-24
 
@@ -136,6 +136,7 @@ Last activity: 2026-08-24
 | Phase 10 P07 | 13min | 3 tasks | 8 files |
 | Phase 10 P08 | 22 min | 2 tasks tasks | 2 files files |
 | Phase 11 P01 | 25min | 2 tasks | 4 files |
+| Phase 11 P02 | 22 min | 2 tasks tasks | 3 files files |
 
 ## Accumulated Context
 
@@ -481,6 +482,9 @@ Recent decisions affecting current work:
 - [Phase ?]: 10-07: Werkzeugzahlen in der Doku als Wort, weil der Zaehlwaechter Ziffern vor 'tools' liest
 - [Phase ?]: 11-01: Id-Kinds heissen message:<token>:<messageId> und table:<tableId> (eine Id adressiert ein Objekt, keine App); PROVIDER_KINDS hat jetzt sechs Eintraege inklusive talk-message-current, belegt statt vermutet (CurrentMessageSearch erbt performSearch von MessageSearch)
 - [Phase ?]: 11-01: Ein Tables-Treffer auf eine View, jeder Mail-Treffer und talk-conversations bleiben bewusst kind=url; der Grund steht je namentlich im Modul-Docstring von provider_map.py
+- [Phase ?]: 11-02: Genau eine Talk-Nachricht wird ueber GET .../chat/{token}/{messageId}/context gelesen, nie ueber lastKnownMessageId-Arithmetik: die Kontextroute liefert die Zielnachricht mit (includeLastKnown=true), die Arithmetik gaebe bei geloeschter oder gefilterter Zielnachricht unsichtbar eine Nachbarnachricht aus
+- [Phase ?]: 11-02: READ_ONLY_PARAMS steht nicht in get_message_context, weil die Route sie nicht annimmt; die Nebenwirkungsfreiheit kommt aus der Route selbst (Timeout 0, markNotificationsAsRead false, kein updateLastReadMessage in spreed 24.0.4) und wird in 11-06 ueber die Konversationsliste gemessen
+- [Phase ?]: 11-02: get_message_context ist eine Welle vor seinem Aufrufer im vulture_whitelist geparkt (Muster Tables 08-02, Talk 09-01, Mail 10-02); Plan 11-03 entfernt den Eintrag mit dem fetch-Zweig, der ihn aufruft
 
 ### Pending Todos
 
@@ -515,8 +519,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-24T19:43:58.870Z
-Stopped at: Completed 11-01-PLAN.md
+Last session: 2026-08-24T20:01:59.316Z
+Stopped at: Completed 11-02-PLAN.md
 Naechster Schritt: /gsd:plan-phase 8
 Resume file: None
 

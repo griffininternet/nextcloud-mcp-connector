@@ -187,3 +187,7 @@ Das eingefrorene URL-Literal `CONTEXT_URL = f"{CHAT_URL}/{MESSAGE_ID}/context"` 
 - Den Whitelist-Eintrag `get_message_context` wieder entfernen.
 
 **11-06 (Messung):** Nebenwirkungsfreiheit vor und nach dem Aufruf über die Konversationsliste messen (`unread`, `unread_mention`, `lastReadMessage`), nicht über die Kontextroute.
+
+## Self-Check: PASSED
+
+Alle vier genannten Dateien existieren auf der Platte, alle drei Commit-Hashes (3ec998d, d6a78cf, bd92a52) sind in `git log` auffindbar.
