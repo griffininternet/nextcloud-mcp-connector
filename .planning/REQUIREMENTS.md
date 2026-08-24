@@ -41,7 +41,7 @@
 
 ### Sicherheit (SEC)
 
-- [ ] **SEC-01**: Die Kombination Mail-Lesen plus Talk-Senden ("Lethal Trifecta": private Daten + fremder Inhalt + Ausgangskanal) ist ausdrücklich adressiert: ein Doku-Abschnitt benennt Mail- und Talk-Inhalte als fremde Daten und die Exfiltrationskette beim Namen, verweist auf den TALK-04-Schalter als Gegenmaßnahme, und die Store-Beschreibung (EN/DE/FR) sagt den Mail-ist-strikt-lesend-Satz.
+- [x] **SEC-01**: Die Kombination Mail-Lesen plus Talk-Senden ("Lethal Trifecta": private Daten + fremder Inhalt + Ausgangskanal) ist ausdrücklich adressiert: ein Doku-Abschnitt benennt Mail- und Talk-Inhalte als fremde Daten und die Exfiltrationskette beim Namen, verweist auf den TALK-04-Schalter als Gegenmaßnahme, und die Store-Beschreibung (EN/DE/FR) sagt den Mail-ist-strikt-lesend-Satz.
 
 ### Store und Release (EXAPP)
 
@@ -94,7 +94,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CTX-02 | Phase 11 | Pending |
 | TOOL-15 | Phase 11 | Pending |
 | TOOL-16 | Phase 11 | Pending |
-| SEC-01 | Phase 10 | Pending |
+| SEC-01 | Phase 10 | Complete |
 | EXAPP-07 | Phase 11 | Pending |
 
 **Coverage:**

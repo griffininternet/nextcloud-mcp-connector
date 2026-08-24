@@ -150,7 +150,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 10-07-PLAN.md: Die Exfiltrationskette benennen: privacy, faq, drei READMEs, Store-Beschreibung EN/DE/FR und Changelog (SEC-01)
+- [x] 10-07-PLAN.md: Die Exfiltrationskette benennen: privacy, faq, drei READMEs, Store-Beschreibung EN/DE/FR und Changelog (SEC-01)
 - [ ] 10-08-PLAN.md: Live-Nachweis Mail lesen ohne Nebenwirkung, Zwei-Konten-Beweis, und Degradation aller drei Familien mit Neustart
 
 **UI hint**: nein (kein eigenes Frontend; Doku- und Store-Texte sind Textarbeit)
@@ -224,7 +224,7 @@ Plans:
 | 7. Verwaltungs-Clients live verprobt | v1.1 | 0/0 | Deferred (extern getaktet) | - |
 | 8. Erreichbarkeits-Spike und Tables | v1.2 | 5/5 | Complete    | 2026-08-21 |
 | 9. Talk | v1.2 | 5/5 | Complete    | 2026-08-21 |
-| 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 6/8 | In Progress|  |
+| 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 7/8 | In Progress|  |
 | 11. Bündelung, Budget und Release 0.1.6 | v1.2 | 0/? | Not started | - |
 
 ## Next
