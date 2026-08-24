@@ -24,8 +24,26 @@ The calendar provider is deliberately **not** in the table. Its entry URL addres
 view, not the DAV object name that ``event:<calendarUri>:<objectName>`` needs, so it would
 be an id that no ``fetch`` can resolve. It stays in the ``url`` category until a real
 instance shows a resolvable form.
+
+A tables hit on a **view** stays in the ``url`` category for the same reason, and it is the
+sharper case, because the two links are indistinguishable at a glance: the tables app builds
+``#/table/<id>`` and ``#/view/<id>`` from one template, and the client of this project reads
+tables only (``get_table``, ``get_columns`` and ``get_rows_simple`` all build a
+``tables/{id}`` path). A view id passed off as a table id therefore does not fail loudly, it
+reads the table that happens to carry that number (threat T-11-01), which is why
+:func:`_tables_node` reads the node type together with the id and accepts only ``table``.
+
+A **mail** hit stays ``url`` on purpose, and the reason is worth naming: ``mail:<databaseId>``
+needs the database id of one message, the search entry carries a deep link into a mailbox and
+a thread instead, and resolving that link to a database id is unmeasured and an explicit
+future requirement. A guessed database id would not answer with an error, it would read
+somebody else's mail (threat T-11-05).
+
+``talk-conversations`` is not in the table either: a conversation is not a document, and
+``talk_browse`` is the way to it.
 """
 
+import re
 from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
@@ -39,6 +57,19 @@ PROVIDER_KINDS: Mapping[str, str] = {
     "notes": "note",
     # Verified against nextcloud/deck lib/Search/DeckProvider.php. "deck" is wrong.
     "search-deck-card-board": "card",
+    # Verified against nextcloud/spreed lib/Search/MessageSearch.php, class MessageSearch:
+    # commentToSearchResultEntry adds conversation, messageId, threadId, actorType, actorId and
+    # timestamp, and links to spreed.Page.showCall with the fragment "message_" . $id.
+    "talk-message": "message",
+    # Verified against nextcloud/spreed lib/Search/CurrentMessageSearch.php, class
+    # CurrentMessageSearch: it extends MessageSearch and overrides getId, getName, getOrder, the
+    # subline template and the room selection only. Its entries are built by the inherited
+    # performSearch, so they carry exactly the same attributes. Not an assumption: read.
+    "talk-message-current": "message",
+    # Verified against nextcloud/tables lib/Search/SearchTablesProvider.php, class
+    # SearchTablesProvider: it sets no attributes at all, and getInternalLink builds
+    # "#/" . $nodeType . "/" . $nodeId with $nodeType being "table" or "view".
+    "tables-search-tables": "table",
 }
 
 #: The honest rest category for everything the table does not cover.
@@ -46,6 +77,21 @@ UNKNOWN_KIND = "url"
 
 #: Web route of a single file, used when an entry carries a fileId but no resourceUrl.
 FILE_WEB_PREFIX = "/index.php/f"
+
+#: The token alphabet of a Talk conversation, four to thirty lowercase letters and digits: the
+#: path requirement every Talk route declares. A token read out of a foreign app's entry is
+#: checked against it before it becomes part of an id.
+_TOKEN = re.compile(r"[a-z0-9]{4,30}")
+
+#: Digits, and only ASCII ones. ``str.isdigit`` also accepts a superscript two and an
+#: Arabic-Indic digit, and both would build an id that the codec has to refuse later.
+_DIGITS = re.compile(r"[0-9]+")
+
+#: The fragment of a Talk search entry: ``message_<id>``.
+_MESSAGE_FRAGMENT = re.compile(r"message_([0-9]+)")
+
+#: The fragment of a tables search entry, node type included: ``/table/7`` or ``/view/3``.
+_TABLES_NODE = re.compile(r"/?(table|view)/([0-9]+)")
 
 
 def absolute_url(base_url: str, resource_url: Any) -> str:
@@ -94,6 +140,16 @@ def extract_id(
             # Short form on purpose: the provider knows no board and no stack, and an
             # invented one would address a card that does not exist.
             return "card", f"card{ids.SEPARATOR}{card_id}", False
+    elif kind == "message":
+        target = _message_target(attributes, url)
+        if target is not None:
+            return "message", ids.encode_message(*target), True
+    elif kind == "table":
+        node = _tables_node(url)
+        # Only a table, never a view: the readers of this project build "tables/{id}" paths, so
+        # a view id used as a table id reads a foreign table (threat T-11-01).
+        if node is not None and node[0] == "table":
+            return "table", ids.encode_table(node[1]), True
 
     if not url:
         return None
@@ -129,6 +185,51 @@ def _file_id(attributes: Mapping[str, Any], url: str) -> str:
         if segment == "f" and segments[index + 1].isdigit():
             return segments[index + 1]
     return ""
+
+
+def _message_target(attributes: Mapping[str, Any], url: str) -> tuple[str, str] | None:
+    """``attributes.conversation`` and ``attributes.messageId`` first, the URL as the cross check.
+
+    The same shape as :func:`_file_id`, only with two values instead of one, and with the honest
+    ``None`` when either half is missing after both ways: a Talk entry can arrive with
+    ``attributes`` as an empty list (pitfall 7), and a guessed token or a guessed message id
+    would address somebody else's conversation (threat T-11-02). ``threadId`` is deliberately
+    never read: it names a thread, not a message.
+    """
+    raw_token = attributes.get("conversation")
+    token = str(raw_token).strip() if raw_token is not None else ""
+    if not _TOKEN.fullmatch(token):
+        # The cross check: the web route of one conversation is ``/call/<token>``.
+        segments = [segment for segment in urlsplit(url).path.split("/") if segment]
+        token = ""
+        for index, segment in enumerate(segments[:-1]):
+            if segment == "call" and _TOKEN.fullmatch(segments[index + 1]):
+                token = segments[index + 1]
+                break
+
+    raw_id = attributes.get("messageId")
+    message_id = str(raw_id).strip() if raw_id is not None else ""
+    if not _DIGITS.fullmatch(message_id):
+        match = _MESSAGE_FRAGMENT.fullmatch(urlsplit(url).fragment)
+        message_id = match.group(1) if match is not None else ""
+
+    if not token or not message_id:
+        return None
+    return token, message_id
+
+
+def _tables_node(url: str) -> tuple[str, str] | None:
+    """Return ``(nodeType, nodeId)`` of a tables link, or ``None``.
+
+    :func:`_last_numeric_segment` is unusable here, and that is the whole point of a second
+    reader: it looks at ``urlsplit(url).path`` only, while the tables app puts its node into the
+    fragment (``#/table/7``). The node type is read together with the id, because ``#/view/3``
+    would otherwise become ``table:3`` and read a foreign table (threat T-11-01).
+    """
+    match = _TABLES_NODE.fullmatch(urlsplit(url).fragment)
+    if match is None:
+        return None
+    return match.group(1), match.group(2)
 
 
 def _last_numeric_segment(url: str) -> str:

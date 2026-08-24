@@ -73,19 +73,35 @@ def test_a_deck_hit_becomes_the_short_card_form_and_is_not_canonical() -> None:
 
 
 def test_an_unknown_provider_becomes_a_url_and_is_never_guessed() -> None:
-    """An honest boundary beats a wrong resolution (pitfall 10)."""
-    entry = {"title": "Talk", "resourceUrl": "/call/abc123#message_42"}
+    """An honest boundary beats a wrong resolution (pitfall 10).
 
-    kind, identifier, canonical = resolved("spreed", entry)
+    The example is a provider that really exists and really is unknown here. ``"spreed"`` used
+    to stand in this line and was never a provider id at all, so the rule was checked against
+    the one app whose two real provider ids are now in the table.
+    """
+    entry = {"title": "Formular", "resourceUrl": "/apps/forms/abc123"}
+
+    kind, identifier, canonical = resolved("forms", entry)
 
     assert kind == "url"
-    assert identifier == f"url:{BASE}/call/abc123#message_42"
+    assert identifier == f"url:{BASE}/apps/forms/abc123"
+    assert canonical is False
+
+
+def test_a_talk_conversation_hit_stays_a_url_because_a_conversation_is_no_document() -> None:
+    """``talk-conversations`` is deliberately absent from the table; ``talk_browse`` is the way."""
+    entry = {"title": "Team", "resourceUrl": "/index.php/call/abcd1234"}
+
+    kind, identifier, canonical = resolved("talk-conversations", entry)
+
+    assert kind == "url"
+    assert identifier == f"url:{BASE}/index.php/call/abcd1234"
     assert canonical is False
 
 
 def test_an_entry_without_a_resource_url_and_without_attributes_is_skipped() -> None:
     assert provider_map.extract_id("files", {"title": "kaputt"}, BASE) is None
-    assert provider_map.extract_id("spreed", {"title": "kaputt", "attributes": []}, BASE) is None
+    assert provider_map.extract_id("forms", {"title": "kaputt", "attributes": []}, BASE) is None
 
 
 def test_a_known_provider_with_an_unusable_url_degrades_to_the_url_kind() -> None:
@@ -125,7 +141,9 @@ def test_a_foreign_resource_url_is_rebuilt_on_the_configured_base_url() -> None:
         ("files", {"attributes": {"fileId": "4711"}}),
         ("notes", {"resourceUrl": "/index.php/apps/notes/note/12"}),
         ("search-deck-card-board", {"resourceUrl": "/apps/deck/card/57"}),
-        ("spreed", {"resourceUrl": "/call/abc123"}),
+        ("forms", {"resourceUrl": "/apps/forms/abc123"}),
+        ("talk-message", {"resourceUrl": "/index.php/call/abcd1234#message_42"}),
+        ("tables-search-tables", {"resourceUrl": "/index.php/apps/tables/#/table/7"}),
     ],
 )
 def test_every_hit_carries_an_absolute_non_empty_url(
@@ -139,6 +157,127 @@ def test_every_hit_carries_an_absolute_non_empty_url(
     assert url != BASE
 
 
+def test_a_talk_hit_takes_the_conversation_and_the_message_from_the_attributes() -> None:
+    """``conversation`` and ``messageId`` are the cheapest source, exactly like ``fileId``."""
+    entry = {
+        "title": "Protokoll",
+        "resourceUrl": "/index.php/call/abcd1234#message_42",
+        "attributes": {"conversation": "abcd1234", "messageId": "42", "threadId": "7"},
+    }
+
+    kind, identifier, canonical = resolved("talk-message", entry)
+
+    assert kind == "message"
+    assert identifier == "message:abcd1234:42", "threadId must never reach the id"
+    assert canonical is True
+
+
+def test_a_talk_hit_without_attributes_falls_back_to_the_call_path_and_the_fragment() -> None:
+    """``attributes`` arrives as an empty list on some instances (pitfall 7)."""
+    entry = {
+        "title": "Protokoll",
+        "resourceUrl": "/index.php/call/abcd1234#message_42",
+        "attributes": [],
+    }
+
+    assert resolved("talk-message", entry) == ("message", "message:abcd1234:42", True)
+
+
+def test_the_second_talk_provider_resolves_exactly_like_the_first_one() -> None:
+    """``CurrentMessageSearch`` extends ``MessageSearch`` and inherits ``performSearch``."""
+    entry = {
+        "title": "Protokoll",
+        "resourceUrl": "/index.php/call/abcd1234#message_42",
+        "attributes": {"conversation": "abcd1234", "messageId": "42"},
+    }
+
+    assert resolved("talk-message-current", entry) == ("message", "message:abcd1234:42", True)
+
+
+def test_a_talk_hit_without_a_usable_conversation_or_message_stays_a_url() -> None:
+    """A guessed token would address a conversation of somebody else (threat T-11-02)."""
+    entry = {"title": "Talk", "resourceUrl": "/index.php/apps/spreed/", "attributes": []}
+
+    kind, identifier, canonical = resolved("talk-message", entry)
+
+    assert kind == "url"
+    assert identifier == f"url:{BASE}/index.php/apps/spreed/"
+    assert canonical is False
+
+
+def test_a_talk_hit_with_a_non_numeric_message_id_stays_a_url() -> None:
+    """No fragment to fall back to, so the entry degrades instead of inventing a number."""
+    entry = {
+        "title": "Talk",
+        "resourceUrl": "/index.php/call/abcd1234",
+        "attributes": {"conversation": "abcd1234", "messageId": "abc"},
+    }
+
+    kind, _, canonical = resolved("talk-message", entry)
+
+    assert kind == "url"
+    assert canonical is False
+
+
+def test_a_tables_hit_takes_its_id_from_the_fragment_not_from_the_path() -> None:
+    """The tables app puts the node into ``#/table/<id>``; the path ends at the app route."""
+    entry = {"title": "Inventar", "resourceUrl": "/index.php/apps/tables/#/table/7"}
+
+    assert resolved("tables-search-tables", entry) == ("table", "table:7", True)
+
+
+def test_a_tables_view_hit_stays_a_url_because_a_guessed_table_reads_a_foreign_table() -> None:
+    """``#/view/3`` as ``table:3`` would read the table numbered three (threat T-11-01)."""
+    entry = {"title": "Ansicht", "resourceUrl": "/index.php/apps/tables/#/view/3"}
+
+    kind, identifier, canonical = resolved("tables-search-tables", entry)
+
+    assert kind == "url"
+    assert identifier == f"url:{BASE}/index.php/apps/tables/#/view/3"
+    assert canonical is False
+
+
+@pytest.mark.parametrize(
+    "resource_url",
+    [
+        "/index.php/apps/tables/#/table/",
+        "/index.php/apps/tables/#/table/7a",
+        "/index.php/apps/tables/",
+    ],
+)
+def test_a_tables_hit_without_a_numeric_node_stays_a_url(resource_url: str) -> None:
+    """No fragment, an empty node or a non numeric one: all three degrade honestly."""
+    kind, _, canonical = resolved(
+        "tables-search-tables", {"title": "t", "resourceUrl": resource_url}
+    )
+
+    assert kind == "url"
+    assert canonical is False
+
+
+def test_a_mail_hit_stays_a_url_because_the_deep_link_resolution_is_unmeasured() -> None:
+    """``mail:<databaseId>`` needs a database id; a guessed one reads a foreign mailbox."""
+    entry = {"title": "Rechnung", "resourceUrl": "/index.php/apps/mail/box/1/thread/5"}
+
+    kind, identifier, canonical = resolved("mail", entry)
+
+    assert kind == "url"
+    assert identifier == f"url:{BASE}/index.php/apps/mail/box/1/thread/5"
+    assert canonical is False
+
+
+def test_a_foreign_origin_in_a_tables_fragment_never_reaches_the_id() -> None:
+    """The fragment survives, the origin never does (threat T-11-04)."""
+    entry = {"title": "t", "resourceUrl": "http://evil.test/index.php/apps/tables/#/table/7"}
+
+    kind, identifier, _ = resolved("tables-search-tables", entry)
+
+    assert kind == "table"
+    assert identifier == "table:7"
+    assert "evil.test" not in identifier
+    assert "evil.test" not in provider_map.hit_url(BASE, kind, identifier, entry)
+
+
 def test_the_provider_table_knows_the_real_deck_provider_id() -> None:
     """It is ``search-deck-card-board``, not ``deck``, and that is worth a test."""
     assert provider_map.PROVIDER_KINDS["search-deck-card-board"] == "card"
@@ -147,4 +286,13 @@ def test_the_provider_table_knows_the_real_deck_provider_id() -> None:
 
 def test_the_provider_table_is_not_a_list_of_installed_apps() -> None:
     """The runtime list comes from Nextcloud; this table only maps ids to kinds."""
-    assert set(provider_map.PROVIDER_KINDS) == {"files", "notes", "search-deck-card-board"}
+    assert set(provider_map.PROVIDER_KINDS) == {
+        "files",
+        "notes",
+        "search-deck-card-board",
+        "talk-message",
+        "talk-message-current",
+        "tables-search-tables",
+    }
+    assert "talk-conversations" not in provider_map.PROVIDER_KINDS
+    assert "mail" not in provider_map.PROVIDER_KINDS
