@@ -61,6 +61,28 @@ SRC = Path(__file__).resolve().parents[2] / "src" / "mcp_connector"
 # ``/share`` already stands above and needs no second entry: the attachment route of Talk is
 # ``chat/{token}/share``, so the Tables needle covers it. An eleventh needle beside it would
 # only look like more security.
+#
+# The nine Mail entries at the end are the same kind of needle for the family that needs it
+# most, and the reason is a route that lies next door to a read: the Mail app declares exactly
+# one send path, ``/apps/mail/message/send``, and the full message read is
+# ``/apps/mail/message/{id}``. The two share the segment ``/message/`` and only ``send``
+# separates them, so the needle has to be the longer segment and the counter proof in
+# :data:`MAIL_ROUTES` is what shows that it still hits. The eight ``/api/...`` entries beside
+# it are the internal resource routes of the app's own frontend, which this server
+# deliberately never builds (see the module docstring of ``clients/mail.py``): a POST there
+# creates, a PUT changes and a DELETE removes on the very path a read would use, and no verb
+# needle can tell those four apart. ``/api/outbox`` is the second way to send in that app and
+# carries no ``send`` in its path at all.
+#
+# Two needles that already stand above reach into the Mail family without anything being done
+# about it, and neither of them gets a second entry beside the nine: ``/attachment`` forbids
+# the Mail attachment route the same way it forbids the Talk one, and ``/read`` forbids
+# ``/api/mailboxes/{id}/read``, which ``/api/mailboxes`` covers a second time anyway. A tenth
+# and eleventh Mail needle for those two would only look like more security.
+#
+# :data:`ALLOWED_MAIL_ROUTES` is the other half of the proof, and it matters more here than
+# for Talk: PUT and POST are allowed verbs in this project, so a needle can never say which
+# path forms are meant to exist. That list says it out loud, with the four the client builds.
 FORBIDDEN: dict[str, str] = {
     "DELETE": "no tool may delete anything",
     "MOVE": "no tool may move or rename anything",
@@ -86,6 +108,19 @@ FORBIDDEN: dict[str, str] = {
     "/notify": "no tool may push a notification into somebody's conversation",
     "/participants": "no tool may add, remove or re-rank a participant",
     "/archive": "no tool may put a conversation aside or take it back out",
+    "/message/send": "no tool may send a mail: this is the one declared send route of the "
+    "Mail app, and it lies directly beside the full message read on the same segment",
+    "/api/messages": "no tool may reach the internal message resource of Mail: POST drafts, "
+    "PUT changes and DELETE removes on the very path a read would use",
+    "/api/mailboxes": "no tool may create, sync, clear, repair or mark a mailbox read",
+    "/api/accounts": "no tool may change a mail account, its draft settings or its signature",
+    "/api/drafts": "no tool may create or move a draft",
+    "/api/outbox": "no tool may put a mail into the outbox: that is the second way to send "
+    "in this app, and it carries no send in its path",
+    "/api/thread": "no tool may move or delete a whole thread",
+    "/api/tags": "no tool may create, change or delete a mail tag, or put one on a message",
+    "/api/trustedsenders": "no tool may grant or withdraw trust in a sender: that is a "
+    "security decision of the account holder",
 }
 
 #: The five needles above that name a Tables route, with a line that would carry them into
@@ -117,6 +152,44 @@ TALK_ROUTES: dict[str, str] = {
     "/participants": '    url = ocs.ocs_url(creds, f"{ROOM_PREFIX}/{room}/participants")',
     "/archive": '    await ocs.ocs_post(client, creds, f"{ROOM_PREFIX}/{room}/archive", b)',
 }
+
+#: The nine needles above that name a Mail route, with a line that would carry them into the
+#: code. Same job as :data:`TABLES_ROUTES` and :data:`TALK_ROUTES` two families earlier: a
+#: needle nobody ever hit is indistinguishable from no needle at all. The first line is the one
+#: MAIL-01 SC4 asks for by name, because the Mail app really does offer that route and this
+#: server really does read one segment above it.
+MAIL_ROUTES: dict[str, str] = {
+    "/message/send": '    await ocs.ocs_post(client, creds, "/apps/mail/message/send", body)',
+    "/api/messages": '    await ocs.ocs_post(client, creds, f"/apps/mail/api/messages/{m}", b)',
+    "/api/mailboxes": '    await ocs.ocs_post(client, creds, f"/apps/mail/api/mailboxes/{m}", b)',
+    "/api/accounts": '    await ocs.ocs_post(client, creds, f"/apps/mail/api/accounts/{a}", b)',
+    "/api/drafts": '    await ocs.ocs_post(client, creds, f"/apps/mail/api/drafts/{draft}", body)',
+    "/api/outbox": '    await ocs.ocs_post(client, creds, f"/apps/mail/api/outbox/{m}", body)',
+    "/api/thread": '    await ocs.ocs_post(client, creds, f"/apps/mail/api/thread/{t}/move", b)',
+    "/api/tags": '    await ocs.ocs_post(client, creds, f"/apps/mail/api/tags/{tag}", body)',
+    "/api/trustedsenders": '    url = ocs.ocs_url(creds, f"/apps/mail/api/trustedsenders/{s}")',
+}
+
+#: The four forms :mod:`mcp_connector.nextcloud.clients.mail` really builds, written the way
+#: that module writes them: as the four path constants at the top of the file. This tuple is
+#: the half of the proof the needles cannot deliver, and for this family it carries more weight
+#: than anywhere else. POST and PUT are allowed verbs in this project (``files_upload`` is a
+#: PUT), so no needle can ever say which forms are meant to exist; and the fourth entry below
+#: sits one segment away from the send route the first Mail needle forbids. Saying both out
+#: loud is what makes the prohibition checkable instead of merely stated.
+ALLOWED_MAIL_ROUTES = (
+    'ACCOUNTS_PATH = "/apps/mail/account/list"',
+    'MAILBOXES_PATH = "/apps/mail/ocs/mailboxes"',
+    'MESSAGES_PATH = "/apps/mail/ocs/mailboxes/{mailbox}/messages"',
+    'MESSAGE_PATH = "/apps/mail/message/{message}"',
+)
+
+#: The two modules of the Mail family, and the call forms that must not appear in either of
+#: them. This is the check no needle list can replace: a needle knows one path, and this one
+#: says that there is no write **call** at all, whatever path it would address (T-10-39). The
+#: pattern is the one ``contacts.py`` has been held to since phase 1 (D-07).
+MAIL_MODULES = ("nextcloud/clients/mail.py", "tools/mail.py")
+WRITING_CALLS = ("ocs_post", ".post(", ".put(", ".patch(", ".delete(", "client.request")
 
 #: The three forms :mod:`mcp_connector.nextcloud.clients.talk` really builds: the conversation
 #: list, one window of history, and the one send. This tuple is the half of the proof the
@@ -448,6 +521,72 @@ def test_the_three_routes_the_talk_client_really_builds_stay_allowed() -> None:
         assert _violations("nextcloud/clients/talk.py", [(1, line)]) == [], (
             f"the gate must not report the allowed route: {line.strip()}"
         )
+
+
+@pytest.mark.parametrize(("needle", "line"), sorted(MAIL_ROUTES.items()))
+def test_each_mail_needle_trips_on_its_route_and_leaves_the_real_module_alone(
+    needle: str, line: str
+) -> None:
+    """Counter proof per Mail needle: it hits the route, and it misses today's code.
+
+    This is the counter proof MAIL-01 SC4 asks for word by word, and it runs through the real
+    check ``_violations`` rather than through a copy of it: a counter proof that reimplements
+    the gate proves something about the counter proof. The Mail app declares a send route and
+    this server reads one segment above it, so "there is no way to send a mail through this
+    app" is only worth saying if the sentence is enforced against the next commit (T-10-37,
+    T-10-38).
+    """
+    relative = "nextcloud/clients/mail.py"
+    real = _code_lines(SRC / relative)
+    assert _violations(relative, real) == [], (
+        f"{relative} must be clean before a needle can prove anything"
+    )
+
+    findings = _violations(relative, [*real, (len(real) + 1, line)])
+    assert any(repr(needle) in finding for finding in findings), (
+        f"the gate must report {needle!r} for: {line.strip()}"
+    )
+
+
+def test_every_mail_needle_of_this_phase_has_a_counter_proof() -> None:
+    """A needle without a counter proof is a claim, and this file does not make claims."""
+    assert len(MAIL_ROUTES) == 9, (
+        "nine Mail segments are named in FORBIDDEN, and each of them needs its own line here"
+    )
+    unbacked = sorted(needle for needle in MAIL_ROUTES if needle not in FORBIDDEN)
+    assert unbacked == [], f"a counter proof for a needle nobody armed: {unbacked}"
+
+
+def test_the_four_routes_the_mail_client_really_builds_stay_allowed() -> None:
+    """The other half of the same proof: all four reads must pass, and the fourth is the point.
+
+    ``/apps/mail/message/{message}`` is the full text read, and it lives one segment away from
+    the send route the first Mail needle forbids. A needle broad enough to catch it would force
+    the choice between a green gate and a working tool, and that choice always ends with the
+    gate losing. There is no fifth form and no write form: this family reads and nothing else.
+    """
+    for line in ALLOWED_MAIL_ROUTES:
+        assert _violations("nextcloud/clients/mail.py", [(1, line)]) == [], (
+            f"the gate must not report the allowed route: {line.strip()}"
+        )
+
+
+@pytest.mark.parametrize("relative", MAIL_MODULES)
+def test_the_mail_modules_are_read_only_in_their_source(relative: str) -> None:
+    """The first family without a single write path, and the claim is literally checkable.
+
+    A needle knows one path. This test knows none and says something a needle cannot: there is
+    no writing **call** in these two files, whatever it would address, so a route nobody
+    thought of when the needles were written is covered as well (T-10-39). The raw source is
+    read on purpose and not the filtered code lines: the module docstring of ``clients/mail.py``
+    names what is deliberately absent, and it says it in prose rather than in call syntax, so
+    the two claims cannot start disagreeing.
+    """
+    text = (SRC / relative).read_text(encoding="utf-8")
+    findings = [call for call in WRITING_CALLS if call in text]
+    assert findings == [], (
+        f"{relative} is a read only module and must contain nothing but GETs: {findings}"
+    )
 
 
 def test_the_tables_read_exemption_covers_two_call_forms_and_nothing_else() -> None:
