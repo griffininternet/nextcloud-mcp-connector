@@ -103,18 +103,18 @@ spreed_features
 # entry_exapp.main, and its production caller is now the first executable line of
 # tools.talk.send.
 
-# --- The transport layer of the Mail family (plan 10-02, to be dissolved in plan 10-04) --
+# --- The transport layer of the Mail family (plan 10-02, thinned out in plan 10-04) -------
 # The same parked-caller case as Tables in 08-02 and Talk in 09-01: the transport of
-# nextcloud/clients/mail.py was written and tested in one piece before its caller existed, so
-# these three have no production call site yet. Every one of them is exercised by
-# tests/unit/test_mail_client.py today, and plan 10-04 adds tools/mail.py, which calls all
-# three; they leave this list with that plan, not with a later cleanup.
+# nextcloud/clients/mail.py was written and tested in one piece before its caller existed.
+# Plan 10-04 added tools/mail.py, and two of the three left the list with it: get_accounts and
+# get_mailboxes are called by mail_browse on its two flat levels. get_messages never entered
+# the list, because the name already has a production caller in the Talk family, so vulture
+# never reports it and an entry here would be a line nobody could ever check.
 #
-# get_messages is deliberately absent: the name already has a production caller in the Talk
-# family, so vulture never reports it, and an entry here would be a line nobody could ever
-# check.
-get_accounts
-get_mailboxes
+# get_message: the one that stays, and it is a parked caller rather than a permanent entry.
+#   The single full message route has no production call site until plan 10-05 adds the
+#   ``mail:`` branch of fetch; it is exercised today by tests/unit/test_mail_client.py and it
+#   leaves this list with that plan.
 get_message
 
 # to_text: the same parked-caller case one layer up. tools/html_text.py was written in plan
