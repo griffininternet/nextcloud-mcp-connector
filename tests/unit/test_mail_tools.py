@@ -319,6 +319,61 @@ async def test_three_mailboxes_carry_a_special_role_and_the_fourth_carries_none(
 
 
 @pytest.mark.anyio
+async def test_a_cut_mailbox_list_names_the_larger_limit_as_the_way_out(
+    clients: NcClients,
+) -> None:
+    """The mailbox level hands out no cursor, so a cut below the ceiling has to say how to
+    see the rest: raise the limit (review finding WR-03). A bare truncated flag on a level
+    without a continuation reads like "cut, for good"."""
+    with respx.mock(assert_all_called=True) as mock:
+        mock_mail_app(mock)
+        mock.get(MAILBOXES_URL).mock(return_value=httpx.Response(200, json=envelope(MAILBOXES)))
+        answer = await mail_tools.browse(
+            clients, level="mailboxes", account_id=str(ACCOUNT_ID), limit=2
+        )
+
+    assert answer["count"] == 2
+    assert answer["truncated"] is True
+    assert "next" not in answer, "this level hands out no cursor, and that stays true"
+    assert "limit" in answer["note"]
+    assert str(mail_tools.MAX_LIMIT) in answer["note"]
+
+
+@pytest.mark.anyio
+async def test_a_mailbox_list_cut_at_the_ceiling_says_the_rest_is_out_of_reach(
+    clients: NcClients,
+) -> None:
+    """At the ceiling a larger limit is no way out any more, and inventing a cursor level
+    is not this fix; the honest sentence is that the remaining entries are not reachable
+    through this tool (review finding WR-03)."""
+    crowd = [mailbox(databaseId=100 + n, name=f"INBOX.Ordner{n}") for n in range(60)]
+    with respx.mock(assert_all_called=True) as mock:
+        mock_mail_app(mock)
+        mock.get(MAILBOXES_URL).mock(return_value=httpx.Response(200, json=envelope(crowd)))
+        answer = await mail_tools.browse(
+            clients, level="mailboxes", account_id=str(ACCOUNT_ID), limit=mail_tools.MAX_LIMIT
+        )
+
+    assert answer["count"] == mail_tools.MAX_LIMIT
+    assert answer["truncated"] is True
+    assert "next" not in answer
+    assert "not reachable" in answer["note"]
+
+
+@pytest.mark.anyio
+async def test_a_mailbox_list_below_the_limit_carries_neither_truncation_nor_note(
+    clients: NcClients,
+) -> None:
+    with respx.mock(assert_all_called=True) as mock:
+        mock_mail_app(mock)
+        mock.get(MAILBOXES_URL).mock(return_value=httpx.Response(200, json=envelope(MAILBOXES)))
+        answer = await mail_tools.browse(clients, level="mailboxes", account_id=str(ACCOUNT_ID))
+
+    assert "truncated" not in answer
+    assert "note" not in answer
+
+
+@pytest.mark.anyio
 async def test_the_number_zero_is_read_as_no_role_and_a_string_comes_through_lower_case(
     clients: NcClients,
 ) -> None:

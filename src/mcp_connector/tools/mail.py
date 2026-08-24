@@ -571,9 +571,29 @@ def _number(value: Any) -> int:
 
 
 def _envelope(level: str, entries: list[dict[str, Any]], limit: int) -> dict[str, Any]:
-    """One answer shape for all three levels, truncation named instead of silent."""
+    """One answer shape for the account and the mailbox level, truncation named with a way out.
+
+    Neither of these two levels hands out a cursor, and a bare ``truncated: true`` on a level
+    without one reads like "cut, and there is no continuation" (review finding WR-03). The
+    cut happens here in the projection, after the app already delivered the complete list, so
+    the answer says what a caller can still do: raise the limit while there is room, and when
+    :data:`MAX_LIMIT` is already reached, say honestly that the rest is out of reach for this
+    tool rather than leaving the model to page in a circle.
+    """
     kept = entries[:limit]
     answer: dict[str, Any] = {"level": level, "count": len(kept), "results": kept}
     if len(entries) > len(kept):
         answer["truncated"] = True
+        if len(kept) < MAX_LIMIT:
+            answer["note"] = (
+                f"{len(kept)} of {len(entries)} {level} shown; this level hands out no "
+                f"cursor, so call mail_browse again with a larger limit (at most "
+                f"{MAX_LIMIT}) to see more"
+            )
+        else:
+            answer["note"] = (
+                f"{len(kept)} of {len(entries)} {level} shown; this level hands out no "
+                f"cursor and {MAX_LIMIT} is its ceiling, so the entries beyond it are not "
+                "reachable through this tool"
+            )
     return answer
