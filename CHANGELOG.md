@@ -9,6 +9,45 @@ All notable changes to this app are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Mail is the newest family an assistant can reach, and it is the first one that only reads.
+An assistant looks through the mail of the account and reads a single message, and there is
+no way in this app to send one, so the family adds reach and deliberately no second way out.
+
+### Added
+
+- An assistant can walk Mail on three levels, with one tool called `mail_browse`: the mail
+  accounts of the account, the mailboxes of one account with their unread count, and the
+  message envelopes of one mailbox, newest first. Neither the account nor the mailbox is
+  ever guessed, because a right looking answer about somebody's mail is worse than a
+  question.
+
+- The envelopes can be filtered by the state of a message, by sender, by subject, by tag and
+  by a time window in Unix seconds. A filter condition this connector does not know is
+  refused with the list of the ones that work, instead of being dropped in silence the way
+  the Mail app itself would drop it, which would answer with the unfiltered list and look
+  exactly like a correct result.
+
+- The full text of a single message travels through the existing fetch entry point, with
+  the id mail:<databaseId> that every envelope carries. The body is always converted to
+  text, it is cut at 32 KiB with a marker that promises no continuation, and what Nextcloud
+  itself knows about the sender travels beside the text and never inside it: whether the
+  sender is trusted, the DKIM and signature verdicts, and any phishing checks that fired.
+
+- All three families degrade in one sentence on an instance without the Mail app, the same
+  way Notes, Deck, Tables and Talk have done since they were added.
+
+### Security
+
+- Mail is read only. There is no way in this app to send a mail, to create a draft, to move,
+  flag or delete a message, and no attachment is downloaded, and a contract test asserts it
+  against the source of the two mail modules on every run. That matters because reading mail
+  completes a combination: private data, text written by strangers, and one channel out. The
+  documentation names it and names the countermeasure with it, the administration switch
+  NC_MCP_TALK_SEND, which closes the outgoing Talk channel for the whole instance while
+  reading stays untouched. See [docs/privacy.md](docs/privacy.md).
+
 ## [0.1.7] - 2026-08-22
 
 Another release about being found, and again not a line of the server changed. The app was

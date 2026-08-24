@@ -1820,11 +1820,16 @@ def test_every_description_carries_the_answer_of_the_faq(manifest_root: etree._E
 
     One marker per fact, in the language of the variant: nothing runs on its own, there is
     a switch per account, and a connection can be ended on its own.
+
+    The fourth triple belongs to the same rule and was added with the Mail family (SEC-01).
+    The most important capability statement of that phase is that mail is read only, and a
+    reader who decides whether to install this app decides on this text: a sentence that
+    lives in the repository alone is not in front of them when they decide.
     """
     markers = {
-        None: ("background", "switch", "disconnect"),
-        "de": ("Hintergrund", "Schalter", "trenn"),
-        "fr": ("arrière-plan", "interrupteur", "déconnect"),
+        None: ("background", "switch", "disconnect", "read only"),
+        "de": ("Hintergrund", "Schalter", "trenn", "nur lesen"),
+        "fr": ("arrière-plan", "interrupteur", "déconnect", "lecture seule"),
     }
 
     for lang, expected in markers.items():
@@ -1832,6 +1837,29 @@ def test_every_description_carries_the_answer_of_the_faq(manifest_root: etree._E
         assert description is not None
         for marker in expected:
             assert marker in description, f"the {_lang_label(lang)} description misses {marker!r}"
+
+
+def test_no_description_names_a_blocked_mailbox(manifest_root: etree._Element) -> None:
+    """The Mail bullet names the levels of the tool, never the standard folder names.
+
+    This is the one place where a natural sentence walks into
+    :data:`FORBIDDEN_VOCABULARY`. That word is matched case insensitively and as a
+    substring, and the obvious enumeration of the standard folders of a mail account
+    carries it in every one of the three languages at once, so the gate would turn red
+    three times over a list nobody needs: the tool navigates accounts, mailboxes and
+    messages, and the store text says exactly that.
+
+    ``description_problems`` already refuses the word over the whole manifest. This test
+    is narrower on purpose: it names the reason, so the next rewrite of the text reads it
+    here instead of rediscovering it against a red run.
+    """
+    for lang in MANIFEST_LANGS:
+        description = _localised(manifest_root, "description", lang)
+        assert description is not None
+        assert FORBIDDEN_VOCABULARY not in description.casefold(), (
+            f"the {_lang_label(lang)} description names a blocked mailbox; "
+            "name the levels of mail_browse instead of the standard folders"
+        )
 
 
 def test_the_text_gate_rejects_a_backtick_and_a_table(manifest_root: etree._Element) -> None:

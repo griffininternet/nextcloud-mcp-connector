@@ -33,6 +33,13 @@
 	  - does NOT contain any more, on purpose: the version archaeology of the install path,
 	  - and the walkthrough of switching the app off again. Both live in docs/exapp-install.md
 	  - and docs/faq.md, which the description links.
+	  -
+	  - The Mail bullet names the levels an assistant walks and no folder names, and that is
+	  - not a matter of taste: the vocabulary gate of tests/unit/test_exapp_env_setup.py
+	  - matches one forbidden word case insensitively as a substring of the element text, and
+	  - the usual list of standard folders carries it in all three languages at once.
+	  - test_no_description_names_a_blocked_mailbox holds the rule, so it does not have to be
+	  - found a second time.
 	-->
 	<description><![CDATA[
 **MCP Connector** is a self hosted MCP server for your Nextcloud. It connects AI assistants that speak the [Model Context Protocol](https://modelcontextprotocol.io), such as Claude, Claude Code, ChatGPT or your own agent. Every request runs as the signed in user.
@@ -46,13 +53,17 @@
 - **Contacts**: search the address book
 - **Tables**: read tables, columns and rows, add a row
 - **Talk**: read conversations, send a message
+- **Mail**: read the accounts, the mailboxes of one, the messages of one, and the full text of a single message, with filters
 - **Search**: one question across all of it, full text on demand
 
 ### What it will not do
 
 - **Nothing destructive**: no delete, no move, no share
 - **No trace when reading**: Talk sets no read marker
+- **Mail is read only**: no way to send, to draft, to move, to flag or to delete a message
 - **One way out only**: sending a Talk message, and an administrator can switch it off
+
+Reading text written by strangers next to private data would be a chain if there were a way out. There is exactly one, sending a Talk message, and an administrator can close it for the whole instance. That is what the switch is for.
 
 ### Under your control
 
@@ -81,13 +92,17 @@
 - **Kontakte**: das Adressbuch durchsuchen
 - **Tables**: Tabellen, Spalten und Zeilen lesen, eine Zeile anlegen
 - **Talk**: Konversationen lesen, eine Nachricht senden
+- **Mail**: die Konten, die Postfächer eines Kontos, die Nachrichten eines Postfachs und den Volltext einer einzelnen Nachricht lesen, mit Filtern
 - **Suche**: eine Frage über alles davon, Volltext auf Abruf
 
 ### Was er nicht kann
 
 - **Nichts Zerstörendes**: kein Löschen, kein Verschieben, kein Teilen
 - **Keine Spur beim Lesen**: Talk setzt keinen Lesemarker
+- **Mail nur lesen**: kein Weg, eine Nachricht zu senden, als Entwurf anzulegen, zu verschieben, zu markieren oder zu löschen
 - **Nur ein Weg nach außen**: eine Talk-Nachricht senden, und die Administration kann das abschalten
+
+Von Fremden geschriebenen Text neben privaten Daten zu lesen wäre eine Kette, wenn es einen Weg nach außen gäbe. Es gibt genau einen, das Senden einer Talk-Nachricht, und die Administration kann ihn für die ganze Instanz schließen. Dafür ist der Schalter da.
 
 ### In Ihrer Hand
 
@@ -118,13 +133,17 @@ Die verlinkten Seiten sind auf Englisch.
 - **Contacts** : rechercher dans le carnet d'adresses
 - **Tables** : lire les tables, les colonnes et les lignes, ajouter une ligne
 - **Talk** : lire les conversations, envoyer un message
+- **Mail** : lire les comptes, les boîtes aux lettres de l'un d'eux, les messages de l'une d'elles et le texte complet d'un seul message, avec des filtres
 - **Recherche** : une seule question sur tout cela, texte complet à la demande
 
 ### Ce qu'il ne fera pas
 
 - **Rien de destructeur** : aucune suppression, aucun déplacement, aucun partage
 - **Aucune trace à la lecture** : Talk ne pose pas de marqueur de lecture
+- **Mail en lecture seule** : aucun moyen d'envoyer, de rédiger un brouillon, de déplacer, de marquer ou de supprimer un message
 - **Une seule sortie** : envoyer un message Talk, et un administrateur peut la désactiver
+
+Lire des textes écrits par des inconnus à côté de données privées formerait une chaîne s'il existait une sortie. Il en existe exactement une, l'envoi d'un message Talk, et un administrateur peut la fermer pour toute l'instance. C'est à cela que sert l'interrupteur.
 
 ### Sous votre contrôle
 
