@@ -1233,7 +1233,10 @@ FILTER_TYPES = frozenset({"is", "not", "from", "subject", "tags", "start", "end"
 
 ---
 
-## Offene Fragen
+## Offene Fragen (RESOLVED)
+
+Alle vier Fragen sind in der Planung dieser Phase entschieden; jede trägt unten den Plan, der
+sie einlöst.
 
 1. **Braucht diese Phase Stufe 2 des Spikes (GreenMail), oder reicht Unit-Ebene plus die
    Feldlisten aus dem Quelltext?**
@@ -1248,6 +1251,10 @@ FILTER_TYPES = frozenset({"is", "not", "from", "subject", "tags", "start", "end"
      Compose-Dienst, ein Konto, eine Testmail, ein Sync-Kommando, alles schon aufgeschrieben)
      und er macht aus vier Annahmen vier Messwerte. Ohne ihn ist der Phasenabschluss eine
      Behauptung.
+   - **RESOLVED: ja.** Plan 10-01 ist der erste und blockierende Plan der Phase (GreenMail als
+     vierter Dienst im Netz `nc-mcp-exapp-net`, Mail-Konto von alice darauf, Testmails
+     eingeliefert, Zwangssynchronisation), und A1 bis A4 werden dort gemessen. Plan 10-08 fährt
+     den Live-Lauf gegen dieselbe Topologie.
 
 2. **Wird der interne Routensatz irgendwo doch gebraucht?**
    - Was wir wissen: Für MAIL-01 bis MAIL-03 nicht. Alle verlangten Felder stehen in den
@@ -1259,6 +1266,10 @@ FILTER_TYPES = frozenset({"is", "not", "from", "subject", "tags", "start", "end"
      geklärt ist.
    - Empfehlung: Nicht in dieser Phase klären, aber den Befund an Phase 11 übergeben, damit
      die 1+N-Kosten von CTX-02 aus der Postfachliste gerechnet werden und nicht neu erforscht.
+   - **RESOLVED: nein, nicht in dieser Phase.** Plan 10-02 begründet die Nichtbenutzung im
+     Ersetzbarkeits-Absatz des Modul-Docstrings, und der `<output>`-Abschnitt von Plan 10-08
+     trägt die zwei Übergaben an Phase 11 (Ungelesen-Zähler pro Postfach samt 1+N-Kosten, und
+     der beobachtete Wert des `unread`-Felds des Navigationseintrags).
 
 3. **Wie eng darf die Byte-Kappe des Volltexts sein?**
    - Was wir wissen: `fetch` nutzt heute 512 KiB (die Datei-Grenze), Talk 800 Bytes pro
@@ -1268,12 +1279,19 @@ FILTER_TYPES = frozenset({"is", "not", "from", "subject", "tags", "start", "end"
    - Empfehlung: Nach der GreenMail-Messung entscheiden, Startwert in der Grössenordnung von
      16 KiB, mit dem Argument im Docstring. Wichtig ist nicht die Zahl, sondern dass die
      Kappung markiert ist und dass der Marker wahr ist (Falle 6).
+   - **RESOLVED: gemessen in 10-01, gesetzt in 10-05.** Plan 10-01 hält die Länge des
+     gewandelten Volltexts je Testmail im Stufe-2-Protokoll fest, und Plan 10-05 setzt daraus
+     eine eigene Konstante (ausdrücklich **nicht** `MAX_TEXT_BYTES` mit seinen 512 KiB) mit der
+     Messung im Kommentar und mit einem Marker, der nur bei echter Kappung erscheint.
 
 4. **Bekommt `mail_browse` einen `account_id`-Default?**
    - Was wir wissen: Die Postfachroute verlangt `accountId`, die Nachrichtenroute `mailboxId`.
    - Empfehlung: Kein Default und kein automatisches "erstes Konto". Das ist dieselbe
      Entscheidung wie bei Talk (`messages` braucht ein Token) und bei Tables. Ein geratenes
      Konto ist die Sorte Antwort, die richtig aussieht.
+   - **RESOLVED: kein Default.** Plan 10-04 lässt `level="mailboxes"` ohne `account_id` mit
+     einem ToolError antworten, dessen Hinweis auf `level=accounts` verweist, statt das erste
+     Konto zu nehmen (T-10-24), und ein Unit-Test belegt die Ablehnung mit null Requests.
 
 ---
 
