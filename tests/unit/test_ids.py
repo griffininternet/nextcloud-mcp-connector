@@ -2,7 +2,13 @@
 
 The codec is the only place that builds or reads prefixed IDs. A wrong prefix would
 make ``fetch`` resolve a card as a note (silently), so the roundtrip property is
-pinned here for all five kinds.
+pinned here for all six kinds.
+
+``mail`` is the one kind with a guard of its own, and the tests below are written against
+the reason for it rather than against its shape: a mail id that is not a number has to be
+refused by this module, because the call it would otherwise reach is the most expensive of
+the whole server (every full message read opens an IMAP session inside the Mail app), and
+the app answers a non numeric id with 404 instead of refusing it.
 """
 
 import pytest
@@ -11,12 +17,13 @@ from mcp_connector import ids
 from mcp_connector.errors import ToolError
 
 
-def test_roundtrip_for_all_five_kinds() -> None:
+def test_roundtrip_for_all_six_kinds() -> None:
     cases = [
         (ids.encode_file("12345"), ("file", ("12345",))),
         (ids.encode_note("42"), ("note", ("42",))),
         (ids.encode_card("7", "13", "99"), ("card", ("7", "13", "99"))),
         (ids.encode_event("personal", "abcd-1234.ics"), ("event", ("personal", "abcd-1234.ics"))),
+        (ids.encode_mail("4711"), ("mail", ("4711",))),
         (
             ids.encode_url("https://nc.test/index.php/apps/notes/note/42"),
             ("url", ("https://nc.test/index.php/apps/notes/note/42",)),
@@ -31,7 +38,41 @@ def test_encoded_prefixes_are_stable() -> None:
     assert ids.encode_note("1") == "note:1"
     assert ids.encode_card("1", "2", "3") == "card:1:2:3"
     assert ids.encode_event("personal", "x.ics") == "event:personal:x.ics"
+    assert ids.encode_mail("1") == "mail:1"
     assert ids.encode_url("https://nc.test/x") == "url:https://nc.test/x"
+
+
+def test_a_mail_id_reads_the_same_from_a_number_and_from_a_string() -> None:
+    """``mail_browse`` builds the id from an int and a model hands it back as text."""
+    assert ids.encode_mail(4711) == "mail:4711" == ids.encode_mail("4711")
+    assert ids.parse("mail:4711") == ("mail", ("4711",))
+
+
+def test_a_mail_id_of_zero_is_a_number_and_the_database_decides_the_rest() -> None:
+    """Refusing a zero would be a statement about the Mail database, not about a form.
+
+    This module knows what a mail id looks like; whether a row with that number exists is
+    the app's answer to give, and it gives it as a 404 with a sentence of its own.
+    """
+    assert ids.parse("mail:0") == ("mail", ("0",))
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["mail:abc", "mail:4711a", "mail:-1", "mail: ", "mail:", "mail:47:11", "mail: 4711"],
+)
+def test_a_mail_id_that_is_not_a_number_is_refused_with_the_format_list(raw: str) -> None:
+    """Not a single request may leave for one of these (threat T-10-31)."""
+    with pytest.raises(ToolError) as excinfo:
+        ids.parse(raw)
+
+    assert "mail:" in excinfo.value.hint, "the rejection hands back the form that works"
+
+
+def test_the_hint_every_tool_prints_names_all_six_forms() -> None:
+    """The hint is contract: it is what a caller reads after any id was refused anywhere."""
+    for form in ("file:", "note:", "card:", "event:", "mail:", "url:"):
+        assert form in ids._HINT, form
 
 
 def test_short_card_form_is_accepted() -> None:
@@ -73,6 +114,7 @@ def test_encode_rejects_empty_parts() -> None:
         lambda: ids.encode_note(""),
         lambda: ids.encode_card("1", "", "3"),
         lambda: ids.encode_event("", "x.ics"),
+        lambda: ids.encode_mail(""),
         lambda: ids.encode_url(""),
     ):
         with pytest.raises(ToolError):

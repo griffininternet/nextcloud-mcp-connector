@@ -10,6 +10,10 @@ Formats::
     note:<id>
     card:<boardId>:<stackId>:<cardId>      (short form card:<cardId> is accepted)
     event:<calendarUri>:<objectName>
+    mail:<databaseId>                      (the databaseId of the message, and no other
+                                            number: one message carries uid, remoteId,
+                                            messageId and, in the full answer, id as well,
+                                            and all four of them address nothing here)
     url:<absolute-url>                     (honest rest category, see pitfall 10)
 """
 
@@ -19,7 +23,8 @@ SEPARATOR = ":"
 
 _HINT = (
     "Use an id exactly as returned by a search tool: file:<fileid>, note:<id>, "
-    "card:<board>:<stack>:<card>, event:<calendar>:<object> or url:<absolute-url>."
+    "card:<board>:<stack>:<card>, event:<calendar>:<object>, mail:<databaseId> or "
+    "url:<absolute-url>."
 )
 
 
@@ -29,6 +34,16 @@ def encode_file(fileid: str | int) -> str:
 
 def encode_note(note_id: str | int) -> str:
     return _join("note", str(note_id))
+
+
+def encode_mail(message_id: str | int) -> str:
+    """The ``databaseId`` of one message, and deliberately nothing else.
+
+    A message carries ``uid``, ``remoteId``, ``messageId`` and, in the full answer, ``id``
+    beside it. Every one of those is a number that looks usable and addresses nothing on the
+    full text route, which is why only one function of this module builds a mail id at all.
+    """
+    return _join("mail", str(message_id))
 
 
 def encode_card(board_id: str | int, stack_id: str | int, card_id: str | int) -> str:
@@ -58,6 +73,16 @@ def parse(raw: str) -> tuple[str, tuple[str, ...]]:
         return "url", (rest,)
     if kind in ("file", "note"):
         parts = (rest,)
+    elif kind == "mail":
+        parts = (rest,)
+        # The digit guard stands here and not only in the mail client, and that is the whole
+        # difference to ``file`` and ``note``: ``mail:abc`` has to fail without a single
+        # request. The full text route is the most expensive call of that family, because
+        # every read of it opens an IMAP session inside the Mail app, and the app offers
+        # nothing to lean on: PHP casts a non numeric id to 0 and answers 404, so there is no
+        # routing error that would stop a wrong value on the way out (pitfall 11).
+        if not rest.isdigit():
+            raise ToolError(message=f"{raw!r} is not a valid mail id.", hint=_HINT)
     elif kind == "card":
         parts = tuple(rest.split(SEPARATOR))
         if len(parts) not in (1, 3):
