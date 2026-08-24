@@ -138,7 +138,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 10-04-PLAN.md: mail_browse mit drei Ebenen, Filter-Positivliste mit Ablehnung, Cursor mit mailbox_id als Scope
+- [x] 10-04-PLAN.md: mail_browse mit drei Ebenen, Filter-Positivliste mit Ablehnung, Cursor mit mailbox_id als Scope
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -224,7 +224,7 @@ Plans:
 | 7. Verwaltungs-Clients live verprobt | v1.1 | 0/0 | Deferred (extern getaktet) | - |
 | 8. Erreichbarkeits-Spike und Tables | v1.2 | 5/5 | Complete    | 2026-08-21 |
 | 9. Talk | v1.2 | 5/5 | Complete    | 2026-08-21 |
-| 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 3/8 | In Progress|  |
+| 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 4/8 | In Progress|  |
 | 11. Bündelung, Budget und Release 0.1.6 | v1.2 | 0/? | Not started | - |
 
 ## Next
