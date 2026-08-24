@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Kuratierte Breite
 status: executing
-stopped_at: Completed 11-05-PLAN.md
-last_updated: "2026-08-24T21:04:43.974Z"
+stopped_at: Completed 11-06-PLAN.md
+last_updated: "2026-08-24T21:34:37.144Z"
 last_activity: 2026-08-24
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 28
-  completed_plans: 23
+  completed_plans: 24
   percent: 75
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 11 (Bündelung, Budget und Release 0.1.8) — EXECUTING
-Plan: 6 of 10
+Plan: 7 of 10
 Status: Ready to execute
 Last activity: 2026-08-24
 
@@ -140,6 +140,7 @@ Last activity: 2026-08-24
 | Phase 11 P03 | 34 min | 3 tasks tasks | 5 files files |
 | Phase 11 P04 | 20 min | 3 tasks tasks | 2 files files |
 | Phase 11 P05 | 17 min | 3 tasks tasks | 4 files files |
+| Phase 11 P06 | 27 min | 2 tasks tasks | 3 files files |
 
 ## Accumulated Context
 
@@ -501,6 +502,11 @@ Recent decisions affecting current work:
 - [Phase ?]: 11-05: die Mail-Zaehler kommen ausschliesslich aus der Postfachliste; das unread-Feld des Navigationseintrags ist verboten und im Docstring mit der Messung begruendet (0 bei sechs ungelesenen Nachrichten)
 - [Phase ?]: 11-05: eine fehlende Inbox bleibt ein fehlendes Feld plus ein benannter degraded-Satz, niemals inbox_unread 0; beide Mail-Ebenen fragen mit limit=MAX_LIMIT, damit die Kappe dieser Antwort immer die eigene ist
 - [Phase ?]: 11-05: die prepare_context-Beschreibung nennt alle vier Quellen und kostet gemessene 33 Bytes (625 auf 658, Oberflaeche 15736 auf 15769); Plan 11-07 braucht fuer ein Gate bei 18000 jetzt 117 statt 84 Bytes Diaet
+- [Phase ?]: 11-06: Keine der vier Zeitbudget-Konstanten wird geaendert: jedes gedeckelte Bein liegt mehr als hundertfach unter seiner Decke (Kalender 0,07 s bei 10 s, Talk 0,04 s bei 5 s, Mail 0,06 s bei 10 s), und eine Absenkung wuerde bei der ersten langsamen Instanz Degradation im Normalfall erzeugen
+- [Phase ?]: 11-06: Die Obergrenze der Wanduhr-Messung ist CALENDAR_BUDGET (10 s) und nicht die Referenz 0,84 s: eine Grenze an der Referenz wuerde den Entwicklungsrechner messen statt den Code, die groesste Einzeldecke faengt genau den sequenziellen Regress (T-11-40)
+- [Phase ?]: 11-06: Ein Buendel zahlt bei kaltem Capabilities-Cache drei Erkennungsrequests und nicht zwei (zweimal /cloud/capabilities, einmal /core/navigation/apps); zwei gehoeren dem Mail-Bein, der dritte entsteht aus dem Rennen des Talk-Beins um denselben leeren Cache-Eintrag. Das Rennen wird nicht behoben (eine Cache-Sperre waere strukturell), der Befund steht im Messdokument
+- [Phase ?]: 11-06: truncated auf der Talk-Nachrichtenebene heisst "die App hat eine Fortsetzungs-Id mitgegeben" und nicht "es gibt mehr zu lesen"; es taugt deshalb nicht als Vollstaendigkeitspruefung, und eine Divergenz zwischen unread und den lesbaren Nachrichten gilt nur, wenn ein Fenster sie entscheidet
+- [Phase ?]: 11-06: Die Falle T12 (unread == 1 bei leerer Historie) ist auf der Messtopologie nicht vorhanden; der Beweis "unread ist kein Nachrichtenzaehler" laeuft ueber den umgekehrten und staerkeren Fall (sechs lesbare Nachrichten, unread 0)
 
 ### Pending Todos
 
@@ -535,8 +541,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-24T21:03:54.691Z
-Stopped at: Completed 11-05-PLAN.md
+Last session: 2026-08-24T21:33:31.951Z
+Stopped at: Completed 11-06-PLAN.md
 Naechster Schritt: /gsd:plan-phase 8
 Resume file: None
 

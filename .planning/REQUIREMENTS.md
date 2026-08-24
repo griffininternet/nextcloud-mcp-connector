@@ -31,8 +31,8 @@
 
 ### prepare_context (CTX)
 
-- [ ] **CTX-01**: `prepare_context` enthält einen Talk-Digest aus einem einzigen Request (die Konversationsliste trägt alles Nötige): maximal 3 Konversationen mit Erwähnung oder Ungelesenem, `lastMessage`-Vorschau hart gekappt (~200 Zeichen), eigenes Zeit-Budget und eigener `degraded`-Eintrag; das bestehende Timeout-/Degradations-Verhalten der anderen Quellen bleibt gemessen unverändert.
-- [ ] **CTX-02**: `prepare_context` enthält Mail-Ungelesen-Zähler (nur Zahlen pro Konto/Inbox, keine Betreffs, kein Inhalt aus fremder Hand im Standardbündel), mit eigenem Zeit-Budget und `degraded`-Eintrag; die 1+N-Request-Kosten sind gemessen und dokumentiert.
+- [x] **CTX-01**: `prepare_context` enthält einen Talk-Digest aus einem einzigen Request (die Konversationsliste trägt alles Nötige): maximal 3 Konversationen mit Erwähnung oder Ungelesenem, `lastMessage`-Vorschau hart gekappt (~200 Zeichen), eigenes Zeit-Budget und eigener `degraded`-Eintrag; das bestehende Timeout-/Degradations-Verhalten der anderen Quellen bleibt gemessen unverändert.
+- [x] **CTX-02**: `prepare_context` enthält Mail-Ungelesen-Zähler (nur Zahlen pro Konto/Inbox, keine Betreffs, kein Inhalt aus fremder Hand im Standardbündel), mit eigenem Zeit-Budget und `degraded`-Eintrag; die 1+N-Request-Kosten sind gemessen und dokumentiert.
 
 ### Tool-Infrastruktur (TOOL)
 
@@ -90,8 +90,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MAIL-03 | Phase 10 | Complete |
 | MAIL-04 | Phase 8 | Complete |
 | SRV-06 | Phase 10 | Complete |
-| CTX-01 | Phase 11 | Pending |
-| CTX-02 | Phase 11 | Pending |
+| CTX-01 | Phase 11 | Complete |
+| CTX-02 | Phase 11 | Complete |
 | TOOL-15 | Phase 11 | Pending |
 | TOOL-16 | Phase 11 | Pending |
 | SEC-01 | Phase 10 | Complete |
