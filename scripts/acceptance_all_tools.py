@@ -1,4 +1,4 @@
-"""Phase acceptance: call all 21 tools once, through a real MCP client over stdio.
+"""Phase acceptance: call every tool of the registry once, through a real MCP client over stdio.
 
 This is the proof behind success criterion 1 of phase 1. Not a unit test and not a mock:
 the script starts ``nc-mcp`` as a subprocess exactly as Claude Desktop does, speaks the
@@ -13,8 +13,13 @@ Usage::
     set -a && . ./.env.test && set +a
     uv run python scripts/acceptance_all_tools.py
 
-Exit code 0 only when all 21 tools answered. The output is a matrix of tool name, verdict
-and the first line of the answer, so a failure is attributable without a rerun.
+Exit code 0 only when every tool the running registry lists has answered. The expected set
+is that list and never a copy of the names in this file: a second list here would be a
+second truth about the tool surface, and this project keeps the number of tools in a test
+(``tests/contract/test_tool_surface.py``) and never in a document or a script. The check
+gets stronger by it rather than weaker, because a tool the registry gained and nobody
+added to this run is named by it. The output is a matrix of tool name, verdict and the
+first line of the answer, so a failure is attributable without a rerun.
 
 The calls build on each other on purpose: the file uploaded in step one is the file that
 ``files_read``, ``unified_search``, ``search`` and ``fetch`` look for later. A tool that
@@ -37,6 +42,13 @@ account is not something this server can create either, and a test instance usua
 An account list that comes back empty is a success with zero accounts, so the run says so and
 walks on; the same holds one level deeper for an account without a single mailbox. Nothing is
 written in this family at all: there is no ``mail_send`` to call, by design.
+
+``fetch`` is called once per id kind that needs an object of this instance, and every one of
+those ids comes out of a read of the same run: a ``fetch("mail:<number>")`` on a guessed number
+would be a request about somebody's mail, and ``message:`` and ``table:`` are no different. A
+read that found nothing is a SKIP whose reason says which of the two dead ends it was, because
+"this instance holds no such object" and "the call before this one failed" are answered by two
+different next steps and only one of them is a defect.
 """
 
 import asyncio
@@ -54,10 +66,10 @@ from mcp.types import TextContent
 
 REQUIRED_ENV = ("NC_MCP_URL", "NC_MCP_USER", "NC_MCP_APP_PASSWORD")
 
-# The count the registry answers today. It stood at 15 while the registry already listed
-# 16, which is the kind of drift only a number in two places produces, so it is raised in
-# the same commit that raises every other frozen number of a phase.
-EXPECTED_TOOLS = 21
+#: The one tool of the mail family, called at three levels in a row. The name lives in a
+#: constant because the chain below would otherwise carry the same string five times, and five
+#: copies of a tool name are five places to miss when that tool is renamed.
+MAIL_BROWSE = "mail_browse"
 
 #: The conversation Talk creates for every account to announce its own new features. It is
 #: read only by design, so a send into it is a refusal of the connector working correctly.
@@ -113,15 +125,23 @@ def loads(payload: str) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {}
 
 
-async def run(client: Client, report: Report) -> None:
+async def run(client: Client, report: Report) -> set[str]:
+    """Call every tool once and hand back the names the registry answered ``tools/list`` with.
+
+    That set is the expected set of this run. It is read here and not written down anywhere in
+    this file on purpose: the number of tools lives in ``tests/contract/test_tool_surface.py``,
+    and a copy of the names beside it would drift without a single test noticing. An empty
+    answer is the one thing this reading cannot interpret, so it is a FAIL of its own rather
+    than an expected set nothing can fall out of.
+    """
     marker = f"abnahme{uuid.uuid4().hex[:10]}"
     stamp = time.strftime("%Y%m%d-%H%M%S")
 
     listed = await client.list_tools()
     names = sorted(tool.name for tool in listed.tools)
     print(f"tools/list: {len(names)} tools: {', '.join(names)}\n")
-    if len(names) != EXPECTED_TOOLS:
-        report.add("tools/list", "FAIL", f"expected {EXPECTED_TOOLS} tools, got {len(names)}")
+    if not names:
+        report.add("tools/list", "FAIL", "the registry answered with no tool at all")
 
     # --- files ------------------------------------------------------------------------
     path = f"/{marker}-{stamp}.md"
@@ -214,7 +234,8 @@ async def run(client: Client, report: Report) -> None:
     # mandatory column empty is refused by design as well. So only tables with ``can_create``
     # are candidates, and a candidate qualifies only when a text marker fits into every
     # mandatory column of it. If none does, this is a SKIP with a reason, exactly like Deck.
-    tables = loads(await call(client, report, "tables_browse", {"level": "tables"}))
+    listing = await call(client, report, "tables_browse", {"level": "tables"})
+    tables = loads(listing)
     table_id = ""
     values: dict[str, str] = {}
     for candidate in _writable_tables(tables):
@@ -246,17 +267,9 @@ async def run(client: Client, report: Report) -> None:
     # into the first conversation that reports ``can_send`` and is not the changelog
     # conversation of the account, because both of the refusals behind that field are correct
     # behaviour and would otherwise be reported as a broken tool.
-    conversations = loads(await call(client, report, "talk_browse", {"level": "conversations"}))
-    entries = [entry for entry in (conversations.get("results") or []) if isinstance(entry, dict)]
-    first = str(entries[0].get("token") or "") if entries else ""
-    if first:
-        await call(client, report, "talk_browse", {"level": "messages", "token": first})
-    else:
-        report.add(
-            "talk_browse",
-            "SKIP",
-            "no conversation on this account, so there is no history to read back",
-        )
+    rooms = await call(client, report, "talk_browse", {"level": "conversations"})
+    entries = [entry for entry in (loads(rooms).get("results") or []) if isinstance(entry, dict)]
+    message_id, message_reason = await _talk_message_id(client, report, rooms, entries)
 
     writable = _sendable_conversation(entries)
     if writable:
@@ -276,41 +289,9 @@ async def run(client: Client, report: Report) -> None:
     # --- mail -------------------------------------------------------------------------
     # The fourth exception, and the one that skips most often: a mail account is not a
     # connector feature either, and an account list that comes back empty is a success with
-    # zero accounts rather than a defect. Each of the two dead ends gets its own sentence,
-    # because "no mail account at all" and "an account without a single mailbox" are answered
-    # by two different next steps.
-    accounts = loads(await call(client, report, "mail_browse", {"level": "accounts"}))
-    account_id = _first_id(accounts)
-    mail_id = ""
-    if not account_id:
-        report.add(
-            "mail_browse",
-            "SKIP",
-            "this account has no mail account, so there are no mailboxes to read",
-        )
-    else:
-        mailboxes = loads(
-            await call(
-                client, report, "mail_browse", {"level": "mailboxes", "account_id": account_id}
-            )
-        )
-        mailbox_id = _preferred_mailbox(mailboxes)
-        if not mailbox_id:
-            report.add(
-                "mail_browse",
-                "SKIP",
-                "that mail account lists no mailbox, so there are no messages to read",
-            )
-        else:
-            messages = loads(
-                await call(
-                    client, report, "mail_browse", {"level": "messages", "mailbox_id": mailbox_id}
-                )
-            )
-            entries = [
-                entry for entry in (messages.get("results") or []) if isinstance(entry, dict)
-            ]
-            mail_id = str(entries[0].get("id") or "") if entries else ""
+    # zero accounts rather than a defect. The walk down the three levels lives in a function of
+    # its own, because each of its dead ends has to be told apart from a failed call.
+    mail_id, mail_reason = await _mail_message_id(client, report)
 
     # --- contacts, search, chatgpt profile ---------------------------------------------
     await call(client, report, "contacts_search", {"query": "a"})
@@ -322,12 +303,22 @@ async def run(client: Client, report: Report) -> None:
     else:
         report.add("fetch", "FAIL", "no file id from files_search to resolve")
 
-    # The sixth id kind, and only ever with an id that came out of the read above: a
-    # fetch("mail:<number>") on a guessed number would be a request about somebody's mail.
-    if mail_id:
-        await call(client, report, "fetch", {"id": mail_id})
-    else:
-        report.add("fetch", "SKIP", "no message id from mail_browse, so no mail full text")
+    # The three id kinds that need an object of this instance, each with an id that came out of
+    # a read of this same run and never a guessed one: a fetch("mail:<number>") on a guessed
+    # number would be a request about somebody's mail, and message: and table: are no
+    # different. Where the id is missing, the reason says whether the instance holds no such
+    # object or the read before it failed.
+    for identifier, reason in (
+        (mail_id, mail_reason),
+        (message_id, message_reason),
+        _table_to_fetch(listing),
+    ):
+        if identifier:
+            await call(client, report, "fetch", {"id": identifier})
+        else:
+            report.add("fetch", "SKIP", reason)
+
+    return set(names)
 
 
 def _writable_tables(payload: dict[str, Any]) -> list[str]:
@@ -390,6 +381,98 @@ def _sendable_conversation(entries: list[dict[str, Any]]) -> str:
     return ""
 
 
+async def _talk_message_id(
+    client: Client, report: Report, rooms: str, entries: list[dict[str, Any]]
+) -> tuple[str, str]:
+    """A ``message:<token>:<id>`` out of two real reads, or an empty id and the true reason.
+
+    Exactly one of the two strings is filled. A call that failed is already a FAIL line in the
+    matrix, and this function stays quiet about it instead of adding a SKIP line that claims the
+    instance holds no conversation: that reason would be false, and a false reason hides the
+    failure it stands next to (review finding IN-04, one family over).
+    """
+    if not rooms:
+        return "", "talk_browse level=conversations failed, so there is no token from a read"
+    token = next((str(entry.get("token") or "") for entry in entries if entry.get("token")), "")
+    if not token:
+        report.add(
+            "talk_browse",
+            "SKIP",
+            "no conversation on this account, so there is no history to read back",
+        )
+        return "", "no conversation on this account, so there is no Talk message to address"
+    history = await call(client, report, "talk_browse", {"level": "messages", "token": token})
+    if not history:
+        return "", "talk_browse level=messages failed, so there is no message id from a read"
+    messages = [item for item in (loads(history).get("results") or []) if isinstance(item, dict)]
+    identifier = next((str(item.get("id") or "") for item in messages if item.get("id")), "")
+    if not identifier:
+        return "", "that conversation holds no readable message, so there is none to fetch"
+    return f"message:{token}:{identifier}", ""
+
+
+def _table_to_fetch(listing: str) -> tuple[str, str]:
+    """A ``table:<id>`` out of the listing this run already read, or the true reason for none.
+
+    No second request: the table level was called above, and the first table it listed is one
+    this account may read by definition. Reading is enough here, unlike the write further up,
+    which needs ``can_create`` and text columns.
+    """
+    if not listing:
+        return "", "tables_browse level=tables failed, so there is no table id from a read"
+    identifier = _first_id(loads(listing))
+    if not identifier:
+        return "", "no table on this account; the connector creates none by design"
+    return f"table:{identifier}", ""
+
+
+async def _mail_message_id(client: Client, report: Report) -> tuple[str, str]:
+    """The id of one readable message, or an empty id and the reason there is none.
+
+    Exactly one of the two strings is filled. The three dead ends of this chain are three
+    different statements, and none of them is invented: a call that failed is already a FAIL
+    line in the matrix, so no SKIP line is written for it at all. Before this shape, a failing
+    ``level=mailboxes`` produced a FAIL line **and** a SKIP line saying "that mail account
+    lists no mailbox", which was not the reason and covered up the one that was (IN-04).
+    """
+    accounts = await call(client, report, MAIL_BROWSE, {"level": "accounts"})
+    if not accounts:
+        return "", f"{MAIL_BROWSE} level=accounts failed, so there is no mail id from a read"
+    account_id = _first_id(loads(accounts))
+    if not account_id:
+        report.add(
+            MAIL_BROWSE,
+            "SKIP",
+            "this account has no mail account, so there are no mailboxes to read",
+        )
+        return "", "this account has no mail account, so there is no mail full text to fetch"
+
+    mailboxes = await call(
+        client, report, MAIL_BROWSE, {"level": "mailboxes", "account_id": account_id}
+    )
+    if not mailboxes:
+        return "", f"{MAIL_BROWSE} level=mailboxes failed, so there is no mail id from a read"
+    mailbox_id = _preferred_mailbox(loads(mailboxes))
+    if not mailbox_id:
+        report.add(
+            MAIL_BROWSE,
+            "SKIP",
+            "that mail account lists no mailbox, so there are no messages to read",
+        )
+        return "", "that mail account lists no mailbox, so there is no mail full text to fetch"
+
+    messages = await call(
+        client, report, MAIL_BROWSE, {"level": "messages", "mailbox_id": mailbox_id}
+    )
+    if not messages:
+        return "", f"{MAIL_BROWSE} level=messages failed, so there is no mail id from a read"
+    entries = [item for item in (loads(messages).get("results") or []) if isinstance(item, dict)]
+    identifier = next((str(item.get("id") or "") for item in entries if item.get("id")), "")
+    if not identifier:
+        return "", "that mailbox holds no message, so there is no mail full text to fetch"
+    return identifier, ""
+
+
 def _preferred_mailbox(payload: dict[str, Any]) -> str:
     """The ``databaseId`` of the inbox of an account, or of the first mailbox it lists.
 
@@ -434,36 +517,18 @@ async def main() -> int:
     report = Report()
     # The transport is handed over unentered: mcp 2.x opens it inside the client.
     async with Client(stdio_client(parameters)) as client:
-        await run(client, report)
+        registry = await run(client, report)
 
     print("\n=== acceptance matrix ===")
     for tool, verdict, detail in report.rows:
         print(f"{verdict:<7} {tool:<22} {detail}")
 
-    expected = {
-        "files_search",
-        "files_list",
-        "files_read",
-        "files_upload",
-        "calendar_list_events",
-        "calendar_create_event",
-        "notes_search",
-        "notes_read",
-        "notes_create",
-        "deck_browse",
-        "deck_create_card",
-        "contacts_search",
-        "unified_search",
-        "prepare_context",
-        "tables_browse",
-        "tables_create_row",
-        "talk_browse",
-        "talk_send",
-        "mail_browse",
-        "search",
-        "fetch",
-    }
-    never_called = expected - report.called()
+    # The expected set is the registry of the process that just answered, never a list in this
+    # file: one truth about the tool surface, and it lives in a test
+    # (tests/contract/test_tool_surface.py). A tool this registry gained since the run was
+    # written therefore shows up here as never called, which is exactly the case a hand kept
+    # list would have missed.
+    never_called = registry - report.called()
     failures = report.failures()
 
     if never_called:
@@ -473,7 +538,7 @@ async def main() -> int:
     if never_called or failures:
         return 1
 
-    print(f"\nOK: all {len(expected)} tools answered over stdio.")
+    print(f"\nOK: all {len(registry)} tools of the registry answered over stdio.")
     return 0
 
 
