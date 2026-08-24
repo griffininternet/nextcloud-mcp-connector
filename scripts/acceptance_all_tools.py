@@ -1,4 +1,4 @@
-"""Phase acceptance: call all 20 tools once, through a real MCP client over stdio.
+"""Phase acceptance: call all 21 tools once, through a real MCP client over stdio.
 
 This is the proof behind success criterion 1 of phase 1. Not a unit test and not a mock:
 the script starts ``nc-mcp`` as a subprocess exactly as Claude Desktop does, speaks the
@@ -13,7 +13,7 @@ Usage::
     set -a && . ./.env.test && set +a
     uv run python scripts/acceptance_all_tools.py
 
-Exit code 0 only when all 20 tools answered. The output is a matrix of tool name, verdict
+Exit code 0 only when all 21 tools answered. The output is a matrix of tool name, verdict
 and the first line of the answer, so a failure is attributable without a rerun.
 
 The calls build on each other on purpose: the file uploaded in step one is the file that
@@ -31,6 +31,12 @@ considers tables with ``can_create`` and only writes when a text marker fits int
 mandatory column of one. For Talk the same holds with one field, ``can_send``: a read only
 conversation and the changelog conversation of the account are refused by design, so a run
 without a conversation this account may write into is a skip and never a failure.
+
+Mail is the fourth of that kind and the most likely to skip of them all, because a mail
+account is not something this server can create either, and a test instance usually has none.
+An account list that comes back empty is a success with zero accounts, so the run says so and
+walks on; the same holds one level deeper for an account without a single mailbox. Nothing is
+written in this family at all: there is no ``mail_send`` to call, by design.
 """
 
 import asyncio
@@ -51,7 +57,7 @@ REQUIRED_ENV = ("NC_MCP_URL", "NC_MCP_USER", "NC_MCP_APP_PASSWORD")
 # The count the registry answers today. It stood at 15 while the registry already listed
 # 16, which is the kind of drift only a number in two places produces, so it is raised in
 # the same commit that raises every other frozen number of a phase.
-EXPECTED_TOOLS = 20
+EXPECTED_TOOLS = 21
 
 #: The conversation Talk creates for every account to announce its own new features. It is
 #: read only by design, so a send into it is a refusal of the connector working correctly.
@@ -267,6 +273,45 @@ async def run(client: Client, report: Report) -> None:
             "no conversation this account may write into; the connector creates none by design",
         )
 
+    # --- mail -------------------------------------------------------------------------
+    # The fourth exception, and the one that skips most often: a mail account is not a
+    # connector feature either, and an account list that comes back empty is a success with
+    # zero accounts rather than a defect. Each of the two dead ends gets its own sentence,
+    # because "no mail account at all" and "an account without a single mailbox" are answered
+    # by two different next steps.
+    accounts = loads(await call(client, report, "mail_browse", {"level": "accounts"}))
+    account_id = _first_id(accounts)
+    mail_id = ""
+    if not account_id:
+        report.add(
+            "mail_browse",
+            "SKIP",
+            "this account has no mail account, so there are no mailboxes to read",
+        )
+    else:
+        mailboxes = loads(
+            await call(
+                client, report, "mail_browse", {"level": "mailboxes", "account_id": account_id}
+            )
+        )
+        mailbox_id = _preferred_mailbox(mailboxes)
+        if not mailbox_id:
+            report.add(
+                "mail_browse",
+                "SKIP",
+                "that mail account lists no mailbox, so there are no messages to read",
+            )
+        else:
+            messages = loads(
+                await call(
+                    client, report, "mail_browse", {"level": "messages", "mailbox_id": mailbox_id}
+                )
+            )
+            entries = [
+                entry for entry in (messages.get("results") or []) if isinstance(entry, dict)
+            ]
+            mail_id = str(entries[0].get("id") or "") if entries else ""
+
     # --- contacts, search, chatgpt profile ---------------------------------------------
     await call(client, report, "contacts_search", {"query": "a"})
     await call(client, report, "unified_search", {"query": marker})
@@ -276,6 +321,13 @@ async def run(client: Client, report: Report) -> None:
         await call(client, report, "fetch", {"id": file_id})
     else:
         report.add("fetch", "FAIL", "no file id from files_search to resolve")
+
+    # The sixth id kind, and only ever with an id that came out of the read above: a
+    # fetch("mail:<number>") on a guessed number would be a request about somebody's mail.
+    if mail_id:
+        await call(client, report, "fetch", {"id": mail_id})
+    else:
+        report.add("fetch", "SKIP", "no message id from mail_browse, so no mail full text")
 
 
 def _writable_tables(payload: dict[str, Any]) -> list[str]:
@@ -338,6 +390,23 @@ def _sendable_conversation(entries: list[dict[str, Any]]) -> str:
     return ""
 
 
+def _preferred_mailbox(payload: dict[str, Any]) -> str:
+    """The ``databaseId`` of the inbox of an account, or of the first mailbox it lists.
+
+    The inbox is preferred because it is the one mailbox that carries messages on a test
+    instance; a drafts or trash folder that happens to be listed first would answer with an
+    empty window and make a working read look like an empty one. ``id`` is already the
+    ``databaseId`` here: ``mail_browse`` never passes on the base64 ``id`` of the app.
+    """
+    entries = [entry for entry in (payload.get("results") or []) if isinstance(entry, dict)]
+    inbox = [entry for entry in entries if entry.get("special_role") == "inbox"]
+    for entry in [*inbox, *entries]:
+        raw = str(entry.get("id", ""))
+        if raw:
+            return raw
+    return ""
+
+
 def _first_id(payload: dict[str, Any]) -> str:
     for key in ("results", "items", "boards", "stacks"):
         entries = payload.get(key)
@@ -390,6 +459,7 @@ async def main() -> int:
         "tables_create_row",
         "talk_browse",
         "talk_send",
+        "mail_browse",
         "search",
         "fetch",
     }

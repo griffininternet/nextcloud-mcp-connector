@@ -29,6 +29,14 @@ from mcp_connector.server import mcp
 #               talk_browse says which level hands one out (review finding IN-04): 14358 bytes
 #   Budget      unchanged at 15000, because the measurement fits below it
 #
+#   Measurement 2026-08-24, all 21 curated tools registered (mail_browse of phase 10): 15736
+#               bytes
+#   Budget      15736 + 15 percent = 18096, rounded up to the next 500 = 18500 bytes
+#   Zwischenstand: this raise is an intermediate one, and it is marked as such on purpose.
+#               TOOL-15 in phase 11 re-anchors the gate on the final measurement of that
+#               phase, so nobody raises an already generous number a second time out of
+#               habit (trap 14 of the phase 10 research).
+#
 # The older lines stay where they are: a regression is only attributable when the number it
 # regressed from is still readable. The first 2026-08-21 line is the tables_browse and
 # tables_create_row pair of phase 8 (751 and 780 bytes), which took the surface past the
@@ -36,14 +44,16 @@ from mcp_connector.server import mcp
 # pair of phase 9 (861 and 648 bytes), and it raises nothing: a budget is lifted against a
 # measurement that needs it, never out of habit. The third is 46 bytes of wording, spent
 # because both tools now refuse a cursor on a level that has none and the schema is where a
-# model reads which level that is; it leaves 642 bytes of headroom.
+# model reads which level that is; it left 642 bytes of headroom. The fourth is the single
+# ``mail_browse`` of phase 10 at 1377 bytes, which is exactly the twenty-first tool the
+# paragraph below was written for: it tripped the gate at 15000, and the gate did its job.
 #
 # The headroom is for wording, not for a new tool: at ~4 bytes per token the whole surface
-# costs roughly 3.6k tokens in every single session of every client. A twenty-first tool or a
+# costs roughly 3.9k tokens in every single session of every client. A twenty-second tool or a
 # description that grows into a paragraph is supposed to trip this gate, so the decision
 # gets made on purpose instead of by accident. Raising the number is allowed, but only
 # together with a new measurement line above, so a regression stays attributable.
-BUDGET_BYTES = 15_000
+BUDGET_BYTES = 18_500
 
 # The second claim, and the one that actually reports a regression. A total with headroom
 # says nothing about a single tool: today's outlier ``calendar_create_event`` sits at 1351
@@ -60,6 +70,11 @@ BUDGET_BYTES = 15_000
 #   ``calendar_create_event`` at 1351 bytes. Every description of this surface is ASCII, so
 #   the two units happen to agree today; the point of the change is that they keep agreeing
 #   when one of them is not ASCII any more.
+#
+#   Measurement 2026-08-24, biggest tool is ``mail_browse`` at 1377 bytes: unchanged, and
+#   deliberately so. This ceiling is the real guard, so a tool that reaches it gets a shorter
+#   description and never a higher limit (A5 of the phase 10 research). ``mail_browse`` was
+#   1585 bytes when it was first written and it was cut, not exempted.
 MAX_TOOL_BYTES = 1400
 
 

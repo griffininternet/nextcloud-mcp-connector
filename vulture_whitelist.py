@@ -31,6 +31,7 @@ tables_browse
 tables_create_row
 talk_browse
 talk_send
+mail_browse
 contacts_search
 
 # --- Framework entry points -----------------------------------------------------------
