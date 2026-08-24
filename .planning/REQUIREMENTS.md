@@ -21,7 +21,7 @@
 ### Mail (MAIL)
 
 - [ ] **MAIL-01**: Nutzer kann Konten, Postfächer und Nachrichten-Envelopes lesen über `mail_browse(level="accounts"|"mailboxes"|"messages")`, strikt lesend: Envelopes mit `previewText` statt Body (Default 20, Max 50), Postfächer mit `specialRole` und Ungelesen-Zähler; kein Send-, Flag-, Move-, Delete- oder Draft-Pfad existiert im Client (AST-Grep-Gate erweitert).
-- [ ] **MAIL-02**: Nutzer kann eine einzelne Mail im Volltext lesen über das bestehende `fetch` mit neuem Präfix `mail:<databaseId>` (offizielle OCS-Route): HTML wird zu Text, die bestehende Byte-Kappe und Truncation-Markierung greifen, und Nextclouds Vertrauens-Signale (`isSenderTrusted`, `phishingDetails`, DKIM) werden als Datenfelder durchgereicht.
+- [x] **MAIL-02**: Nutzer kann eine einzelne Mail im Volltext lesen über das bestehende `fetch` mit neuem Präfix `mail:<databaseId>` (offizielle OCS-Route): HTML wird zu Text, die bestehende Byte-Kappe und Truncation-Markierung greifen, und Nextclouds Vertrauens-Signale (`isSenderTrusted`, `phishingDetails`, DKIM) werden als Datenfelder durchgereicht.
 - [ ] **MAIL-03**: Die Mail-Filtergrammatik (`is:unread`, `from:`, `subject:`, `start:`, `tags:`) ist als `filter`-Parameter von `mail_browse(level="messages")` dokumentiert und getestet.
 - [x] **MAIL-04**: Der Mail-Zugang ist im AppAPI-Modus live bewiesen, nicht nur mit App-Passwort: ein Integrationstest gegen eine echte Instanz belegt die internen Listen-Routen (accounts, mailboxes, messages) und die OCS-Volltext-Route unter Impersonation, und das SCOPE_IGNORE-Risiko der internen Routen ist im Code und in der Doku benannt.
 
@@ -86,7 +86,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TABLES-01 | Phase 8 | Complete |
 | TABLES-02 | Phase 8 | Complete |
 | MAIL-01 | Phase 10 | Pending |
-| MAIL-02 | Phase 10 | Pending |
+| MAIL-02 | Phase 10 | Complete |
 | MAIL-03 | Phase 10 | Pending |
 | MAIL-04 | Phase 8 | Complete |
 | SRV-06 | Phase 10 | Pending |

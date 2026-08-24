@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Kuratierte Breite
 status: executing
-stopped_at: Completed 10-04-PLAN.md
-last_updated: "2026-08-24T14:06:54.107Z"
-last_activity: 2026-08-24 -- Plan 10-04 abgeschlossen (mail_browse mit drei Ebenen und der Filter-Positivliste)
+stopped_at: Completed 10-05-PLAN.md
+last_updated: "2026-08-24T14:26:54.263Z"
+last_activity: 2026-08-24
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 18
-  completed_plans: 14
-  percent: 78
+  completed_plans: 15
+  percent: 50
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 10 (Mail strikt lesend und die Trifecta-Grenze) — EXECUTING
-Plan: 5 of 8
+Plan: 6 of 8
 Status: Ready to execute
-Last activity: 2026-08-24 -- Plan 10-04 abgeschlossen (mail_browse mit drei Ebenen und der Filter-Positivliste)
+Last activity: 2026-08-24
 
 ## Performance Metrics
 
@@ -130,6 +130,7 @@ Last activity: 2026-08-24 -- Plan 10-04 abgeschlossen (mail_browse mit drei Eben
 | Phase 10-mail P02 | 17 min | 3 tasks tasks | 5 files files |
 | Phase 10-mail PP03 | 25 min | 3 tasks tasks | 5 files files |
 | Phase 10-mail P04 | 22 min | 3 tasks | 3 files |
+| Phase 10 P05 | 20min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -464,6 +465,9 @@ Recent decisions affecting current work:
 - [Phase 10-mail]: Cursor-Scope-Schluessel der Mail-Familie ist m (mailbox_id), Position o ist der dateInt der aeltesten Nachricht der Seite; ohne positiven Zeitstempel wird kein next ausgegeben, weil Cursor 0 die erste Seite wiederholen wuerde
 - [Phase 10-mail]: die strikte Sekundengrenze des App-Cursors (sent_at kleiner) wird benannt und nicht repariert, wie schon beim halboffenen Kalenderfenster; eine eigene Korrektur waere eine zweite Wahrheit ueber die Reihenfolge der App
 - [Phase 10-mail]: MAIL-01 und MAIL-03 bleiben nach Plan 10-04 Pending; das Werkzeug existiert, aber die Registrierung gehoert zu 10-06 und der Live-Nachweis zu 10-08
+- [Phase 10-mail]: 10-05: MAX_MAIL_BYTES = 32768 als eigene Byte-Kappe des Mail-Volltexts, begruendet durch die Messung aus 10-01
+- [Phase 10-mail]: 10-05: Vertrauens-Signale flach in metadata und nie im text; fehlendes dkimValid ergibt unchecked
+- [Phase 10-mail]: 10-05: url einer Mail ist die Mail-App-Route, nie eine Adresse aus der Antwort
 
 ### Pending Todos
 
@@ -498,8 +502,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-24T14:06:25.565Z
-Stopped at: Completed 10-03-PLAN.md
+Last session: 2026-08-24T14:26:54.245Z
+Stopped at: Completed 10-05-PLAN.md
 Naechster Schritt: /gsd:plan-phase 8
 Resume file: None
 

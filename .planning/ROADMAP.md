@@ -142,7 +142,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 10-05-PLAN.md: mail: als Id-Kind und der Volltext über das bestehende fetch, mit flachen Vertrauens-Signalen
+- [x] 10-05-PLAN.md: mail: als Id-Kind und der Volltext über das bestehende fetch, mit flachen Vertrauens-Signalen
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -224,7 +224,7 @@ Plans:
 | 7. Verwaltungs-Clients live verprobt | v1.1 | 0/0 | Deferred (extern getaktet) | - |
 | 8. Erreichbarkeits-Spike und Tables | v1.2 | 5/5 | Complete    | 2026-08-21 |
 | 9. Talk | v1.2 | 5/5 | Complete    | 2026-08-21 |
-| 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 4/8 | In Progress|  |
+| 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 5/8 | In Progress|  |
 | 11. Bündelung, Budget und Release 0.1.6 | v1.2 | 0/? | Not started | - |
 
 ## Next
