@@ -11,8 +11,16 @@ Two of them belong to Talk and are worth naming here. The app detection reads th
 Talk is installed but switched off for the asking account. And ``parse_ocs`` accepts an
 envelope with the created status: the Talk send route documents 201 as its only success, and
 without it a successfully sent message would read as a failure (T1).
+
+The Mail block at the end covers the second detection channel, which is the one thing in this
+module that is not read out of the capabilities answer at all: Mail has no section there, so
+the navigation of the signed in user answers instead. Four states are covered (listed,
+not listed, empty, not a list), plus the two properties that make the channel affordable: the
+extra request happens once per cache window and only for Mail, and it does not extend the
+lifetime of the snapshot it is written into.
 """
 
+import dataclasses
 import json
 from pathlib import Path
 
@@ -30,7 +38,37 @@ USER = "alice"
 SECRET = "app-password-test"
 CAPABILITIES_URL = f"{BASE}/ocs/v2.php/cloud/capabilities"
 
+# The second detection channel, frozen as a literal: it is a core OCS route and not an app
+# route, which is the whole reason it can answer a question about an app that may be absent.
+NAVIGATION_URL = f"{BASE}/ocs/v2.php/core/navigation/apps"
+
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
+
+#: A navigation entry as Nextcloud 34.0.3 sends it, field for field.
+MAIL_ENTRY = {
+    "id": "mail",
+    "app": "mail",
+    "type": "link",
+    "name": "Mail",
+    "order": 3,
+    "href": f"{BASE}/index.php/apps/mail/",
+    "icon": f"{BASE}/index.php/apps/mail/img/app.svg",
+    "active": False,
+    "default": False,
+    "classes": "",
+    "unread": 0,
+}
+
+FILES_ENTRY = {
+    "id": "files",
+    "app": "files",
+    "type": "link",
+    "name": "Dateien",
+    "order": 0,
+    "href": f"{BASE}/index.php/apps/files/",
+    "active": False,
+    "unread": 0,
+}
 
 LOGIN_PAGE = (
     '<!DOCTYPE html>\n<html class="ng-csp" data-placeholder-focus="false">\n'
@@ -299,14 +337,16 @@ def test_has_refuses_an_app_this_server_does_not_check() -> None:
     """An unknown name is a programming error, never a silent False.
 
     The name used here is deliberately an app this project does *not* check. It used to be
-    ``spreed`` and had to change when Talk became the fourth checked app, which is the point
-    of the test: the mapping in ``has()`` is the list of apps, and a name outside it is a
-    typo at the developer.
+    ``spreed``, then ``mail``, and it had to change both times, when Talk became the fourth
+    and Mail the fifth checked app. That is the point of the test: the mapping in ``has()``
+    is the list of apps, and a name outside it is a typo at the developer. ``cospend`` is a
+    real Nextcloud app and one this project has no tool for.
     """
     caps = capabilities.parse({"capabilities": {"tables": {"enabled": True}}})
     assert caps.has("tables") is True
-    with pytest.raises(ValueError, match="mail"):
-        caps.has("mail")
+    assert caps.has("mail") is False, "checked since phase 10, and unanswered means absent"
+    with pytest.raises(ValueError, match="cospend"):
+        caps.has("cospend")
 
 
 @pytest.mark.anyio
@@ -516,3 +556,166 @@ async def test_a_redirect_is_never_followed(clients: NcClients) -> None:
             await capabilities.load(clients)
 
     assert "redirect" in excinfo.value.message.lower()
+
+
+@pytest.mark.anyio
+async def test_a_navigation_entry_for_mail_is_what_makes_the_app_available(
+    clients: NcClients,
+) -> None:
+    """The second detection channel end to end, and the proof that it is actually asked.
+
+    ``assert_all_called=True`` over both routes is the assertion here: the capabilities
+    answer alone can never report Mail, because Mail publishes no section in it, so a green
+    test without the second request would be a test of nothing.
+    """
+    with respx.mock(assert_all_called=True) as mock:
+        mock.get(CAPABILITIES_URL).mock(
+            return_value=httpx.Response(200, json=capabilities_fixture())
+        )
+        mock.get(NAVIGATION_URL).mock(
+            return_value=httpx.Response(200, json=envelope([FILES_ENTRY, MAIL_ENTRY]))
+        )
+        caps = await capabilities.require_app(clients, "mail")
+
+    assert caps.mail_available is True
+    assert caps.has("mail") is True
+
+
+@pytest.mark.anyio
+async def test_a_navigation_without_mail_reports_the_app_as_absent(clients: NcClients) -> None:
+    """A Nextcloud without Mail is a normal Nextcloud, and it says so in one sentence."""
+    with respx.mock(assert_all_called=True) as mock:
+        mock.get(CAPABILITIES_URL).mock(
+            return_value=httpx.Response(200, json=capabilities_fixture())
+        )
+        mock.get(NAVIGATION_URL).mock(
+            return_value=httpx.Response(200, json=envelope([FILES_ENTRY]))
+        )
+        with pytest.raises(AppMissingError) as excinfo:
+            await capabilities.require_app(clients, "mail")
+
+    assert excinfo.value.message == "The Mail app is not available on this Nextcloud."
+    assert "Mail app" in excinfo.value.hint
+    assert excinfo.value.hint != excinfo.value.message
+    assert "navigation" not in f"{excinfo.value.message} {excinfo.value.hint}".lower()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "entry",
+    [
+        {"app": "mail", "type": "link", "name": "Mail"},
+        {"id": "mail", "type": "link", "name": "Mail"},
+        {"id": "mail-something", "app": "mail", "type": "settings"},
+    ],
+    ids=["app only", "id only", "differing id and another type"],
+)
+async def test_either_field_alone_identifies_the_mail_app(
+    clients: NcClients, entry: dict[str, object]
+) -> None:
+    """Both fields carry ``mail`` in 5.11.1, and a second entry of one app may differ.
+
+    The last case also states the missing filter positively: ``type`` is never looked at,
+    because a filter on it would be an assumption about an answer shape with nothing to gain.
+    """
+    with respx.mock(assert_all_called=True) as mock:
+        mock.get(CAPABILITIES_URL).mock(
+            return_value=httpx.Response(200, json=capabilities_fixture())
+        )
+        mock.get(NAVIGATION_URL).mock(return_value=httpx.Response(200, json=envelope([entry])))
+        caps = await capabilities.load_mail(clients)
+
+    assert caps.mail_available is True
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("payload", [[], {"apps": ["mail"]}, None], ids=["empty", "object", "null"])
+async def test_a_deformed_navigation_answer_is_an_error_and_never_a_missing_app(
+    clients: NcClients, payload: object
+) -> None:
+    """Every instance has navigation, so an empty answer is deformed and not an answer.
+
+    Reading it as "Mail is missing" would be the worst of both worlds: a wrong sentence about
+    somebody else's instance, delivered with the confidence of a measurement. Same decision as
+    the provider list of ``unified_search``, where zero providers is an error with a way out.
+    """
+    with respx.mock(assert_all_called=True) as mock:
+        mock.get(CAPABILITIES_URL).mock(
+            return_value=httpx.Response(200, json=capabilities_fixture())
+        )
+        mock.get(NAVIGATION_URL).mock(return_value=httpx.Response(200, json=envelope(payload)))
+        with pytest.raises(ToolError) as excinfo:
+            await capabilities.require_app(clients, "mail")
+
+    assert not isinstance(excinfo.value, AppMissingError), "deformed is not the same as absent"
+    assert excinfo.value.hint
+    assert "Mail app is not available" not in excinfo.value.message
+
+
+@pytest.mark.anyio
+async def test_a_second_mail_call_inside_the_cache_window_asks_nothing_again(
+    clients: NcClients,
+) -> None:
+    """Two requests for the first Mail tool call, none for the second (D-20)."""
+    with respx.mock(assert_all_called=True) as mock:
+        capabilities_route = mock.get(CAPABILITIES_URL).mock(
+            return_value=httpx.Response(200, json=capabilities_fixture())
+        )
+        navigation_route = mock.get(NAVIGATION_URL).mock(
+            return_value=httpx.Response(200, json=envelope([MAIL_ENTRY]))
+        )
+        first = await capabilities.require_app(clients, "mail")
+        second = await capabilities.require_app(clients, "mail")
+
+    assert capabilities_route.call_count == 1
+    assert navigation_route.call_count == 1, "the refill happens once per cache window"
+    assert first == second
+
+
+@pytest.mark.anyio
+async def test_a_talk_call_never_pays_for_the_navigation_request(clients: NcClients) -> None:
+    """The refill hangs in ``require_app`` and not in ``load``, and this is why it matters."""
+    payload = envelope({"capabilities": {"spreed": {"features": ["chat-v2"]}}})
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get(CAPABILITIES_URL).mock(return_value=httpx.Response(200, json=payload))
+        navigation_route = mock.get(NAVIGATION_URL).mock(
+            return_value=httpx.Response(200, json=envelope([MAIL_ENTRY]))
+        )
+        caps = await capabilities.require_app(clients, "spreed")
+
+    assert caps.has("spreed") is True
+    assert len(navigation_route.calls) == 0, "Notes, Deck, Tables and Talk never ask this route"
+
+
+@pytest.mark.anyio
+async def test_the_second_question_does_not_extend_the_life_of_the_snapshot(
+    clients: NcClients,
+) -> None:
+    """The refill writes the same key with the **original** timestamp, and stays in one entry.
+
+    A refreshed timestamp would let a Mail user keep a stale capabilities snapshot alive for
+    as long as they keep asking, which is exactly the kind of quiet lifetime extension the TTL
+    exists to prevent.
+    """
+    key = (BASE, USER)
+    with respx.mock(assert_all_called=True) as mock:
+        mock.get(CAPABILITIES_URL).mock(
+            return_value=httpx.Response(200, json=capabilities_fixture())
+        )
+        mock.get(NAVIGATION_URL).mock(return_value=httpx.Response(200, json=envelope([MAIL_ENTRY])))
+        await capabilities.load(clients)
+        stored_at = capabilities._cache[key][0]
+        await capabilities.load_mail(clients)
+
+    assert capabilities._cache[key][0] == stored_at
+    assert capabilities._cache[key][1].mail_available is True
+    assert len(capabilities._cache) == 1, "the answer lands in the entry that already exists"
+
+
+def test_an_unanswered_mail_question_is_not_the_same_as_an_absent_app() -> None:
+    """``None`` is the third value that makes the refill path possible without a third cache."""
+    fresh = capabilities.parse({"capabilities": {"core": {}}})
+
+    assert fresh.mail_available is None, "None means not asked yet, and never absent"
+    assert fresh.has("mail") is False
+    assert dataclasses.replace(fresh, mail_available=True).has("mail") is True
