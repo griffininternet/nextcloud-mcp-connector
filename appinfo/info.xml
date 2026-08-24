@@ -162,7 +162,7 @@ Lire des textes écrits par des inconnus à côté de données privées formerai
 
 Les pages liées sont en anglais.
 	]]></description>
-	<version>0.1.7</version>
+	<version>0.1.8</version>
 	<licence>agpl</licence>
 	<author mail="k.cherif@outlook.de">street1983nk</author>
 	<namespace>McpConnector</namespace>
@@ -236,7 +236,7 @@ Les pages liées sont en anglais.
 			-->
 			<registry>ghcr.io</registry>
 			<image>street1983nk/mcp_connector</image>
-			<image-tag>0.1.7</image-tag>
+			<image-tag>0.1.8</image-tag>
 		</docker-install>
 		<!--
 		  - Exactly thirteen routes, and they are the whole external attack surface of this app.

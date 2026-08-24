@@ -9,13 +9,38 @@ All notable changes to this app are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.8] - 2026-08-25
 
 Mail is the newest family an assistant can reach, and it is the first one that only reads.
 An assistant looks through the mail of the account and reads a single message, and there is
 no way in this app to send one, so the family adds reach and deliberately no second way out.
+Around it, this release is about one call and one id: the bundle that answers a question in
+a single round trip now also says what is waiting in Talk and how much unread mail there is,
+without a subject and without a line of mail content, and a Talk message or a table found by
+a search can be read where it was found.
 
 ### Added
+
+- `prepare_context` now also carries what is waiting in Talk: at most three conversations
+  with something unread or a mention, each with a preview of the last message cut at 200
+  bytes. The Talk part has its own time budget and its own `degraded` entry, so a slow Talk
+  or an instance without it shortens the bundle by one sentence and never delays the answer.
+
+- `prepare_context` now also carries the unread mail counts, for at most three accounts and
+  the inbox of each, and nothing else about the mail. That restriction is the point of it:
+  the standard bundle contains no subject and no line of message content, only numbers. A
+  count the instance does not report stays a missing field plus one sentence, never a zero.
+  Measured against a running instance: the bundle answers in under two seconds with all four
+  sources present, and it costs one extra pair of requests for the mail counts.
+
+- `fetch` resolves two more kinds of id, so a search hit can be read where it was found. The
+  id `message:<token>:<messageId>` is one single Talk message, read over the same context
+  route that leaves no trace, and a message that cannot be read in that conversation is a
+  refusal and never a neighbouring message. The id `table:<tableId>` is the title of a table,
+  the number of rows it really holds and the first of them. A view is not a table, so a view
+  stays a URL, and a mail search hit stays a URL as well: resolving its deep link to the id
+  the full text route needs is untested, and an id that is right most of the time is an
+  answer about somebody else's mail the rest of the time.
 
 - An assistant can walk Mail on three levels, with one tool called `mail_browse`: the mail
   accounts of the account, the mailboxes of one account with their unread count, and the
@@ -37,6 +62,27 @@ no way in this app to send one, so the family adds reach and deliberately no sec
 
 - All three families degrade in one sentence on an instance without the Mail app, the same
   way Notes, Deck, Tables and Talk have done since they were added.
+
+### Changed
+
+- A change of the answer format, named here because a reader of the old key has to be
+  updated: in an answer of `mail_browse` on the message level, the key `truncated` of a
+  single entry is now called `preview_truncated`. The same word meant two things in the same
+  answer, and only one of them was about the entry: on the answer level `truncated` says that
+  the page of messages was cut and that there may be a next one, on a single entry it says
+  that the preview text of that message was cut. The answer level keeps `truncated`
+  unchanged, and no other tool is affected.
+
+- The descriptions an assistant reads when it connects are 157 bytes shorter for exactly the
+  same information, and the limit that guards them stands on a measurement of this release
+  for the first time: 15612 bytes across 21 tools, so the gate came down from 18500 to 18000
+  instead of up. Every byte of that surface is context an assistant does not spend on the
+  question it was asked.
+
+- The PayPal donation button of the store page points at a paypal.me address now. It carried
+  a mail address in plain text on a public page before, which is a harvesting target and not
+  a payment detail anybody needs. Same recipient, same account, and the store reads the
+  manifest at upload time, which is why the correction becomes visible with this release.
 
 ### Security
 
@@ -82,6 +128,24 @@ same behaviour it had before.
 - The store page now carries a homepage link and both documentation links, the client setup
   for a user and the installation guide for an administrator, so a reader does not have to
   find the repository first.
+
+## [0.1.5] - 2026-08-22
+
+The release that put the current store page in place, and the first of two about it. No line
+of the server changed here either. The second one, 0.1.6, carried the same change again
+because it was not visible on the store page one minute after the upload, and that was a
+mistake and not a failed release: the store serves the app page, the catalogue and the search
+index from caches that refresh minutes apart. The note that says so is in
+[docs/store-submission.md](docs/store-submission.md), so it does not have to be learned a
+third time.
+
+### Changed
+
+- The store description became what it is today: one line of what this app is, one line per
+  family of what an assistant can do, then what it deliberately cannot do and who holds the
+  switch. The store page carries the homepage link, both documentation links and both
+  donation buttons since this release. Measured on the store page on 2026-08-22 at 11:00Z,
+  the proof row is in [docs/store-submission.md](docs/store-submission.md).
 
 ## [0.1.4] - 2026-08-21
 
@@ -376,7 +440,8 @@ First release, submitted to the Nextcloud App Store.
   never sees more than that user sees in the web interface.
 - A privacy and data flow description, see [docs/privacy.md](docs/privacy.md).
 
-[Unreleased]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.4...v0.1.5
