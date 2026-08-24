@@ -37,7 +37,8 @@ Audit: [milestones/v1.1-MILESTONE-AUDIT.md](milestones/v1.1-MILESTONE-AUDIT.md) 
 
 - [x] **Phase 8: Erreichbarkeits-Spike und Tables** - Erst messen, ob Mail unter AppAPI-Impersonation überhaupt erreichbar ist, dann die risikoärmste Familie komplett bauen und damit die mechanische Checkliste einmal etablieren (completed 2026-08-21)
 - [x] **Phase 9: Talk** - Konversationen und Verlauf nachweislich nebenwirkungsfrei lesen, Nachricht senden als risikoarmer Create, Ausgangskanal per Admin-Schalter abschaltbar (completed 2026-08-21)
-- [x] **Phase 10: Mail strikt lesend und die Trifecta-Grenze** - Konten, Postfächer, Envelopes und Volltext lesen ohne jeden Schreibpfad, App-Erkennung für alle drei Familien, Exfiltrationskette benannt statt beschwiegen (completed 2026-08-24)
+- [x] **Phase 10: Mail strikt lesend und die Trifecta-Grenze** - Konten, Postfächer, Envelopes und Volltext lesen ohne jeden Schreibpfad, App-Erkennung für alle drei Familien, Exfiltrationskette benannt statt beschwiegen
+ (completed 2026-08-24)
 - [ ] **Phase 11: Bündelung, Budget und Release 0.1.6** - Talk- und Mail-Anteil in prepare_context, Suchtreffer auflösbar, Budget-Gate neu verankert, Fassung im Store
 
 ## Phase Details
@@ -168,7 +169,20 @@ Plans:
   4. `tools/list` bleibt unter einem neu gemessenen und aufgeschriebenen Budget (Messung plus 15 Prozent, aufgerundet), alle fünf neuen Werkzeuge sind schema-diätet, die Annotationen sagen die Wahrheit (drei lesend, zwei anlegend), und Werkzeugzahl 21 steht identisch in Registry, README-Tabelle in drei Sprachen und Contract-Tests.
   5. Release 0.1.8 ist im Store (die Nummer 0.1.6 im Phasentitel ist überholt: 0.1.4 mit Tables+Talk am 21.08.2026, 0.1.5 mit der neuen Store-Beschreibung am 22.08.2026, 0.1.6 und 0.1.7 am 22.08.2026 wurden sämtlich per Owner-Entscheid vorgezogen; die nächste freie Nummer ist 0.1.8, mit ihr wird der neue Spendenlink paypal.me/KhaledCherifDev sichtbar): Version an allen vier Stellen, Changelog-Block, Store-Texte und READMEs EN/DE/FR nachgezogen, alle Gates grün, Runbook-Schritte mit Proof-Zeilen, Tag erst nach Owner-Freigabe.
 
-**Plans**: TBD
+**Plans**: 10 plans in 7 waves
+
+Plans:
+- [ ] 11-01-PLAN.md: Zwei neue Id-Kinds (message, table) und zwei neue Provider in der Übersetzungstabelle
+- [ ] 11-02-PLAN.md: Die nebenwirkungsfreie Talk-Kontextroute im Client
+- [ ] 11-03-PLAN.md: fetch löst eine einzelne Talk-Nachricht und eine Tabelle auf
+- [ ] 11-04-PLAN.md: Talk-Digest im Bündel plus die eine Zeile, die TOOL-16 dort wirksam macht
+- [ ] 11-05-PLAN.md: Mail-Ungelesen-Zähler im Bündel und die ehrliche Werkzeugbeschreibung
+- [ ] 11-06-PLAN.md: Live-Messung der vier Beine und das Nachweisdokument
+- [ ] 11-07-PLAN.md: Schema-Diät der fünf Werkzeuge und das neu verankerte Budget-Gate
+- [ ] 11-08-PLAN.md: Abnahmeskript aus der Registry, drei Info-Befunde, drei READMEs
+- [ ] 11-09-PLAN.md: Release-Vorbereitung 0.1.8, Version, Changelog, Store-Texte, Gates
+- [ ] 11-10-PLAN.md: Release 0.1.8 veröffentlichen, Tag nach Owner-Freigabe, Signatur, Store, Nachweise
+
 **UI hint**: nein (kein eigenes Frontend)
 
 ## Requirement Coverage v1.2
