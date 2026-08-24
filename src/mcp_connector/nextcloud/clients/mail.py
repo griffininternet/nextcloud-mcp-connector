@@ -32,9 +32,10 @@ default and caps it here, so a URL without a window cannot be built by construct
 
 Two statuses mean something on these routes that they mean nowhere else in this project.
 **206** on the full message is a success: the message was found and everything but ``body`` is
-there, because it could not be decrypted. **500** on the mailbox and envelope routes is the
-everyday case of a mail server of the user that cannot be reached, or of a mailbox that was
-never synchronised, so the sentence points at that account and not at the Nextcloud log. Both
+there, because it could not be decrypted. **500** on the three IMAP backed routes (mailboxes,
+envelopes and the full message, which opens an IMAP session on every read) is the everyday
+case of a mail server of the user that cannot be reached, or of a mailbox that was never
+synchronised, so the sentence points at that account and not at the Nextcloud log. Both
 are handled in this module and not in the shared parser, exactly as phase 9 kept Talk's 304
 local: they carry this meaning on these routes only, and a global change would loosen the
 rules for every other family in silence.
@@ -194,9 +195,16 @@ async def get_message(
     empty. The shared status mapping reads ``meta.message``, so that sentence is dropped, and
     here that is a gain rather than a loss: a sentence about somebody else's account would say
     that a message exists that this user may not see.
+
+    The 500 branch of the two list routes stands here as well, and here most of all: this is
+    the route that opens an IMAP session inside the app on every read, so a dead mail server
+    hits it first (measured against GreenMail in the phase 8 spike: HTTP 500 "Could not
+    connect to IMAP server."). Without the check the shared transport turn would send the
+    user to the Nextcloud log about a machine that is not at fault.
     """
     message = _path_id(message_id, "message id")
     response = await ocs.ocs_get(client, creds, MESSAGE_PATH.format(message=message))
+    _check_mail_server(response, f"the message {message}")
     if response.status_code == PARTIAL:
         return _partial_message(response), True
     payload = ocs.parse_ocs(response, what=f"the message {message}")
@@ -220,7 +228,7 @@ def _path_id(value: str | int, what: str) -> str:
 
 
 def _check_mail_server(response: httpx.Response, what: str) -> None:
-    """Name the failure these two routes actually have, before the shared parser generalises.
+    """Name the failure the IMAP backed routes actually have, before the shared parser generalises.
 
     ``ocs._check_transport`` catches every status from 500 upwards before the envelope is even
     read, so this check has to run first and cannot wait for a raised error to inspect.

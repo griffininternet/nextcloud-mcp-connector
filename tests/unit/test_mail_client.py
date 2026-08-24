@@ -224,6 +224,28 @@ async def test_a_server_error_on_the_message_list_says_the_same_thing(
 
 
 @pytest.mark.anyio
+async def test_a_server_error_on_the_full_message_points_at_the_mail_account_as_well(
+    client: httpx.AsyncClient, creds: Credentials
+) -> None:
+    """The full text route opens an IMAP session on every read, so a dead mail server hits
+    it first of all (measured in the phase 8 spike: 500 "Could not connect to IMAP server."),
+    and it has to carry the same branch as the two list routes (review finding WR-01)."""
+    with respx.mock(assert_all_called=True) as mock:
+        mock.get(MESSAGE_URL).mock(
+            return_value=httpx.Response(
+                500, json=envelope(None, MAIL_SERVER_ERROR, "Internal Server Error\n")
+            )
+        )
+        with pytest.raises(ToolError) as excinfo:
+            await mail_client.get_message(client, creds, MESSAGE_ID)
+
+    spoken = f"{excinfo.value.message} {excinfo.value.hint}"
+    assert "Mail" in spoken
+    assert "account" in spoken
+    assert "Nextcloud side" not in spoken, "the Nextcloud log is the wrong next step here"
+
+
+@pytest.mark.anyio
 async def test_every_message_url_carries_the_single_view_and_an_explicit_limit(
     client: httpx.AsyncClient, creds: Credentials
 ) -> None:
