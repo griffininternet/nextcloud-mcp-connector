@@ -2,8 +2,8 @@
 
 # MCP Connector for Nextcloud
 
-A curated MCP server that connects your Nextcloud (files, calendar, notes, deck, contacts, Tables
-and Talk) to AI assistants such as Claude, Cursor, ChatGPT or your own agents.
+A curated MCP server that connects your Nextcloud (files, calendar, notes, deck, contacts, Tables,
+Talk and Mail) to AI assistants such as Claude, Cursor, ChatGPT or your own agents.
 
 **This server can never delete, overwrite or re-share anything.**
 
@@ -305,6 +305,60 @@ Deck is one browse tool with a level, not one tool per level:
   checked against the board's own permissions, so a read-only board is explained instead of
   answered with a 403.
 
+### Mail
+
+Mail is one browse tool with three levels and one strict property: it reads, and there is no
+second thing it can do.
+
+- `mail_browse(level="accounts")` lists the mail accounts of the signed in user with their
+  address, `level="mailboxes"` needs an `account_id` and lists the mailboxes of that account
+  with their unread count and their IMAP role, and `level="messages"` needs a `mailbox_id` and
+  returns the message envelopes, newest first. Neither id is ever guessed: there is no default
+  account and no "first mailbox", because a right looking answer about somebody else's mail is
+  the most expensive mistake this family can make. A window is 20 envelopes unless a larger one
+  is asked for, at most 50, and a list that had to stop hands back a `next` handle like every
+  other long list of this server.
+- **The full text of one message** travels through the existing `fetch`, with the id
+  `mail:<databaseId>` that every envelope carries, and not through a second tool. The body is
+  always converted to text, whether the message was written in HTML or not, and it is cut at
+  32 KiB with a marker that promises no continuation, because a mail has no offset to continue
+  from. Beside the text, and deliberately never inside it, `metadata` carries what Nextcloud
+  itself knows about the sender: `sender_trusted`, `dkim`, `signature`, `encrypted`,
+  `phishing_warning` and `phishing_checks`. `dkim` of `unchecked` means "no verdict was
+  computed", not "the signature is invalid", and the same word covers a mail that carries no
+  signature at all: neither of them is a verified sender, and both lead to the same next step.
+- **The filter grammar**, exactly as it is tested. Conditions are written `type:value` and
+  separated by spaces:
+
+  | Type | Takes | Example |
+  |------|-------|---------|
+  | `is:` | `unread`, `read`, `starred`, `answered`, `important` | `is:unread` |
+  | `not:` | the same five values | `not:answered` |
+  | `from:` | an address or a part of one | `from:billing@example.org` |
+  | `subject:` | a word of the subject | `subject:invoice` |
+  | `tags:` | the **numeric** tag id, never the IMAP label | `tags:1` |
+  | `start:` | **Unix seconds** | `start:1756000000` |
+  | `end:` | **Unix seconds** | `end:1756600000` |
+
+  Two rules of the Mail app's own parser are part of the grammar, because a caller cannot guess
+  them. The filter is split on **spaces**, so a value that contains one has to be percent
+  encoded: `subject:invoice%20May` is the only spelling that filters on both words, and
+  `subject:invoice May` filters on `invoice` and drops `May` without saying so. And every token
+  is split at its **first** colon with the rest falling away, so a colon inside a value has to be
+  written `%3A`. `start:` and `end:` are compared against an integer column, so they take Unix
+  seconds and nothing else: `start:2026-08-01` filters every message away instead of failing, and
+  `start:2026-08-01T10:00:00Z` would be cut at its first colon on top of that, which is why an
+  ISO timestamp is refused here.
+
+  A type this connector does not know is **refused**, not dropped. The Mail app drops it in
+  silence and answers with the unfiltered list, so `is:ungelesen` would come back looking like a
+  correct filter result and a model has no way to see the difference. An error costs one round
+  trip, a right looking wrong answer costs the conversation.
+- **What is deliberately missing.** There is no `body:` filter: it is the one condition that
+  leaves the database and searches over IMAP, so it costs a round trip to the mail server of the
+  user per call. Attachments are never downloaded. And there is no write path of any kind, see
+  the next section.
+
 ### Cloud wide search
 
 `unified_search` asks every search provider the instance offers, at the same time:
@@ -356,12 +410,18 @@ ship an output schema, because ChatGPT reads the payload as structured content:
 
 ### Optional apps
 
-Notes, Deck, Tables and Talk are optional Nextcloud apps, nine tools in total. The tool list is the
-same everywhere: it never depends on which apps an instance has, so it stays cacheable and
+Notes, Deck, Tables, Talk and Mail are optional Nextcloud apps, ten tools in total. The tool list is
+the same everywhere: it never depends on which apps an instance has, so it stays cacheable and
 predictable for every client. If an app is missing, the tool says so in one sentence and names an
 alternative, for example "The Notes app is not installed on this Nextcloud.", "The Tables app is not
-enabled on this Nextcloud." or "The Talk app is not available on this Nextcloud." Calendars and
-contacts need no app at all: CalDAV and CardDAV are part of the Nextcloud core.
+enabled on this Nextcloud.", "The Talk app is not available on this Nextcloud." or "The Mail app is
+not available on this Nextcloud." Calendars and contacts need no app at all: CalDAV and CardDAV are
+part of the Nextcloud core.
+
+Mail is detected differently from the other four, and the reason is not ours: the Mail app
+publishes no capabilities entry, so there is nothing in the capabilities document to look for.
+This server therefore asks the navigation of the signed in user, which lists the apps that account
+may actually open. That costs one additional request per cache window, and only on a Mail call.
 
 ## What this server cannot do
 
@@ -377,6 +437,28 @@ contacts need no app at all: CalDAV and CardDAV are part of the Nextcloud core.
   installed and configured. Without it, file search matches names and metadata.
 - **No background jobs, no sync, no local copy of your data.** Every call goes to your Nextcloud
   and returns.
+- **No sending mail.** No tool sends a mail, creates a draft, moves a message, sets or clears a
+  flag or deletes anything, and the attachment route of the Mail app is never called. What holds
+  that sentence is a contract test: it reads the two mail modules of this server and asserts that
+  not one writing call exists in them, against a list of the routes the Mail app offers for
+  exactly those actions.
+
+### The chain this server has, and the switch that breaks it
+
+Reading mail completes a combination worth naming rather than describing. This server has access
+to **private data** (files, calendar, notes, contacts, Tables and now mail), it takes in
+**untrusted content** (a mail and a Talk message are written by somebody else, and for a mail that
+somebody needs no account on your instance at all), and it has exactly one **outgoing channel**,
+`talk_send`. Those three together are what Simon Willison calls the
+[lethal trifecta](https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/), and a language model
+does not reliably separate data from instructions, so a mail can carry a sentence meant for the
+model and the answer can take the way out.
+
+Two things stand against it here. `talk_send` sits behind the administration switch
+`NC_MCP_TALK_SEND`, which closes the outgoing channel for the whole instance while reading stays
+untouched. And **mail is read only**: this family adds reach, and deliberately no second way out.
+Neither makes prompt injection impossible. The long form, with every countermeasure and the honest
+remainder, is in [docs/privacy.md](docs/privacy.md), section "The chain that mail closes".
 
 ## Known limitations
 
@@ -388,7 +470,10 @@ each one is visible in the answer the tool gives rather than hidden behind an em
 | **Search matches names, not contents** | Every search answer carries `"note":"matched on names only; contents are not indexed"` | Install and configure the Nextcloud Full text search app, or search by file name |
 | **An account created with `occ user:add` has no calendar** | `calendar_list_events` returns an error that names the missing calendar | `occ dav:create-calendar <user> personal`, or log in to Nextcloud once through the web UI, which creates it |
 | **The same is true for the address book** | `contacts_search` names the way out instead of returning nothing | `occ dav:create-addressbook <user> contacts` |
-| **Notes, Deck, Tables and Talk are optional apps** | The tools stay in `tools/list` everywhere and answer "The Notes app is not installed on this Nextcloud.", "The Tables app is not enabled on this Nextcloud." or "The Talk app is not available on this Nextcloud." | Install the app, or ignore those nine tools |
+| **Notes, Deck, Tables, Talk and Mail are optional apps** | The tools stay in `tools/list` everywhere and answer "The Notes app is not installed on this Nextcloud.", "The Tables app is not enabled on this Nextcloud.", "The Talk app is not available on this Nextcloud." or "The Mail app is not available on this Nextcloud." | Install the app, or ignore those ten tools |
+| **Two mails sent in the same second can fall across a page boundary** | The paging of the Mail app compares the send time strictly, so of two messages carrying the same second the second one is missing from the next page, for good | Ask for a larger `limit`, which makes the boundary rarer. The limit belongs to the app, and this server does not correct it quietly: a correction of our own would be a second truth about the order, and two callers with the same window would see different lists |
+| **No full text search inside mail bodies** | There is no `body:` filter, and the grammar refuses it like any other unknown type | Use the search of the Mail app itself. `body:` exists there, but it leaves the database and searches over IMAP, which costs a round trip to the user's mail server per call |
+| **A mailbox that has never been synchronised, and a mail server that cannot be reached** | Both answer as an error whose sentence points at the account in the Mail app, not at Nextcloud | Open the account in the Mail app once and let it synchronise, or fix the account there. Neither case is a Nextcloud problem, and neither is answered with an empty list |
 | **Nothing can be deleted or overwritten** | `files_upload` refuses an existing path with a conflict, and there is no update or delete tool at all | Pick another name. This is the design constraint, not a missing feature |
 | **No session, so no server side paging state** | A long list hands back a `next` handle you pass in again | Nothing. The handle survives a restart, which is the point |
 | **Calendars need an explicit time window with a zone** | A `start` or `end` without a zone is refused | Send `2026-09-01T00:00:00+02:00` or `...Z`. A guessed zone is a confidently wrong answer |

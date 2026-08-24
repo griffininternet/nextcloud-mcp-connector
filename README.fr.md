@@ -5,7 +5,8 @@
 # MCP Connector for Nextcloud
 
 Un serveur MCP soigneusement sélectionné qui relie votre Nextcloud (fichiers, agenda, notes, deck,
-contacts, Tables et Talk) à des assistants IA tels que Claude, Cursor, ChatGPT ou vos propres agents.
+contacts, Tables, Talk et Mail) à des assistants IA tels que Claude, Cursor, ChatGPT ou vos propres
+agents.
 
 **Ce serveur ne peut jamais supprimer, écraser ou repartager quoi que ce soit.**
 
@@ -18,7 +19,7 @@ Deux autres propriétés découlent de la même idée :
 
 - **L'assistant ne voit jamais plus que vous.** Chaque requête s'exécute avec vos propres
   identifiants Nextcloud, si bien que les permissions Nextcloud s'appliquent sans changement.
-- **Un ensemble d'outils délibérément restreint.** Les 20 outils sont sélectionnés de façon que ce
+- **Un ensemble d'outils délibérément restreint.** Les 21 outils sont sélectionnés de façon que ce
   serveur cohabite avec vos autres serveurs MCP, même dans des clients avec une limite stricte du
   nombre d'outils.
 
@@ -31,7 +32,7 @@ Version 0.1.7. L'application est référencée dans l'App Store de Nextcloud et 
 ExApp Nextcloud via AppAPI. Ce qui est en place aujourd'hui, et où chacune de ces affirmations est
 consignée :
 
-- Les 20 outils de l'ensemble v1 sont implémentés, et le tableau des outils ci-dessous n'est plus
+- Les 21 outils de l'ensemble v1 sont implémentés, et le tableau des outils ci-dessous n'est plus
   maintenu à la main : un test de contrat lit le registre d'outils en direct et échoue si un nom
   ou un niveau de permission du tableau est en désaccord avec lui.
 - La connexion OAuth 2.1 est vérifiée de bout en bout face aux deux connecteurs hébergés pour
@@ -219,6 +220,7 @@ l'outil peut créer de nouveaux objets mais ne peut jamais modifier ni supprimer
 | `tables_create_row` | create-only | Ajoute une ligne désignée par les titres de colonnes ; les lignes existantes ne sont jamais modifiées |
 | `talk_browse` | read | Parcourt Talk : les conversations de ce compte, ou l'historique de l'une d'elles |
 | `talk_send` | create-only | Envoie un message dans une conversation ; un message n'est jamais modifié ni supprimé, et une administratrice peut désactiver l'envoi pour toute l'instance |
+| `mail_browse` | read | Parcourt Mail : les comptes de cet utilisateur, les boîtes aux lettres de l'un d'eux, ou les en-têtes de messages de l'une d'elles ; strictement en lecture seule, aucun moyen d'envoyer, de rédiger un brouillon, de déplacer, de marquer ou de supprimer un courriel |
 | `contacts_search` | read | Recherche des contacts dans les carnets d'adresses |
 | `unified_search` | read | Interroge la recherche unifiée de Nextcloud à travers les fournisseurs, en respectant les permissions |
 | `prepare_context` | read | Regroupe fichiers, notes et cartes correspondants avec la semaine d'événements à venir pour une même question |
@@ -320,6 +322,60 @@ Deck est un seul outil de navigation avec un niveau, pas un outil par niveau :
   dont le Nextcloud interdit la création de tableau est vérifié au regard des propres permissions du
   tableau, si bien qu'un tableau en lecture seule est expliqué au lieu de recevoir une réponse 403.
 
+### Mail
+
+Mail est un seul outil de parcours à trois niveaux, avec une propriété stricte : il lit, et il ne
+sait rien faire d'autre.
+
+- `mail_browse(level="accounts")` liste les comptes de messagerie de l'utilisateur connecté avec leur
+  adresse, `level="mailboxes"` exige un `account_id` et liste les boîtes aux lettres de ce compte
+  avec leur nombre de messages non lus et leur rôle IMAP, et `level="messages"` exige un `mailbox_id`
+  et renvoie les en-têtes de messages, les plus récents d'abord. Aucun des deux identifiants n'est
+  deviné : il n'y a ni compte par défaut ni "première boîte", parce qu'une réponse qui a l'air juste
+  au sujet du courrier de quelqu'un d'autre serait l'erreur la plus coûteuse de cette famille. Une
+  fenêtre compte 20 en-têtes si aucune plus grande n'est demandée, 50 au maximum, et une liste qui a
+  dû s'arrêter remet un handle `next` comme toute autre liste longue de ce serveur.
+- **Le texte complet d'un seul message** passe par le `fetch` existant, avec l'identifiant
+  `mail:<databaseId>` que porte chaque en-tête, et non par un second outil. Le corps est toujours
+  converti en texte, que le message ait été écrit en HTML ou non, et il est coupé à 32 Kio avec un
+  marqueur qui ne promet aucune suite : un courriel n'a pas de décalage à partir duquel continuer. À
+  côté du texte, et délibérément jamais dedans, `metadata` porte ce que Nextcloud sait lui-même de
+  l'expéditeur : `sender_trusted`, `dkim`, `signature`, `encrypted`, `phishing_warning` et
+  `phishing_checks`. Un `dkim` égal à `unchecked` signifie "aucune vérification n'a été faite" et non
+  "la signature est invalide", et le même mot couvre un courriel sans aucune signature : ni l'un ni
+  l'autre n'est un expéditeur vérifié, et tous deux mènent à la même étape suivante.
+- **La grammaire de filtre**, exactement telle qu'elle est testée. Les conditions s'écrivent
+  `type:value` et se séparent par des espaces :
+
+  | Type | Prend | Exemple |
+  |------|-------|---------|
+  | `is:` | `unread`, `read`, `starred`, `answered`, `important` | `is:unread` |
+  | `not:` | les mêmes cinq valeurs | `not:answered` |
+  | `from:` | une adresse ou une partie d'adresse | `from:facture@example.org` |
+  | `subject:` | un mot de l'objet | `subject:facture` |
+  | `tags:` | l'identifiant **numérique** de l'étiquette, jamais le libellé IMAP | `tags:1` |
+  | `start:` | des **secondes Unix** | `start:1756000000` |
+  | `end:` | des **secondes Unix** | `end:1756600000` |
+
+  Deux propriétés de l'analyseur de l'application Mail font partie de la grammaire, parce qu'un
+  appelant ne peut pas les deviner. Le filtre est découpé sur les **espaces**, donc une valeur qui en
+  contient un doit être encodée en pourcentage : `subject:facture%20mai` est la seule écriture qui
+  filtre sur les deux mots, et `subject:facture mai` filtre sur `facture` et laisse tomber `mai` sans
+  le dire. Et chaque jeton est découpé à son **premier** deux-points, le reste disparaissant, donc un
+  deux-points dans une valeur doit s'écrire `%3A`. `start:` et `end:` sont comparés à une colonne
+  entière, ils prennent donc des secondes Unix et rien d'autre : `start:2026-08-01` élimine tous les
+  messages au lieu d'échouer, et `start:2026-08-01T10:00:00Z` serait en plus coupé à son premier
+  deux-points, raison pour laquelle un horodatage ISO est refusé ici.
+
+  Un type que ce connecteur ne connaît pas est **refusé**, et non écarté. L'application Mail l'écarte
+  en silence et répond avec la liste non filtrée, si bien que `is:ungelesen` ressemblerait à un
+  résultat de filtre correct et qu'un modèle ne peut pas voir la différence. Une erreur coûte un
+  aller-retour, une réponse fausse qui a l'air juste coûte la conversation.
+- **Ce qui manque délibérément.** Il n'y a pas de filtre `body:` : c'est la seule condition qui quitte
+  la base de données et cherche via IMAP, elle coûte donc un aller-retour vers le serveur de
+  messagerie de l'utilisateur à chaque appel. Les pièces jointes ne sont jamais téléchargées. Et il
+  n'existe aucun chemin d'écriture, voir la section correspondante plus bas.
+
 ### Recherche à l'échelle du cloud
 
 `unified_search` interroge chaque fournisseur de recherche que l'instance offre, en même temps :
@@ -378,13 +434,19 @@ livrer un output schema, car ChatGPT lit la charge utile comme contenu structur�
 
 ### Applications optionnelles
 
-Notes, Deck, Tables et Talk sont des applications Nextcloud optionnelles, neuf outils en tout. La liste
-des outils est la même partout : elle ne dépend jamais des applications qu'une instance possède, si bien
-qu'elle reste mise en cache et prévisible pour chaque client. Si une application manque, l'outil le dit
-en une phrase et nomme une alternative, par exemple "The Notes app is not installed on this Nextcloud.",
-"The Tables app is not enabled on this Nextcloud." ou "The Talk app is not available on this Nextcloud."
-Les agendas et les contacts n'ont besoin d'aucune application : CalDAV et CardDAV font partie du cœur de
-Nextcloud.
+Notes, Deck, Tables, Talk et Mail sont des applications Nextcloud optionnelles, dix outils en tout. La
+liste des outils est la même partout : elle ne dépend jamais des applications qu'une instance possède,
+si bien qu'elle reste mise en cache et prévisible pour chaque client. Si une application manque,
+l'outil le dit en une phrase et nomme une alternative, par exemple "The Notes app is not installed on
+this Nextcloud.", "The Tables app is not enabled on this Nextcloud.", "The Talk app is not available on
+this Nextcloud." ou "The Mail app is not available on this Nextcloud." Les agendas et les contacts
+n'ont besoin d'aucune application : CalDAV et CardDAV font partie du cœur de Nextcloud.
+
+Mail est détectée autrement que les quatre autres, et la raison ne vient pas de nous : l'application
+Mail ne publie aucune entrée de capacités, il n'y a donc rien à chercher dans le document de capacités.
+Ce serveur interroge alors la navigation de l'utilisateur connecté, qui liste les applications que ce
+compte peut réellement ouvrir. Cela coûte une requête supplémentaire par fenêtre de cache, et
+uniquement lors d'un appel à Mail.
 
 ## Ce que ce serveur ne peut pas faire
 
@@ -403,6 +465,29 @@ Nextcloud.
   en correspondance les noms et les métadonnées.
 - **Aucune tâche d'arrière-plan, aucune synchronisation, aucune copie locale de vos données.** Chaque
   appel va vers votre Nextcloud et revient.
+- **Aucun envoi de courriel.** Aucun outil n'envoie de courriel, ne crée de brouillon, ne déplace de
+  message, ne pose ni ne retire de marqueur et ne supprime quoi que ce soit, et la route des pièces
+  jointes de l'application Mail n'est jamais appelée. Ce qui tient cette phrase est un test de
+  contrat : il lit les deux modules Mail de ce serveur et affirme qu'aucun appel d'écriture ne s'y
+  trouve, face à la liste des routes que l'application Mail offre pour exactement ces actions.
+
+### La chaîne que ce serveur possède, et l'interrupteur qui la brise
+
+Lire le courrier complète une combinaison qu'il vaut mieux nommer que décrire. Ce serveur a accès à des
+**données privées** (fichiers, agenda, notes, contacts, Tables et désormais le courrier), il absorbe du
+**contenu non fiable** (un courriel et un message Talk sont écrits par un tiers, et pour un courriel ce
+tiers n'a même pas besoin d'un compte sur votre instance), et il a exactement une **sortie**,
+`talk_send`. Ces trois éléments ensemble sont ce que Simon Willison appelle la
+[lethal trifecta](https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/), et un modèle de langage
+ne sépare pas de façon fiable les données des instructions : un courriel peut donc porter une phrase
+destinée au modèle, et la réponse peut prendre le chemin de la sortie.
+
+Deux choses s'y opposent ici. `talk_send` se trouve derrière l'interrupteur d'administration
+`NC_MCP_TALK_SEND`, qui ferme la sortie pour toute l'instance tandis que la lecture reste intacte. Et
+**Mail est en lecture seule** : cette famille ajoute de la portée et, délibérément, aucune seconde
+sortie. Aucune des deux ne rend l'injection de prompt impossible. La version longue, avec chaque
+contre-mesure et le reste honnête, se trouve dans [docs/privacy.md](docs/privacy.md), section "The
+chain that mail closes".
 
 ## Limitations connues
 
@@ -415,7 +500,10 @@ résultat vide.
 | **La recherche met en correspondance les noms, pas le contenu** | Chaque réponse de recherche porte `"note":"matched on names only; contents are not indexed"` | Installer et configurer l'application Nextcloud Full text search, ou rechercher par nom de fichier |
 | **Un compte créé avec `occ user:add` n'a pas d'agenda** | `calendar_list_events` renvoie une erreur qui nomme l'agenda manquant | `occ dav:create-calendar <user> personal`, ou se connecter une fois à Nextcloud par l'interface web, ce qui le crée |
 | **Il en va de même pour le carnet d'adresses** | `contacts_search` nomme la solution au lieu de ne rien renvoyer | `occ dav:create-addressbook <user> contacts` |
-| **Notes, Deck, Tables et Talk sont des applications optionnelles** | Les outils restent dans `tools/list` partout et répondent "The Notes app is not installed on this Nextcloud.", "The Tables app is not enabled on this Nextcloud." ou "The Talk app is not available on this Nextcloud." | Installer l'application, ou ignorer ces neuf outils |
+| **Notes, Deck, Tables, Talk et Mail sont des applications optionnelles** | Les outils restent dans `tools/list` partout et répondent "The Notes app is not installed on this Nextcloud.", "The Tables app is not enabled on this Nextcloud.", "The Talk app is not available on this Nextcloud." ou "The Mail app is not available on this Nextcloud." | Installer l'application, ou ignorer ces dix outils |
+| **Deux courriels de la même seconde d'envoi peuvent tomber de part et d'autre d'une limite de page** | La pagination de l'application Mail compare l'heure d'envoi de façon stricte : de deux messages portant la même seconde, le second manque sur la page suivante, définitivement | Demander un `limit` plus grand, ce qui rend la limite plus rare. Cette limite appartient à l'application, et ce serveur ne la corrige pas en silence : une correction de notre part serait une seconde vérité sur l'ordre, et deux appelants avec la même fenêtre verraient des listes différentes |
+| **Aucune recherche en texte intégral dans le corps des courriels** | Il n'y a pas de filtre `body:`, et la grammaire le refuse comme tout autre type inconnu | Utiliser la recherche de l'application Mail elle-même. `body:` y existe, mais il quitte la base de données et cherche via IMAP, ce qui coûte un aller-retour vers le serveur de messagerie de l'utilisateur à chaque appel |
+| **Une boîte aux lettres jamais synchronisée et un serveur de messagerie injoignable** | Les deux répondent par une erreur dont la phrase désigne le compte dans l'application Mail, pas Nextcloud | Ouvrir une fois le compte dans l'application Mail et le laisser se synchroniser, ou réparer le compte là-bas. Aucun des deux cas n'est un problème Nextcloud, et aucun n'est traité par une liste vide |
 | **Rien ne peut être supprimé ni écrasé** | `files_upload` refuse un chemin existant avec un conflit, et il n'y a aucun outil de mise à jour ou de suppression du tout | Choisir un autre nom. C'est la contrainte de conception, pas une fonctionnalité manquante |
 | **Aucune session, donc aucun état de pagination côté serveur** | Une liste longue remet un handle `next` que vous passez de nouveau | Rien. Le handle survit à un redémarrage, ce qui est le but |
 | **Les agendas ont besoin d'une fenêtre de temps explicite avec un fuseau** | Un `start` ou `end` sans fuseau est refusé | Envoyer `2026-09-01T00:00:00+02:00` ou `...Z`. Un fuseau deviné est une réponse confidemment fausse |

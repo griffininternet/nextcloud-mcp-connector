@@ -4,8 +4,8 @@
 
 # MCP Connector für Nextcloud
 
-Ein kuratierter MCP server, der Ihr Nextcloud (Dateien, Kalender, Notizen, Deck, Kontakte, Tables und Talk)
-mit KI-Assistenten wie Claude, Cursor, ChatGPT oder Ihren eigenen Agenten verbindet.
+Ein kuratierter MCP server, der Ihr Nextcloud (Dateien, Kalender, Notizen, Deck, Kontakte, Tables, Talk
+und Mail) mit KI-Assistenten wie Claude, Cursor, ChatGPT oder Ihren eigenen Agenten verbindet.
 
 **Dieser Server kann niemals etwas löschen, überschreiben oder neu teilen.**
 
@@ -18,7 +18,7 @@ Zwei weitere Eigenschaften folgen aus derselben Idee:
 
 - **Der Assistent sieht nie mehr als Sie.** Jede Anfrage läuft mit Ihren eigenen Nextcloud-Zugangsdaten,
   sodass die Nextcloud-Berechtigungen unverändert gelten.
-- **Ein bewusst kleiner Tool-Satz.** Die 20 Tools sind so kuratiert, dass dieser Server neben Ihre
+- **Ein bewusst kleiner Tool-Satz.** Die 21 Tools sind so kuratiert, dass dieser Server neben Ihre
   anderen MCP server passt, selbst in Clients mit einer harten Tool-Obergrenze.
 
 Lizenz: AGPL-3.0-or-later. App-ID, Paketnamen und Repository-Name sind eingefroren, siehe
@@ -29,7 +29,7 @@ Lizenz: AGPL-3.0-or-later. App-ID, Paketnamen und Repository-Name sind eingefror
 Version 0.1.7. Die App ist im Nextcloud App Store gelistet und als Nextcloud-ExApp über AppAPI
 installierbar. Was heute vorliegt und wo jede dieser Aussagen festgehalten ist:
 
-- Alle 20 Tools des v1-Satzes sind implementiert, und die Tool-Tabelle weiter unten wird nicht
+- Alle 21 Tools des v1-Satzes sind implementiert, und die Tool-Tabelle weiter unten wird nicht
   mehr von Hand gepflegt: ein Contract-Test liest die aktive Tool-Registry und schlägt fehl,
   wenn ein Name oder eine Berechtigungsstufe in der Tabelle davon abweicht.
 - Die OAuth-2.1-Anmeldung ist Ende zu Ende gegen die zwei gehosteten Konnektoren belegt, für
@@ -216,6 +216,7 @@ neue Objekte anlegen, aber niemals bestehende ändern oder entfernen.
 | `tables_create_row` | create-only | Legt eine Zeile über Spaltentitel an; bestehende Zeilen werden nie geändert |
 | `talk_browse` | read | Durchsucht Talk: die Konversationen dieses Kontos oder den Verlauf einer davon |
 | `talk_send` | create-only | Sendet eine Nachricht in eine Konversation; eine Nachricht wird nie bearbeitet oder gelöscht, und eine Administratorin kann das Senden instanzweit abschalten |
+| `mail_browse` | read | Durchsucht Mail: die Konten dieses Nutzers, die Postfächer eines Kontos oder die Nachrichtenköpfe eines Postfachs; strikt lesend, es gibt keinen Weg zu senden, einen Entwurf anzulegen, zu verschieben, zu markieren oder zu löschen |
 | `contacts_search` | read | Durchsucht Adressbuch-Kontakte |
 | `unified_search` | read | Fragt die Nextcloud-Unified-Search über alle Provider ab, berechtigungsbewusst |
 | `prepare_context` | read | Bündelt passende Dateien, Notizen und Karten mit den Terminen der kommenden Woche zu einer Frage |
@@ -313,6 +314,60 @@ Deck ist ein Browse-Tool mit einer Ebene, nicht ein Tool pro Ebene:
   Board-Erstellung verbietet, wird gegen die eigenen Berechtigungen des Boards geprüft, sodass ein
   schreibgeschütztes Board erklärt wird statt mit einem 403 beantwortet.
 
+### Mail
+
+Mail ist ein Browse-Tool mit drei Ebenen und einer strikten Eigenschaft: es liest, und ein Zweites
+kann es nicht.
+
+- `mail_browse(level="accounts")` listet die Mail-Konten des angemeldeten Nutzers mit ihrer Adresse,
+  `level="mailboxes"` braucht eine `account_id` und listet die Postfächer dieses Kontos mit ihrer
+  Ungelesen-Zahl und ihrer IMAP-Rolle, und `level="messages"` braucht eine `mailbox_id` und gibt die
+  Nachrichtenköpfe zurück, neueste zuerst. Keine der beiden IDs wird geraten: es gibt kein
+  Standardkonto und kein "erstes Postfach", weil eine richtig aussehende Antwort über fremde Post der
+  teuerste Fehler dieser Familie wäre. Ein Fenster umfasst 20 Nachrichtenköpfe, wenn kein größeres
+  verlangt wird, höchstens 50, und eine Liste, die abbrechen musste, gibt ein `next`-Handle zurück wie
+  jede andere lange Liste dieses Servers.
+- **Den Volltext einer einzelnen Nachricht** liefert das bestehende `fetch` über die ID
+  `mail:<databaseId>`, die jeder Nachrichtenkopf trägt, und kein zweites Tool. Der Body läuft immer
+  durch die Wandlung nach Text, ob die Nachricht in HTML geschrieben wurde oder nicht, und er wird bei
+  32 KiB gekappt, mit einer Markierung, die keine Fortsetzung verspricht: eine Mail hat keinen Offset,
+  an dem man weiterlesen könnte. Neben dem Text, und bewusst nie darin, trägt `metadata`, was Nextcloud
+  selbst über den Absender weiß: `sender_trusted`, `dkim`, `signature`, `encrypted`,
+  `phishing_warning` und `phishing_checks`. `dkim` gleich `unchecked` heißt "es wurde nicht geprüft"
+  und nicht "die Signatur ist ungültig", und dasselbe Wort deckt eine Mail ohne jede Signatur ab:
+  keine von beiden ist ein geprüfter Absender, und beide führen zum selben nächsten Schritt.
+- **Die Filtergrammatik**, genau so, wie sie getestet ist. Bedingungen werden `type:value`
+  geschrieben und durch Leerzeichen getrennt:
+
+  | Typ | Nimmt | Beispiel |
+  |------|-------|---------|
+  | `is:` | `unread`, `read`, `starred`, `answered`, `important` | `is:unread` |
+  | `not:` | dieselben fünf Werte | `not:answered` |
+  | `from:` | eine Adresse oder einen Teil davon | `from:rechnung@example.org` |
+  | `subject:` | ein Wort des Betreffs | `subject:Rechnung` |
+  | `tags:` | die **numerische** Tag-ID, nie das IMAP-Label | `tags:1` |
+  | `start:` | **Unix-Sekunden** | `start:1756000000` |
+  | `end:` | **Unix-Sekunden** | `end:1756600000` |
+
+  Zwei Eigenschaften des Parsers der Mail-App gehören zur Grammatik, weil ein Aufrufer sie nicht
+  erraten kann. Der Filter wird an **Leerzeichen** zerlegt, ein Wert mit einem Leerzeichen muss also
+  prozentkodiert sein: `subject:Rechnung%20Mai` ist die einzige Schreibweise, die auf beide Wörter
+  filtert, und `subject:Rechnung Mai` filtert auf `Rechnung` und lässt `Mai` fallen, ohne das zu
+  sagen. Und jedes Token wird am **ersten** Doppelpunkt zerlegt, der Rest fällt weg, ein Doppelpunkt
+  im Wert muss also `%3A` heißen. `start:` und `end:` werden gegen eine Ganzzahlspalte verglichen,
+  nehmen also Unix-Sekunden und nichts sonst: `start:2026-08-01` filtert jede Nachricht weg, statt
+  fehlzuschlagen, und `start:2026-08-01T10:00:00Z` würde obendrein am ersten Doppelpunkt abgeschnitten,
+  weshalb ein ISO-Zeitstempel hier abgelehnt wird.
+
+  Ein Typ, den dieser Connector nicht kennt, wird **abgelehnt** und nicht verworfen. Die Mail-App
+  verwirft ihn still und antwortet mit der ungefilterten Liste, sodass `is:ungelesen` wie ein
+  korrektes Filterergebnis aussähe und ein Modell den Unterschied nicht sehen kann. Ein Fehler kostet
+  eine Runde, eine richtig aussehende falsche Antwort kostet das Gespräch.
+- **Was bewusst fehlt.** Es gibt keinen `body:`-Filter: er ist die eine Bedingung, die die Datenbank
+  verlässt und über IMAP sucht, also kostet er pro Aufruf eine Runde zum Mailserver des Nutzers.
+  Anhänge werden nie heruntergeladen. Und es gibt überhaupt keinen Schreibweg, siehe den
+  übernächsten Abschnitt.
+
 ### Cloud-weite Suche
 
 `unified_search` fragt jeden Suchprovider ab, den die Instanz anbietet, gleichzeitig:
@@ -367,12 +422,19 @@ ein Output-Schema mitliefern, weil ChatGPT die Nutzlast als strukturierten Inhal
 
 ### Optionale Apps
 
-Notes, Deck, Tables und Talk sind optionale Nextcloud-Apps, insgesamt neun Tools. Die Tool-Liste ist
-überall gleich: sie hängt nie davon ab, welche Apps eine Instanz hat, sodass sie cachebar und für jeden
-Client vorhersagbar bleibt. Fehlt eine App, sagt das Tool das in einem Satz und nennt eine Alternative,
-zum Beispiel "The Notes app is not installed on this Nextcloud.", "The Tables app is not enabled on this
-Nextcloud." oder "The Talk app is not available on this Nextcloud." Kalender und Kontakte brauchen
-überhaupt keine App: CalDAV und CardDAV sind Teil des Nextcloud-Kerns.
+Notes, Deck, Tables, Talk und Mail sind optionale Nextcloud-Apps, insgesamt zehn Tools. Die Tool-Liste
+ist überall gleich: sie hängt nie davon ab, welche Apps eine Instanz hat, sodass sie cachebar und für
+jeden Client vorhersagbar bleibt. Fehlt eine App, sagt das Tool das in einem Satz und nennt eine
+Alternative, zum Beispiel "The Notes app is not installed on this Nextcloud.", "The Tables app is not
+enabled on this Nextcloud.", "The Talk app is not available on this Nextcloud." oder "The Mail app is
+not available on this Nextcloud." Kalender und Kontakte brauchen überhaupt keine App: CalDAV und
+CardDAV sind Teil des Nextcloud-Kerns.
+
+Mail wird anders erkannt als die anderen vier, und der Grund liegt nicht bei uns: die Mail-App
+veröffentlicht keinen Capabilities-Eintrag, im Capabilities-Dokument ist also nichts zu finden.
+Dieser Server fragt deshalb die Navigation des angemeldeten Nutzers ab, die die Apps auflistet, die
+dieses Konto tatsächlich öffnen darf. Das kostet eine zusätzliche Anfrage pro Cache-Fenster, und nur
+bei einem Mail-Aufruf.
 
 ## Was dieser Server nicht kann
 
@@ -389,6 +451,28 @@ Nextcloud." oder "The Talk app is not available on this Nextcloud." Kalender und
   und konfiguriert ist. Ohne sie trifft die Dateisuche Namen und Metadaten.
 - **Keine Hintergrundjobs, keine Synchronisation, keine lokale Kopie Ihrer Daten.** Jeder Aufruf geht an
   Ihr Nextcloud und kehrt zurück.
+- **Kein Senden von Mail.** Kein Tool sendet eine Mail, legt einen Entwurf an, verschiebt eine
+  Nachricht, setzt oder entfernt eine Markierung oder löscht etwas, und die Anhangsroute der Mail-App
+  wird nie aufgerufen. Was diesen Satz hält, ist ein Contract-Test: er liest die beiden Mail-Module
+  dieses Servers und behauptet, dass in ihnen kein einziger schreibender Aufruf steht, gegen eine
+  Liste der Routen, die die Mail-App für genau diese Aktionen anbietet.
+
+### Die Kette, die dieser Server hat, und der Schalter, der sie bricht
+
+Mail zu lesen vervollständigt eine Kombination, die man benennen sollte, statt sie zu umschreiben.
+Dieser Server hat Zugang zu **privaten Daten** (Dateien, Kalender, Notizen, Kontakte, Tables und jetzt
+Mail), er nimmt **fremde Inhalte** auf (eine Mail und eine Talk-Nachricht sind von Dritten geschrieben,
+und für eine Mail braucht dieser Dritte nicht einmal ein Konto auf Ihrer Instanz), und er hat genau
+einen **Ausgangskanal**, `talk_send`. Diese drei zusammen sind das, was Simon Willison
+[lethal trifecta](https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/) nennt, und ein
+Sprachmodell trennt Daten und Anweisungen nicht zuverlässig, also kann eine Mail einen Satz tragen,
+der dem Modell gilt, und die Antwort kann den Weg nach draußen nehmen.
+
+Zwei Dinge stehen dagegen. `talk_send` liegt hinter dem Admin-Schalter `NC_MCP_TALK_SEND`, der den
+Ausgangskanal für die ganze Instanz schließt, während das Lesen unberührt bleibt. Und **Mail ist
+strikt lesend**: diese Familie fügt Reichweite hinzu und bewusst keinen zweiten Weg nach draußen.
+Keines von beidem macht Prompt Injection unmöglich. Die lange Fassung, mit jeder Gegenmaßnahme und dem
+ehrlichen Rest, steht in [docs/privacy.md](docs/privacy.md), Abschnitt "The chain that mail closes".
 
 ## Bekannte Einschränkungen
 
@@ -400,7 +484,10 @@ und jede ist in der Antwort sichtbar, die das Tool gibt, statt hinter einem leer
 | **Suche trifft Namen, nicht Inhalte** | Jede Suchantwort trägt `"note":"matched on names only; contents are not indexed"` | Installieren und konfigurieren Sie die Nextcloud-Full-text-search-App, oder suchen Sie nach Dateinamen |
 | **Ein mit `occ user:add` erstelltes Konto hat keinen Kalender** | `calendar_list_events` gibt einen Fehler zurück, der den fehlenden Kalender benennt | `occ dav:create-calendar <user> personal`, oder melden Sie sich einmal über die Web-UI bei Nextcloud an, was ihn erstellt |
 | **Dasselbe gilt für das Adressbuch** | `contacts_search` benennt den Ausweg, statt nichts zurückzugeben | `occ dav:create-addressbook <user> contacts` |
-| **Notes, Deck, Tables und Talk sind optionale Apps** | Die Tools bleiben überall in `tools/list` und antworten "The Notes app is not installed on this Nextcloud.", "The Tables app is not enabled on this Nextcloud." oder "The Talk app is not available on this Nextcloud." | Installieren Sie die App, oder ignorieren Sie diese neun Tools |
+| **Notes, Deck, Tables, Talk und Mail sind optionale Apps** | Die Tools bleiben überall in `tools/list` und antworten "The Notes app is not installed on this Nextcloud.", "The Tables app is not enabled on this Nextcloud.", "The Talk app is not available on this Nextcloud." oder "The Mail app is not available on this Nextcloud." | Installieren Sie die App, oder ignorieren Sie diese zehn Tools |
+| **Zwei Mails derselben Sendesekunde können an einer Seitengrenze auseinanderfallen** | Die Paginierung der Mail-App vergleicht die Sendezeit strikt, von zwei Nachrichten mit derselben Sekunde fehlt die zweite auf der nächsten Seite, dauerhaft | Fragen Sie ein größeres `limit` an, das macht die Grenze seltener. Die Grenze gehört der App, und dieser Server korrigiert sie nicht heimlich: eine eigene Korrektur wäre eine zweite Wahrheit über die Reihenfolge, und zwei Aufrufer mit demselben Fenster sähen verschiedene Listen |
+| **Keine Volltextsuche in Mail-Inhalten** | Es gibt keinen `body:`-Filter, und die Grammatik lehnt ihn ab wie jeden anderen unbekannten Typ | Nutzen Sie die Suche der Mail-App selbst. Dort gibt es `body:`, aber er verlässt die Datenbank und sucht über IMAP, was pro Aufruf eine Runde zum Mailserver des Nutzers kostet |
+| **Ein nie synchronisiertes Postfach und ein nicht erreichbarer Mailserver** | Beide antworten als Fehler, dessen Satz auf das Konto in der Mail-App zeigt, nicht auf Nextcloud | Öffnen Sie das Konto einmal in der Mail-App und lassen Sie es synchronisieren, oder reparieren Sie das Konto dort. Keiner der beiden Fälle ist ein Nextcloud-Problem, und keiner wird mit einer leeren Liste beantwortet |
 | **Nichts kann gelöscht oder überschrieben werden** | `files_upload` lehnt einen bestehenden Pfad mit einem Konflikt ab, und es gibt überhaupt kein Update- oder Delete-Tool | Wählen Sie einen anderen Namen. Das ist die Design-Einschränkung, kein fehlendes Feature |
 | **Keine Sitzung, also kein serverseitiger Paging-Zustand** | Eine lange Liste gibt ein `next`-Handle zurück, das Sie erneut übergeben | Nichts. Das Handle übersteht einen Neustart, und genau das ist der Sinn |
 | **Kalender brauchen ein explizites Zeitfenster mit Zone** | Ein `start` oder `end` ohne Zone wird abgelehnt | Senden Sie `2026-09-01T00:00:00+02:00` oder `...Z`. Eine geratene Zone ist eine selbstsicher falsche Antwort |
