@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Kuratierte Breite
-status: verifying
-stopped_at: Completed 10-06-PLAN.md
-last_updated: "2026-08-24T15:19:14.192Z"
+status: ready_to_plan
+stopped_at: Phase 10 complete (8/8) — ready to discuss Phase 11
+last_updated: 2026-08-24T16:03:21.310Z
 last_activity: 2026-08-24
 progress:
   total_phases: 4
@@ -21,20 +21,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Current focus:** Phase 10 — Mail strikt lesend und die Trifecta-Grenze
+**Current focus:** Phase 11 — bündelung, budget und release 0.1.6
 
 ## Current Position
 
-Phase: 10 (Mail strikt lesend und die Trifecta-Grenze) — EXECUTING
-Plan: 8 of 8
-Status: Phase complete — ready for verification
+Phase: 11
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-08-24
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 70
+- Total plans completed: 78
 - Average duration: 35 min
 - Total execution time: 15.2 hours
 
@@ -50,6 +50,7 @@ Last activity: 2026-08-24
 | 6 | 11 | - | - |
 | 8 | 5 | - | - |
 | 9 | 5 | - | - |
+| 10 | 8 | - | - |
 
 **Recent Trend:**
 
