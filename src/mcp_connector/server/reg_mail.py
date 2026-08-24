@@ -27,6 +27,13 @@ the grammar into the docstring of the tool "instead of the schema", which was me
 plan 11-07: a tool description and a ``Field`` description are two keys of the same
 ``tools/list`` payload, so moving text between them saves nothing and the line break of a
 docstring costs two bytes where a description costs none. Only compression is a saving.
+
+The docstring names both truncation keys, and that is the one sentence of it that buys itself
+back: ``truncated`` is the cut **page**, ``preview_truncated`` the cut **preview** of a single
+entry, and before plan 11-08 both were called ``truncated``. A model that reads the entry level
+flag as a page flag pages in a circle, which costs more round trips than the fifty odd bytes
+this sentence occupies; the filter line above it was compressed in the same edit so the tool
+stays under its own ceiling (``MAX_TOOL_BYTES``, plan 11-07).
 """
 
 from typing import Annotated, Literal
@@ -68,9 +75,10 @@ async def mail_browse(
 ) -> str:
     """List the mail accounts of this user, the mailboxes of one, or the messages of one.
 
-    Envelopes newest first; the full text of one is a fetch("mail:<id>") away. A filter value
-    with a space or colon must be percent encoded (subject:Rechnung%20Mai). Reads only: never
-    sends, drafts, moves, flags or deletes."""
+    Envelopes newest first; the full text of one is a fetch("mail:<id>") away. Percent encode a
+    filter value with a space or colon (subject:Rechnung%20Mai). truncated: page cut;
+    preview_truncated: preview cut. Reads only: never sends, drafts, moves, flags or
+    deletes."""
     clients = deps.resolve_clients(ctx)
     return compact(
         await mail_tools.browse(

@@ -1803,8 +1803,12 @@ def variable_problems(root: etree._Element) -> list[str]:
     b0ac128), so an empty element costs either a broken deploy environment or a rejected
     upload (pitfall 3 of 05-RESEARCH.md).
 
-    Either fill a default or leave the element out. Our four variables carry none today,
-    and that is the safe state.
+    Either fill a default or leave the element out. Which variables that is about is not
+    written here as a number: the set is pinned by
+    :func:`test_every_variable_the_code_reads_is_declared_in_the_manifest` in this same file,
+    and a count in this sentence would be a second truth that the next switch makes wrong
+    without a single test noticing (review finding IN-03). Not one of them carries a default
+    today, and that is the safe state.
     """
     problems: list[str] = []
 

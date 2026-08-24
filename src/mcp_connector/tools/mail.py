@@ -88,7 +88,8 @@ _MAILBOX_HINT = (
 #: every other refusal of this family.
 _CURSOR_HINT = (
     "Only level=messages hands out a cursor. Call mail_browse without cursor; the answer says "
-    "with truncated that it was cut."
+    "with truncated that the page was cut (a cut preview of a single entry is a different key, "
+    "preview_truncated)."
 )
 
 #: The filter types this connector passes on, as a **positive** list. Three things are decided
@@ -486,7 +487,14 @@ def _message(raw: dict[str, Any]) -> dict[str, Any]:
     if preview:
         entry["preview"] = preview
         if cut:
-            entry["truncated"] = True
+            # ``preview_truncated`` and not ``truncated``, and the difference is the whole
+            # point: one level up, ``truncated`` means "this page was cut and there may be a
+            # next", and :data:`_CURSOR_HINT` tells a model exactly that sentence. The same
+            # word down here meant "this preview was cut at MAX_PREVIEW_BYTES", which is a
+            # second meaning a model cannot resolve, because both readings are plausible in
+            # the same answer: a cut page whose first entry carries a cut preview sets both
+            # keys at once (review finding IN-01).
+            entry["preview_truncated"] = True
     if flags.get("hasAttachments"):
         entry["has_attachments"] = True
     return entry

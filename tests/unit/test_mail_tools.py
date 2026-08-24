@@ -508,11 +508,43 @@ async def test_a_preview_over_the_byte_cap_is_cut_and_says_so_beside_the_text(
         answer, _ = await browse_messages(clients, mock, payload)
 
     entry = answer["results"][0]
-    assert entry["truncated"] is True
+    assert entry["preview_truncated"] is True
+    assert "truncated" not in entry, "the entry level flag is the preview one, never the page one"
     assert len(entry["preview"].encode("utf-8")) <= mail_tools.MAX_PREVIEW_BYTES
     for marker in (marks.FINAL_TRUNCATION, marks.EXCERPT_TRUNCATION):
         assert marker not in entry["preview"]
     assert "[" not in entry["preview"], "a cut preview carries no bracketed note of any kind"
+
+
+@pytest.mark.anyio
+async def test_a_cut_page_and_a_cut_preview_are_two_keys_with_two_meanings(
+    clients: NcClients,
+) -> None:
+    """IN-01: the case that made one word for two cuts a problem, in one single answer.
+
+    Both flags are set here at the same time and neither of them can be derived from the
+    other: the **page** was cut, so there is a ``next`` to continue with, and the **preview**
+    of one entry was cut at :data:`mail_tools.MAX_PREVIEW_BYTES`, which no cursor continues
+    because the full text of a mail is one ``fetch`` away and not one page further. While both
+    were called ``truncated``, a model reading the entry level flag as a page flag paged in a
+    circle, and the hint of this family (``_CURSOR_HINT``) told it exactly that reading.
+    """
+    payload = [
+        message(previewText="ü" * mail_tools.MAX_PREVIEW_BYTES),
+        message(databaseId=4712, dateInt=1755180000, previewText="Kurz und vollständig."),
+    ]
+    with respx.mock(assert_all_called=True) as mock:
+        answer, _ = await browse_messages(clients, mock, payload, limit=2)
+
+    assert answer["truncated"] is True, "the page was cut"
+    assert paging.decode_cursor(answer["next"]) == {"o": 1755180000, "m": str(MAILBOX_ID)}
+    assert "preview_truncated" not in answer, "the page flag is never the preview one"
+
+    cut, whole = answer["results"]
+    assert cut["preview_truncated"] is True, "the preview of the first entry was cut"
+    assert "next" not in cut, "a cut preview has no continuation, the full text is a fetch away"
+    assert "truncated" not in cut
+    assert "preview_truncated" not in whole, "an uncut preview says nothing at all"
 
 
 @pytest.mark.anyio
