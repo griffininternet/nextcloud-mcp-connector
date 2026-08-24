@@ -35,18 +35,17 @@ async def talk_browse(
         str, Field(description="Conversation token from level=conversations, e.g. gzu8sw3d")
     ] = "",
     limit: Annotated[
-        int, Field(ge=1, le=talk_tools.MAX_LIMIT, description="Maximum number of entries")
+        int, Field(ge=1, le=talk_tools.MAX_LIMIT, description="Maximum entries")
     ] = talk_tools.DEFAULT_LIMIT,
     cursor: Annotated[
         str,
-        Field(description="Next page handle from a truncated messages answer; only that level"),
+        Field(description="Next page handle from a truncated answer; only level=messages"),
     ] = "",
     ctx: Context | None = None,
 ) -> str:
-    """List the conversations of this account, or the history of one of them.
+    """List the conversations of this account, or the history of one.
 
-    The message level answers newest first, and the next page runs further into the past.
-    """
+    The messages level answers newest first; the next page runs further into the past."""
     clients = deps.resolve_clients(ctx)
     return compact(
         await talk_tools.browse(
@@ -63,13 +62,12 @@ async def talk_browse(
 @graceful
 async def talk_send(
     token: Annotated[str, Field(description="Conversation token from talk_browse")],
-    message: Annotated[str, Field(description="The message text to post, plain text")],
+    message: Annotated[str, Field(description="The text to post, plain text")],
     ctx: Context | None = None,
 ) -> str:
-    """Send one message into a conversation; never edits or deletes a message.
+    """Send one message into a conversation; never edits or deletes one.
 
-    A timeout does not mean nothing was sent. Read back with talk_browse(level="messages")
-    instead of calling this a second time.
-    """
+    A timeout does not mean nothing was sent. Read back with talk_browse(level=messages)
+    instead of calling this twice."""
     clients = deps.resolve_clients(ctx)
     return compact(await talk_tools.send(clients, token=token, message=message))

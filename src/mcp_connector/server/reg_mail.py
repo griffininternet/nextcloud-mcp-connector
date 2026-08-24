@@ -15,9 +15,18 @@ the schema; the body below turns them back into ``None`` before the call.
 One tool and no second one, which is the whole security statement of this family: there is no
 send, no draft, no move, no flag and no delete here, and the full text of a single mail travels
 through the existing ``fetch`` with ``mail:<databaseId>`` rather than through a tool of its own.
-The full filter grammar stands in the docstring of the tool and in the README instead of in the
-schema: every byte of a ``Field`` description is paid for in every ``tools/list`` of every
-session, and a grammar is read once.
+
+The full filter grammar stands in ``README.md`` and in the runtime hint of
+:data:`mcp_connector.tools.mail._FILTER_HINT`, never in this file: every byte here is paid for
+in every ``tools/list`` of every session, a grammar is read once, and a wrong condition costs
+exactly one round trip because the refusal names all seven types itself. What stays here is the
+short form a model needs to write a condition at all: the level it applies to, the shape
+``type:value``, the seven names and the one rule that silently swallows a wrong answer instead
+of failing (``start`` and ``end`` are Unix seconds). The earlier wording of this paragraph sent
+the grammar into the docstring of the tool "instead of the schema", which was measured wrong in
+plan 11-07: a tool description and a ``Field`` description are two keys of the same
+``tools/list`` payload, so moving text between them saves nothing and the line break of a
+docstring costs two bytes where a description costs none. Only compression is a saving.
 """
 
 from typing import Annotated, Literal
@@ -35,7 +44,7 @@ from . import READ_ONLY, compact, graceful, mcp
 async def mail_browse(
     level: Annotated[
         Literal["accounts", "mailboxes", "messages"],
-        Field(description="What to list; mailboxes needs an account_id, messages a mailbox_id"),
+        Field(description="What to list; mailboxes needs account_id, messages mailbox_id"),
     ] = "accounts",
     account_id: Annotated[str, Field(description="Account id from level=accounts")] = "",
     mailbox_id: Annotated[str, Field(description="Mailbox id from level=mailboxes")] = "",
@@ -43,26 +52,25 @@ async def mail_browse(
         str,
         Field(
             description=(
-                "Only level=messages: type:value conditions, space separated; types is, not, "
-                "from, subject, tags, start, end; start/end take Unix seconds"
+                "Only level=messages: space separated type:value; types "
+                "is/not/from/subject/tags/start/end; start/end in Unix seconds"
             )
         ),
     ] = "",
     limit: Annotated[
-        int, Field(ge=1, le=mail_tools.MAX_LIMIT, description="Maximum number of entries")
+        int, Field(ge=1, le=mail_tools.MAX_LIMIT, description="Maximum entries")
     ] = mail_tools.DEFAULT_LIMIT,
     cursor: Annotated[
         str,
-        Field(description="Next page handle from a truncated messages answer; only that level"),
+        Field(description="Next page handle from a truncated answer; only level=messages"),
     ] = "",
     ctx: Context | None = None,
 ) -> str:
     """List the mail accounts of this user, the mailboxes of one, or the messages of one.
 
     Envelopes newest first; the full text of one is a fetch("mail:<id>") away. A filter value
-    with a space or a colon has to be percent encoded (subject:Rechnung%20Mai). Reads only:
-    never sends, drafts, moves, flags or deletes.
-    """
+    with a space or colon must be percent encoded (subject:Rechnung%20Mai). Reads only: never
+    sends, drafts, moves, flags or deletes."""
     clients = deps.resolve_clients(ctx)
     return compact(
         await mail_tools.browse(

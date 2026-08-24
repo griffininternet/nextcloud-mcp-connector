@@ -29,14 +29,14 @@ async def tables_browse(
     ] = "tables",
     table_id: Annotated[str, Field(description="Table id from level=tables, e.g. 7")] = "",
     limit: Annotated[
-        int, Field(ge=1, le=tables_tools.MAX_LIMIT, description="Maximum number of entries")
+        int, Field(ge=1, le=tables_tools.MAX_LIMIT, description="Maximum entries")
     ] = tables_tools.DEFAULT_LIMIT,
     cursor: Annotated[
-        str, Field(description="Next page handle from a truncated rows answer; only level=rows")
+        str, Field(description="Next page handle from a truncated answer; only level=rows")
     ] = "",
     ctx: Context | None = None,
 ) -> str:
-    """List the user's Tables, the columns of one table, or its rows."""
+    """List the user's Tables, the columns of one, or its rows."""
     clients = deps.resolve_clients(ctx)
     return compact(
         await tables_tools.browse(
@@ -57,17 +57,16 @@ async def tables_create_row(
         str,
         Field(
             description=(
-                'One JSON object of column titles and values, e.g. {"Task": "Call back", '
-                '"Amount": 12.5}; a text column takes a string, a number column a number'
+                'One JSON object of column titles and values, e.g. {"Task":"Call back",'
+                '"Amount":12.5}; text columns take strings, number columns numbers'
             )
         ),
     ],
     ctx: Context | None = None,
 ) -> str:
-    """Add one row to an existing table; never changes or deletes an existing row.
+    """Add one row to an existing table; never changes or deletes one.
 
-    A timeout does not mean nothing was written. Read back with tables_browse(level="rows")
-    instead of calling this a second time.
-    """
+    A timeout does not mean nothing was written. Read back with tables_browse(level=rows)
+    instead of calling this twice."""
     clients = deps.resolve_clients(ctx)
     return compact(await tables_tools.create_row(clients, table_id=table_id, values=values))
