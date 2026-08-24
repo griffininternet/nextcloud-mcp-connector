@@ -205,7 +205,7 @@ Les pages liées sont en anglais.
 	  - The ampersand of the PayPal address is written as an entity because this is XML: a
 	  - bare one is a parse error, and the store never sees the file.
 	  -->
-	<donation title="Donate with PayPal" type="paypal">https://www.paypal.com/donate/?business=k.cherif83%40web.de&amp;currency_code=EUR</donation>
+	<donation title="Donate with PayPal" type="paypal">https://www.paypal.com/paypalme/KhaledCherifDev</donation>
 	<donation title="Donate with Stripe" type="stripe">https://buy.stripe.com/3cI14n2ke6AbdTPfG22VG00</donation>
 	<dependencies>
 		<!--
