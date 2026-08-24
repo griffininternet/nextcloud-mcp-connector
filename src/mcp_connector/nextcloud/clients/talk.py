@@ -15,6 +15,12 @@ user's own account by default: it moves the read marker, acknowledges notificati
 bumps the online status. The values that keep a read a read therefore live in
 :data:`READ_ONLY_PARAMS` below, as a constant and not as arguments.
 
+That constant is a statement about the history window and not about every route in this
+file. The chat has a second reading route, the context around one single message
+(:func:`get_message_context`), and it accepts none of those four parameters: its freedom
+from side effects is a property of the route itself, and the three proofs out of the app's
+own source stand in the docstring there.
+
 Neither route carries ``#[OpenAPI(scope: SCOPE_IGNORE)]``, and both stand in the published
 ``openapi.json`` of the app. They are a promised API, not internal frontend plumbing, so
 this module needs no replaceability warning of the kind a Mail integration would need.
@@ -95,6 +101,11 @@ LAST_GIVEN_HEADER = "X-Chat-Last-Given"
 #: Talk addresses a conversation by a token, and the token is not free text: every route of
 #: the app declares this pattern as its path requirement.
 _TOKEN = re.compile(r"[a-z0-9]{4,30}")
+
+#: A message id is a database number, and ASCII digits are the whole alphabet of it.
+#: ``str.isdigit`` would also accept a superscript two and an Arabic-Indic digit, and both
+#: would travel into a path segment that the app declares as an integer.
+_MESSAGE_ID = re.compile(r"[0-9]{1,19}")
 
 _SHAPE_HINT = "Check that the Talk app is enabled and up to date on that instance."
 
@@ -182,6 +193,62 @@ async def get_messages(
     return _as_list(payload, what="messages"), _last_given(response)
 
 
+async def get_message_context(
+    client: httpx.AsyncClient,
+    creds: Credentials,
+    token: str,
+    message_id: str | int,
+    *,
+    limit: int,
+) -> list[dict[str, Any]]:
+    """Read the window around exactly one message, that message included.
+
+    There is no route in spreed that answers a single message: ``GET .../{messageId}`` does
+    not exist, and asking :func:`get_messages` for a window of one below ``messageId + 1``
+    would guess. That answer is the highest id under the given bound, so as soon as the
+    wanted message is deleted, expired or invisible to this account, it is a **different**
+    message and nobody can see the substitution. The context route is the only path that
+    carries the wanted message itself: in spreed 24.0.4 the history half is fetched with
+    ``includeLastKnown = true``.
+
+    :data:`READ_ONLY_PARAMS` is absent here on purpose, and the absence is the reason this
+    paragraph exists: the route does not accept those four parameters at all. Its freedom
+    from side effects comes from the route instead of from the query string, and the source
+    of spreed 24.0.4 says so three times over: the newer half is fetched through
+    ``waitForNewMessages`` with a timeout of 0, so nothing waits for anything; the same call
+    passes ``markNotificationsAsRead: false``; and the method never reaches
+    ``updateLastReadMessage``, so no marker moves. That claim is measured in plan 11-06
+    before and after a call over the **conversation list**, never over this route, because a
+    route cannot testify about itself.
+
+    The path hangs on :data:`CHAT_PREFIX`, API version 1, and never on the version 4
+    conversation prefix above it. The comment at those two constants says what mixing the
+    two versions up looks like from the outside.
+
+    ``limit`` exists because this route answers a window and not one message: spreed lifts
+    it to at least one for the older half (``$historyLimit = max(1, $limit)``) and hands the
+    same number to the newer half, so ``limit=1`` yields the wanted message plus at most one
+    newer one. Picking the right entry out of that window is explicitly **not** the job of
+    this function. The caller in ``tools/chatgpt.py`` filters on the ``id`` and refuses when
+    it is missing, which keeps this client dumb and the decision in one place.
+
+    An empty window is **304** without a body, a success and not a redirect, so it is
+    answered before the shared parser turns every 3xx into a complaint about the base URL.
+    """
+    conversation = _path_token(token)
+    message = _path_message_id(message_id)
+    response = await ocs.ocs_get(
+        client,
+        creds,
+        f"{CHAT_PREFIX}/{conversation}/{message}/context",
+        params={"limit": min(max(int(limit), 1), MAX_MESSAGES)},
+    )
+    if response.status_code == httpx.codes.NOT_MODIFIED:
+        return []
+    payload = ocs.parse_ocs(response, what=f"the context of message {message}")
+    return _as_list(payload, what="messages")
+
+
 async def send_message(
     client: httpx.AsyncClient,
     creds: Credentials,
@@ -230,6 +297,26 @@ def _path_token(value: str) -> str:
             hint=(
                 "Use a token exactly as talk_browse reports it; a Talk token is 4 to 30 "
                 "lower case letters and digits."
+            ),
+        )
+    return text
+
+
+def _path_message_id(value: str | int) -> str:
+    """Message ids go into the path too, so free text must not reach it from any caller.
+
+    ``ids.parse`` refuses anything but digits already, and this second guard for the same
+    value is deliberate: the client package is where an identifier becomes part of a URL,
+    and a future caller that skips the codec would not inherit its check. The Notes and the
+    Deck client keep the same guard for the same reason (threat T-11-08).
+    """
+    text = str(value).strip()
+    if not _MESSAGE_ID.fullmatch(text):
+        raise ToolError(
+            message=f"{value!r} is not a Talk message id.",
+            hint=(
+                "Use an id exactly as a search tool reports it, for example "
+                "message:abcd1234:4711; a Talk message id is a positive number."
             ),
         )
     return text
