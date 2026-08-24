@@ -13,7 +13,7 @@ sees. The unified search already guarantees an absolute URL on the configured in
 the fallbacks below exist so a future provider cannot quietly take the citations away.
 
 **``fetch`` owns no reader.** It parses the id once, through the central codec, and then
-calls the tool that already knows how to read that kind. Five properties of that routing
+calls the tool that already knows how to read that kind. Seven properties of that routing
 are load bearing:
 
 * A prefix is never guessed. An unknown one is refused with the list of the valid ones,
@@ -31,15 +31,25 @@ are load bearing:
   travels beside that text in ``metadata`` and never inside it, because next to foreign
   content a sentence of this server is indistinguishable from a sentence of the sender
   (threat T-10-28).
+* One Talk message is answered by exactly that message or by a sentence. The context route
+  hands over a window, so the wanted id is filtered out of it and a missing one is refused;
+  answering with the message next to it would be wrong in a way nobody can see (T-11-13). The
+  token of that conversation is resolved through the account's own list, so an address out of
+  a model answer never reaches the instance in a path (T-11-14).
+* A table is answered as an excerpt that says how big the table is: title, row count, the
+  first :data:`TABLE_ROWS` rows, cut at :data:`MAX_TABLE_BYTES`. ``tables_browse`` is the way
+  to the rest, and a table without a row is a sentence rather than a title on its own.
 
 **No text of an answer carries a marker this server did not write.** ``text`` is one field
-for every kind, so the truncation note of a cut file and the content of a note, a card or a
-mail land in the same place a model reads. Every one of the five readers therefore filters
-the marker sequences out of the foreign text (:mod:`mcp_connector.tools.marks`), and only
-the file and the mail reader write one back in, where a text actually ended. The rule sits
-on all five and not only on the two that append, because a note that forges the sequence
-frames itself exactly the same way (BL-09, ME-03), and a mail is the cheapest place of all
-to try it: anybody may write one.
+for every kind, so the truncation note of a cut file and the content of a note, a card, a
+mail, a chat message or a table cell land in the same place a model reads. Every one of the
+seven readers therefore filters the marker sequences out of the foreign text
+(:mod:`mcp_connector.tools.marks`), and only the file, the mail and the table reader write one
+back in, where a text actually ended; a cut chat message says so beside its text instead,
+because phase 9 put no marker into a text every participant of a conversation may write. The
+rule sits on all seven and not only on the three that append, because a note that forges the
+sequence frames itself exactly the same way (BL-09, ME-03), and a mail is the cheapest place
+of all to try it: anybody may write one.
 """
 
 from datetime import UTC, datetime
@@ -52,12 +62,16 @@ from ..nextcloud.clients import caldav
 from ..nextcloud.clients import dav as dav_client
 from ..nextcloud.clients import deck as deck_client
 from ..nextcloud.clients import mail as mail_client
+from ..nextcloud.clients import tables as tables_client
+from ..nextcloud.clients import talk as talk_client
 from . import deck as deck_tools
 from . import files as files_tools
 from . import html_text, marks
 from . import mail as mail_tools
 from . import notes as notes_tools
 from . import search as search_tools
+from . import tables as tables_tools
+from . import talk as talk_tools
 
 DEFAULT_LIMIT = search_tools.DEFAULT_LIMIT
 
@@ -87,6 +101,31 @@ FINAL_TRUNCATION = marks.FINAL_TRUNCATION
 #: marking says something true (threat T-10-32).
 MAX_MAIL_BYTES = 32 * 1024
 
+#: The window the context route of Talk is asked for, in messages. One is the smallest window
+#: that is guaranteed to carry the wanted message: spreed lifts the history half to
+#: ``max(1, limit)`` and fetches it with ``includeLastKnown = true``, then hands the same number
+#: to the newer half, so this reads the wanted message plus at most one message after it
+#: (measured out of the source of spreed 24.0.4 in plan 11-02). A larger window would cost
+#: payload and change nothing about the certainty, because the selection happens here.
+MESSAGE_CONTEXT_LIMIT = 1
+
+#: How many rows of a table a fetch hands over. The number 20 is a setting and not a
+#: measurement, in the same sense as ``talk.MAX_MESSAGE_BYTES``: a table has no natural
+#: excerpt, so somebody has to decide what "the first rows" means. Twenty is a screen of rows,
+#: it is below the default window of ``tables_browse`` (25) on purpose, because this answer is
+#: an excerpt beside a total and not a page of a walk, and the total beside it is what keeps
+#: the excerpt honest. ``tables_browse`` is the way to the rest, and it pages.
+TABLE_ROWS = 20
+
+#: Ceiling for the text of one fetched table, in bytes of the UTF-8 encoding. Also a setting:
+#: :data:`TABLE_ROWS` bounds the number of rows, and this one bounds what those rows may cost,
+#: because a single cell of a text column carries up to 40.000 characters and twenty of them
+#: would be one megabyte. Four KiB is roughly twenty rows of eight columns of twenty
+#: characters, so the ordinary table arrives whole and the pathological wide one is cut. It is
+#: deliberately an eighth of :data:`MAX_MAIL_BYTES`: a letter is meant to be read from
+#: beginning to end, a table excerpt is meant to say what is in the table.
+MAX_TABLE_BYTES = 4 * 1024
+
 #: Month view of the Calendar app. The event itself is read over CalDAV and needs no app;
 #: this link needs the Calendar web interface, which is what a human opens.
 CALENDAR_WEB_PREFIX = "/index.php/apps/calendar/dayGridMonth"
@@ -102,6 +141,12 @@ MAIL_WEB_PREFIX = "/index.php/apps/mail"
 #: A mail without a subject is an ordinary mail, and an empty title is not readable in a
 #: citation list, which is the same reason the search projection falls back to the id.
 _NO_SUBJECT = "(no subject)"
+
+#: The same fallback for the two kinds of this phase. A conversation always has a display name
+#: on a healthy instance, and a table always has a title, so both of these are what a deformed
+#: answer produces; an empty title is not readable in a citation list either way.
+_NO_CONVERSATION = "(conversation without a name)"
+_NO_TABLE_TITLE = "(table without a title)"
 
 _UNFETCHABLE = "This search result cannot be fetched: it belongs to an app this server cannot read."
 
@@ -172,6 +217,10 @@ async def fetch(
             return await _fetch_event(clients, parts[0], parts[1])
         case "mail":
             return await _fetch_mail(clients, parts[0])
+        case "message":
+            return await _fetch_message(clients, parts[0], parts[1])
+        case "table":
+            return await _fetch_table(clients, parts[0])
         case _:
             raise ToolError(
                 message=_UNFETCHABLE,
@@ -533,3 +582,171 @@ def _mail_date(value: Any) -> str:
         return datetime.fromtimestamp(value, tz=UTC).isoformat()
     except (OSError, OverflowError, ValueError):
         return ""
+
+
+async def _fetch_message(clients: NcClients, token: str, message_id: str) -> dict[str, Any]:
+    """Read exactly one Talk message: the text of that message and never of a neighbour.
+
+    The app check is the first line, exactly as in :func:`_fetch_card` and :func:`_fetch_mail`.
+    Without it a Nextcloud without Talk falls into the 404 branch of the shared status mapping,
+    and that one sends a model searching in an app that is not on the instance.
+
+    The token is then resolved through the conversation list of this account, and the reason is
+    **not** the brute force counter of phase 9: the context route carries no
+    ``#[BruteForceProtection]``, its participant middleware answers a conversation this account
+    is not in with a plain 404. Two reasons remain. The refusal becomes our own sentence
+    instead of that foreign 404, and the display name of the conversation is what the title and
+    the link of the answer are made of. The price is one additional request per ``fetch``, and
+    it is the price the whole Talk family pays: ``talk_browse`` reads the same list before it
+    reads a history.
+
+    Two answers of the context route mean the same thing here, and both are refused rather than
+    answered: a window that does not carry the wanted message, and the empty window of a 304. A
+    message beside the wanted one would be a wrong answer nobody can see (threat T-11-13), and
+    an empty success is the shape that invites a model to fill the gap itself (threat T-11-17).
+
+    The selection runs through ``talk_tools.one_message``, so the text arrives with the message
+    parameters resolved and the marker sequences of this server removed, and it arrives cut at
+    ``talk.MAX_MESSAGE_BYTES``. This branch appends **no** marker of its own to it: a cut
+    message text carries none by decision of phase 9, because a marker inside a text every
+    participant of a conversation may write is an attack path (ME-03), and the fact stands
+    beside the text as ``metadata["truncated"]`` instead.
+    """
+    await capabilities.require_app(clients, talk_tools.APP)
+    room = await talk_tools._room(clients, token, include_last_message=False)
+    window = await talk_client.get_message_context(
+        clients.client, clients.creds, token, message_id, limit=MESSAGE_CONTEXT_LIMIT
+    )
+
+    entry = talk_tools.one_message(window, message_id)
+    if entry is None:
+        raise ToolError(
+            message=(
+                f"The message {message_id} cannot be read in the conversation {token}: either it "
+                "was deleted, or it is a system message this server does not pass on as content."
+            ),
+            hint=(
+                'Call talk_browse with level="messages" and this token to see what the '
+                "conversation carries now; the ids in that answer can be fetched."
+            ),
+        )
+
+    actor = str(entry.get("actor") or "")
+    body = str(entry.get("message") or "")
+    # The author as the first line, in the shape of ``_fetch_event``'s line list. A chat
+    # message without the person who wrote it is barely readable, and unlike the trust signals
+    # of a mail this is content of the conversation rather than a verdict of this server; it
+    # stands in ``metadata`` as well, so a caller that reads only fields has it too.
+    lines = [f"From: {actor}", body] if actor else [body]
+
+    metadata = {
+        "kind": "message",
+        "conversation": token,
+        "message_id": message_id,
+        "actor": actor,
+    }
+    timestamp = entry.get("timestamp")
+    if isinstance(timestamp, int) and not isinstance(timestamp, bool) and timestamp > 0:
+        # The Unix number of the app, as ``talk_browse`` hands it over one level up: a second
+        # reading of the same field would be a second truth about when this was written.
+        metadata["timestamp"] = str(timestamp)
+    if entry.get("truncated"):
+        metadata["truncated"] = "true"
+
+    return {
+        "id": ids.encode_message(token, message_id),
+        # The name of the conversation, and never the text of the message. A title reads like a
+        # summary written by this server, and that text was written by somebody else.
+        "title": marks.without_marks(str(room.get("displayName") or "")).strip()
+        or _NO_CONVERSATION,
+        "text": "\n".join(lines),
+        "url": talk_client.web_url(clients.creds, token),
+        "metadata": metadata,
+    }
+
+
+async def _fetch_table(clients: NcClients, table_id: str) -> dict[str, Any]:
+    """Read one table as an excerpt: its title, how many rows it has, and its first rows.
+
+    This answer shape is a decision and it is named as one (assumption A4 of the phase research,
+    confirmed here). A table is not a document, so "the first rows" is a setting of this server
+    (:data:`TABLE_ROWS`) and not a property of the thing being read. What keeps the excerpt
+    honest is the total number beside it, so a model reads how much of the table it did not get,
+    and ``tables_browse`` is the way to the rest: it pages, this does not.
+
+    One request per statement. The table itself answers its title and its row count together
+    (K11), and the rows are read exactly once, with the ceiling as a keyword. There is no
+    second round for the column titles, because the compact row form ships them as its first
+    list, and no paging, because ``fetch`` hands over an excerpt.
+
+    A table without a single row is refused rather than answered, in the shape of
+    :func:`_fetch_event`: an answer that consists of a title and nothing else is the empty
+    success that invites a model to fill the gap itself (threat T-11-17). An answer that carries
+    the header row alone is the same case, because that row is the shape of the table and not
+    its content.
+    """
+    await capabilities.require_app(clients, tables_tools.APP)
+    table = await tables_client.get_table(clients.client, clients.creds, table_id)
+    rows = await tables_client.get_rows_simple(
+        clients.client, clients.creds, table_id, limit=TABLE_ROWS
+    )
+
+    shown = max(len(rows) - 1, 0)
+    if not shown:
+        raise ToolError(
+            message=f"The table {table_id} exists, but it carries no row.",
+            hint=(
+                "Call tables_browse with level=columns to see what this table expects, and "
+                "level=rows once somebody has added a row to it."
+            ),
+        )
+
+    total = _table_total(table, shown)
+    # The order is the order of the mail branch and it is load bearing in both directions
+    # (BL-09, ME-03): every cell has already lost its own copy of any marker inside
+    # ``as_text``, before this server appends one of its own. A whole table that carried a copy
+    # would claim to be cut, and a cut one could send a model on to a continuation whoever
+    # writes into that table chose.
+    text = "\n".join(tables_tools.as_text(str(table.get("title") or ""), rows, total))
+    blob = text.encode("utf-8")
+    truncated = len(blob) > MAX_TABLE_BYTES
+    if truncated:
+        # The same marker the mail branch uses, for the same reason: the other two would send a
+        # model to ``files_read`` with an offset a table has not got, or back into the call that
+        # just did the cutting. That there are more rows is said by the row count in the text,
+        # not by the marker.
+        text = f"{blob[:MAX_TABLE_BYTES].decode('utf-8', errors='ignore')}\n\n{FINAL_TRUNCATION}"
+
+    metadata = {
+        "kind": "table",
+        "table_id": table_id,
+        "rows_total": str(total),
+        "rows_shown": str(shown),
+    }
+    if truncated:
+        metadata["truncated"] = "true"
+
+    return {
+        "id": ids.encode_table(table_id),
+        "title": marks.without_marks(str(table.get("title") or "")).strip() or _NO_TABLE_TITLE,
+        "text": text,
+        "url": tables_client.web_url(clients.creds, table_id),
+        "metadata": metadata,
+    }
+
+
+def _table_total(table: dict[str, Any], shown: int) -> int:
+    """The row count of a table, falling back to the number of rows actually read.
+
+    ``tools/tables.py`` leaves its ``rowsCount`` field out when the app reports no usable one,
+    because a wrong count there would make its own truncation check unreachable and turn a cut
+    into a silent one. Here the number is part of the sentence that says how much of the table
+    this excerpt is, so leaving it out is not an option and the fallback is the one number that
+    is certainly true: what was just read. The same fallback catches a counter below the window,
+    which is the one case in which the app's own number is demonstrably wrong (the counter of
+    Tables drifts, which is why ``tables_browse`` guards its next handle with it).
+    """
+    count = table.get("rowsCount")
+    if isinstance(count, bool) or not isinstance(count, int) or count < shown:
+        return shown
+    return count

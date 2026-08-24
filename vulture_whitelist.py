@@ -119,17 +119,12 @@ spreed_features
 # same three lines. Nothing of the Mail family is parked any more, which is what the empty
 # space below this paragraph says.
 
-# --- The context route of one Talk message (plan 11-02, called in plan 11-03) ------------
-# The same parked-caller case as Tables in 08-02, Talk in 09-01 and Mail in 10-02: the route
-# and the tests that pin it belong in one piece, and the caller is one plan away.
-#
-# get_message_context: the only read path in spreed that returns a named message instead of
-#   the highest id below a bound, so it is the one function that makes ``fetch("message:...")``
-#   possible without guessing a neighbour. Driven by eleven cases in
-#   tests/unit/test_talk_client.py, which assert the route, the 304, the two path guards at
-#   zero requests and the one request per call. Plan 11-03 adds the fetch branch that calls it
-#   and takes this entry out again.
-get_message_context
+# --- The context route of one Talk message (plan 11-02, dissolved in plan 11-03) ---------
+# Empty on purpose, and that is the rule of this file at work rather than an omission. Plan
+# 11-02 parked get_message_context here, because the route and the tests that pin it belong in
+# one piece and its caller was one plan away. Plan 11-03 added the ``message:`` branch of
+# ``chatgpt.fetch``, which calls it, so the name left the list with the plan that calls it,
+# exactly as the entry announced it would.
 
 # --- The store API of phase 3 ----------------------------------------------------------
 # oauth/store.py was built in one piece in plan 03-02, because its schema and its
