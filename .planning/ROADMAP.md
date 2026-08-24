@@ -166,7 +166,7 @@ Plans:
   2. Das gemessene Timeout- und Degradations-Verhalten der bestehenden Quellen ist unverändert, und die Request-Kosten der Mail-Zähler sind gemessen und aufgeschrieben statt geschätzt.
   3. Ein Talk- oder Tables-Treffer aus der Suche ist auflösbar: `fetch` liefert Inhalt statt `kind=url`; Mail-Treffer bleiben ehrlich `kind=url` mit benanntem Grund.
   4. `tools/list` bleibt unter einem neu gemessenen und aufgeschriebenen Budget (Messung plus 15 Prozent, aufgerundet), alle fünf neuen Werkzeuge sind schema-diätet, die Annotationen sagen die Wahrheit (drei lesend, zwei anlegend), und Werkzeugzahl 21 steht identisch in Registry, README-Tabelle in drei Sprachen und Contract-Tests.
-  5. Release 0.1.6 ist im Store (0.1.4 mit Tables+Talk am 21.08.2026 und 0.1.5 mit der neuen Store-Beschreibung am 22.08.2026 vorgezogen, beides Owner-Entscheid): Version an allen vier Stellen, Changelog-Block, Store-Texte und READMEs EN/DE/FR nachgezogen, alle Gates grün, Runbook-Schritte mit Proof-Zeilen, Tag erst nach Owner-Freigabe.
+  5. Release 0.1.8 ist im Store (die Nummer 0.1.6 im Phasentitel ist überholt: 0.1.4 mit Tables+Talk am 21.08.2026, 0.1.5 mit der neuen Store-Beschreibung am 22.08.2026, 0.1.6 und 0.1.7 am 22.08.2026 wurden sämtlich per Owner-Entscheid vorgezogen; die nächste freie Nummer ist 0.1.8, mit ihr wird der neue Spendenlink paypal.me/KhaledCherifDev sichtbar): Version an allen vier Stellen, Changelog-Block, Store-Texte und READMEs EN/DE/FR nachgezogen, alle Gates grün, Runbook-Schritte mit Proof-Zeilen, Tag erst nach Owner-Freigabe.
 
 **Plans**: TBD
 **UI hint**: nein (kein eigenes Frontend)
