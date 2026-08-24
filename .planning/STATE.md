@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Kuratierte Breite
 status: executing
-stopped_at: Completed 11-04-PLAN.md
-last_updated: "2026-08-24T20:42:26.203Z"
+stopped_at: Completed 11-05-PLAN.md
+last_updated: "2026-08-24T21:04:43.974Z"
 last_activity: 2026-08-24
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 28
-  completed_plans: 22
+  completed_plans: 23
   percent: 75
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 11 (Bündelung, Budget und Release 0.1.8) — EXECUTING
-Plan: 5 of 10
+Plan: 6 of 10
 Status: Ready to execute
 Last activity: 2026-08-24
 
@@ -139,6 +139,7 @@ Last activity: 2026-08-24
 | Phase 11 P02 | 22 min | 2 tasks tasks | 3 files files |
 | Phase 11 P03 | 34 min | 3 tasks tasks | 5 files files |
 | Phase 11 P04 | 20 min | 3 tasks tasks | 2 files files |
+| Phase 11 P05 | 17 min | 3 tasks tasks | 4 files files |
 
 ## Accumulated Context
 
@@ -495,6 +496,11 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 11-04: EXCERPT_KINDS existiert getrennt von KIND_BUCKETS; die Gruppierung der Antwort und die Frage, wessen Inhalt der Server ungefragt liest, sind zwei Entscheidungen (T-11-24)
 - [Phase ?]: Phase 11-04: DIGEST_PREVIEW_BYTES misst Bytes statt Zeichen (gegen den Wortlaut von CTX-01), TALK_BUDGET=5.0 ist als Setzung markiert und wird in 11-06 live geprueft
 - [Phase ?]: Phase 11-04: der Antwortschluessel talk ist immer da und immer eine Liste; leer ohne degraded heisst nichts Ungelesenes, leer mit degraded heisst konnte nicht gelesen werden
+- [Phase ?]: 11-05: das Mail-Bein liefert einen Envelope {results, total} statt einer Liste, weil der Kappungssatz die Gesamtzahl nennt, die eine gekappte Liste nicht mehr traegt
+- [Phase ?]: 11-05: MAIL_BUDGET = 10.0 ist eine Setzung und weiter als TALK_BUDGET, weil das Bein 1+N ist und nicht ein Request; MAX_MAIL_ACCOUNTS = 3 kappt fremdes Mengenwachstum mit eigenem degraded-Eintrag
+- [Phase ?]: 11-05: die Mail-Zaehler kommen ausschliesslich aus der Postfachliste; das unread-Feld des Navigationseintrags ist verboten und im Docstring mit der Messung begruendet (0 bei sechs ungelesenen Nachrichten)
+- [Phase ?]: 11-05: eine fehlende Inbox bleibt ein fehlendes Feld plus ein benannter degraded-Satz, niemals inbox_unread 0; beide Mail-Ebenen fragen mit limit=MAX_LIMIT, damit die Kappe dieser Antwort immer die eigene ist
+- [Phase ?]: 11-05: die prepare_context-Beschreibung nennt alle vier Quellen und kostet gemessene 33 Bytes (625 auf 658, Oberflaeche 15736 auf 15769); Plan 11-07 braucht fuer ein Gate bei 18000 jetzt 117 statt 84 Bytes Diaet
 
 ### Pending Todos
 
@@ -529,8 +535,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-24T20:42:26.186Z
-Stopped at: Completed 11-04-PLAN.md
+Last session: 2026-08-24T21:03:54.691Z
+Stopped at: Completed 11-05-PLAN.md
 Naechster Schritt: /gsd:plan-phase 8
 Resume file: None
 

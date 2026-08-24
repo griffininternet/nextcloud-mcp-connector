@@ -185,7 +185,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 11-05-PLAN.md: Mail-Ungelesen-Zähler im Bündel und die ehrliche Werkzeugbeschreibung
+- [x] 11-05-PLAN.md: Mail-Ungelesen-Zähler im Bündel und die ehrliche Werkzeugbeschreibung
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -260,7 +260,7 @@ Plans:
 | 8. Erreichbarkeits-Spike und Tables | v1.2 | 5/5 | Complete    | 2026-08-21 |
 | 9. Talk | v1.2 | 5/5 | Complete    | 2026-08-21 |
 | 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 8/8 | Complete    | 2026-08-24 |
-| 11. Bündelung, Budget und Release 0.1.6 | v1.2 | 4/10 | In Progress|  |
+| 11. Bündelung, Budget und Release 0.1.6 | v1.2 | 5/10 | In Progress|  |
 
 ## Next
 
