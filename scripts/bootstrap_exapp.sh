@@ -444,6 +444,7 @@ import time
 from email.message import EmailMessage
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from email.utils import formatdate
 
 HOST = os.environ["MAIL_HOST"]
@@ -517,12 +518,20 @@ def newsletter(target_bytes):
 
 
 def plain(sender, subject, body):
-    message = EmailMessage()
+    # One text/plain part and nothing else, but wrapped in a multipart/mixed envelope, and
+    # that wrapping is a workaround and not a preference. GreenMail 2.1.12 casts the content
+    # of every message to MimeMultipart in FetchCommand.handleBodyFetch, so a message whose
+    # content is a plain String makes the IMAP FETCH fail with a ClassCastException, and
+    # Nextcloud answers the full text route with 500 "Could not connect to IMAP server"
+    # (measured on 2026-08-24, the stack trace is in the log of nc-mcp-exapp-greenmail).
+    # A single part envelope keeps the property this mail exists for: no HTML anywhere in it,
+    # so the body of the full text route proves correction K2 all the same.
+    message = MIMEMultipart("mixed")
     message["From"] = sender
     message["To"] = ADDRESS
     message["Subject"] = subject
     message["Date"] = formatdate(localtime=False)
-    message.set_content(body)
+    message.attach(MIMEText(body, "plain", "utf-8"))
     return message
 
 
@@ -562,8 +571,15 @@ messages = [
     plain(
         "buero@example.test",
         "Gruesse aus Hamburg, die Masse stehen unten",
+        # The link, the ampersand and the angle bracket are the point of this body and not
+        # decoration: Html::convertLinks runs UrlLinker plus HTMLPurifier over the text of
+        # every message, so exactly these three characters show whether the body of the full
+        # text route arrives as HTML even for a message that carries none (K2). A text without
+        # them would arrive unchanged and would prove nothing.
         "Moin,\n\nGrüße aus Hamburg. Die Maße des Regals sind 80 x 200 cm.\n"
-        "Der Preis liegt bei 30 Euro, die Straße kennst du ja.\n\nViele Grüße\nDas Büro\n",
+        "Der Preis liegt bei 30 Euro & Versand, die Straße kennst du ja.\n"
+        "Details: https://example.test/regal?groesse=80x200\n"
+        "Ein spitzes Zeichen: 5 < 7.\n\nViele Grüße\nDas Büro\n",
     ),
     # 2. A newsletter in a realistic size, the message the byte cap of the full text is
     #    decided on (A3).
