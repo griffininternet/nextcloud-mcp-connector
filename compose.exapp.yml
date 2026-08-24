@@ -121,6 +121,36 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  greenmail:
+    # An IMAP and SMTP server for the mail account of alice, added in plan 10-01. The field
+    # shapes of the Mail app cannot be measured without real IMAP data: `specialRole`,
+    # `previewText`, the filter grammar and the length of a converted HTML body (A1 to A4 in
+    # 10-RESEARCH.md) are decidable against real messages only, and MAIL-03 asks literally for
+    # "documented the way it was tested". Before this service the spike account pointed at
+    # imap.invalid, which was enough to prove reachability (MAIL-04) and nothing beyond it.
+    #
+    # This service belongs to the throwaway topology of this repository and never to an
+    # installation. It accepts mail without any authentication and it stores everything in
+    # memory.
+    image: greenmail/standalone:2.1.12
+    container_name: nc-mcp-exapp-greenmail
+    # No ports section, for the same reason the registry service gives: Nextcloud reaches
+    # GreenMail over the network nc-mcp-exapp-net under the service name, and a published port
+    # would be reach without any gain (T-08-05, T-10-01). The test mails are delivered from a
+    # throwaway container inside the same network, see deliver_mail in
+    # scripts/bootstrap_exapp.sh.
+    environment:
+      # The user password is interpolated from the same variable scripts/bootstrap_exapp.sh
+      # reads for ALICE_IMAP_PASSWORD, including the same default, so the two places cannot
+      # drift apart: a mismatch would produce an account that authenticates nowhere and a
+      # measurement that reads the error path instead of the field shapes.
+      GREENMAIL_OPTS: >-
+        -Dgreenmail.setup.test.all
+        -Dgreenmail.hostname=0.0.0.0
+        -Dgreenmail.auth.disabled
+        -Dgreenmail.users=alice:${NC_EXAPP_ALICE_IMAP_PASSWORD:-alice-spike-imap-pw}@example.test
+    restart: unless-stopped
+
   registry:
     # The ExApp image is not published before phase 5 (D-25), but the deploy daemon can
     # only pull what a registry serves. It uses the Docker daemon of the host, and that

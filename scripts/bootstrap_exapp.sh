@@ -97,9 +97,17 @@ MANUAL_APP_PORT="${NC_EXAPP_MANUAL_PORT:-23001}"
 ALICE_PASSWORD="${NC_EXAPP_ALICE_PASSWORD:-alice-test-pw-01}"
 BOB_PASSWORD="${NC_EXAPP_BOB_PASSWORD:-bob-test-pw-01}"
 # The IMAP password of the spike mail account (see ensure_mail_account). Not a Nextcloud
-# credential and not subject to the password policy: it belongs to an account on the host
-# imap.invalid, which no resolver will ever answer for.
+# credential and not subject to the password policy: it belongs to an account on the GreenMail
+# service of compose.exapp.yml, which lives in that throwaway topology only and accepts mail
+# without authentication anyway. The same variable with the same default is interpolated into
+# GREENMAIL_OPTS, so the two places cannot drift apart.
 ALICE_IMAP_PASSWORD="${NC_EXAPP_ALICE_IMAP_PASSWORD:-alice-spike-imap-pw}"
+# The IMAP and SMTP endpoint of that account. `greenmail` is the service name from
+# compose.exapp.yml and therefore the host name inside the network nc-mcp-exapp-net. Both
+# values are written out literally rather than composed from parts, so a grep finds them.
+MAIL_HOST="greenmail"
+MAIL_IMAP_PORT="3143"
+MAIL_SMTP_PORT="3025"
 TOKEN_NAME="mcp-exapp"
 ENV_FILE="${ENV_FILE:-.env.exapp}"
 # The base URL a browser and a client use. Everything the app publishes about itself is
@@ -284,37 +292,342 @@ ensure_user() {
   echo "user ${uid}: created"
 }
 
-# The host is invalid on purpose. `occ mail:account:create-imap` never opens a connection,
-# it only writes the account row (CreateImapAccount), so an account pointing at
-# imap.invalid is created without an IMAP server anywhere in the topology. That is enough
-# for the measurement of MAIL-04: the question is whether an impersonated request reaches
-# Mail's own controllers, and every answer that comes out of app code proves it was reached,
-# a 500 from a failed IMAP sync included; only an HTML login page or a redirect to /login
-# would disprove it.
+# The host and the port are parameters, and the topology now carries a server that answers
+# under them. Until plan 10-01 the account pointed at a host that does not resolve, which was
+# enough for MAIL-04 (the question there was whether an impersonated request reaches Mail's own
+# controllers, and a 500 out of a failed IMAP sync answers it as well as a 200). It is not
+# enough for phase 10: `specialRole`, `previewText`, the filter grammar and the length of a
+# converted HTML body are properties of real messages, and a tool built on guessed shapes would
+# only be measured in the live run at the end of the phase.
+#
+# `imapSslMode` and `smtpSslMode` are `none` because GreenMail inside the compose network holds
+# no certificate. That is a property of this throwaway topology and never a recommendation.
 #
 # The IMAP password travels on the command line, which WR-06 forbids for every value that
-# carries authority. This one carries none: it belongs to an account on a host that does not
-# exist, the occ command takes it as a positional argument and has no stdin form, and it
-# never leaves this throwaway topology.
+# carries authority. This one carries none: it belongs to a mailbox on a service that runs in
+# this throwaway topology only, keeps everything in memory, accepts mail without any
+# authentication and is not reachable from outside the compose network. The occ command takes
+# the password as a positional argument and has no stdin form.
+#
+# The account id of the account this function leaves behind, for the sync and the delivery
+# step below. A function cannot return a string in shell, and echoing it would mix into the
+# progress output every other ensure_* function writes.
+MAIL_ACCOUNT_ID=""
+
+# One line "<account-id> <imap-host>:<imap-port>" for the account of `uid` that carries
+# `email`, or nothing. `mail:account:export` prints a block per account:
+#
+#   Account 1:
+#   - E-Mail: alice@example.test
+#   ...
+#   - IMAP host: greenmail:3143, security: none
+#
+# awk is fed the whole output and prints at END instead of exiting at the first match: an
+# early exit closes the pipe and can kill the writing occ with SIGPIPE, which is the same
+# failure mode the grep rule above this file's helpers describes.
+mail_account_row() {
+  local uid="$1" email="$2"
+  occ mail:account:export "$uid" 2>/dev/null | tr -d '\r' | awk -v want="$email" '
+    /^Account [0-9]+:/ { id = $2; sub(/:$/, "", id); mail = "" }
+    /^- E-Mail: / { mail = $3 }
+    /^- IMAP host: / {
+      if (mail == want && found == "") { host = $4; sub(/,$/, "", host); found = id " " host }
+    }
+    END { if (found != "") print found }
+  '
+}
+
 ensure_mail_account() {
-  local uid="$1" name="$2" email="$3" password="$4" output
+  local uid="$1" name="$2" email="$3" password="$4" host="$5" port="$6"
+  local output row account_id endpoint
   # `mail:account:export` exits 0 for a user without any account and prints nothing, so the
   # output decides and not the exit code. Without this check a second run would create a
   # second account for the same address.
-  if occ mail:account:export "$uid" 2>/dev/null | grep "${email}" >/dev/null; then
-    echo "mail account ${uid}: exists"
-    return 0
+  #
+  # The address alone is not enough any more, and that is the point of this check (T-10-03):
+  # an account left behind by an earlier run still points at the host that never answers, a
+  # match on the address alone would report "exists", the bootstrap would end green and not a
+  # single IMAP fetch would be possible. So the endpoint has to match as well, and an account
+  # on the wrong one is deleted and created again. `occ mail:account:delete <account-id>`
+  # exists in Mail 5.11.1 (verified with `occ list mail` on the running instance, 2026-08-24);
+  # should a future version drop it, the error path below names the one manual step instead of
+  # walking on silently.
+  row="$(mail_account_row "$uid" "$email")"
+  if [ -n "$row" ]; then
+    account_id="${row%% *}"
+    endpoint="${row#* }"
+    if [ "$endpoint" = "${host}:${port}" ]; then
+      echo "mail account ${uid}: exists on ${endpoint} (id ${account_id})"
+      MAIL_ACCOUNT_ID="${account_id}"
+      return 0
+    fi
+    echo "mail account ${uid}: points at ${endpoint}, expected ${host}:${port}, recreating"
+    if ! output="$(occ mail:account:delete "${account_id}" 2>&1)"; then
+      echo "ERROR: the mail account of ${uid} points at ${endpoint} and could not be deleted:" >&2
+      echo "${output}" >&2
+      echo "delete the mail account of alice in the Mail app once, then run this script again" >&2
+      return 1
+    fi
+    echo "mail account ${uid}: deleted the account on ${endpoint}"
   fi
   # Same reason as in ensure_user: occ reports a refused value on stdout, and swallowing it
   # would turn a rejected account into a silent exit 1.
   if ! output="$(occ mail:account:create-imap "$uid" "$name" "$email" \
-    imap.invalid 143 none "$uid" "$password" \
-    smtp.invalid 25 none "$uid" "$password" password 2>&1)"; then
+    "$host" "$port" none "$uid" "$password" \
+    "$host" "${MAIL_SMTP_PORT}" none "$uid" "$password" password 2>&1)"; then
     echo "ERROR: could not create the spike mail account for ${uid}:" >&2
     echo "${output}" >&2
     return 1
   fi
-  echo "mail account ${uid}: created"
+  row="$(mail_account_row "$uid" "$email")"
+  if [ -z "$row" ]; then
+    echo "ERROR: the mail account of ${uid} was created but does not show up in the export." >&2
+    return 1
+  fi
+  MAIL_ACCOUNT_ID="${row%% *}"
+  echo "mail account ${uid}: created on ${host}:${port} (id ${MAIL_ACCOUNT_ID})"
+}
+
+# The number of test mails plan 10-01 delivers. Six messages across the five purposes that
+# document calls for, because the subject purpose needs two of them (`Rechnung` and
+# `Rechnung Mai`, the pair that shows what the space rule of the filter grammar does).
+MAIL_FIXTURE_COUNT=6
+
+# The test mails of plan 10-01. They exist so that four assumptions of 10-RESEARCH.md become
+# measurements: the value set of `specialRole` (A1), whether and how long `previewText` is
+# filled (A2), the byte length of a converted HTML body (A3) and the behaviour of the filter
+# grammar against real messages (A4).
+#
+# Every sender lives under example.test and every content is invented. That is what makes the
+# stage 2 protocol in docs/spike-mail.md allowed to print field values, unlike the phase 8
+# measurement whose account answer carried a real address and was therefore cut to 120
+# characters (T-08-01).
+#
+# The delivery runs from a throwaway container inside the compose network, because GreenMail
+# has no published port (T-10-01) and the host therefore cannot reach it at all. The image is
+# pinned (T-10-SC) and nothing is installed into it: smtplib, imaplib and email are standard
+# library. The script travels through stdin rather than through `python -c`, so neither it nor
+# the mailbox password appears in the world readable argv of the docker client (WR-06); the
+# password is handed over as a name with `-e MAIL_PW`, which copies the value out of the
+# environment of this process.
+#
+# Idempotent through the mailbox itself and not through a marker file: the function counts the
+# messages in the INBOX over IMAP first and delivers nothing when they are already there. A
+# marker file in the Nextcloud volume would claim something about a state that lives in
+# GreenMail, and GreenMail keeps everything in memory: a restart of that container empties the
+# mailbox while the marker would still be sitting in the volume.
+deliver_test_mail() {
+  local uid="$1" address="$2" password="$3"
+  if [ "${STAGING_MODE}" -eq 1 ]; then
+    # The public topology of compose.staging.yml carries no GreenMail service, and it must not
+    # grow one: it is reachable from the internet. The mail account there stays a row without
+    # a server behind it, exactly as it was before plan 10-01.
+    echo "test mails ${uid}: skipped (the staging topology carries no mail server)"
+    return 0
+  fi
+  MAIL_PW="${password}" \
+  MAIL_HOST="${MAIL_HOST}" \
+  MAIL_SMTP_PORT="${MAIL_SMTP_PORT}" \
+  MAIL_IMAP_PORT="${MAIL_IMAP_PORT}" \
+  MAIL_USER="${uid}" \
+  MAIL_ADDRESS="${address}" \
+  MAIL_EXPECTED="${MAIL_FIXTURE_COUNT}" \
+  docker run --rm -i --network "${NETWORK_NAME}" \
+    -e MAIL_PW -e MAIL_HOST -e MAIL_SMTP_PORT -e MAIL_IMAP_PORT \
+    -e MAIL_USER -e MAIL_ADDRESS -e MAIL_EXPECTED \
+    python:3.13-alpine python - <<'PY'
+import imaplib
+import os
+import smtplib
+import sys
+import time
+from email.message import EmailMessage
+from email.mime.application import MIMEApplication
+from email.mime.multipart import MIMEMultipart
+from email.utils import formatdate
+
+HOST = os.environ["MAIL_HOST"]
+SMTP_PORT = int(os.environ["MAIL_SMTP_PORT"])
+IMAP_PORT = int(os.environ["MAIL_IMAP_PORT"])
+USER = os.environ["MAIL_USER"]
+PASSWORD = os.environ["MAIL_PW"]
+ADDRESS = os.environ["MAIL_ADDRESS"]
+EXPECTED = int(os.environ["MAIL_EXPECTED"])
+
+
+def imap():
+    """One IMAP connection, retried: the service has no healthcheck to wait on."""
+    last = None
+    for _ in range(30):
+        try:
+            box = imaplib.IMAP4(HOST, IMAP_PORT)
+        except OSError as error:
+            last = error
+            time.sleep(2)
+            continue
+        box.login(USER, PASSWORD)
+        return box
+    raise SystemExit(f"greenmail did not answer on {HOST}:{IMAP_PORT}: {last}")
+
+
+def inbox_count():
+    box = imap()
+    try:
+        status, data = box.select("INBOX")
+        if status != "OK":
+            raise SystemExit(f"selecting INBOX answered {status}: {data}")
+        return int(data[0])
+    finally:
+        box.logout()
+
+
+def block(index):
+    return (
+        "<table><tr><td><table><tr><td>"
+        f"<p>Angebot {index}: Ma&szlig;e, Gr&uuml;&szlig;e und Preise</p>"
+        f"<div>Beschreibung {index} mit <b>Auszeichnung</b> und einem Verweis auf "
+        f'<a href="https://example.test/angebot/{index}">Angebot {index}</a>.<br>'
+        "Eine zweite Zeile, damit der Block die L&auml;nge eines echten "
+        "Newsletter-Abschnitts bekommt und die Wandlung etwas zu tun hat.</div>"
+        f"<ul><li>Punkt A {index}</li><li>Punkt B {index}</li>"
+        f"<li>Punkt C {index}</li></ul>"
+        "</td></tr></table></td></tr></table>"
+    )
+
+
+def newsletter(target_bytes):
+    parts = []
+    total = 0
+    index = 0
+    while total < target_bytes:
+        piece = block(index)
+        parts.append(piece)
+        total += len(piece)
+        index += 1
+    return (
+        "<html><head>"
+        "<style>body{font-family:sans-serif;color:#333}"
+        "table{border-collapse:collapse;width:100%}td{padding:4px}</style>"
+        "<script>var tracking = 1; function noop(){return tracking;}</script>"
+        "</head><body><h1>Newsletter der Beispiel GmbH</h1>"
+        + "".join(parts)
+        + "<p>Abmelden: <a href=\"https://example.test/abmelden\">hier</a></p>"
+        "</body></html>"
+    )
+
+
+def plain(sender, subject, body):
+    message = EmailMessage()
+    message["From"] = sender
+    message["To"] = ADDRESS
+    message["Subject"] = subject
+    message["Date"] = formatdate(localtime=False)
+    message.set_content(body)
+    return message
+
+
+def html_mail(sender, subject, html):
+    message = EmailMessage()
+    message["From"] = sender
+    message["To"] = ADDRESS
+    message["Subject"] = subject
+    message["Date"] = formatdate(localtime=False)
+    message.set_content("Dieser Newsletter braucht einen HTML-faehigen Client.")
+    message.add_alternative(html, subtype="html")
+    return message
+
+
+def attachment_only(sender, subject):
+    # No text part at all, on purpose: the full text route has to be measured against a
+    # message whose body is missing (falle 5 of 10-RESEARCH.md).
+    message = MIMEMultipart()
+    message["From"] = sender
+    message["To"] = ADDRESS
+    message["Subject"] = subject
+    message["Date"] = formatdate(localtime=False)
+    part = MIMEApplication(b"Notiz ohne Nachrichtentext.\n", Name="notiz.txt")
+    part["Content-Disposition"] = 'attachment; filename="notiz.txt"'
+    message.attach(part)
+    return message
+
+
+present = inbox_count()
+if present >= EXPECTED:
+    print(f"test mails {USER}: already there ({present} in INBOX)")
+    sys.exit(0)
+
+messages = [
+    # 1. Purely textual, with real umlauts in the subject and in the body. It carries the
+    #    evidence for correction K2: the body of the full text route arrives as HTML anyway.
+    plain(
+        "buero@example.test",
+        "Gruesse aus Hamburg, die Masse stehen unten",
+        "Moin,\n\nGrüße aus Hamburg. Die Maße des Regals sind 80 x 200 cm.\n"
+        "Der Preis liegt bei 30 Euro, die Straße kennst du ja.\n\nViele Grüße\nDas Büro\n",
+    ),
+    # 2. A newsletter in a realistic size, the message the byte cap of the full text is
+    #    decided on (A3).
+    html_mail("newsletter@example.test", "Newsletter August", newsletter(45000)),
+    # 3. The upper bound case.
+    html_mail("newsletter@example.test", "Grosser Newsletter August", newsletter(400000)),
+    # 4a and 4b. The subject filter and the space rule of the filter grammar.
+    plain(
+        "buchhaltung@example.test",
+        "Rechnung",
+        "Anbei die Rechnung des laufenden Monats.\n",
+    ),
+    plain(
+        "buchhaltung@example.test",
+        "Rechnung Mai",
+        "Anbei die Rechnung für den Monat Mai.\n",
+    ),
+    # 5. No body, one small attachment.
+    attachment_only("ablage@example.test", "Nur ein Anhang"),
+]
+
+with smtplib.SMTP(HOST, SMTP_PORT, timeout=30) as smtp:
+    for message in messages:
+        smtp.send_message(message, from_addr=message["From"], to_addrs=[ADDRESS])
+print(f"test mails {USER}: delivered {len(messages)} over {HOST}:{SMTP_PORT}")
+
+# One IMAP keyword, so the tags: run of the filter grammar has something to find. Mail maps
+# its tags onto IMAP keywords, and $label1 is the first of the default ones. A server that
+# refuses user flags is a measurement too, so the refusal is reported and not fatal.
+box = imap()
+try:
+    box.select("INBOX")
+    status, data = box.search(None, 'SUBJECT', '"Rechnung"')
+    numbers = data[0].split() if status == "OK" and data and data[0] else []
+    if numbers:
+        status, data = box.store(numbers[0], "+FLAGS", "$label1")
+        print(f"test mails {USER}: keyword $label1 on message {numbers[0].decode()}: {status}")
+    else:
+        print(f"test mails {USER}: no message found to carry a keyword")
+finally:
+    box.logout()
+PY
+}
+
+# Without this the messages sit in GreenMail and nowhere else: `listMessages` reads the
+# database of the Mail app, and `MailSearch::findMessages` raises MailboxNotCachedException for
+# a mailbox that has never been synchronised, which surfaces as a 500 (K6). A measurement
+# without this step would read the error path instead of the field shapes.
+sync_mail_account() {
+  local uid="$1" output
+  if [ "${STAGING_MODE}" -eq 1 ]; then
+    echo "mail sync ${uid}: skipped (the staging topology carries no mail server)"
+    return 0
+  fi
+  if [ -z "${MAIL_ACCOUNT_ID}" ]; then
+    echo "ERROR: no mail account id for ${uid}, so nothing can be synchronised." >&2
+    return 1
+  fi
+  if ! output="$(occ mail:account:sync "${MAIL_ACCOUNT_ID}" -f 2>&1)"; then
+    echo "ERROR: could not synchronise the mail account ${MAIL_ACCOUNT_ID} of ${uid}:" >&2
+    echo "${output}" >&2
+    return 1
+  fi
+  echo "mail sync ${uid}: account ${MAIL_ACCOUNT_ID} synchronised"
 }
 
 # Mandatory, not cosmetic: Nextcloud creates the default calendar and the default address
@@ -962,11 +1275,15 @@ ensure_app spreed
 ensure_user alice "${ALICE_PASSWORD}"
 ensure_user bob "${BOB_PASSWORD}"
 
-# The spike account of MAIL-04. It has to come after ensure_user and not next to the
-# ensure_app lines above: on a fresh topology alice does not exist yet at that point, and
-# `mail:account:create-imap` for an unknown user is an error, not a no-op. alice is the
-# account the connection file publishes as NC_MCP_TEST_USER.
-ensure_mail_account alice "Alice Spike" alice@example.test "${ALICE_IMAP_PASSWORD}"
+# The spike account of MAIL-04, since plan 10-01 pointed at the GreenMail service of this
+# topology. It has to come after ensure_user and not next to the ensure_app lines above: on a
+# fresh topology alice does not exist yet at that point, and `mail:account:create-imap` for an
+# unknown user is an error, not a no-op. alice is the account the connection file publishes as
+# NC_MCP_TEST_USER.
+ensure_mail_account alice "Alice Spike" alice@example.test "${ALICE_IMAP_PASSWORD}" \
+  "${MAIL_HOST}" "${MAIL_IMAP_PORT}"
+deliver_test_mail alice alice@example.test "${ALICE_IMAP_PASSWORD}"
+sync_mail_account alice
 
 ensure_calendar alice personal
 ensure_addressbook alice contacts
