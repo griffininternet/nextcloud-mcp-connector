@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Kuratierte Breite
 status: executing
-stopped_at: Completed 11-06-PLAN.md
-last_updated: "2026-08-24T21:34:37.144Z"
+stopped_at: Completed 11-07-PLAN.md
+last_updated: "2026-08-24T21:57:44.729Z"
 last_activity: 2026-08-24
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 28
-  completed_plans: 24
+  completed_plans: 25
   percent: 75
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 11 (Bündelung, Budget und Release 0.1.8) — EXECUTING
-Plan: 7 of 10
+Plan: 8 of 10
 Status: Ready to execute
 Last activity: 2026-08-24
 
@@ -141,6 +141,7 @@ Last activity: 2026-08-24
 | Phase 11 P04 | 20 min | 3 tasks tasks | 2 files files |
 | Phase 11 P05 | 17 min | 3 tasks tasks | 4 files files |
 | Phase 11 P06 | 27 min | 2 tasks tasks | 3 files files |
+| Phase 11 P07 | 19 min | 2 tasks tasks | 5 files files |
 
 ## Accumulated Context
 
@@ -507,6 +508,9 @@ Recent decisions affecting current work:
 - [Phase ?]: 11-06: Ein Buendel zahlt bei kaltem Capabilities-Cache drei Erkennungsrequests und nicht zwei (zweimal /cloud/capabilities, einmal /core/navigation/apps); zwei gehoeren dem Mail-Bein, der dritte entsteht aus dem Rennen des Talk-Beins um denselben leeren Cache-Eintrag. Das Rennen wird nicht behoben (eine Cache-Sperre waere strukturell), der Befund steht im Messdokument
 - [Phase ?]: 11-06: truncated auf der Talk-Nachrichtenebene heisst "die App hat eine Fortsetzungs-Id mitgegeben" und nicht "es gibt mehr zu lesen"; es taugt deshalb nicht als Vollstaendigkeitspruefung, und eine Divergenz zwischen unread und den lesbaren Nachrichten gilt nur, wenn ein Fenster sie entscheidet
 - [Phase ?]: 11-06: Die Falle T12 (unread == 1 bei leerer Historie) ist auf der Messtopologie nicht vorhanden; der Beweis "unread ist kein Nachrichtenzaehler" laeuft ueber den umgekehrten und staerkeren Fall (sechs lesbare Nachrichten, unread 0)
+- [Phase 11]: 11-07: Verschieben ist keine Diaet: Tool-Docstring und Field-Beschreibung sind zwei Schluessel desselben tools/list-Payloads, ein Docstring-Umbruch kostet zwei Bytes; nur Komprimieren spart (die vom Plan verlangte Verschiebung war gemessen +4 Bytes)
+- [Phase 11]: 11-07: BUDGET_BYTES 18500 -> 18000, verankert auf 15612 gemessenen Bytes bei 21 Werkzeugen; 17500 haette 395 Bytes mehr gebraucht, also 23 Prozent der verbliebenen Prosa der fuenf Werkzeuge
+- [Phase 11]: 11-07: MAX_TOOL_BYTES bleibt 1400 mit eigener Messzeile; groesstes Werkzeug ist jetzt calendar_create_event (1351) statt mail_browse (1331), und die 15-Prozent-Regel ergaebe hier eine verbotene Anhebung auf 1553
 
 ### Pending Todos
 
@@ -541,8 +545,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-24T21:33:31.951Z
-Stopped at: Completed 11-06-PLAN.md
+Last session: 2026-08-24T21:57:44.712Z
+Stopped at: Completed 11-07-PLAN.md
 Naechster Schritt: /gsd:plan-phase 8
 Resume file: None
 

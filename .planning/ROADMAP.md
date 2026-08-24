@@ -190,7 +190,7 @@ Plans:
 **Wave 4** *(blocked on Wave 3 completion)*
 
 - [x] 11-06-PLAN.md: Live-Messung der vier Beine und das Nachweisdokument
-- [ ] 11-07-PLAN.md: Schema-Diät der fünf Werkzeuge und das neu verankerte Budget-Gate
+- [x] 11-07-PLAN.md: Schema-Diät der fünf Werkzeuge und das neu verankerte Budget-Gate
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -260,7 +260,7 @@ Plans:
 | 8. Erreichbarkeits-Spike und Tables | v1.2 | 5/5 | Complete    | 2026-08-21 |
 | 9. Talk | v1.2 | 5/5 | Complete    | 2026-08-21 |
 | 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 8/8 | Complete    | 2026-08-24 |
-| 11. Bündelung, Budget und Release 0.1.6 | v1.2 | 6/10 | In Progress|  |
+| 11. Bündelung, Budget und Release 0.1.6 | v1.2 | 7/10 | In Progress|  |
 
 ## Next
 
