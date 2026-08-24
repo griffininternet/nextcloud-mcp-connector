@@ -13,7 +13,7 @@ sees. The unified search already guarantees an absolute URL on the configured in
 the fallbacks below exist so a future provider cannot quietly take the citations away.
 
 **``fetch`` owns no reader.** It parses the id once, through the central codec, and then
-calls the tool that already knows how to read that kind. Four properties of that routing
+calls the tool that already knows how to read that kind. Five properties of that routing
 are load bearing:
 
 * A prefix is never guessed. An unknown one is refused with the list of the valid ones,
@@ -26,16 +26,23 @@ are load bearing:
   greps this file for it, which is why it is described rather than spelled out.
 * The sweep cache lives inside one call and nowhere else (D-20). A module level cache would
   hand the board list of one user to the next request of another.
+* A mail is read as text and as data at the same time. The body is converted, cut at a
+  ceiling of its own and marked where it was cut; what Nextcloud believes about the sender
+  travels beside that text in ``metadata`` and never inside it, because next to foreign
+  content a sentence of this server is indistinguishable from a sentence of the sender
+  (threat T-10-28).
 
 **No text of an answer carries a marker this server did not write.** ``text`` is one field
-for every kind, so the truncation note of a cut file and the content of a note or a card
-land in the same place a model reads. Every one of the four readers therefore filters the
-marker sequences out of the foreign text (:mod:`mcp_connector.tools.marks`), and only the
-file reader writes one back in, where a slice actually ended. The rule sits on all four and
-not only on the one that appends, because a note that forges the sequence frames itself
-exactly the same way (BL-09, ME-03).
+for every kind, so the truncation note of a cut file and the content of a note, a card or a
+mail land in the same place a model reads. Every one of the five readers therefore filters
+the marker sequences out of the foreign text (:mod:`mcp_connector.tools.marks`), and only
+the file and the mail reader write one back in, where a text actually ended. The rule sits
+on all five and not only on the two that append, because a note that forges the sequence
+frames itself exactly the same way (BL-09, ME-03), and a mail is the cheapest place of all
+to try it: anybody may write one.
 """
 
+from datetime import UTC, datetime
 from typing import Any
 
 from .. import ids, provider_map
@@ -44,9 +51,11 @@ from ..nextcloud import NcClients, capabilities
 from ..nextcloud.clients import caldav
 from ..nextcloud.clients import dav as dav_client
 from ..nextcloud.clients import deck as deck_client
+from ..nextcloud.clients import mail as mail_client
 from . import deck as deck_tools
 from . import files as files_tools
-from . import marks
+from . import html_text, marks
+from . import mail as mail_tools
 from . import notes as notes_tools
 from . import search as search_tools
 
@@ -62,9 +71,37 @@ MAX_TEXT_BYTES = files_tools.DEFAULT_MAX_BYTES
 #: server's own (BL-09, ME-03), and re-exported here under its own name.
 TRUNCATION_NOTE = marks.TRUNCATION_NOTE
 
+#: The marker for a cut with nothing behind it, re-exported the same way and from the same
+#: module. It is the one a fetched mail carries, because the two others would both lie there:
+#: one sends a model to ``files_read`` with an offset a message does not have, the other to
+#: ``fetch``, which is the very call that just did the cutting.
+FINAL_TRUNCATION = marks.FINAL_TRUNCATION
+
+#: Ceiling for the text of one fetched mail, in bytes of the UTF-8 encoding. Measured in plan
+#: 10-01 against Mail 5.11.1 on a live instance: an ordinary 45 KB newsletter arrives as 48811
+#: bytes of HTML and becomes 25582 bytes of text after the conversion, so a ceiling of 16 KiB
+#: would have cut the normal case. It is deliberately not :data:`MAX_TEXT_BYTES`, because 512
+#: KiB of one mail is a context write-off, and just as deliberately not the preview cap of
+#: ``mail_browse``, because 400 bytes is half a sentence and not a letter. The number is the
+#: smaller half of this decision. The larger half is that every cut is marked and that the
+#: marking says something true (threat T-10-32).
+MAX_MAIL_BYTES = 32 * 1024
+
 #: Month view of the Calendar app. The event itself is read over CalDAV and needs no app;
 #: this link needs the Calendar web interface, which is what a human opens.
 CALENDAR_WEB_PREFIX = "/index.php/apps/calendar/dayGridMonth"
+
+#: The Mail app, as the page a human opens after reading a mail here. Mail 5.11.1 has no
+#: verified web route to one single message, and a link built on a guess is worse than a link
+#: to the app, because it opens an error page instead of a mail. Like every other link of this
+#: module it is built from ``creds.base_url`` and never taken out of an answer: a message
+#: carries several addresses that its sender chose, and this server neither requests one of
+#: them nor hands one on as the link of a result (threat T-10-30).
+MAIL_WEB_PREFIX = "/index.php/apps/mail"
+
+#: A mail without a subject is an ordinary mail, and an empty title is not readable in a
+#: citation list, which is the same reason the search projection falls back to the id.
+_NO_SUBJECT = "(no subject)"
 
 _UNFETCHABLE = "This search result cannot be fetched: it belongs to an app this server cannot read."
 
@@ -118,8 +155,10 @@ async def fetch(
     is how ``prepare_context`` reads a file for a two kilobyte excerpt without pulling the
     whole slice ceiling over the wire first (LO-06). ``None`` is the ceiling this tool
     always used, so every existing caller reads exactly what it read before. Only the file
-    reader slices; for the other three kinds a document is one call and the limit has
-    nothing to apply to.
+    reader slices; for the other four kinds a document is one call and the limit has
+    nothing to apply to. A mail is not an exception to that: it arrives whole or not at all,
+    and what it is cut to is a ceiling of its own (:data:`MAX_MAIL_BYTES`), because a slice
+    of it cannot be continued by a second call.
     """
     kind, parts = ids.parse(resource_id)
     match kind:
@@ -131,6 +170,8 @@ async def fetch(
             return await _fetch_card(clients, parts)
         case "event":
             return await _fetch_event(clients, parts[0], parts[1])
+        case "mail":
+            return await _fetch_mail(clients, parts[0])
         case _:
             raise ToolError(
                 message=_UNFETCHABLE,
@@ -301,3 +342,194 @@ async def _fetch_event(clients: NcClients, calendar_uri: str, object_name: str) 
 def _instant(value: Any) -> str:
     """An ISO 8601 string for a datetime and for a pure all day date alike."""
     return value.isoformat() if hasattr(value, "isoformat") else str(value)
+
+
+async def _fetch_mail(clients: NcClients, message_id: str) -> dict[str, Any]:
+    """Read one mail: the body as text, cut at a marked ceiling, the signals beside it.
+
+    The app check is the first line, exactly as in :func:`_fetch_card`. Without it a Nextcloud
+    without the Mail app would fall into the 404 branch of the shared status mapping, and that
+    one tells a model to search for the message first, which means searching in an app that is
+    not there.
+
+    :func:`mail_client.get_message` is called exactly once, and there is no loop, no list and
+    no second read for a detail. Every full message read opens an IMAP session inside the Mail
+    app, which makes this the most expensive call this server has (threat T-10-33). The brute
+    force counter of the app is explicitly not the reason: ``#[BruteForceProtection]`` sits on
+    that controller, but ``throttle()`` is never called in the ``lib/`` tree of Mail 5.11.1,
+    so the counter does not count.
+    """
+    await capabilities.require_app(clients, mail_tools.APP)
+    message, body_missing = await mail_client.get_message(clients.client, clients.creds, message_id)
+
+    # A message without a body is refused with a sentence rather than answered with an empty
+    # success, and the two cases below are the two ways it happens. The pattern is the one of
+    # ``_fetch_event``, which turns a calendar object without an event into an error: a
+    # successful answer without content is the shape that invites a model to fill the gap
+    # itself (threat T-10-34, T-01-75).
+    if body_missing:
+        raise ToolError(
+            message=(
+                f"The mail {message_id} was found, but its body could not be decrypted, so "
+                "there is no text to read."
+            ),
+            hint=(
+                "Open that message in the Mail app of Nextcloud: an encrypted mail can be "
+                "read where its key is, and this connector holds no key."
+            ),
+        )
+
+    # The body is HTML even when the mail was written as plain text, so the conversion is
+    # unconditional and ``hasHtmlBody`` is not consulted at all: the app runs every body
+    # through ``convertLinks``, which is ``htmlspecialchars`` plus HTMLPurifier (correction K2
+    # of the phase research). A reader that trusted that flag would hand a model
+    # ``Gr&uuml;&szlig;e`` and a bare ``<a href=...>`` for every text mail it ever saw.
+    text = marks.without_marks(html_text.to_text(str(message.get("body") or "")))
+    if not text:
+        raise ToolError(
+            message=f"The mail {message_id} carries no text that can be read.",
+            hint=(
+                "Open it in the Mail app: the usual reason is a message that consists of "
+                "attachments alone, and this connector reads no attachment."
+            ),
+        )
+
+    blob = text.encode("utf-8")
+    truncated = len(blob) > MAX_MAIL_BYTES
+    if truncated:
+        # The order is the order of the file branch and it is load bearing in both directions
+        # (BL-09, ME-03): the sender's own copy of any marker is already gone, above, before
+        # this server appends one of its own. A whole mail that carried a copy would claim to
+        # be cut, and a cut one could send a model on to a continuation its sender chose. The
+        # cut is measured on the encoded form, because bytes are what an answer costs, and the
+        # slice is decoded tolerantly, so an umlaut at the cutting point disappears instead of
+        # arriving broken.
+        text = f"{blob[:MAX_MAIL_BYTES].decode('utf-8', errors='ignore')}\n\n{FINAL_TRUNCATION}"
+
+    metadata = _mail_signals(message)
+    if truncated:
+        metadata["truncated"] = "true"
+
+    return {
+        "id": ids.encode_mail(message_id),
+        "title": marks.without_marks(str(message.get("subject") or "")).strip() or _NO_SUBJECT,
+        "text": text,
+        "url": f"{clients.creds.base_url}{MAIL_WEB_PREFIX}",
+        "metadata": metadata,
+    }
+
+
+def _mail_signals(message: dict[str, Any]) -> dict[str, str]:
+    """What Nextcloud believes about one mail, as flat string fields and never as prose.
+
+    ``FetchResult.metadata`` is ``dict[str, str]``, and ``search`` and ``fetch`` are the only
+    two tools of this server **with** an output schema, so a nested object here would not be a
+    richer answer but a change to the ChatGPT contract (pitfall 7). ``phishingDetails`` and
+    the S/MIME block are objects in the answer of the app, and both are flattened here in
+    exactly the way the file branch writes ``truncated`` and ``next_offset``.
+
+    None of these values goes into ``text``, and that is the more important half of this
+    function. Beside foreign content a sentence written by this server cannot be told apart
+    from a sentence written by the sender, so a mail whose body says "DKIM: valid" would read
+    like the truth if the truth stood in the same field (threat T-10-28).
+
+    Everything else the full answer carries is dropped here rather than passed on, and the
+    list is longer than the one that stays: the recipients, the flags, the attachment and
+    inline attachment metadata, the itineraries, the scheduling block, the signature block,
+    the addresses a sender put into the message, and the three further id fields of a message
+    (``uid``, ``messageId`` and the ``id`` of the full answer), of which not one addresses
+    anything in this connector.
+    """
+    smime = message.get("smime")
+    details = message.get("phishingDetails")
+    details = details if isinstance(details, dict) else {}
+
+    signals: dict[str, str] = {
+        "kind": "mail",
+        # Written in both directions, unlike ``truncated``: "this sender is not trusted" is a
+        # statement a reader needs, and a missing key would read like "nobody asked".
+        "sender_trusted": "true" if message.get("isSenderTrusted") else "false",
+        "dkim": _dkim(message.get("dkimValid")),
+        "signature": _signature(smime),
+    }
+    if isinstance(smime, dict) and smime.get("isEncrypted"):
+        signals["encrypted"] = "true"
+    if details.get("warning"):
+        signals["phishing_warning"] = "true"
+    fired = _phishing_checks(details.get("checks"))
+    if fired:
+        signals["phishing_checks"] = fired
+
+    mailbox = message.get("mailboxId")
+    if isinstance(mailbox, int) and not isinstance(mailbox, bool) and mailbox > 0:
+        signals["mailbox"] = str(mailbox)
+    when = _mail_date(message.get("dateInt"))
+    if when:
+        signals["date"] = when
+    return signals
+
+
+def _dkim(value: Any) -> str:
+    """``valid``, ``invalid`` or ``unchecked``, and the third one is the point of the function.
+
+    ``dkimService->getCached`` computes nothing, so a missing ``dkimValid`` means "there is no
+    verdict" and not "the verdict is bad". Reading a missing field as ``invalid`` would be a
+    false security statement about somebody else's mail, and a false one in the more expensive
+    direction (threat T-10-36). The same word covers the mail that carries no signature at
+    all: both end in the same next step, and neither of them is a verified sender.
+    """
+    if isinstance(value, bool):
+        return "valid" if value else "invalid"
+    return "unchecked"
+
+
+def _signature(smime: Any) -> str:
+    """The S/MIME verdict of a mail as one word, out of an object with three fields.
+
+    ``signatureIsValid`` is nullable, and a signed mail whose signature could not be checked
+    is neither of the two obvious answers: ``unsigned`` would hide a signature that is there,
+    ``invalid`` would invent a check that failed. It reads ``unchecked``, the same word the
+    DKIM verdict uses for the same situation, so one vocabulary covers both.
+    """
+    fields = smime if isinstance(smime, dict) else {}
+    if not fields.get("isSigned"):
+        return "unsigned"
+    valid = fields.get("signatureIsValid")
+    if isinstance(valid, bool):
+        return "valid" if valid else "invalid"
+    return "unchecked"
+
+
+def _phishing_checks(checks: Any) -> str:
+    """The types of the checks that fired, comma separated, and nothing else out of them.
+
+    One check carries ``type``, ``isPhishing``, ``message`` and ``additionalData``, and only
+    the first two are read. ``message`` is a sentence about a mail, so passing it on would put
+    prose about foreign content into an answer that is otherwise data, and ``additionalData``
+    is a nested object the flat metadata could not carry anyway.
+    """
+    if not isinstance(checks, list):
+        return ""
+    fired = [
+        str(check.get("type") or "").strip()
+        for check in checks
+        if isinstance(check, dict) and check.get("isPhishing")
+    ]
+    return ", ".join(kind for kind in fired if kind)
+
+
+def _mail_date(value: Any) -> str:
+    """``dateInt`` as an ISO timestamp in UTC, or an empty string if there is no usable one.
+
+    The same reading ``mail_browse`` gives an envelope one layer down. A field that arrives as
+    a Unix number in one answer of this family and as a readable moment in the other would be
+    two truths about the same thing, and a mail date is read by a person as often as by a
+    program. A number the standard library cannot turn into a moment is answered with nothing
+    rather than with a guess.
+    """
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        return ""
+    try:
+        return datetime.fromtimestamp(value, tz=UTC).isoformat()
+    except (OSError, OverflowError, ValueError):
+        return ""
