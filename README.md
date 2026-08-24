@@ -213,7 +213,7 @@ new objects but can never modify or remove existing ones.
 | `unified_search` | read | Query the Nextcloud unified search across providers, permission aware |
 | `prepare_context` | read | Bundle matching files, notes and cards with the next week of events for one question |
 | `search` | read | OpenAI compatible search entry point, delegates to unified search |
-| `fetch` | read | OpenAI compatible fetch entry point, resolves an id to a file, note, card or event |
+| `fetch` | read | OpenAI compatible fetch entry point, resolves an id to a file, note, card, event or mail |
 
 `search` and `fetch` exist because the ChatGPT connector profile requires exactly these two names
 and schemas. They are thin wrappers over the tools above, not a second implementation.
@@ -399,9 +399,10 @@ ship an output schema, because ChatGPT reads the payload as structured content:
   answer the same question the same way.
 - Every hit carries a non-empty, absolute URL on the configured instance. ChatGPT creates citation
   metadata only while `url` is a non-empty string, so an empty one would silently drop the source.
-- `fetch` resolves the four id kinds the read tools understand: `file:<fileid>` (looked up by a
+- `fetch` resolves the five id kinds the read tools understand: `file:<fileid>` (looked up by a
   single WebDAV search on `oc:fileid`), `note:<id>`, `card:<board>:<stack>:<card>` including the
-  short `card:<cardId>` form from the Deck search provider, and `event:<calendar>:<object>`.
+  short `card:<cardId>` form from the Deck search provider, `event:<calendar>:<object>`, and
+  `mail:<databaseId>` (the full text of one message, cut at 32 KiB with the cut marked).
 - A `url:` id is answered honestly: this server never requests a URL that came out of a search
   entry, and it says so instead of inventing content. An unknown prefix is refused with the list of
   the valid ones, because resolving a chat message as a note is worse than an error.

@@ -221,7 +221,7 @@ neue Objekte anlegen, aber niemals bestehende ändern oder entfernen.
 | `unified_search` | read | Fragt die Nextcloud-Unified-Search über alle Provider ab, berechtigungsbewusst |
 | `prepare_context` | read | Bündelt passende Dateien, Notizen und Karten mit den Terminen der kommenden Woche zu einer Frage |
 | `search` | read | OpenAI-kompatibler Sucheinstiegspunkt, delegiert an die Unified-Search |
-| `fetch` | read | OpenAI-kompatibler Abrufeinstiegspunkt, löst eine ID zu einer Datei, Notiz, Karte oder einem Termin auf |
+| `fetch` | read | OpenAI-kompatibler Abrufeinstiegspunkt, löst eine ID zu einer Datei, Notiz, Karte, einem Termin oder einer Mail auf |
 
 `search` und `fetch` existieren, weil das ChatGPT-Connector-Profil genau diese beiden Namen und Schemata
 verlangt. Sie sind dünne Hüllen über den obigen Tools, keine zweite Implementierung.
@@ -411,9 +411,11 @@ ein Output-Schema mitliefern, weil ChatGPT die Nutzlast als strukturierten Inhal
 - Jeder Treffer trägt eine nicht-leere, absolute URL auf der konfigurierten Instanz. ChatGPT erzeugt nur
   dann Zitations-Metadaten, solange `url` ein nicht-leerer String ist, sodass eine leere die Quelle still
   fallenlassen würde.
-- `fetch` löst die vier ID-Arten auf, die die Lese-Tools verstehen: `file:<fileid>` (nachgeschlagen über
+- `fetch` löst die fünf ID-Arten auf, die die Lese-Tools verstehen: `file:<fileid>` (nachgeschlagen über
   eine einzige WebDAV-Suche auf `oc:fileid`), `note:<id>`, `card:<board>:<stack>:<card>` inklusive der
-  kurzen Form `card:<cardId>` aus dem Deck-Suchprovider, und `event:<calendar>:<object>`.
+  kurzen Form `card:<cardId>` aus dem Deck-Suchprovider, `event:<calendar>:<object>` und
+  `mail:<databaseId>` (der Volltext einer einzelnen Nachricht, geschnitten bei 32 KiB, mit markiertem
+  Schnitt).
 - Eine `url:`-ID wird ehrlich beantwortet: dieser Server fordert nie eine URL an, die aus einem
   Sucheintrag stammt, und sagt das, statt Inhalt zu erfinden. Ein unbekanntes Präfix wird mit der Liste
   der gültigen abgelehnt, weil eine Chat-Nachricht als Notiz aufzulösen schlimmer ist als ein Fehler.

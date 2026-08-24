@@ -225,7 +225,7 @@ l'outil peut créer de nouveaux objets mais ne peut jamais modifier ni supprimer
 | `unified_search` | read | Interroge la recherche unifiée de Nextcloud à travers les fournisseurs, en respectant les permissions |
 | `prepare_context` | read | Regroupe fichiers, notes et cartes correspondants avec la semaine d'événements à venir pour une même question |
 | `search` | read | Point d'entrée de recherche compatible OpenAI, délègue à la recherche unifiée |
-| `fetch` | read | Point d'entrée de récupération compatible OpenAI, résout un id vers un fichier, une note, une carte ou un événement |
+| `fetch` | read | Point d'entrée de récupération compatible OpenAI, résout un id vers un fichier, une note, une carte, un événement ou un courriel |
 
 `search` et `fetch` existent parce que le profil de connecteur ChatGPT exige exactement ces deux noms
 et schémas. Ce sont de fines enveloppes autour des outils ci-dessus, pas une seconde implémentation.
@@ -421,10 +421,11 @@ livrer un output schema, car ChatGPT lit la charge utile comme contenu structur�
 - Chaque résultat porte une URL absolue et non vide sur l'instance configurée. ChatGPT ne crée des
   métadonnées de citation que tant que `url` est une chaîne non vide, si bien qu'une URL vide ferait
   discrètement disparaître la source.
-- `fetch` résout les quatre types d'id que les outils de lecture comprennent : `file:<fileid>`
+- `fetch` résout les cinq types d'id que les outils de lecture comprennent : `file:<fileid>`
   (recherché par une seule WebDAV search sur `oc:fileid`), `note:<id>`,
   `card:<board>:<stack>:<card>` y compris la forme courte `card:<cardId>` du fournisseur de recherche
-  Deck, et `event:<calendar>:<object>`.
+  Deck, `event:<calendar>:<object>` et `mail:<databaseId>` (le texte complet d'un seul message,
+  coupé à 32 Kio, la coupe étant marquée).
 - Un id `url:` reçoit une réponse honnête : ce serveur ne requête jamais une URL issue d'un résultat
   de recherche, et il le dit au lieu d'inventer du contenu. Un préfixe inconnu est refusé avec la
   liste de ceux qui sont valides, car résoudre un message de chat comme une note est pire qu'une
