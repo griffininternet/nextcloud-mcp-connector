@@ -56,6 +56,7 @@ counter is not the reason. ``#[BruteForceProtection]`` sits on that controller, 
 does not count.
 """
 
+import re
 from typing import Any
 
 import httpx
@@ -102,6 +103,12 @@ MAX_MESSAGES = 50
 PARTIAL = 206
 
 _SHAPE_HINT = "Check that the Mail app is enabled and up to date on that instance."
+
+#: The digits an id of this family may consist of, and only those. ``str.isdigit`` would
+#: accept a superscript two and an Arabic-Indic digit as well, and both would build a URL
+#: the app answers with a cast-to-zero 404 instead of being stopped here (review finding
+#: WR-04); ``tools/mail.py`` checks its timestamps with the same pattern for the same reason.
+_DIGITS = re.compile(r"[0-9]+")
 
 
 async def get_accounts(client: httpx.AsyncClient, creds: Credentials) -> list[dict[str, Any]]:
@@ -219,7 +226,7 @@ def _path_id(value: str | int, what: str) -> str:
     keeps the most expensive call of this family away from a value that is certainly wrong.
     """
     text = str(value).strip()
-    if not text.isdigit():
+    if not _DIGITS.fullmatch(text):
         raise ToolError(
             message=f"{value!r} is not a numeric {what}.",
             hint="Use an id exactly as mail_browse reports it; Mail addresses by number.",

@@ -17,6 +17,8 @@ Formats::
     url:<absolute-url>                     (honest rest category, see pitfall 10)
 """
 
+import re
+
 from .errors import ToolError
 
 SEPARATOR = ":"
@@ -26,6 +28,12 @@ _HINT = (
     "card:<board>:<stack>:<card>, event:<calendar>:<object>, mail:<databaseId> or "
     "url:<absolute-url>."
 )
+
+#: The digits a mail id may consist of, and only those. ``str.isdigit`` would accept a
+#: superscript two and an Arabic-Indic digit as well (the same reason ``tools/mail.py``
+#: checks its timestamps with this pattern), and both would build a URL the app answers
+#: with a cast-to-zero 404 instead of stopping here (review finding WR-04).
+_DIGITS = re.compile(r"[0-9]+")
 
 
 def encode_file(fileid: str | int) -> str:
@@ -81,7 +89,7 @@ def parse(raw: str) -> tuple[str, tuple[str, ...]]:
         # every read of it opens an IMAP session inside the Mail app, and the app offers
         # nothing to lean on: PHP casts a non numeric id to 0 and answers 404, so there is no
         # routing error that would stop a wrong value on the way out (pitfall 11).
-        if not rest.isdigit():
+        if not _DIGITS.fullmatch(rest):
             raise ToolError(message=f"{raw!r} is not a valid mail id.", hint=_HINT)
     elif kind == "card":
         parts = tuple(rest.split(SEPARATOR))

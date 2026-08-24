@@ -471,7 +471,7 @@ async def test_a_full_message_that_is_not_an_object_is_reported_as_such(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("invented", ["abc", "", "-1", "1 OR 1=1"])
+@pytest.mark.parametrize("invented", ["abc", "", "-1", "1 OR 1=1", "٤٢", "²"])
 async def test_a_mailbox_id_that_is_not_a_number_never_reaches_nextcloud(
     client: httpx.AsyncClient, creds: Credentials, invented: str
 ) -> None:
@@ -486,7 +486,7 @@ async def test_a_mailbox_id_that_is_not_a_number_never_reaches_nextcloud(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("invented", ["abc", "", "-1", "1 OR 1=1"])
+@pytest.mark.parametrize("invented", ["abc", "", "-1", "1 OR 1=1", "٤٢", "²"])
 async def test_a_message_id_that_is_not_a_number_never_reaches_nextcloud(
     client: httpx.AsyncClient, creds: Credentials, invented: str
 ) -> None:
@@ -501,7 +501,7 @@ async def test_a_message_id_that_is_not_a_number_never_reaches_nextcloud(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("invented", ["abc", "", "-1", "1 OR 1=1"])
+@pytest.mark.parametrize("invented", ["abc", "", "-1", "1 OR 1=1", "٤٢", "²"])
 async def test_an_account_id_that_is_not_a_number_never_reaches_nextcloud(
     client: httpx.AsyncClient, creds: Credentials, invented: str
 ) -> None:

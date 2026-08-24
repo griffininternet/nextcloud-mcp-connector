@@ -59,10 +59,26 @@ def test_a_mail_id_of_zero_is_a_number_and_the_database_decides_the_rest() -> No
 
 @pytest.mark.parametrize(
     "raw",
-    ["mail:abc", "mail:4711a", "mail:-1", "mail: ", "mail:", "mail:47:11", "mail: 4711"],
+    [
+        "mail:abc",
+        "mail:4711a",
+        "mail:-1",
+        "mail: ",
+        "mail:",
+        "mail:47:11",
+        "mail: 4711",
+        "mail:٤٢",
+        "mail:²",
+    ],
 )
 def test_a_mail_id_that_is_not_a_number_is_refused_with_the_format_list(raw: str) -> None:
-    """Not a single request may leave for one of these (threat T-10-31)."""
+    """Not a single request may leave for one of these (threat T-10-31).
+
+    The last two are the WR-04 pair: an Arabic-Indic forty-two and a superscript two are
+    both true under ``str.isdigit``, and both are not an id the Mail app could ever have
+    handed out, so the guard has to measure "numeric" in ASCII digits like the timestamp
+    filters do.
+    """
     with pytest.raises(ToolError) as excinfo:
         ids.parse(raw)
 
