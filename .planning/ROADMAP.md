@@ -127,7 +127,32 @@ Plans:
   5. Ein Werkzeug gegen eine nicht installierte App antwortet in allen drei Familien mit einem Fehlersatz samt konkretem nächstem Schritt, nie mit Stacktrace oder Loginseite; für Talk und Tables über den bestehenden Capabilities-Weg, für Mail über den zweiten Erkennungskanal, gecacht wie bisher.
   6. Wer die Doku oder die Store-Beschreibung (EN/DE/FR) liest, findet die Exfiltrationskette benannt (fremder Mail-Inhalt als Daten, Talk-Senden als Ausgangskanal), den Admin-Schalter als Gegenmaßnahme und den Satz, dass Mail strikt lesend ist.
 
-**Plans**: TBD
+**Plans**: 8 Pläne in 5 Wellen
+
+Plans:
+**Wave 1**
+
+- [ ] 10-01-PLAN.md: GreenMail-Dienst und die Stufe-2-Messung (blockierend): A1 bis A4 werden Messwerte, Byte-Kappe entschieden, Korrektur K1 in docs/spike-mail.md
+- [ ] 10-02-PLAN.md: Mail-Client mit den vier deklarierten OCS-Leseformen und der zweite Erkennungskanal in derselben Cache-Zeile
+- [ ] 10-03-PLAN.md: HTML zu Text mit lxml und der dritte Kappungsmarker, der für eine Mail wahr ist
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 10-04-PLAN.md: mail_browse mit drei Ebenen, Filter-Positivliste mit Ablehnung, Cursor mit mailbox_id als Scope
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 10-05-PLAN.md: mail: als Id-Kind und der Volltext über das bestehende fetch, mit flachen Vertrauens-Signalen
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 10-06-PLAN.md: Registrierung, das erweiterte Schreibverbot mit Gegenprobe, die Budget-Zwischenanhebung und die eingefrorenen Zahlen
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 10-07-PLAN.md: Die Exfiltrationskette benennen: privacy, faq, drei READMEs, Store-Beschreibung EN/DE/FR und Changelog (SEC-01)
+- [ ] 10-08-PLAN.md: Live-Nachweis Mail lesen ohne Nebenwirkung, Zwei-Konten-Beweis, und Degradation aller drei Familien mit Neustart
+
 **UI hint**: nein (kein eigenes Frontend; Doku- und Store-Texte sind Textarbeit)
 
 ### Phase 11: Bündelung, Budget und Release 0.1.6
@@ -199,14 +224,12 @@ Plans:
 | 7. Verwaltungs-Clients live verprobt | v1.1 | 0/0 | Deferred (extern getaktet) | - |
 | 8. Erreichbarkeits-Spike und Tables | v1.2 | 5/5 | Complete    | 2026-08-21 |
 | 9. Talk | v1.2 | 5/5 | Complete    | 2026-08-21 |
-| 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 0/? | Not started | - |
+| 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 0/8 | Planned | - |
 | 11. Bündelung, Budget und Release 0.1.6 | v1.2 | 0/? | Not started | - |
 
 ## Next
 
-`/gsd:execute-phase 8`
+`/gsd:execute-phase 10`
 
 ---
-*Roadmap created: 2026-08-14 (granularity: coarse, mode: mvp); v1.0 abgeschlossen: 2026-08-20; v1.1 abgeschlossen: 2026-08-20 (Phase 7 deferred); v1.2 Phasen 8-11 ergänzt: 2026-08-21*
-</content>
-</invoke>
+*Roadmap created: 2026-08-14 (granularity: coarse, mode: mvp); v1.0 abgeschlossen: 2026-08-20; v1.1 abgeschlossen: 2026-08-20 (Phase 7 deferred); v1.2 Phasen 8-11 ergänzt: 2026-08-21; Phase 10 geplant: 2026-08-24*
