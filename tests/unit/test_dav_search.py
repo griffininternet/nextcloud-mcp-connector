@@ -89,6 +89,19 @@ def test_a_limit_below_one_is_refused() -> None:
         dav.build_search_body("/files/alice", "budget", 0)
 
 
+@pytest.mark.parametrize("fileid", ["abc", "", "   ", "4711a", "-1", "²", "٤٢"])
+def test_a_fileid_that_is_not_ascii_digits_never_becomes_a_search_body(fileid: str) -> None:
+    """The backstop half of review finding WR-02, measured in ASCII digits.
+
+    The last two are the pair ``str.isdigit`` gets wrong: a superscript two and an
+    Arabic-Indic forty-two are both "digits" to it, and neither is a file id Nextcloud
+    ever handed out. The lookup takes its identifier straight from a model, so the refusal
+    has to stand here as well as in ``provider_map``.
+    """
+    with pytest.raises(ToolError, match="not a numeric Nextcloud file id"):
+        dav.build_fileid_body("/files/alice", fileid)
+
+
 def test_search_scope_is_the_home_or_one_folder_below_it(creds: Credentials) -> None:
     assert dav.search_scope(creds, "/") == "/files/alice"
     assert dav.search_scope(creds, "/Docs") == "/files/alice/Docs"

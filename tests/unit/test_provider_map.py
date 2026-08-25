@@ -55,6 +55,36 @@ def test_a_files_hit_without_attributes_falls_back_to_the_f_segment() -> None:
     assert canonical is True
 
 
+@pytest.mark.parametrize("digit", ["²", "٤٢"])
+def test_a_file_id_that_is_not_ascii_digits_degrades_to_the_url_kind(digit: str) -> None:
+    """Review finding WR-02: both values are true under ``str.isdigit`` and neither is an
+    id Nextcloud ever handed out.
+
+    The attribute reader and the ``/f/`` fallback measure with the same ASCII pattern, so a
+    deformed entry becomes the honest ``url`` kind instead of ``file:٤٢``, which would cost
+    a SEARCH request for a value the instance never issued.
+    """
+    entry = {"attributes": {"fileId": digit}, "resourceUrl": f"/index.php/f/{digit}"}
+
+    kind, identifier, canonical = resolved("files", entry)
+
+    assert kind == "url"
+    assert identifier == f"url:{BASE}/index.php/f/{digit}"
+    assert canonical is False
+
+
+@pytest.mark.parametrize("digit", ["²", "٤٢"])
+def test_a_last_segment_that_is_not_ascii_digits_degrades_to_the_url_kind(digit: str) -> None:
+    """The same WR-02 pair over ``_last_numeric_segment``, the source of note and card ids."""
+    entry = {"title": "kaputt", "resourceUrl": f"/index.php/apps/notes/note/{digit}"}
+
+    kind, identifier, canonical = resolved("notes", entry)
+
+    assert kind == "url"
+    assert identifier == f"url:{BASE}/index.php/apps/notes/note/{digit}"
+    assert canonical is False
+
+
 def test_a_notes_hit_takes_its_id_from_the_last_url_segment() -> None:
     """The notes provider ships no ``attributes`` at all (verified in the notes app)."""
     entry = {"title": "Protokoll", "resourceUrl": f"{BASE}/index.php/apps/notes/note/12"}

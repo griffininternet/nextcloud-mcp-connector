@@ -96,7 +96,10 @@ FILE_WEB_PREFIX = "/index.php/f"
 _TOKEN = re.compile(r"[a-z0-9]{4,30}")
 
 #: Digits, and only ASCII ones. ``str.isdigit`` also accepts a superscript two and an
-#: Arabic-Indic digit, and both would build an id that the codec has to refuse later.
+#: Arabic-Indic digit, and both would build an id that Nextcloud never handed out. Every
+#: digit check of this module measures with this pattern, including the file id and the
+#: last-segment readers (review finding WR-02): an entry with ``fileId: "٤٢"`` must degrade
+#: to the honest ``url`` kind instead of becoming ``file:٤٢``.
 _DIGITS = re.compile(r"[0-9]+")
 
 #: The fragment of a Talk search entry: ``message_<id>``.
@@ -195,12 +198,12 @@ def _file_id(attributes: Mapping[str, Any], url: str) -> str:
     """``attributes.fileId`` first, then the ``/f/<fileid>`` segment of the URL."""
     raw = attributes.get("fileId")
     candidate = str(raw).strip() if raw is not None else ""
-    if candidate.isdigit():
+    if _DIGITS.fullmatch(candidate):
         return candidate
 
     segments = [segment for segment in urlsplit(url).path.split("/") if segment]
     for index, segment in enumerate(segments[:-1]):
-        if segment == "f" and segments[index + 1].isdigit():
+        if segment == "f" and _DIGITS.fullmatch(segments[index + 1]):
             return segments[index + 1]
     return ""
 
@@ -256,4 +259,4 @@ def _last_numeric_segment(url: str) -> str:
     if not path:
         return ""
     candidate = path.rsplit("/", 1)[-1]
-    return candidate if candidate.isdigit() else ""
+    return candidate if _DIGITS.fullmatch(candidate) else ""

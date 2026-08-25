@@ -13,6 +13,7 @@ server afterwards), and never let a redirect pass silently (the auth header woul
 foreign host or vanish).
 """
 
+import re
 from collections.abc import Sequence
 from posixpath import dirname
 from typing import Any
@@ -27,6 +28,12 @@ from ..credentials import Credentials
 from . import xml
 
 DAV_FILES_PREFIX = "/remote.php/dav/files/"
+
+#: Digits, and only ASCII ones. ``str.isdigit`` also accepts a superscript two and an
+#: Arabic-Indic digit, and neither is a file id Nextcloud ever handed out. This is the
+#: backstop behind ``provider_map._DIGITS`` (review finding WR-02): the one lookup that
+#: takes an identifier straight from a model refuses the same set on both layers.
+_DIGITS = re.compile(r"[0-9]+")
 
 #: The search endpoint is the DAV root, not the files path: Nextcloud's search backend
 #: reports an empty arbiter path, so every other target answers 405.
@@ -282,7 +289,7 @@ def build_fileid_body(scope: str, fileid: str, props: Sequence[str] = _SEARCH_PR
     lookup that takes an identifier straight from a model.
     """
     number = (fileid or "").strip()
-    if not number.isdigit():
+    if not _DIGITS.fullmatch(number):
         raise ToolError(
             message=f"{fileid!r} is not a numeric Nextcloud file id.",
             hint="Use an id from a search tool, for example file:4711.",
