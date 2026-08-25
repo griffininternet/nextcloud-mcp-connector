@@ -542,6 +542,35 @@ ainsi que des deux spikes dont elle dépendait :
   familles d'API s'exécutent sous un seul mode d'impersonation, si bien qu'il n'y a pas de séparation
   de fournisseur par famille.
 
+## Enterprise
+
+Trois choses décident si une organisation laisse un assistant atteindre sa Nextcloud, et cette
+application n'en résout aucune aujourd'hui. Qui a lu quel fichier hier, et par quel client.
+Pourquoi un groupe peut appeler les outils Mail et un autre non. Comment quelques centaines de
+comptes s'authentifient auprès du fournisseur d'identité que l'organisation exploite déjà. Ces
+trois éléments sont prévus comme un module commercial distinct, et cette section le dit avant
+que vous ne les cherchiez.
+
+- **Un journal d'audit** : un événement structuré par appel d'outil, nommant le compte, le
+  client, l'outil, la ressource touchée et la façon dont l'appel s'est terminé, avec une durée
+  de conservation que l'administration fixe et un export qui quitte l'application.
+- **Des politiques de groupe** : quels outils un groupe peut appeler, des portées de lecture
+  restreintes à un dossier, une liste blanche de clients, et un interrupteur qui ferme l'accès
+  pour un seul compte ou pour tout le monde.
+- **Le SSO** : la connexion via le fournisseur d'identité que l'organisation exploite déjà,
+  devant la connexion OAuth de cette application, avec un inventaire central des jetons
+  délivrés et un moyen de les révoquer.
+
+**Aucun des trois n'existe aujourd'hui dans cette application, dans aucune version et derrière
+aucun réglage.** Cette section décrit un projet, pas une fonctionnalité, et elle est écrite ici
+parce qu'un projet gardé pour soi se découvre comme un manque au pire moment. Ce que
+l'application fait aujourd'hui est le reste de ce document, et l'interrupteur qu'un compte tient
+sur son propre accès est jusqu'ici tout ce que la gouvernance signifie ici.
+
+Si votre organisation avait besoin de l'un des trois avant d'autoriser un tel accès, c'est
+justement l'information utile, et c'est elle qui décide si le module sera construit un jour.
+Écrivez à k.cherif@outlook.de et nommez celui des trois qui vous bloque.
+
 ## Développement
 
 ```bash

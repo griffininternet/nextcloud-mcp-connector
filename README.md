@@ -509,6 +509,33 @@ depended on:
 - [docs/spike-dav.md](docs/spike-dav.md): the DAV impersonation result, which is that all six
   API families run under one impersonation mode, so there is no per family provider split.
 
+## Enterprise
+
+Three things decide whether an organisation lets an assistant reach its Nextcloud at all, and
+this app answers none of them today. Who read which file yesterday, and through which client.
+Why one group may call the mail tools and another may not. How a few hundred accounts sign in
+against the identity provider the organisation already runs. Those three are planned as a
+separate commercial add-on, and this section says so before you go looking for them.
+
+- **An audit log**: one structured event per tool call, naming the account, the client, the
+  tool, the resource it touched and how the call ended, with a retention an administrator sets
+  and an export that leaves the app.
+- **Group policies**: which tools a group may call at all, read scopes narrowed to a folder, an
+  allow list of clients, and a switch that closes access for one account or for everyone.
+- **SSO**: sign in through the identity provider the organisation already runs, in front of the
+  OAuth sign in of this app, with a central inventory of the tokens that were handed out and a
+  way to withdraw them.
+
+**None of the three exists in this app today, in no version and behind no setting.** This
+section describes a plan, not a feature, and it is written down here because a plan that is
+kept quiet gets discovered as a gap at the worst possible moment. What the app does today is
+the rest of this document, and the switch an account holds over its own access is the whole of
+what governance means here so far.
+
+If your organisation would need one of the three before it allows this kind of access, that is
+the useful thing to say, and saying it is what decides whether the add-on gets built at all.
+Write to k.cherif@outlook.de and name the one of the three that blocks you.
+
 ## Development
 
 ```bash
