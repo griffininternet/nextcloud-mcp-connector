@@ -19,7 +19,7 @@
 ### Store und Release (EXAPP)
 
 - [x] **EXAPP-08**: Der CIMD-Weg ist nach den v1.1-Review-Fixes live nachgemessen (v1.1-Tech-Debt): ein E2E-Lauf gegen die laufende Topologie zeigt, dass ein CIMD-Client sich weiterhin ohne Registrierung verbindet, mit Proof-Zeile (Datum, Befehl, Ergebnis) in der Doku oder dem Messdokument der Phase.
-- [ ] **EXAPP-09**: Release 0.1.9 ist im Store: Version an allen fünf Stellen (vier Code-Stellen plus README-Statuszeile in drei Sprachen), Changelog-Block mit `message_truncated` als Formatänderung, alle Gates grün (inkl. Vokabular-Gate in seiner neuen Reichweite), Branch-Push vor dem Tag, Signatur über das heruntergeladene Asset, Tag `v0.1.9` erst nach Owner-Freigabe, Runbook-Schritte 4 bis 8 mit Proof-Zeilen.
+- [x] **EXAPP-09**: Release 0.1.9 ist im Store: Version an allen fünf Stellen (vier Code-Stellen plus README-Statuszeile in drei Sprachen), Changelog-Block mit `message_truncated` als Formatänderung, alle Gates grün (inkl. Vokabular-Gate in seiner neuen Reichweite), Branch-Push vor dem Tag, Signatur über das heruntergeladene Asset, Tag `v0.1.9` erst nach Owner-Freigabe, Runbook-Schritte 4 bis 8 mit Proof-Zeilen.
 
 ## Future Requirements
 
@@ -50,7 +50,7 @@ Vorgemerkt, nicht in v1.3:
 | TOOL-19 | Phase 12 | Complete |
 | SEC-02 | Phase 12 | Complete |
 | EXAPP-08 | Phase 13 | Complete |
-| EXAPP-09 | Phase 13 | Pending |
+| EXAPP-09 | Phase 13 | Complete |
 
 **Coverage:**
 - v1.3 requirements: 6 total

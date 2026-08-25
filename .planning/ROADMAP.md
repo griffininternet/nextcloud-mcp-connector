@@ -117,7 +117,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 13-06-PLAN.md — Signatur über das heruntergeladene Asset, Store-Upload, vier Nachweise, Proof-Zeilen 6 bis 8 (nicht autonom)
+- [x] 13-06-PLAN.md — Signatur über das heruntergeladene Asset, Store-Upload, vier Nachweise, Proof-Zeilen 6 bis 8 (nicht autonom)
 
 ## Progress
 
@@ -135,11 +135,11 @@ Plans:
 | 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 8/8 | Complete | 2026-08-24 |
 | 11. Bündelung, Budget und Release 0.1.8 | v1.2 | 10/10 | Complete | 2026-08-25 |
 | 12. Konsistenz und Härtungs-Nachzieher | v1.3 | 4/4 | Complete    | 2026-08-25 |
-| 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 5/6 | In Progress|  |
+| 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 6/6 | Complete | 2026-08-25 |
 
 ## Next
 
-`/gsd:execute-phase 13` — Phase 13 "CIMD-Nachmessung und Release 0.1.9" ausführen (6 Pläne in 6 Wellen, seriell; 13-05 und 13-06 sind nicht autonom: Tag nur nach Owner-Freigabe, Store-Upload braucht die angemeldete Sitzung)
+`/gsd:complete-milestone` — Milestone v1.3 abschließen: beide Phasen (12 und 13) sind komplett, Release 0.1.9 ist im Store gelistet
 
 ---
 *Roadmap created: 2026-08-14 (granularity: coarse, mode: mvp); v1.0 abgeschlossen: 2026-08-20; v1.1 abgeschlossen: 2026-08-20 (Phase 7 deferred); v1.2 abgeschlossen: 2026-08-25 (Release 0.1.8 live); v1.3 aufgesetzt: 2026-08-25 (2 Phasen, 6 Requirements)*
