@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Pflege und 0.1.9
 status: executing
-stopped_at: "Completed 12-02-PLAN.md (TOOL-18: der Id-Codec ist die einzige Quelle)"
-last_updated: "2026-08-25T12:45:18.953Z"
-last_activity: 2026-08-25 -- Plan 12-02 abgeschlossen (TOOL-18)
+stopped_at: "Completed 12-03-PLAN.md (SEC-02: die drei Nachzieher aus 11-SECURITY sind Belege)"
+last_updated: "2026-08-25T13:01:32.169Z"
+last_activity: 2026-08-25
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_plans: 3
+  percent: 0
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 12 (Konsistenz und Härtungs-Nachzieher) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-08-25
 
@@ -147,6 +147,7 @@ Last activity: 2026-08-25
 | Phase 11 P10 | 20 min | 4 tasks | 2 files |
 | Phase 12 P01 | 9 min | 2 tasks tasks | 4 files files |
 | Phase 12 P02 | 10 min | 2 tasks | 4 files |
+| Phase 12 P03 | 21 min | 3 tasks tasks | 3 files files |
 
 ## Accumulated Context
 
@@ -537,6 +538,11 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 12 TOOL-18: Whitespace im url-Rest ist gegen encode_url ausgelegt: whitespace-only und fuehrender Whitespace werden von ids.parse abgelehnt, inneres Whitespace bleibt erlaubt, weil encode_url('https://a b') genau diesen Wert baut
 - [Phase ?]: Phase 12 TOOL-18: neue Funktion ids.encode_card_short, weil ids.parse die Kurzform card:cardId seit Phase 1 akzeptiert, der Codec sie aber nicht bauen konnte und provider_map sie deshalb von Hand baute (zweiter Handbau, den 12-02-PLAN nicht kannte)
 - [Phase ?]: Phase 12 TOOL-18: die Mail-Id-Ausgabe ist byte-identisch geblieben (Filter _number(databaseId) grosser 0 vor der Projektion); weder die Umstellung noch die neuen url-Ablehnungen gehen in den Changelog von 0.1.9
+- [Phase ?]: Phase 12-03 (SEC-02c): die Wortliste FORBIDDEN_VOCABULARY bleibt in tests/unit/test_exapp_env_setup.py und das Gate waechst um sie herum; zwei Stellen mit demselben Wort waeren zwei Wahrheiten (IN-03), ein Umzug haette an einem gruenen Sicherheits-Gate gebaut
+- [Phase ?]: Phase 12-03 (SEC-02c): LICENSE ist die zweite benannte Ausnahme des Vokabular-Gates (AGPL-Volltext traegt das Wort in LICENSE:653); Fremdtext im Store-Archiv, eine Bearbeitung wuerde den Lizenztext verfaelschen
+- [Phase ?]: Phase 12-03: ab jetzt steht CHANGELOG.md unter dem Vokabular-Gate, relevant fuer den 0.1.9-Block in Phase 13
+- [Phase ?]: Phase 12-03 (SEC-02b): die Nicht-leer-Behauptung eines Quelltext-Gates darf nicht auf der Zeile ankern, die die Gegenprobe manipuliert; Anker ist level=accounts, nicht level=mailboxes
+- [Phase ?]: Phase 12-03: Gegenproben, die eine echte Datei manipulieren, lesen und schreiben Bytes (write_bytes); read_text/write_text dreht auf diesem Windows-Host die Zeilenenden und hinterlaesst einen unsauberen Baum
 
 ### Pending Todos
 
@@ -571,12 +577,13 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-25T12:45:18.937Z
-Stopped at: Completed 12-02-PLAN.md (TOOL-18: der Id-Codec ist die einzige Quelle)
-Naechster Schritt: Plan 12-02 ausfuehren
+Last session: 2026-08-25T13:00:57.874Z
+Stopped at: Completed 12-03-PLAN.md (SEC-02: die drei Nachzieher aus 11-SECURITY sind Belege)
+Naechster Schritt: Plan 12-04 ausfuehren
 Resume file: None
 
 ## Operator Next Steps
 
-- Plan 12-02 ausfuehren (Phase 12, Plan 2 von 4)
+- Plan 12-04 ausfuehren (Phase 12, Plan 4 von 4)
 - Uebergabe an Phase 13: Changelog-Block 0.1.9 braucht die Zeile zur Umbenennung truncated -> message_truncated (siehe 12-01-SUMMARY.md)
+- Uebergabe an Phase 13: CHANGELOG.md steht ab 12-03 unter dem Vokabular-Gate; der 0.1.9-Block entsteht unter dieser Regel (siehe 12-03-SUMMARY.md)

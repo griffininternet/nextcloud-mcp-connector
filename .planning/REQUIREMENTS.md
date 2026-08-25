@@ -14,7 +14,7 @@
 
 ### Sicherheit (SEC)
 
-- [ ] **SEC-02**: Die drei Security-Nachzieher aus 11-SECURITY.md sind geschlossen: (a) alle Einträge in `PROVIDER_KINDS` tragen den Verifikationskommentar mit Repository, Datei und Klasse (UF-1, heute fehlen `files` und `notes`), (b) das Quelltext-Gate aus T-11-29 existiert als Regressionstest statt als einmaliger Prüfschritt (UF-2), (c) das Vokabular-Gate prüft über `appinfo/info.xml` hinaus mindestens die drei READMEs und `CHANGELOG.md`, und `docs/store-submission.md` ist als interne Ausnahme begründet oder bereinigt (UF-3).
+- [x] **SEC-02**: Die drei Security-Nachzieher aus 11-SECURITY.md sind geschlossen: (a) alle Einträge in `PROVIDER_KINDS` tragen den Verifikationskommentar mit Repository, Datei und Klasse (UF-1, heute fehlen `files` und `notes`), (b) das Quelltext-Gate aus T-11-29 existiert als Regressionstest statt als einmaliger Prüfschritt (UF-2), (c) das Vokabular-Gate prüft über `appinfo/info.xml` hinaus mindestens die drei READMEs und `CHANGELOG.md`, und `docs/store-submission.md` ist als interne Ausnahme begründet oder bereinigt (UF-3).
 
 ### Store und Release (EXAPP)
 
@@ -48,7 +48,7 @@ Vorgemerkt, nicht in v1.3:
 | TOOL-17 | Phase 12 | Complete |
 | TOOL-18 | Phase 12 | Complete |
 | TOOL-19 | Phase 12 | Pending |
-| SEC-02 | Phase 12 | Pending |
+| SEC-02 | Phase 12 | Complete |
 | EXAPP-08 | Phase 13 | Pending |
 | EXAPP-09 | Phase 13 | Pending |
 
