@@ -92,7 +92,15 @@ Plans:
   3. Alle Gates laufen lokal grün, das Vokabular-Gate in seiner neuen Reichweite aus Phase 12 eingeschlossen, und der Branch ist gepusht, bevor irgendein Tag existiert (Runbook Schritt 4); der Tag `v0.1.9` entsteht erst nach ausdrücklicher Owner-Freigabe.
   4. Release 0.1.9 ist im Store gelistet: signiert wurde das heruntergeladene Release-Asset und nicht das lokal gebaute (Runbook Schritt 6), und die Runbook-Schritte 4 bis 8 tragen je eine Proof-Zeile mit Datum, Befehl und Ergebnis in `docs/store-submission.md`.
 
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+- [ ] 13-01-PLAN.md — Versions-Bump 0.1.9 an sechs Stellen und der Changelog-Block mit `message_truncated`
+- [ ] 13-02-PLAN.md — Enterprise-Fake-Door: `## Enterprise` in drei READMEs, drei Store-Beschreibungen, Issue-Entwurf (D-05 bis D-07)
+- [ ] 13-03-PLAN.md — CIMD-Nachmessung gegen den 0.1.9-Kandidaten, Gegenprobe, Proof-Zeile in `docs/oauth-setup.md` (EXAPP-08)
+- [ ] 13-04-PLAN.md — Sechs Gates lokal grün, Archiv-Probelauf als Strukturprüfung, Proof-Zeilen der Schritte 1 bis 3
+- [ ] 13-05-PLAN.md — Push vor dem Tag, Owner-Freigabe, Tag `v0.1.9`, Workflow, Proof-Zeile der Schritte 4 und 5 (nicht autonom)
+- [ ] 13-06-PLAN.md — Signatur über das heruntergeladene Asset, Store-Upload, vier Nachweise, Proof-Zeilen 6 bis 8 (nicht autonom)
 
 ## Progress
 
@@ -110,11 +118,11 @@ Plans:
 | 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 8/8 | Complete | 2026-08-24 |
 | 11. Bündelung, Budget und Release 0.1.8 | v1.2 | 10/10 | Complete | 2026-08-25 |
 | 12. Konsistenz und Härtungs-Nachzieher | v1.3 | 4/4 | Complete    | 2026-08-25 |
-| 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 0/? | Not started | - |
+| 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 0/6 | Planned | - |
 
 ## Next
 
-`/gsd:execute-phase 12` — Phase 12 "Konsistenz und Härtungs-Nachzieher" ausführen (4 Pläne in 2 Wellen; Gates bleiben auf der v1.2-Messung: BUDGET_BYTES 18000, MAX_TOOL_BYTES 1400)
+`/gsd:execute-phase 13` — Phase 13 "CIMD-Nachmessung und Release 0.1.9" ausführen (6 Pläne in 6 Wellen, seriell; 13-05 und 13-06 sind nicht autonom: Tag nur nach Owner-Freigabe, Store-Upload braucht die angemeldete Sitzung)
 
 ---
 *Roadmap created: 2026-08-14 (granularity: coarse, mode: mvp); v1.0 abgeschlossen: 2026-08-20; v1.1 abgeschlossen: 2026-08-20 (Phase 7 deferred); v1.2 abgeschlossen: 2026-08-25 (Release 0.1.8 live); v1.3 aufgesetzt: 2026-08-25 (2 Phasen, 6 Requirements)*
