@@ -16,6 +16,15 @@ published answer the same questions, and an instance that updates keeps the beha
 had. What changed is one key of one answer that carried two meanings, and one example in
 the documentation that named a provider which never existed.
 
+### Added
+
+- The READMEs and the store description now name a commercial add-on that is planned and
+  does not exist: an audit log over every tool call, policies per group, and sign in through
+  the identity provider an organisation already runs. Not one of the three is implemented in
+  this release, and each of the four texts says so in a sentence of its own; the description
+  travels with this release because the store reads the manifest at upload time, which is
+  what made the corrections of 0.1.5 and 0.1.6 invisible.
+
 ### Changed
 
 - A change of the answer format, named here because a reader of the old key has to be
