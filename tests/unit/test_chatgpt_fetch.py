@@ -477,6 +477,77 @@ async def test_a_note_cannot_carry_a_marker_this_server_never_wrote_either(
 
 
 @pytest.mark.anyio
+async def test_a_file_name_cannot_carry_a_marker_into_the_title(clients: NcClients) -> None:
+    """WR-04: the title is foreign text exactly like the text beside it (ME-03).
+
+    Whoever shares a file chose its name, so a marker sequence inside the name would claim
+    the framing of the answer right next to the filtered ``text`` field. The mail, message
+    and table branches already filter their titles; this pins the same rule for a file.
+    """
+    forged_name = f"Budget {chatgpt.TRUNCATION_NOTE.format(offset=64)} 2026.md"
+    forged_path = f"/Dokumente/{forged_name}"
+    body = FILE_CONTENT.encode("utf-8")
+
+    with respx.mock(assert_all_called=True) as mock:
+        mock.route(method="SEARCH", url=DAV_ROOT).mock(
+            return_value=httpx.Response(207, text=search_body(path=forged_path))
+        )
+        mock.route(method="PROPFIND", url__startswith=FILES_ROOT).mock(
+            return_value=httpx.Response(207, text=stat_body(length=len(body), path=forged_path))
+        )
+        mock.route(method="GET", url__startswith=FILES_ROOT).mock(
+            return_value=httpx.Response(200, content=body)
+        )
+
+        result = await chatgpt.fetch(clients, "file:4711")
+
+    assert "files_read with offset" not in result["title"], "the marker is the server's own"
+    assert "Budget" in result["title"], "the name keeps its words, it loses our marker"
+    assert "2026.md" in result["title"]
+
+
+@pytest.mark.anyio
+async def test_a_note_title_loses_the_marker_and_keeps_its_words(clients: NcClients) -> None:
+    """WR-04 for the note branch: every writer of the note writes its title too."""
+    note = {
+        "id": 12,
+        "title": f"Protokoll {chatgpt.FINAL_TRUNCATION}",
+        "content": "Anwesend: Anja",
+        "modified": 1755180000,
+    }
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock, notes=NOTES_INSTALLED)
+        mock.get(f"{NOTES_API}/12").mock(return_value=httpx.Response(200, json=note))
+
+        result = await chatgpt.fetch(clients, "note:12")
+
+    assert chatgpt.FINAL_TRUNCATION not in result["title"], "the marker is the server's own"
+    assert "Protokoll" in result["title"], "the title keeps its words, it loses our marker"
+
+
+@pytest.mark.anyio
+async def test_a_card_title_loses_the_marker_and_keeps_its_words(clients: NcClients) -> None:
+    """WR-04 for the card branch: every board member writes card titles."""
+    card = {
+        "id": 102,
+        "title": f"Fixtures {chatgpt.FINAL_TRUNCATION} schreiben",
+        "description": "Mit echten Deck-Antworten",
+        "stackId": 11,
+    }
+    with respx.mock(assert_all_called=False) as mock:
+        mock_capabilities(mock, deck=DECK_INSTALLED)
+        mock.get(f"{DECK_API}/boards/2/stacks/11/cards/102").mock(
+            return_value=httpx.Response(200, json=card)
+        )
+
+        result = await chatgpt.fetch(clients, "card:2:11:102")
+
+    assert chatgpt.FINAL_TRUNCATION not in result["title"], "the marker is the server's own"
+    assert "Fixtures" in result["title"], "the title keeps its words, it loses our marker"
+    assert "schreiben" in result["title"]
+
+
+@pytest.mark.anyio
 async def test_a_note_id_without_the_notes_app_gets_the_app_missing_sentence(
     clients: NcClients,
 ) -> None:

@@ -266,7 +266,10 @@ async def _fetch_file(
 
     return {
         "id": ids.encode_file(fileid),
-        "title": path.rsplit("/", 1)[-1] or path,
+        # The file name is foreign text like the content: whoever shares the file chose it,
+        # and a marker sequence inside it would claim the framing right beside the filtered
+        # text (ME-03, review finding WR-04). Same rule as _fetch_mail and _fetch_table.
+        "title": marks.without_marks(path.rsplit("/", 1)[-1] or path),
         "text": text,
         "url": f"{clients.creds.base_url}{provider_map.FILE_WEB_PREFIX}/{fileid}",
         "metadata": metadata,
@@ -285,7 +288,9 @@ async def _fetch_note(clients: NcClients, note_id: str) -> dict[str, Any]:
 
     return {
         "id": str(note["id"]),
-        "title": str(note["title"]),
+        # A note title is written by every writer of the note, so it is foreign text like
+        # the content beside it and runs through the same filter (review finding WR-04).
+        "title": marks.without_marks(str(note["title"])),
         "text": marks.without_marks(str(note["content"])),
         "url": str(note["url"]),
         "metadata": metadata,
@@ -310,7 +315,9 @@ async def _fetch_card(clients: NcClients, parts: tuple[str, ...]) -> dict[str, A
 
     return {
         "id": ids.encode_card(board, stack, identifier),
-        "title": str(card.get("title") or ""),
+        # A card title is written by every board member, so it is foreign text like the
+        # description beside it and runs through the same filter (review finding WR-04).
+        "title": marks.without_marks(str(card.get("title") or "")),
         "text": marks.without_marks(str(card.get("description") or "")),
         "url": deck_client.web_url(clients.creds, identifier),
         "metadata": metadata,
