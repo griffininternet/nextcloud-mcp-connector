@@ -22,6 +22,7 @@ def test_roundtrip_for_all_eight_kinds() -> None:
         (ids.encode_file("12345"), ("file", ("12345",))),
         (ids.encode_note("42"), ("note", ("42",))),
         (ids.encode_card("7", "13", "99"), ("card", ("7", "13", "99"))),
+        (ids.encode_card_short("99"), ("card", ("99",))),
         (ids.encode_event("personal", "abcd-1234.ics"), ("event", ("personal", "abcd-1234.ics"))),
         (ids.encode_mail("4711"), ("mail", ("4711",))),
         (ids.encode_message("abcd1234", "42"), ("message", ("abcd1234", "42"))),
@@ -39,6 +40,7 @@ def test_encoded_prefixes_are_stable() -> None:
     assert ids.encode_file("1") == "file:1"
     assert ids.encode_note("1") == "note:1"
     assert ids.encode_card("1", "2", "3") == "card:1:2:3"
+    assert ids.encode_card_short("3") == "card:3"
     assert ids.encode_event("personal", "x.ics") == "event:personal:x.ics"
     assert ids.encode_mail("1") == "mail:1"
     assert ids.encode_message("abcd1234", "1") == "message:abcd1234:1"
@@ -250,6 +252,7 @@ def test_encode_rejects_empty_parts() -> None:
         lambda: ids.encode_file(""),
         lambda: ids.encode_note(""),
         lambda: ids.encode_card("1", "", "3"),
+        lambda: ids.encode_card_short(""),
         lambda: ids.encode_event("", "x.ics"),
         lambda: ids.encode_mail(""),
         lambda: ids.encode_message("", "42"),
@@ -262,8 +265,15 @@ def test_encode_rejects_empty_parts() -> None:
 
 
 def test_encode_rejects_separator_inside_a_part() -> None:
-    """A colon inside an id would make ``parse`` ambiguous."""
+    """A colon inside an id would make ``parse`` ambiguous.
+
+    ``encode_card_short`` is in this list by name (review finding WR-06): the comment at
+    ``provider_map.extract_id`` leans on exactly these ``_join`` refusals, so they are
+    pinned here directly instead of only through the provider table.
+    """
     with pytest.raises(ToolError):
         ids.encode_note("4:2")
     with pytest.raises(ToolError):
         ids.encode_event("per:sonal", "x.ics")
+    with pytest.raises(ToolError):
+        ids.encode_card_short("9:9")
