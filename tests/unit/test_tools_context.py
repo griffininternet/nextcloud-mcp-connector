@@ -1827,3 +1827,66 @@ def test_this_module_reads_no_content_of_its_own() -> None:
         assert line == "import httpx" or "isinstance" in line, (
             "httpx appears for classifying a failure and for nothing else"
         )
+
+
+#: The one spelling that would open the message level of Mail. The word "messages" appears
+#: five times in the prose of ``context.py`` and never in this form, so the needle is exact
+#: on purpose: the prose there explains decisions and is not rewritten to keep a gate green.
+MESSAGE_LEVEL_CALL = 'level="messages"'
+
+
+def _message_level_calls(text: str) -> list[tuple[int, str]]:
+    """Return the numbered lines of ``text`` that ask a reader for the Mail message level.
+
+    The text is a parameter and is deliberately not read inside: the gate below points this
+    function at the real module, its counter probe points the same function at a constructed
+    one. A counter probe that rebuilt the check would prove something about the counter probe.
+    Only lines starting with ``#`` are dropped, which is enough for an exact needle.
+    """
+    return [
+        (number, line)
+        for number, line in enumerate(text.splitlines(), start=1)
+        if not line.strip().startswith("#") and MESSAGE_LEVEL_CALL in line
+    ]
+
+
+def test_no_line_of_this_module_asks_mail_for_level_messages() -> None:
+    """T-11-29 as a source gate: the message level of Mail is the only way a subject or a mail
+    body could enter the context bundle, and ``prepare_context`` does not ask for it.
+
+    The behaviour test above proves that for one call with one fake. This one proves it for the
+    source, so a future leg cannot quietly add the level: the promise is checked on every run
+    instead of once in an execution log.
+    """
+    source = Path(context_tools.__file__).read_text(encoding="utf-8")
+
+    # The anchor is the account level and not the mailbox level on purpose: the counter probe
+    # of this gate turns the mailbox call into a message call, and an anchor it overwrites would
+    # let the gate go red for the wrong reason. Without an anchor at all a typo in the path
+    # would protect nothing, which is how a gate that is green on arrival becomes worthless.
+    assert source.strip(), f"no source was read at {context_tools.__file__}"
+    assert "mail_tools" in source, "the gate has to be reading the module that owns the mail leg"
+    assert 'level="accounts"' in source, "and a level this module does ask for has to be in it"
+
+    assert _message_level_calls(source) == [], "the message level of mail has no caller here"
+
+
+def test_the_message_level_gate_notices_the_call_and_leaves_the_prose_alone() -> None:
+    """Counter proof: a gate nobody has seen fail is not a gate.
+
+    The function that reads the module reads a constructed text with the call on one line and
+    the same spelling inside a comment on another, and reports exactly the first, with its line
+    number, so a violation is a one-line correction and not a search through the tree.
+    """
+    constructed = "\n".join(
+        [
+            'answer = await mail_tools.browse(clients, level="accounts")',
+            'unread = await mail_tools.browse(clients, level="messages")',
+            '# not even level="messages" in a note about the rule counts as a call',
+        ]
+    )
+
+    found = _message_level_calls(constructed)
+
+    assert [number for number, _ in found] == [2], found
+    assert MESSAGE_LEVEL_CALL in found[0][1], found
