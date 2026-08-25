@@ -311,8 +311,36 @@ outbound socket counted rather than blocked:
   page, `This app is not allowed`; with the document address on the list that client passes
   and the unlisted one still does not.
 
-The raw numbers are in
-[06-09-MEASUREMENTS.md](../.planning/phases/06-h-rtung-eigennachweise-und-conference-reife/06-09-MEASUREMENTS.md).
+Every claim of that session is repeated here with the command that produced it, rather than
+with a pointer at a neighbouring file: the notes of a release are removed once the release is
+out, and a proof that leans on them stops being a proof.
+
+**Measured live on 2026-08-25 again, against Claude Code 2.1.233**, on the same Nextcloud
+34.0.3 topology and this time against the 0.1.9 candidate, which answered as `mcp_connector
+0.1.9 [enabled]` from the image `127.0.0.1:5000/mcp_connector:0.1.9` with the manifest digest
+`sha256:1183f8455c5f2ab420ee3d4b7eb8e0b2c207610c08dcd12b943ae78920759c47`. The client chose
+this way on its own: the container log carries one `GET /authorize` whose `client_id` is the
+percent encoded address `https://claude.ai/oauth/claude-code-client-metadata` and not a random
+identifier, and `docker logs <container> | grep -c 'POST /register'` answers `0` over the whole
+life of that container. The consent screen named `claude.ai` as the host of that client id,
+`POST /token` answered `200`, and `files_list` on `/` came back with the real content of the
+signed in account, the two marker files of the permission fixture included. The row written in
+the client table carries an empty secret and the two portless return addresses of the document,
+with a freshness window of `300` seconds taken from the `Cache-Control` of the answer, and the
+same fetch executed inside the running container reports `HTTP 200, 317 bytes, lifetime 300s`.
+This run is newer than the two review fixes that moved the refetch off the hot paths and that
+ask the allowlist before the fetch, which the 2026-08-20 run above predates.
+
+- **The switch was measured again on that candidate, and put back.** With
+  `NC_MCP_OAUTH_CIMD=0`, set through the administration form and applied by disabling and
+  enabling the app once, `GET /authorize` with the document address answered `400` in `0.065`
+  seconds with the page `This link has expired`, the authorization server document stopped
+  carrying the field while the registration endpoint stayed, and the counter inside the
+  container saw **zero** sockets to port 443 over twelve seconds, against **five** socket
+  states of the same remote address in the identical run with the switch on. The counter reads
+  `/proc/net/tcp` and `/proc/net/tcp6` in a loop, about 1700 polls a second, and it is the
+  same code in both runs. The configuration value was deleted afterwards and the document
+  advertises the field again.
 
 A client of this kind does not register here at all. Its client id **is** the https address
 of a small JSON document it publishes itself, this server reads that document once and takes
@@ -842,11 +870,12 @@ metadata in the answer and does not forbid extension fields, but the answer mode
 in use carries no extra field, measured on 2026-08-20. The only way to name the dropped
 addresses in the answer would therefore be an intervention in the registration answer on the
 auth path itself, for a field that no measured client reads. The record of that decision,
-including the raw evidence of that measurement, is BL-14 in `.planning/BACKLOG.md`.
+including the raw evidence of that measurement, is the backlog entry BL-14 of this project.
 For Cursor today, the app password way in `docs/client-setup.md` is the answer, and the
-refusal page names that way in words as well. Raw numbers,
-including the store rows and the counter checks:
-[06-08-MEASUREMENTS.md](../.planning/phases/06-h-rtung-eigennachweise-und-conference-reife/06-08-MEASUREMENTS.md).
+refusal page names that way in words as well. The numbers behind the paragraph above were
+measured on 2026-08-20 on a Nextcloud 34.0.3 topology: the registration answered `201` with
+the two admissible addresses and dropped the `cursor://` one, and the `/authorize` that
+followed carried exactly the dropped address and was refused with `400`.
 
 ### Are the two reverse proxy rules required?
 
@@ -976,8 +1005,10 @@ can send either.
 Three counter checks on the same instance say the boundary holds: a registered path swapped
 for another one (`/other`) is `400`, a loopback host the document does not carry (`[::1]`) is
 `400`, and a public host that only looks like loopback (`localhost.example.com`) is `400`, all
-three with the same page and no redirect. The raw numbers are in
-[06-09-MEASUREMENTS.md](../.planning/phases/06-h-rtung-eigennachweise-und-conference-reife/06-09-MEASUREMENTS.md).
+three with the same page and no redirect. All four requests were sent on 2026-08-20 against
+the same running instance with the same `client_id`, the same challenge and the same
+`resource`, and only the return address was exchanged between them, which is what makes the
+three refusals a statement about the address and not about the request.
 
 **7. What the metadata advertises is what a registration has to get.** A client reads
 `scopes_supported` and asks for what it finds there, and the authorization endpoint compares

@@ -421,3 +421,146 @@ zwei lebende Verbindungen des Kontos `jane` vom 2026-08-20 (die Demo-Substanz f�
 Nach dem Lauf stehen sie unverändert da, `revoked_at` beider Zeilen ist weiterhin leer. Der
 Plan verlangt beides, `/revoke` oder `purge` und fremden Zustand unberührt; auf dieser Instanz
 erfüllt nur `/revoke` beide Hälften.
+
+---
+
+## 4. Die Gegenprobe: Schalter aus, und kein Paket geht nach außen
+
+Ohne diese Gegenprobe würde Abschnitt 3 nur belegen, dass etwas durchgeht, nicht dass die
+Grenze hält. Gefahren wurde genau eine, die des Schalters `NC_MCP_OAUTH_CIMD`, und sie ist
+danach zurückgenommen.
+
+**Wie ein ausgehender Request gezählt wurde.** Nicht abgeschaltet, sondern gezählt: ein Skript
+im Container liest `/proc/net/tcp` und `/proc/net/tcp6` in einer Schleife (12 Sekunden lang)
+und sammelt jeden Socket mit Gegenport 443, mit dem Zustand und der Zahl der Abfragen, in
+denen er stand. **Dasselbe Skript im positiven und im negativen Lauf**, sonst vergleichen die
+zwei Zahlen nichts. Der Zähler liegt im Scratchpad und wird per `docker cp` in den Container
+gelegt; er ist Messwerkzeug und gehört nicht ins Repository.
+
+### 4.1 Positivkontrolle, Schalter auf Werkseinstellung (17:59:29Z)
+
+Zuerst wurde gewartet, bis das Frischefenster der `clients`-Zeile abgelaufen war (Ablauf
+17:59:22Z), denn eine frische Zeile hätte den Abruf gar nicht ausgelöst und die
+Positivkontrolle wäre eine Null gegen eine Null geworden. Dann derselbe `/authorize` wie im
+Rundlauf, mit derselben Dokumentadresse als `client_id`:
+
+```
+{"label": "positive-control", "status": 302, "seconds": 0.344,
+ "cache_control": "no-store", "location_path": "/exapps/mcp_connector/authorize/consent",
+ "as_cimd_field_present": true, "as_cimd_field_value": true,
+ "as_registration_endpoint_present": true}
+```
+
+Und der Zähler:
+
+```
+polls=20051 over 12.0s
+sockets to port 443 seen: 5
+  remote=0A684FA0:01BB state=01 seen_in_258_polls   (ESTABLISHED)
+  remote=0A684FA0:01BB state=02 seen_in_21_polls    (SYN_SENT)
+  remote=0A684FA0:01BB state=04 seen_in_2_polls     (FIN_WAIT1)
+  remote=0A684FA0:01BB state=05 seen_in_22_polls    (FIN_WAIT2)
+  remote=0A684FA0:01BB state=06 seen_in_16248_polls (TIME_WAIT)
+```
+
+`0A684FA0` ist `160.79.104.10`, also eine der zwei Adressen, zu denen `claude.ai` in diesem
+Container auflöst (Abschnitt 3.5). Der Zähler sieht den Abruf also, wenn er stattfindet, und
+das ist die Bedingung, unter der eine Null etwas bedeutet.
+
+### 4.2 Der Schalter wird abgeschaltet, über die Admin-Form (17:59:52Z)
+
+Nicht über eine Neuregistrierung, denn `oauth_cimd` ist seit 0.1.3 einer der sechs
+Admin-Werte (`exapp/config_values.py`, `CONFIG_KEYS`); der Vorlauf 06-09 musste noch ab- und
+neu anmelden, weil der Schalter damals keiner war.
+
+```
+occ app_api:app:config:set mcp_connector oauth_cimd --value 0
+  -> ExApp mcp_connector config oauth_cimd set to 0
+occ app_api:app:disable mcp_connector    -> successfully disabled
+occ app_api:app:enable  mcp_connector    -> successfully enabled
+occ app_api:app:list                     -> mcp_connector (MCP Connector): 0.1.9 [enabled]
+occ app_api:app:config:list mcp_connector -> oauth_cimd, oauth_data_key, public_url
+docker inspect nc_app_mcp_connector --format '{{.State.Health.Status}} {{.RestartCount}}'
+  -> healthy 0
+```
+
+Ab- und Anmelden ist Pflicht: die sechs Felder werden beim Prozessstart einmal gelesen.
+`docker exec nc_app_mcp_connector printenv NC_MCP_OAUTH_CIMD` findet den Wert **nicht**, und
+das ist richtig und kein Widerspruch: ein Admin-Wert kommt nicht in die Container-Umgebung,
+sondern wird beim Start aus Nextcloud gelesen und im Prozess über das Deploy-Environment
+gelegt. Wer den Schalter am `printenv` prüft, prüft die falsche Stelle.
+
+### 4.3 Negativkontrolle, Schalter aus (18:00:18Z)
+
+Dieselbe Anfrage, dasselbe Skript, dieselbe Dauer:
+
+```
+{"label": "cimd-off", "status": 400, "seconds": 0.065,
+ "cache_control": "no-store",
+ "page_title": "This link has expired - MCP Connector for Nextcloud",
+ "as_cimd_field_present": false, "as_cimd_field_value": null,
+ "as_registration_endpoint_present": true}
+```
+
+```
+2026-08-25T18:00:18.999072482Z INFO:      - "GET /authorize?response_type=code&
+  client_id=https%3A%2F%2Fclaude.ai%2Foauth%2Fclaude-code-client-metadata&... HTTP/1.1" 400 Bad Request
+```
+
+Und der Zähler:
+
+```
+polls=20543 over 12.0s
+sockets to port 443 seen: 0
+```
+
+Vier Aussagen stehen damit belegt:
+
+| Behauptung | Beleg |
+|------------|-------|
+| Die Dokumentadresse wird abgelehnt | `400`, Seite `This link has expired`, dieselbe Seite, die eine unbekannte oder lange vergangene Registrierung sieht |
+| Kein Paket geht nach außen | **0** Sockets mit Gegenport 443 gegen **5** in der Positivkontrolle, gleiches Skript, gleiche 12 Sekunden |
+| Das AS-Dokument bewirbt die Fähigkeit nicht mehr | `client_id_metadata_document_supported` fehlt im Dokument |
+| Der Schalter nimmt die Registrierung nicht mit | `registration_endpoint` steht weiter im Dokument |
+
+Die Antwortzeiten sagen dasselbe noch einmal: 0,344 s mit Abruf, 0,065 s ohne. Die Absage
+fällt, bevor irgendein Socket geöffnet wird, weil `provider._resolve_cimd` den Schalter fragt,
+bevor die Form der Kennung geprüft wird.
+
+### 4.4 Der Ausgangszustand ist wiederhergestellt (18:00:39 bis 18:00:48Z)
+
+```
+occ app_api:app:config:delete mcp_connector oauth_cimd -> config oauth_cimd deleted
+occ app_api:app:disable mcp_connector                  -> successfully disabled
+occ app_api:app:enable  mcp_connector                  -> successfully enabled
+occ app_api:app:config:list mcp_connector              -> oauth_data_key, public_url
+occ app_api:app:list                                   -> mcp_connector (MCP Connector): 0.1.9 [enabled]
+curl -sS .../.well-known/oauth-authorization-server | jq -r .client_id_metadata_document_supported
+  -> true
+docker inspect nc_app_mcp_connector --format '{{.Config.Image}} {{.RestartCount}} {{.State.Health.Status}}'
+  -> 127.0.0.1:5000/mcp_connector:0.1.9 0 healthy
+```
+
+`config:list` nennt genau die zwei Schlüssel, die vor dem Lauf dastanden, und das AS-Dokument
+bewirbt die Fähigkeit wieder. Eine Messung, die den Schalter umgelegt liegen lässt, verändert
+die Instanz hinter dem Rücken des nächsten Plans.
+
+`docker ps` meldet `nc-mcp-test` und `findling-nextcloud` weiter als "Up 10 days"; kein
+Kommando dieses Laufs nennt sie, und `compose.test.yml` wurde nicht angefasst.
+
+---
+
+## 5. Was in der Doku bleibt
+
+Das Rohprotokoll hier verschwindet mit dem Phasenverzeichnis. Was bleiben muss, steht in
+`docs/oauth-setup.md`, Kapitel "Client ID Metadata Documents": eine datierte Zeile mit
+Client-Version, gemessener Fassung und Digest, die jede der fünf Behauptungen einzeln nennt
+(Identifikation über die Dokumentadresse, kein `/register`, Consent nennt den Host, Token 200,
+echter Werkzeuginhalt), plus ein Aufzählungspunkt zur Gegenprobe mit beiden Socket-Zahlen. Der
+Absatz von 2026-08-20 bleibt daneben stehen, seine 0.1.3-Aussage ist weiter wahr.
+
+Im selben Zug sind vier tote Verweise geschlossen. Die Datei nannte an vier Stellen Pfade unter
+`.planning/`, drei davon auf Messprotokolle in Verzeichnissen, die Commit `02dd6e1` entfernt
+hat. Jede dieser Stellen trägt jetzt die Aussage selbst, mit Datum und Ergebnis im Satz.
+`grep -n '\.planning' docs/oauth-setup.md` gibt danach keine Zeile aus, und derselbe tote Link
+kann beim Abschluss von v1.3 nicht ein zweites Mal entstehen.
