@@ -10,7 +10,11 @@ one enum value (D-06). The answer envelope is the same on both levels (``level``
 and orders it not at all, and one message may be 32.000 characters long, so the order, the
 filter and the three cuts are made here: :data:`MAX_CONVERSATIONS` conversations,
 :data:`MAX_LIMIT` messages per window and :data:`MAX_MESSAGE_BYTES` bytes per message. Every
-cut is named in the answer, never silent.
+cut is named in the answer, never silent, and every cut has a name of its own: ``truncated``
+is the cut **window** of the answer level, which is why a ``next`` stands beside it, and
+``message_truncated`` is the cut **text** of one single entry, which no cursor continues.
+Before plan 12-01 both were called ``truncated``, and a model reading the entry level flag as
+a page flag pages in a circle (DF-11-01, the finding IN-01 named for ``mail_browse`` first).
 
 **Two things are explained before they can fail.** A missing or disabled Talk app stops both
 tools at the capabilities check, before the first Talk request (SRV-04). And an account that
@@ -510,9 +514,10 @@ def _message(raw: dict[str, Any]) -> dict[str, Any]:
     ``isReplyable``, ``referenceId``, ``threadId``, ``isThread``, ``threadTitle``,
     ``threadReplies``, ``metaData``, ``reactionsSelf`` and ``expirationTimestamp``.
 
-    The truncation is a field beside the text and never a marker inside it. A marker inside
-    foreign text is an attack path (ME-03), and a chat message is the cheapest place for it of
-    all, because every participant of a conversation may write one.
+    The truncation is a field beside the text and never a marker inside it, and the field is
+    called ``message_truncated``. A marker inside foreign text is an attack path (ME-03), and a
+    chat message is the cheapest place for it of all, because every participant of a
+    conversation may write one.
     """
     text, cut = _capped(_resolve(raw.get("message"), raw.get("messageParameters")))
     entry: dict[str, Any] = {
@@ -522,7 +527,13 @@ def _message(raw: dict[str, Any]) -> dict[str, Any]:
         "message": text,
     }
     if cut:
-        entry["truncated"] = True
+        # ``message_truncated`` and not ``truncated``, and the difference is the whole
+        # point: one level up, ``truncated`` means "this window was cut and there is a
+        # ``next``", down here it means "this message was cut at MAX_MESSAGE_BYTES". A cut
+        # window whose first entry carries a cut message sets both keys at once, so a model
+        # reading the entry level flag as a page flag pages in a circle (DF-11-01, the same
+        # finding IN-01 named for mail_browse).
+        entry["message_truncated"] = True
     if raw.get("lastEditTimestamp"):
         entry["edited"] = True
     return entry

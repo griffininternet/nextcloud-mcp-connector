@@ -650,7 +650,11 @@ async def _fetch_message(clients: NcClients, token: str, message_id: str) -> dic
         # The Unix number of the app, as ``talk_browse`` hands it over one level up: a second
         # reading of the same field would be a second truth about when this was written.
         metadata["timestamp"] = str(timestamp)
-    if entry.get("truncated"):
+    if entry.get("message_truncated"):
+        # The two names go apart on purpose here. The projection of ``talk_browse`` carries two
+        # levels in one answer and therefore needs two words (``truncated`` for the cut window,
+        # ``message_truncated`` for the cut text of one entry, DF-11-01); ``fetch`` answers one
+        # single message, so its ``metadata`` has one level and one word is unambiguous there.
         metadata["truncated"] = "true"
 
     return {

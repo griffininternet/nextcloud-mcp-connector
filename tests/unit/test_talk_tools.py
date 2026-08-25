@@ -723,11 +723,48 @@ async def test_a_long_message_is_cut_on_a_character_boundary_and_says_so_beside_
         result = await talk_tools.browse(clients, level="messages", token="abcd1234")
 
     entry = result["results"][0]
-    assert entry["truncated"] is True
+    assert entry["message_truncated"] is True
+    assert "truncated" not in entry, "the entry level flag is the message one, never the page one"
     assert entry["message"] == "a" * 799
     assert "�" not in entry["message"]
     assert MARKER not in entry["message"]
     assert "truncated" not in json.dumps(entry["message"])
+
+
+@pytest.mark.anyio
+async def test_a_cut_window_and_a_cut_message_are_two_keys_with_two_meanings(
+    clients: NcClients,
+) -> None:
+    """DF-11-01: the case that made one word for two cuts a problem, in one single answer.
+
+    Both flags are set here at the same time and neither of them can be derived from the
+    other: the **window** was cut, so there is a ``next`` to continue with, and the **text** of
+    one entry was cut at :data:`talk_tools.MAX_MESSAGE_BYTES`, which no cursor continues
+    because the whole message is one ``fetch`` away and not one page further. While both were
+    called ``truncated``, a model reading the entry level flag as a page flag paged in a
+    circle, which is the same finding IN-01 named for ``mail_browse`` first.
+    """
+    raw = [
+        message(id=42, message="a" * 799 + "ü" + " und weiter", messageParameters={}),
+        message(id=41, message="Kurz und vollständig.", messageParameters={}),
+    ]
+    with respx.mock(assert_all_called=True) as mock:
+        mock_capabilities(mock)
+        mock_rooms(mock)
+        mock_messages(mock, raw, last_given=5100)
+
+        result = await talk_tools.browse(clients, level="messages", token="abcd1234")
+
+    assert result["truncated"] is True, "the window was cut"
+    assert paging.decode_cursor(result["next"]) == {"c": "abcd1234", "o": 5100}
+    assert "message_truncated" not in result, "the page flag is never the message one"
+
+    cut, whole = result["results"]
+    assert cut["message_truncated"] is True, "the text of the first entry was cut"
+    assert "next" not in cut, "a cut message has no continuation, the whole one is a fetch away"
+    assert "truncated" not in cut
+    assert "message_truncated" not in whole, "an uncut message says nothing at all"
+    assert "truncated" not in whole
 
 
 @pytest.mark.anyio
