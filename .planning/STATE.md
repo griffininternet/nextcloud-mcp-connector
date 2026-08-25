@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Pflege und 0.1.9
 status: executing
-stopped_at: "Completed 13-02-PLAN.md (Enterprise-Fake-Door: Abschnitt Enterprise in drei READMEs, Kurzfassung in drei Manifest-Beschreibungen, Issue-Entwurf als Datei nicht veroeffentlicht, Changelog-Rubrik Added; kein Tag)"
-last_updated: "2026-08-25T17:21:07.964Z"
+stopped_at: "Completed 13-03-PLAN.md (CIMD-Nachmessung gegen den 0.1.9-Kandidaten: Messweg A mit echtem Client, Digest sha256:1183f845, kein POST /register, Gegenprobe 0 gegen 5 Sockets, Proof-Zeile in docs/oauth-setup.md, vier tote .planning-Verweise geschlossen)"
+last_updated: "2026-08-25T18:06:52.665Z"
 last_activity: 2026-08-25
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 10
-  completed_plans: 6
+  completed_plans: 7
   percent: 50
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 13 (CIMD-Nachmessung und Release 0.1.9) — EXECUTING
-Plan: 3 of 6
+Plan: 4 of 6
 Status: Ready to execute
 Last activity: 2026-08-25
 
@@ -152,6 +152,7 @@ Last activity: 2026-08-25
 | Phase 12 P04 | 18 min | 3 tasks tasks | 7 files files |
 | Phase 13 P01 | 12 min | 2 tasks tasks | 8 files files |
 | Phase 13 P02 | 8min | 3 tasks | 6 files |
+| Phase 13 P03 | 40 min | 3 tasks tasks | 2 files files |
 
 ## Accumulated Context
 
@@ -556,6 +557,10 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 13 Plan 01: der 0.1.9-Changelog-Block nennt nur die zwei nutzersichtbaren Phase-12-Uebergaben (message_truncated, talk-conversations); die Rubrik Added bleibt leer und gehoert Plan 13-02 (Enterprise-Fake-Door)
 - [Phase ?]: Phase 13 Plan 02: Enterprise-Fake-Door in vier Fassungen (drei READMEs plus drei Manifest-Beschreibungen); Ueberschrift unuebersetzt, Ehrlichkeitssatz je Fassung eigenstaendig, kein Preis und kein free/kostenlos
 - [Phase ?]: Phase 13 Plan 02: der Issue-Entwurf bleibt eine Datei (docs/contrib/enterprise-signals-issue.md); Veroeffentlichung ist Owner-Entscheidung (D-07), das Go-Kriterium steht im HTML-Kommentar und nicht im Body
+- [Phase ?]: Phase 13-03: CIMD-Nachmessung ueber Messweg A gefahren (echter Client Claude Code 2.1.233 gegen 127.0.0.1:5000/mcp_connector:0.1.9, Digest sha256:1183f845); damit ist die Client-Wahl belegt und nicht nur die Serverseite
+- [Phase ?]: Phase 13-03: occ mcp_connector:purge --force bewusst nicht gefahren, weil es jede Verbindung der Instanz beendet und zwei lebende Verbindungen des Kontos jane bestehen; claude mcp logout ruft /revoke und erfuellt beide Haelften der Vorgabe
+- [Phase ?]: Phase 13-03: alle vier .planning-Verweise in docs/oauth-setup.md geschlossen (Plan nannte zwei); jede Stelle traegt die Aussage jetzt selbst, mit Datum und Ergebnis
+- [Phase ?]: Phase 13-03: ConPTY per ctypes braucht STARTF_USESTDHANDLES mit den Konsolen-Handles 0x3/0x7/0xB, sonst haengt das Kind an der Pseudo-Konsole und schreibt trotzdem auf die Pipes des Elternprozesses
 
 ### Pending Todos
 
@@ -590,8 +595,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-25T17:20:45.175Z
-Stopped at: Completed 13-02-PLAN.md (Enterprise-Fake-Door: Abschnitt Enterprise in drei READMEs, Kurzfassung in drei Manifest-Beschreibungen, Issue-Entwurf als Datei nicht veroeffentlicht, Changelog-Rubrik Added; kein Tag)
+Last session: 2026-08-25T18:06:52.645Z
+Stopped at: Completed 13-03-PLAN.md (CIMD-Nachmessung gegen den 0.1.9-Kandidaten: Messweg A mit echtem Client, Digest sha256:1183f845, kein POST /register, Gegenprobe 0 gegen 5 Sockets, Proof-Zeile in docs/oauth-setup.md, vier tote .planning-Verweise geschlossen)
 Naechster Schritt: Plan 13-03 ausfuehren (CIMD-Nachmessung gegen den Kandidaten 0.1.9)
 Resume file: None
 

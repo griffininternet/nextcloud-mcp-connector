@@ -105,7 +105,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 13-03-PLAN.md — CIMD-Nachmessung gegen den 0.1.9-Kandidaten, Gegenprobe, Proof-Zeile in `docs/oauth-setup.md` (EXAPP-08)
+- [x] 13-03-PLAN.md — CIMD-Nachmessung gegen den 0.1.9-Kandidaten, Gegenprobe, Proof-Zeile in `docs/oauth-setup.md` (EXAPP-08)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -135,7 +135,7 @@ Plans:
 | 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 8/8 | Complete | 2026-08-24 |
 | 11. Bündelung, Budget und Release 0.1.8 | v1.2 | 10/10 | Complete | 2026-08-25 |
 | 12. Konsistenz und Härtungs-Nachzieher | v1.3 | 4/4 | Complete    | 2026-08-25 |
-| 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 2/6 | In Progress|  |
+| 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 3/6 | In Progress|  |
 
 ## Next
 
