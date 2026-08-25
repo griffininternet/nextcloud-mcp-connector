@@ -710,6 +710,48 @@ async def test_a_token_without_a_colon_is_refused_instead_of_being_dropped(
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize(
+    "wanted",
+    [
+        "is:unread\tfrom:chef",
+        "is:unread\u00a0from:chef",
+        "is:unread\nfrom:chef",
+        "subject:Rechnung\tMai",
+    ],
+)
+async def test_whitespace_the_app_does_not_split_on_is_refused(
+    clients: NcClients, wanted: str
+) -> None:
+    """WR-01: ``"is:unread\\tfrom:chef".split()`` is two valid tokens, the app reads **one**.
+
+    The app splits its filter on spaces alone, so a tab between two conditions reaches it as
+    one token whose value is no known flag; the parser drops it silently and answers with the
+    unfiltered list, exactly the measured ``is:ungelesen`` answer this gate exists against.
+    """
+    with respx.mock(assert_all_called=False) as mock:
+        mock_mail_app(mock)
+        calls = mail_routes(mock)
+
+        with pytest.raises(ToolError) as excinfo:
+            await mail_tools.browse(
+                clients, level="messages", mailbox_id=str(MAILBOX_ID), filter=wanted
+            )
+
+    assert calls.call_count == 0
+    assert "whitespace" in excinfo.value.message
+    assert "spaces" in excinfo.value.hint
+
+
+@pytest.mark.anyio
+async def test_surrounding_whitespace_is_stripped_and_not_refused(clients: NcClients) -> None:
+    """The edge of the guard: a tab at the rim vanishes in the strip and carries no meaning."""
+    with respx.mock(assert_all_called=True) as mock:
+        _, route = await browse_messages(clients, mock, [message()], filter="\tis:unread \n")
+
+    assert route.calls.last.request.url.params["filter"] == "is:unread"
+
+
+@pytest.mark.anyio
 async def test_a_filter_condition_without_a_value_is_refused(clients: NcClients) -> None:
     with respx.mock(assert_all_called=False) as mock:
         mock_mail_app(mock)

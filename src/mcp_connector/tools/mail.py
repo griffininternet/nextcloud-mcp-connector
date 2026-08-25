@@ -227,8 +227,15 @@ def _checked_filter(raw: str | None) -> str | None:
     then leaves the parameter out of the URL entirely, which is what the app makes of an empty
     string anyway, one round trip earlier and with a shorter URL.
 
-    Four refusals, and every one of them replaces a right looking answer with a sentence:
+    Five refusals, and every one of them replaces a right looking answer with a sentence:
 
+    *   whitespace that is not the space character. The app splits its filter on **spaces
+        alone**, so ``is:unread\\tfrom:chef`` reaches it as **one** token whose value is no
+        known flag; the parser drops that token without a word and answers with the
+        unfiltered list, exactly the silent wrong answer this gate exists against (review
+        finding WR-01). ``str.split()`` here would read the same string as two valid tokens
+        and wave it through, which is why this check comes first and refuses every character
+        ``str.isspace`` accepts except the space itself, a tab and a no-break space included.
     *   a token without a colon. The app drops it silently, so ``unread`` alone filters
         nothing and reads like ``is:unread``.
     *   a type outside :data:`FILTER_TYPES`. The message names the type that was refused and
@@ -241,14 +248,19 @@ def _checked_filter(raw: str | None) -> str | None:
         ``start:2026-08-01T10:00:00Z`` would additionally be cut at its first colon. A filter
         that quietly removes everything is the worse answer of the two.
 
-    The split is on any whitespace and not on the space alone. The app splits on spaces, so
-    this reading is one shade stricter: a tab inside a value is checked as two tokens here and
-    refused, while the app would have passed it on as one. That is the safe direction, and a
-    value with whitespace in it has to be percent encoded either way.
+    After the whitespace refusal only spaces are left, so ``str.split()`` and the space split
+    of the app see the **same** tokens: what passes this loop is what the app parses, token
+    for token, and a value with whitespace in it has to be percent encoded either way.
     """
     wanted = str(raw or "").strip()
     if not wanted:
         return None
+
+    if any(ch.isspace() and ch != " " for ch in wanted):
+        raise ToolError(
+            message="The filter contains whitespace the Mail app does not split on.",
+            hint=_FILTER_HINT,
+        )
 
     for token in wanted.split():
         kind, separator, value = token.partition(":")
