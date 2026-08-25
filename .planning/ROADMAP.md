@@ -67,7 +67,13 @@ Audit: [milestones/v1.2-MILESTONE-AUDIT.md](milestones/v1.2-MILESTONE-AUDIT.md) 
   4. Die drei Nachzieher aus 11-SECURITY.md sind geschlossen: jeder Eintrag in `PROVIDER_KINDS` trägt den Verifikationskommentar mit Repository, Datei und Klasse (auch `files` und `notes`), das Quelltext-Gate aus T-11-29 läuft als Regressionstest in der Suite, und das Vokabular-Gate prüft über `appinfo/info.xml` hinaus mindestens die drei READMEs und `CHANGELOG.md`, wobei `docs/store-submission.md` entweder bereinigt oder als interne Ausnahme im Gate begründet ist.
   5. Die Werkzeugoberfläche ist unverändert groß und alle Gates bleiben ohne Anhebung grün: `BUDGET_BYTES` steht weiter auf 18000, `MAX_TOOL_BYTES` weiter auf 1400, die Zahl der Werkzeuge bleibt 21, und die einzige nutzersichtbare Änderung ist der umbenannte Nachrichten-Schlüssel.
 
-**Plans**: TBD
+**Plans**: 4 plans (2 Wellen: 12-01, 12-02 und 12-03 parallel, danach 12-04)
+
+Plans:
+- [ ] 12-01-PLAN.md — TOOL-17: `message_truncated` auf der Nachrichtenebene von `talk_browse`, Verbraucher in `fetch` zieht mit, Tool-Docstring mit einer Bedeutung je Ebene
+- [ ] 12-02-PLAN.md — TOOL-18: `ids.encode_mail` statt `_ID_KIND`, und `ids.parse` liest im `url`-Zweig nur noch, was `ids.encode_url` bauen kann
+- [ ] 12-03-PLAN.md — SEC-02: Verifikationskommentare für `files` und `notes`, T-11-29 als Regressionstest, Vokabular-Gate über READMEs und Changelog
+- [ ] 12-04-PLAN.md — TOOL-19: `talk.one_room` statt `talk_tools._room`, AST-Gate gegen Privat-Durchgriffe, README-Beispiel mit `talk-conversations`
 
 ### Phase 13: CIMD-Nachmessung und Release 0.1.9
 
@@ -98,12 +104,12 @@ Audit: [milestones/v1.2-MILESTONE-AUDIT.md](milestones/v1.2-MILESTONE-AUDIT.md) 
 | 9. Talk | v1.2 | 5/5 | Complete | 2026-08-21 |
 | 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 8/8 | Complete | 2026-08-24 |
 | 11. Bündelung, Budget und Release 0.1.8 | v1.2 | 10/10 | Complete | 2026-08-25 |
-| 12. Konsistenz und Härtungs-Nachzieher | v1.3 | 0/? | Not started | - |
+| 12. Konsistenz und Härtungs-Nachzieher | v1.3 | 0/4 | Planned | - |
 | 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 0/? | Not started | - |
 
 ## Next
 
-`/gsd:plan-phase 12` — Phase 12 "Konsistenz und Härtungs-Nachzieher" planen (TOOL-17, TOOL-18, TOOL-19, SEC-02; Gates bleiben auf der v1.2-Messung: BUDGET_BYTES 18000, MAX_TOOL_BYTES 1400)
+`/gsd:execute-phase 12` — Phase 12 "Konsistenz und Härtungs-Nachzieher" ausführen (4 Pläne in 2 Wellen; Gates bleiben auf der v1.2-Messung: BUDGET_BYTES 18000, MAX_TOOL_BYTES 1400)
 
 ---
 *Roadmap created: 2026-08-14 (granularity: coarse, mode: mvp); v1.0 abgeschlossen: 2026-08-20; v1.1 abgeschlossen: 2026-08-20 (Phase 7 deferred); v1.2 abgeschlossen: 2026-08-25 (Release 0.1.8 live); v1.3 aufgesetzt: 2026-08-25 (2 Phasen, 6 Requirements)*
