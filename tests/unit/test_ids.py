@@ -222,6 +222,29 @@ def test_invalid_ids_raise_toolerror_with_hint(raw: str) -> None:
     assert excinfo.value.hint, "every rejection must carry an actionable hint"
 
 
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "note:4:2",
+        "file:a:b",
+        "event:a:b:c",
+    ],
+)
+def test_an_id_the_encode_side_can_never_have_built_is_refused(raw: str) -> None:
+    """The url yardstick for the three remaining kinds (review finding WR-03).
+
+    ``_join`` refuses the separator inside every segment, so none of these three ids can
+    have come out of this module: ``note:4:2`` and ``file:a:b`` would need a separator
+    inside the one segment, and ``event:a:b:c`` a third segment the encoder does not have.
+    Each of them used to parse, cost a request one layer down and came back as a 404; the
+    refusal here is the zero-request answer the mail and table kinds already give.
+    """
+    with pytest.raises(ToolError) as excinfo:
+        ids.parse(raw)
+
+    assert excinfo.value.hint, "every rejection must carry an actionable hint"
+
+
 def test_encode_rejects_empty_parts() -> None:
     for call in (
         lambda: ids.encode_file(""),

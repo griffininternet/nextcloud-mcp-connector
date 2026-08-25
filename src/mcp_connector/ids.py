@@ -139,6 +139,12 @@ def parse(raw: str) -> tuple[str, tuple[str, ...]]:
             raise ToolError(message=f"{raw!r} is not a valid resource id.", hint=_HINT)
         return "url", (rest,)
     if kind in ("file", "note"):
+        # One segment, and the separator may not hide inside it: ``_join`` refuses the
+        # separator in every part, so ``note:4:2`` and ``file:a:b`` are ids this module can
+        # never have built, and exactly the set the encode side builds may be read back
+        # (the same yardstick the ``url`` branch above wrote down, review finding WR-03).
+        if SEPARATOR in rest:
+            raise ToolError(message=f"{raw!r} is not a valid resource id.", hint=_HINT)
         parts = (rest,)
     elif kind == "mail":
         parts = (rest,)
@@ -176,7 +182,11 @@ def parse(raw: str) -> tuple[str, tuple[str, ...]]:
                 hint=_HINT,
             )
     elif kind == "event":
-        parts = tuple(rest.split(SEPARATOR, 1))
+        # A full split instead of ``maxsplit=1``: ``_join`` refuses the separator in the
+        # calendar uri and in the object name alike, so ``event:a:b:c`` is an id the encode
+        # side can never have built, and a third segment must be refused rather than folded
+        # into the object name (review finding WR-03).
+        parts = tuple(rest.split(SEPARATOR))
         if len(parts) != 2:
             raise ToolError(message=f"{raw!r} is not a valid event id.", hint=_HINT)
     else:
