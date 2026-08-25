@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Pflege und 0.1.9
 status: planning
-last_updated: "2026-08-25T05:01:42.543Z"
+last_updated: "2026-08-25T06:20:00.000Z"
 last_activity: 2026-08-25
 progress:
-  total_phases: 0
+  total_phases: 2
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Current focus:** Milestone complete
+**Current focus:** Phase 12 - Konsistenz und Härtungs-Nachzieher (TOOL-17, TOOL-18, TOOL-19, SEC-02)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-08-25 — Milestone v1.3 started
+Phase: 12 - Konsistenz und Härtungs-Nachzieher (v1.3, Phasen 12-13)
+Plan: — (keiner geplant)
+Status: Roadmap steht, Phase 12 nicht begonnen
+Last activity: 2026-08-25, Roadmap v1.3 erstellt (2 Phasen, 6 Requirements, Coverage 6/6)
 
 ## Performance Metrics
 
@@ -151,6 +151,12 @@ Last activity: 2026-08-25 — Milestone v1.3 started
 
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
+
+- Roadmap v1.3: Phasennummerierung setzt bei 12 fort (v1.2 verbrauchte 8 bis 11); zwei Phasen bei Granularität coarse, weil ein reiner Pflege-Milestone keine dritte Naht hat
+- Roadmap v1.3: alle vier Code-Schulden (TOOL-17, TOOL-18, TOOL-19, SEC-02) liegen in einer Phase, weil sie dieselben Dateien und dasselbe Gate-Set berühren und eine Aufteilung nur Reibung erzeugt
+- Roadmap v1.3: EXAPP-08 (CIMD-Live-Rerun) liegt in der Release-Phase und nicht davor, weil die Nachmessung gegen die Topologie laufen soll, die auch veröffentlicht wird
+- Roadmap v1.3: die Gates bleiben auf der v1.2-Messung (BUDGET_BYTES 18000, MAX_TOOL_BYTES 1400); eine Anhebung ist ausdrücklich Out of Scope, `message_truncated` ist die einzige nutzersichtbare Änderung der Phase 12
+- Roadmap v1.3: der Tag v0.1.9 entsteht erst nach ausdrücklicher Owner-Freigabe, Branch-Push davor, Signatur über das heruntergeladene Asset (Runbook Schritte 4 bis 8, Erfahrung 0.1.8)
 
 - Roadmap v1.2: Phasennummerierung setzt bei 8 fort (v1.1 verbrauchte 6 und das deferred 7); vier Phasen bei Granularität coarse
 - Roadmap v1.2: kein eigener Spike-Phasenkopf; der Mail-Erreichbarkeits-Spike (MAIL-04) ist der erste, blockierende Plan von Phase 8, weil Tables nicht an ihm hängt und die Erkenntnis damit genauso früh fällt
@@ -556,11 +562,11 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-25T03:10:50.545Z
-Stopped at: Completed 11-10-PLAN.md
-Naechster Schritt: /gsd:plan-phase 8
+Last session: 2026-08-25T06:20:00.000Z
+Stopped at: Roadmap v1.3 erstellt (ROADMAP.md, REQUIREMENTS.md Traceability, STATE.md)
+Naechster Schritt: /gsd:plan-phase 12
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Phase 12 planen mit /gsd:plan-phase 12

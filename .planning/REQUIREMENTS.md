@@ -45,13 +45,13 @@ Vorgemerkt, nicht in v1.3:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TOOL-17 | TBD | Pending |
-| TOOL-18 | TBD | Pending |
-| TOOL-19 | TBD | Pending |
-| SEC-02 | TBD | Pending |
-| EXAPP-08 | TBD | Pending |
-| EXAPP-09 | TBD | Pending |
+| TOOL-17 | Phase 12 | Pending |
+| TOOL-18 | Phase 12 | Pending |
+| TOOL-19 | Phase 12 | Pending |
+| SEC-02 | Phase 12 | Pending |
+| EXAPP-08 | Phase 13 | Pending |
+| EXAPP-09 | Phase 13 | Pending |
 
 **Coverage:**
 - v1.3 requirements: 6 total
-- Mapped to phases: 0 (Roadmap ausstehend)
+- Mapped to phases: 6 von 6 (Phase 12: 4, Phase 13: 2); keine Waisen, keine Dopplungen
