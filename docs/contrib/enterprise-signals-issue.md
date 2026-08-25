@@ -3,11 +3,6 @@ Prepared GitHub issue body for street1983nk/nextcloud-mcp-connector.
 
 Target repo:   street1983nk/nextcloud-mcp-connector
 Title:         Enterprise features: what would your org need before allowing MCP access?
-Kind:          fake door, question only, no implementation behind it
-Go criterion:  at least five qualified organisation signals, each from an organisation with
-               more than 100 users, within six weeks of publication; or one anchor customer
-               asking for a pilot. Anything short of that is a no-go and the add-on stays
-               unbuilt.
 Not published. Publishing this issue is an owner decision (D-07).
 
 Everything below this comment is the issue body as it will be rendered on GitHub.
