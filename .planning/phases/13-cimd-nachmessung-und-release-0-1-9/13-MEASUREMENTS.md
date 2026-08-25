@@ -26,6 +26,19 @@ Drei Konventionen für dieses Protokoll, übernommen aus dem Vorlauf 06-09:
 * Die Version einer Instanz ist immer die Zeile aus `occ status`, nie ein Docker-Tag
   (Pitfall 6). Für den Connector ist die Pflichtangabe Version **und** Image-Digest.
 
+Zur zweiten Konvention gehört eine Prüfung und eine Genauigkeit. Geprüft wird mit
+
+```
+grep -nE '(code_verifier=[A-Za-z0-9]|code_challenge=[A-Za-z0-9]|Bearer [A-Za-z0-9]|state=[A-Za-z0-9]{8}|password=)' 13-MEASUREMENTS.md
+-> kein Treffer
+```
+
+Ein Grep nach den blossen Namen (`code_challenge` ohne Gleichheitszeichen und ohne Wert) findet
+dagegen drei Zeilen: die Konvention selbst, die den Namen nennen muss, um ihn zu verbieten, die
+gekürzte `/authorize`-Zeile in Abschnitt 2, und die Tabellenzeile, die `code_challenge_method`
+als `S256` nennt. Ein Verfahrensname ist kein Geheimnis. Verboten sind die Werte, und keiner
+steht hier.
+
 ## Topologie des Laufs
 
 | Was | Wert |
@@ -110,3 +123,303 @@ gemeinsames Geheimnis hat.
 dem Programmtext von `claude.exe` gelesen worden
 (`client_id_metadata_document_supported === !0` und `clientMetadataUrl`). Die Client-Version
 ist unverändert 2.1.233, die Stelle also dieselbe.
+
+---
+
+## 2. Gefahren wurde Messweg A: der echte Client (17:44:32Z)
+
+**Antwort: Messweg A, nicht der Fallback.** Das ist die stärkere Aussage, und sie ist die
+einzige, die nicht nur die Serverseite belegt: der Client hat den CIMD-Weg selbst gewählt,
+anhand des Feldes aus Abschnitt 1, und er hat seine `client_id` selbst gesetzt. Der HTTP-Treiber
+des Fallbacks B hätte den Weg vorgegeben statt ihn wählen zu lassen; er wurde nicht gebaut.
+
+Der Rohbeleg ist die `client_id` der Anfrage aus dem Containerlog, ohne die gekürzten Werte:
+
+```
+2026-08-25T17:44:34.758600969Z INFO:      - "GET /authorize?response_type=code&
+  client_id=https%3A%2F%2Fclaude.ai%2Foauth%2Fclaude-code-client-metadata&
+  code_challenge=<gekürzt>&code_challenge_method=S256&
+  redirect_uri=http%3A%2F%2Flocalhost%3A41333%2Fcallback&state=<gekürzt>&
+  scope=nextcloud+offline_access&
+  resource=http%3A%2F%2F127.0.0.1%3A8081%2Fexapps%2Fmcp_connector%2Fmcp HTTP/1.1" 302 Found
+```
+
+Was an dieser Zeile die Behauptung trägt:
+
+| Feld | Wert |
+|------|------|
+| `client_id` | `https://claude.ai/oauth/claude-code-client-metadata`, prozentkodiert, also eine Adresse und **kein Zufallsstring** und keine vergebene Id |
+| `redirect_uri` | `http://localhost:41333/callback`, also **mit** Port |
+| `code_challenge_method` | `S256` |
+| `scope` | `nextcloud offline_access` |
+| `resource` | `http://127.0.0.1:8081/exapps/mcp_connector/mcp` |
+| Antwort | `302 Found` auf `/authorize/consent` |
+
+Der Port wurde **gelesen und nicht angenommen** (Pitfall 4): `MCP_OAUTH_CALLBACK_PORT` war
+nicht gesetzt, der Client wählte 41333 frei, und die zwei abgebrochenen Vorläufe dieses
+Nachmittags wählten 42623 und 43988. Drei Läufe, drei Ports, alle im Windows-Fenster 39152
+bis 49151. Der Treiber liest den Port aus der Adresse, die der Client ausgibt.
+
+---
+
+## 3. Der Rundlauf (17:33:43 bis 17:46:33Z)
+
+### 3.1 Wie der Client angesprochen wurde, und was am Vorzustand geschützt wurde
+
+Der MCP-Server wurde in einem **eigenen Projektverzeichnis** unter dem Scratchpad angelegt,
+nicht in der globalen Serverliste des Owners:
+
+```
+claude mcp add --transport http ncmcp http://127.0.0.1:8081/exapps/mcp_connector/mcp -s local
+-> Added HTTP MCP server ncmcp with URL: ... to local config
+   File modified: C:\Users\Student\.claude.json [project: ...\scratchpad\cimd-run]
+```
+
+`-s local` schreibt unter `projects[<dieses Verzeichnis>].mcpServers` und lässt die drei
+globalen Server des Owners (`firecrawl-mcp`, `obsidian`, `stitch`) und die
+claude.ai-Connectoren unberührt. Vor der ersten Änderung wurde
+`C:\Users\Student\.claude.json` außerhalb des Repositories gesichert. Nachzustand um
+17:49:45Z, nach `claude mcp logout ncmcp` und `claude mcp remove ncmcp -s local`: die
+globale Liste nennt weiter genau `firecrawl-mcp`, `obsidian`, `stitch`, und das
+Scratchpad-Projekt hat keinen Server mehr.
+
+**`claude mcp login` verlangt ein Terminal**, sonst endet es mit
+`stdin isn't a terminal, so authentication can't be completed here`. Gemessen wurde deshalb
+über eine **Pseudo-Konsole** (`CreatePseudoConsole`, Windows-Bordmittel, per `ctypes`
+angesprochen), nicht über ein installiertes Paket: kein `uv add`, kein `pip install`, kein
+`npm install`, und `uv.lock` und der Dependency-Block von `pyproject.toml` sind unangetastet.
+Die zwei Treiberskripte liegen im Scratchpad und nicht im Repository, weil sie Messwerkzeug
+sind.
+
+**Ein Fund, den das Vorbild 06-09 nicht nennt und der eine halbe Stunde gekostet hat.** Eine
+Pseudo-Konsole allein genügt nicht. Nach `CreatePseudoConsole` plus
+`PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE` hing das Kind sichtbar an der Pseudo-Konsole (deren
+Titel trug den Kindnamen), schrieb aber weiter auf die Standard-Handles des messenden
+Prozesses und fragte diese nach einem Terminal, also wieder eine Pipe. Der Microsoft-Beispielcode
+kommt ohne die fehlende Zeile aus, weil sein Elternprozess selbst eine Konsolenanwendung ist.
+Die Zeile ist `STARTF_USESTDHANDLES` mit den drei alten Konsolen-Handle-Werten `0x3`, `0x7`
+und `0xB`: dann liest das Kind seine eigene Konsole, und die ist ein Terminal. Danach kam die
+Zeile `Or paste the redirect URL here:` aus dem Client, und das ist der Beleg, dass er den
+Prozess für interaktiv hält.
+
+Der Browser-Schenkel ist automatisiert, und zwar so, wie dieses Projekt ihn schon
+automatisiert: `scripts/oauth_flow_check.py:sign_in` meldet `alice` über den Login Flow v2 an
+und drückt "Grant access". Eine eigene Nextcloud-Login-Automatisierung wurde nicht gebaut, ein
+Gate verbietet dasselbe unter `src/`. Der Client baut seine Anfrage selbst, hält seinen eigenen
+Loopback-Port, tauscht den Code selbst ein und ruft das Werkzeug selbst auf.
+
+Ein zweiter kleiner Fund derselben Art: die Adresse steht in der Ausgabe des Clients zweimal,
+als Id und als sichtbarer Text eines OSC-8-Hyperlinks, und die Escape-Folge dahinter ist eine
+Cursor-Bewegung. Wer die Escapes erst entfernt und dann die Adresse sucht, klebt das nächste
+Wort an den letzten Query-Parameter: aus `resource=...%2Fmcp` wurde einmal
+`resource=...%2FmcpWaiting`. Gelesen wird deshalb aus den Rohbytes, mit einem Muster, das an
+der Escape-Folge endet.
+
+### 3.2 Der 401 der MCP-Route und der Zeiger (17:33:53Z)
+
+Diese drei Zeilen entstanden aus einem `claude mcp list`, also aus dem ersten Kontaktversuch
+des Clients:
+
+```
+2026-08-25T17:33:53.339914669Z INFO:      - "POST /mcp HTTP/1.1" 401 Unauthorized
+2026-08-25T17:33:53.347293984Z INFO:      - "GET /.well-known/oauth-protected-resource/mcp HTTP/1.1" 200 OK
+2026-08-25T17:33:53.362944568Z INFO:      - "GET /.well-known/oauth-authorization-server HTTP/1.1" 200 OK
+```
+
+`claude mcp list` meldete danach `ncmcp: http://127.0.0.1:8081/exapps/mcp_connector/mcp
+(HTTP) - ! Needs authentication`.
+
+### 3.3 Die Discovery-Kette des Rundlaufs (17:44:33Z)
+
+```
+2026-08-25T17:44:33.674316092Z INFO:      - "GET /.well-known/oauth-protected-resource/mcp HTTP/1.1" 200 OK
+2026-08-25T17:44:33.683927792Z INFO:      - "GET /.well-known/oauth-authorization-server HTTP/1.1" 200 OK
+2026-08-25T17:44:33.699947816Z INFO:      - "GET /.well-known/oauth-protected-resource/mcp HTTP/1.1" 200 OK
+2026-08-25T17:44:33.714192009Z INFO:      - "GET /.well-known/oauth-authorization-server HTTP/1.1" 200 OK
+```
+
+Jedes der beiden Dokumente wird zweimal geholt, unverändert gegenüber dem Vorlauf. Das ist
+kein Fehler unserer Seite.
+
+### 3.4 Kein `POST /register` im Messfenster
+
+**Antwort: keiner, und zwar keiner im ganzen Leben dieses Containers.** Ohne diesen Beleg wäre
+"ohne Registrierung" behauptet und nicht gemessen (Pitfall 2). Gelesen wurde das Containerlog
+mit Zeitstempeln:
+
+```
+docker logs nc_app_mcp_connector -t | grep -c 'POST /register'
+-> 0
+```
+
+Das Zeitfenster dieses Zählers beginnt mit dem Start des 0.1.9-Containers um
+2026-08-25T17:31:34Z und reicht bis zum Ende des Rundlaufs, umfasst also den ersten
+Kontaktversuch um 17:33:53Z, den Rundlauf um 17:44:32 bis 17:44:39Z und den Werkzeugaufruf um
+17:45:20 bis 17:45:32Z. Dieselbe Filterung über das Fenster ab 17:44:30Z zeigt zehn Zeilen,
+und keine davon ist `/register`:
+
+```
+docker logs nc_app_mcp_connector -t | grep -v heartbeat | awk '$1 >= "2026-08-25T17:44:30"' | grep 'INFO: '
+-> GET /.well-known/oauth-protected-resource/mcp 200
+   GET /.well-known/oauth-authorization-server 200
+   GET /.well-known/oauth-protected-resource/mcp 200
+   GET /.well-known/oauth-authorization-server 200
+   GET /authorize?...client_id=https%3A%2F%2Fclaude.ai%2F... 302 Found
+   GET /authorize/consent?flow=<gekürzt>&step=wait 200 OK
+   POST /authorize/decide 200 OK
+   GET /.well-known/oauth-authorization-server 200
+   GET /.well-known/oauth-protected-resource/mcp 200
+   POST /token 200 OK
+```
+
+Der zweite Beleg derselben Aussage liegt in der Datenbank: von sechs Zeilen der Tabelle
+`clients` trägt **keine einzige** einen `client_secret_hash`, und genau eine hat eine
+`client_id`, die mit `https` beginnt. Eine Registrierungszeile hätte gesetzte Frischespalten
+nicht, diese hat sie (Abschnitt 3.5).
+
+### 3.5 Der ausgehende Abruf und die geschriebene `clients`-Zeile
+
+Der Abruf selbst hinterlässt im Containerlog **keine** Zeile: `oauth/cimd.py` protokolliert
+nur Absagen, ein geglückter Abruf ist still (Pitfall 1). Belegt ist er deshalb zweifach.
+
+**Beleg (a): die geschriebene Zeile, Feld für Feld aus `/nc_app_mcp_connector_data/oauth.sqlite3`**,
+gelesen per `docker exec nc_app_mcp_connector python` mit `sqlite3`:
+
+| Feld | Wert |
+|------|------|
+| `client_id` | `https://claude.ai/oauth/claude-code-client-metadata` |
+| `client_secret_hash` | `None`, also **leer** |
+| `allowed` | `1` |
+| `registered_at` | `1787679616` = 2026-08-25T17:40:16Z |
+| `last_used_at` | `1787679879` = 2026-08-25T17:44:39Z |
+| `cimd_fetched_at` | `1787679616` = 2026-08-25T17:40:16Z |
+| `cimd_expires_at` | `1787679916` = 2026-08-25T17:45:16Z |
+| Frischefenster | **300 Sekunden** |
+| `metadata_json.redirect_uris` | `["http://localhost/callback", "http://127.0.0.1/callback"]`, also **die zwei portlosen** |
+| `metadata_json.token_endpoint_auth_method` | `none` |
+| `metadata_json.client_name` | `Claude Code` |
+| `metadata_json.grant_types` | `["authorization_code", "refresh_token"]` |
+| `metadata_json.logo_uri` | `None`, und das ist Absicht: `validate_document` liest das Feld nicht |
+
+Das Fenster von 300 Sekunden kommt aus dem `Cache-Control` der Antwort (`max-age=300`) und
+wird auf 300 bis 3600 Sekunden gekappt (`CACHE_MIN_SECONDS`, `CACHE_MAX_SECONDS`).
+
+**Ein Detail, das nicht verschwiegen wird:** `cimd_fetched_at` steht auf 17:40:16Z und nicht
+auf 17:44:34Z. Um 17:40 lief der erste, an der OSC-8-Falle gescheiterte Versuch dieses
+Nachmittags, und der erste `/authorize` dieses Versuchs hat den Abruf ausgelöst. Um 17:44:34Z
+war die Zeile noch frisch (Ablauf 17:45:16Z), und der Code hat sie benutzt statt neu
+abzurufen: `/authorize` antwortete in 0,208 s statt in den 0,9 s eines Laufs mit Abruf. Das
+ist genau der Zweck der zwei Frischespalten, und es ist der Grund, warum die Positivkontrolle
+des Socket-Zählers in Abschnitt 4 mit einer abgelaufenen Zeile fahren muss.
+
+**Beleg (b): derselbe Abruf, im laufenden Container aus dem Prozess selbst ausgeführt**
+(`docker exec nc_app_mcp_connector python`, 17:48Z):
+
+```
+fetch_document_and_lifetime -> lifetime 300s, 0.205s
+document           : {"client_id": "https://claude.ai/oauth/claude-code-client-metadata",
+                      "client_name": "Claude Code", "client_uri": "https://claude.ai",
+                      "grant_types": ["authorization_code", "refresh_token"],
+                      "redirect_uris": ["http://localhost/callback", "http://127.0.0.1/callback"],
+                      "response_types": ["code"], "token_endpoint_auth_method": "none"}
+plain GET          -> HTTP 200, 317 bytes, 0.185s, cache-control 'public, max-age=300'
+limits in force    : MAX_DOCUMENT_BYTES=5120, timeout=5.0s, cache 300..3600s
+resolved addresses : ['160.79.104.10', '2607:6bc0::10']
+```
+
+317 Bytes, dieselbe Größe wie am 2026-08-20, und beide aufgelösten Adressen sind öffentlich,
+sonst hätte `resolve_addresses` den ganzen Namen verworfen.
+
+### 3.6 Die Zustimmungsseite (17:44:36Z)
+
+`GET /authorize/consent?flow=<gekürzt>&step=wait` antwortete **200**. Aus der Definitionsliste
+der Seite:
+
+| Begriff | Wert |
+|---------|------|
+| App name | `Claude Code` |
+| Sends you back to | `http://localhost:41333/callback` |
+| Client ID | `https://claude.ai/oauth/claude-code-client-metadata` |
+| **Client ID host** | **`claude.ai`** |
+
+Die Seite nennt den Hostnamen der `client_id` als eigene Zeile, und sie nennt das angemeldete
+Konto (`alice` steht im Seitentext). `POST /authorize/decide` aus dem Browser, der die
+Anmeldung gerade abgeschlossen hat: **200**. Die Rückseite navigiert auf
+`http://localhost:41333/callback` mit einem `code`, mit dem `state` der Anfrage und mit
+`iss=http://127.0.0.1:8081/exapps/mcp_connector`.
+
+### 3.7 Der Code-Tausch (17:44:39Z)
+
+Der Sprung auf die Rückadresse wurde ausgeführt, wie ein Browser ihn ausführt. **Der Client
+hat auf seinem eigenen Port gelauscht und 200 geantwortet** (`callback_status: 200` im
+Treiberprotokoll), der Einfüge-Weg wurde nicht gebraucht. Danach:
+
+```
+2026-08-25T17:44:36.904728622Z INFO:      - "GET /authorize/consent?flow=<gekürzt>&step=wait HTTP/1.1" 200 OK
+2026-08-25T17:44:36.959138886Z INFO:      - "POST /authorize/decide HTTP/1.1" 200 OK
+2026-08-25T17:44:39.124414890Z INFO:      - "POST /token HTTP/1.1" 200 OK
+```
+
+Der Client schrieb danach
+
+```
+Authenticated with "ncmcp". Its tools are now available in Claude Code.
+```
+
+und beendete sich mit Rückgabewert **0**. Vom `/authorize` bis zum beendeten
+`claude mcp login`: 4,4 Sekunden.
+
+### 3.8 Der Werkzeugaufruf, mit Inhalt (17:45:20 bis 17:45:32Z)
+
+```
+claude -p "Call the ncmcp tool files_list for the path / and then print, verbatim,
+           the JSON the tool returned. Do nothing else."
+  --strict-mcp-config --mcp-config mcp.json --allowedTools "mcp__ncmcp__files_list"
+```
+
+Die Antwort, gekürzt auf die Einträge, auf die es ankommt, aber wörtlich aus dem Werkzeug:
+
+```json
+{"path":"/","count":73,"items":[
+ {"path":"/Documents","name":"Documents","kind":"folder","size":1108446,"modified":"Thu, 20 Aug 2026 04:44:24 GMT","id":"file:155"},
+ {"path":"/mcp-share-04d2eb7d6d","name":"mcp-share-04d2eb7d6d","kind":"folder","size":80,"modified":"Thu, 20 Aug 2026 04:44:24 GMT","id":"file:161"},
+ {"path":"/mcp-private-04d2eb7d6d.md","name":"mcp-private-04d2eb7d6d.md","kind":"file","size":76,"content_type":"text/markdown","modified":"Thu, 20 Aug 2026 04:44:25 GMT","id":"file:163"},
+ {"path":"/Readme.md","name":"Readme.md","kind":"file","size":43,"content_type":"text/markdown","modified":"Tue, 25 Aug 2026 17:30:41 GMT","id":"file:88"}]}
+```
+
+Das ist `alice`s eigenes Files-Home, samt der zwei Marker-Dateien aus dem
+Berechtigungs-Fixture (`mcp-private-…` und `mcp-share-…`), also **Inhalt** und keine
+Werkzeugliste. Im Containerlog:
+
+```
+2026-08-25T17:45:20.528621407Z INFO:      - "POST /mcp HTTP/1.1" 200 OK
+2026-08-25T17:45:20.707596586Z INFO:      - "POST /mcp HTTP/1.1" 200 OK
+2026-08-25T17:45:21.026862712Z INFO:      - "POST /mcp HTTP/1.1" 200 OK
+2026-08-25T17:45:21.057457196Z INFO:      - "POST /mcp HTTP/1.1" 200 OK
+2026-08-25T17:45:21.064714542Z INFO:      - "POST /mcp HTTP/1.1" 200 OK
+2026-08-25T17:45:32.468347025Z INFO:      - "POST /mcp HTTP/1.1" 200 OK
+```
+
+**EXAPP-08 hat damit seinen Live-Beleg gegen den 0.1.9-Kandidaten:** ein Client, der sich
+ausschließlich über die Adresse seines eigenen Metadatendokuments ausweist, verbindet sich
+und ruft ein Werkzeug mit Inhalt auf. Gemessen wurde eine Fassung nach `a47bb57` und
+`bd75cd8`, damit ist der v1.1-Debt-Befund W-5 geschlossen.
+
+### 3.9 Die Verbindung dieses Laufs ist beendet (17:49:45Z)
+
+`claude mcp logout ncmcp` ruft `/revoke`, und das ist der Weg, den der Plan verlangt:
+
+```
+2026-08-25T17:49:46.442741069Z INFO:      - "POST /revoke HTTP/1.1" 200 OK
+2026-08-25T17:49:46.458865666Z INFO:      - "POST /revoke HTTP/1.1" 200 OK
+```
+
+Zweimal, einmal für das Zugriffs- und einmal für das Erneuerungs-Token. Die Zeile in
+`authorizations` trägt danach `revoked_at` = 2026-08-25T17:49:46Z.
+
+`occ mcp_connector:purge --force` wurde **nicht** gefahren, und das ist eine Entscheidung und
+kein Versäumnis: dieses Kommando beendet jede Verbindung der Instanz, und die Instanz hält
+zwei lebende Verbindungen des Kontos `jane` vom 2026-08-20 (die Demo-Substanz für CONF-01).
+Nach dem Lauf stehen sie unverändert da, `revoked_at` beider Zeilen ist weiterhin leer. Der
+Plan verlangt beides, `/revoke` oder `purge` und fremden Zustand unberührt; auf dieser Instanz
+erfüllt nur `/revoke` beide Hälften.
