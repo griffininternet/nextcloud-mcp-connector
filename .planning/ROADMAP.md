@@ -113,7 +113,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 13-05-PLAN.md — Push vor dem Tag, Owner-Freigabe, Tag `v0.1.9`, Workflow, Proof-Zeile der Schritte 4 und 5 (nicht autonom)
+- [x] 13-05-PLAN.md — Push vor dem Tag, Owner-Freigabe, Tag `v0.1.9`, Workflow, Proof-Zeile der Schritte 4 und 5 (nicht autonom)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -135,7 +135,7 @@ Plans:
 | 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 8/8 | Complete | 2026-08-24 |
 | 11. Bündelung, Budget und Release 0.1.8 | v1.2 | 10/10 | Complete | 2026-08-25 |
 | 12. Konsistenz und Härtungs-Nachzieher | v1.3 | 4/4 | Complete    | 2026-08-25 |
-| 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 4/6 | In Progress|  |
+| 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 5/6 | In Progress|  |
 
 ## Next
 

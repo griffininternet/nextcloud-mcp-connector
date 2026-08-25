@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Pflege und 0.1.9
 status: executing
-stopped_at: "Completed 13-04-PLAN.md (sechs Gates lokal gruen auf dem 0.1.9-Kandidaten: 2812 Tests bei 163 deselektiert, 199 Dateien formatiert, Werkzeugoberflaeche 15711 Bytes ueber 21 Werkzeuge gegen 18000; Store-Paket mit genau einem Top-Level-Ordner und der Statuszeile 0.1.9 darin, 47546 Bytes lokal; drei Proof-Zeilen zu den Runbook-Schritten 1 bis 3; kein Tag v0.1.9)"
-last_updated: "2026-08-25T18:18:35.578Z"
+stopped_at: Completed 13-05-PLAN.md (Tag v0.1.9 auf 685295d nach Owner-Freigabe, Release-Lauf 32883904698 gruen, Job publish 1m40s, Asset mcp_connector-0.1.9.tar.gz mit 47264 Bytes am Release)
+last_updated: "2026-08-25T18:35:38.632Z"
 last_activity: 2026-08-25
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 10
-  completed_plans: 8
+  completed_plans: 9
   percent: 50
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 13 (CIMD-Nachmessung und Release 0.1.9) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 Status: Ready to execute
 Last activity: 2026-08-25
 
@@ -154,6 +154,7 @@ Last activity: 2026-08-25
 | Phase 13 P02 | 8min | 3 tasks | 6 files |
 | Phase 13 P03 | 40 min | 3 tasks tasks | 2 files files |
 | Phase 13 P04 | 12 min | 2 tasks | 1 files |
+| Phase 13 P05 | 13 min | 3 tasks tasks | 1 file files |
 
 ## Accumulated Context
 
@@ -565,6 +566,8 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 13 Plan 04: die Werkzeugoberflaeche traf den Erwartungswert 15711 Bytes ueber 21 Werkzeuge exakt; BUDGET_BYTES bleibt 18000 und MAX_TOOL_BYTES bleibt 1400 (D-04)
 - [Phase ?]: Phase 13 Plan 04: die Proof-Zeile zu Runbook-Schritt 3 nennt weder Signatur noch Bytezahl; 47546 Bytes und sha256 4f2a05fe stehen nur in der SUMMARY als Vergleichswert fuer Plan 13-06
 - [Phase ?]: Phase 13 Plan 04: die Testzahl 2812 bei 163 deselektiert kam aus einem zweiten Lauf ohne zusaetzliches -q, weil addopts bereits -q traegt und -qq die Summenzeile unterdrueckt; das Runbook-Kommando blieb woertlich
+- [Phase ?]: Phase 13: der Tag v0.1.9 entstand erst nach der woertlichen Owner-Antwort freigeben (2026-08-25T18:27Z), Branch-Push davor; Weg fuer Schritt 7 ist die angemeldete Store-Sitzung im Browser
+- [Phase ?]: Phase 13: die Proof-Zeile zu Runbook-Schritt 4 wurde geteilt, eine Zeile fuer den Push vor dem Checkpoint und eine fuer Tag und Workflow nach dem gruenen Lauf
 
 ### Pending Todos
 
@@ -599,9 +602,9 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-25T18:18:35.562Z
-Stopped at: Completed 13-04-PLAN.md (sechs Gates lokal gruen auf dem 0.1.9-Kandidaten: 2812 Tests bei 163 deselektiert, 199 Dateien formatiert, Werkzeugoberflaeche 15711 Bytes ueber 21 Werkzeuge gegen 18000; Store-Paket mit genau einem Top-Level-Ordner und der Statuszeile 0.1.9 darin, 47546 Bytes lokal; drei Proof-Zeilen zu den Runbook-Schritten 1 bis 3; kein Tag v0.1.9)
-Naechster Schritt: Plan 13-03 ausfuehren (CIMD-Nachmessung gegen den Kandidaten 0.1.9)
+Last session: 2026-08-25T18:35:38.613Z
+Stopped at: Completed 13-05-PLAN.md (Tag v0.1.9 auf 685295d nach Owner-Freigabe, Release-Lauf 32883904698 gruen, Job publish 1m40s, Asset mcp_connector-0.1.9.tar.gz mit 47264 Bytes am Release)
+Naechster Schritt: Plan 13-06 ausfuehren (Runbook-Schritte 6 bis 8: das Asset mcp_connector-0.1.9.tar.gz herunterladen und signieren, per angemeldeter Store-Sitzung einreichen, danach Store-Liste und OCI-Index nachpruefen)
 Resume file: None
 
 ## Operator Next Steps
