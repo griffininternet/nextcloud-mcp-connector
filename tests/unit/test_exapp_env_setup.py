@@ -2007,14 +2007,19 @@ def vocabulary_findings(text: str, name: str) -> list[str]:
 
 
 def public_markdown_pages() -> list[Path]:
-    """Every markdown page the rule reaches: the four public documents plus ``docs/*.md``.
+    """Every markdown page the rule reaches: the four public documents plus all of ``docs/``.
 
     Markdown and the manifest, and deliberately nothing else. ``scripts/build_store_release.sh``
     and its neighbours stay out: ``ARCHIVE`` is a variable name there and ``tar`` is the tool
     that builds the package, so a check over the scripts would turn the gate red in a place the
     rule never addressed.
+
+    ``rglob`` and not ``glob``, because the claim is "the rest of docs/" and
+    ``docs/contrib/227-pr-body.md`` already lives one folder down: a non-recursive glob would
+    let every future page under a subfolder escape silently (review finding WR-05). The
+    subfolder reach is pinned in the self test below, so a change back to ``glob`` goes red.
     """
-    docs = sorted(page for page in (ROOT / "docs").glob("*.md") if page != VOCABULARY_EXCEPTION)
+    docs = sorted(page for page in (ROOT / "docs").rglob("*.md") if page != VOCABULARY_EXCEPTION)
     pages = [*PUBLIC_MARKDOWN, *docs]
     assert pages, f"no public markdown found under {ROOT}"
     return pages
@@ -2058,6 +2063,10 @@ def test_the_vocabulary_gate_reads_a_list_that_is_not_empty() -> None:
 
     assert {"README.md", "README.de.md", "README.fr.md", "CHANGELOG.md"} <= names, names
     assert "docs/store-submission.md" not in names, "the exemption is exempt, not silently read"
+    assert "docs/contrib/227-pr-body.md" in names, (
+        "the rule claims the rest of docs/, and this page one folder down is the proof that "
+        "the walk is recursive (review finding WR-05)"
+    )
     assert len(names) > len(PUBLIC_MARKDOWN), "the docs pages belong to the covered set too"
     for page in public_markdown_pages():
         assert page.read_text(encoding="utf-8").strip(), f"{page} was read as empty"
