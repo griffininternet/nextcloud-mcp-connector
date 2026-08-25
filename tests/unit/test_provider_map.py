@@ -9,6 +9,7 @@ answer (threat T-01-68).
 """
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -296,3 +297,72 @@ def test_the_provider_table_is_not_a_list_of_installed_apps() -> None:
     }
     assert "talk-conversations" not in provider_map.PROVIDER_KINDS
     assert "mail" not in provider_map.PROVIDER_KINDS
+
+
+#: The three pages that carry the example answer of ``unified_search``. They spell the same
+#: line, so an id that does not exist is a wrong lesson three times over.
+READMES = ("README.md", "README.de.md", "README.fr.md")
+
+#: Provider ids that really exist on a Nextcloud and are deliberately **not** in
+#: :data:`provider_map.PROVIDER_KINDS`. This list stands in the test and not in
+#: ``provider_map.py`` on purpose: that module keeps a translation table, not a list of the ids
+#: it declines to translate, and its module docstring already says in prose why this one is
+#: absent (a conversation is no document, ``talk_browse`` is the way to it). Exactly one entry
+#: today, and the two tests above are its proof.
+REAL_BUT_UNREGISTERED = frozenset({"talk-conversations"})
+
+_PROVIDER_IN_JSON = re.compile(r'"provider":"([a-z0-9-]+)"')
+
+
+def provider_ids(text: str, name: str) -> set[str]:
+    """Every provider id the example answers in this text name.
+
+    Takes a text and a name rather than a path, so the holder below and its counter probe run
+    through the same extraction. A counter probe with a regex of its own would prove something
+    about the counter probe.
+
+    The not empty assertion is part of it: a reformatted example would otherwise turn the
+    holder into a test that passes because it found nothing to look at.
+    """
+    found = set(_PROVIDER_IN_JSON.findall(text))
+    assert found, f"{name} names no provider id at all, so the example was reformatted"
+    return found
+
+
+def test_every_provider_id_in_the_readmes_is_one_that_exists() -> None:
+    """TOOL-19: ``"provider":"spreed"`` stood in all three READMEs for three releases.
+
+    A documented answer is a lesson about the shape of the world, and ``spreed`` is the name of
+    the Talk app, never a provider id, so the example taught a provider landscape that does not
+    exist. The replacement is ``talk-conversations``, which is real and deliberately not in the
+    table, so ``"kind":"url"`` and ``"resolvable":false`` beside it are true rather than
+    invented.
+    """
+    root = Path(__file__).resolve().parents[2]
+    for name in READMES:
+        found = provider_ids((root / name).read_text(encoding="utf-8"), name)
+
+        unexplained = found - set(provider_map.PROVIDER_KINDS) - REAL_BUT_UNREGISTERED
+        assert unexplained == set(), (
+            f"{name} names the provider id(s) {sorted(unexplained)}, and none of them is in "
+            "PROVIDER_KINDS or in REAL_BUT_UNREGISTERED. Either the id is real and belongs in "
+            "one of the two, or the example names something that does not exist."
+        )
+        assert "talk-conversations" in found, (
+            f"{name} no longer names an unregistered provider id, so the example lost the case "
+            "it exists for: the honest boundary of an unknown provider"
+        )
+
+
+def test_the_holder_would_notice_the_id_that_used_to_stand_there() -> None:
+    """Counter proof: the line as it read until this plan, through the same extraction.
+
+    Without it the holder would be green from the day it was written, without ever having
+    looked at anything.
+    """
+    as_it_stood = '{"results":[{"provider":"spreed","kind":"url","resolvable":false}]}'
+
+    found = provider_ids(as_it_stood, "a constructed example")
+
+    assert found == {"spreed"}
+    assert found - set(provider_map.PROVIDER_KINDS) - REAL_BUT_UNREGISTERED == {"spreed"}
