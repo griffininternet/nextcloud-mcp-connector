@@ -747,6 +747,55 @@ async def test_a_title_is_matched_trimmed_and_case_folded(clients: NcClients) ->
 
 
 @pytest.mark.anyio
+async def test_two_values_keys_for_the_same_column_are_refused_instead_of_last_wins(
+    clients: NcClients,
+) -> None:
+    """WR-04: "Aufgabe" and "aufgabe " normalise to one column, and a write may not guess.
+
+    A silent last wins would send only the later value, report only the later value under
+    ``values_written`` and never show the caller an error: data loss with a healthy looking
+    answer, on the one write path of this family.
+    """
+    with respx.mock(assert_all_called=False) as mock:
+        mock_capabilities(mock)
+        mock.get(TABLE_URL).mock(return_value=httpx.Response(200, json=envelope(OWN_TABLE)))
+        mock.get(COLUMNS_URL).mock(
+            return_value=httpx.Response(200, json=envelope(columns_without_the_collision()))
+        )
+        post = mock.post(CREATE_ROW_URL)
+
+        with pytest.raises(ToolError) as excinfo:
+            await tables_tools.create_row(
+                clients, "7", '{"Aufgabe": "Baulos 4", "aufgabe ": "Baulos 5"}'
+            )
+
+    assert len(post.calls) == 0, "neither of the two values may be written on a guess"
+    assert "'Aufgabe'" in excinfo.value.message
+    assert "'aufgabe '" in excinfo.value.message
+    assert "one key per column" in excinfo.value.hint
+
+
+@pytest.mark.anyio
+async def test_two_unknown_keys_that_collide_are_refused_as_a_collision_first(
+    clients: NcClients,
+) -> None:
+    """The collision refusal does not depend on the titles existing in the table at all."""
+    with respx.mock(assert_all_called=False) as mock:
+        mock_capabilities(mock)
+        mock.get(TABLE_URL).mock(return_value=httpx.Response(200, json=envelope(OWN_TABLE)))
+        mock.get(COLUMNS_URL).mock(
+            return_value=httpx.Response(200, json=envelope(columns_without_the_collision()))
+        )
+        post = mock.post(CREATE_ROW_URL)
+
+        with pytest.raises(ToolError) as excinfo:
+            await tables_tools.create_row(clients, "7", '{"Zuständig": "Bob", "ZUSTÄNDIG ": "Eva"}')
+
+    assert len(post.calls) == 0
+    assert "twice" in excinfo.value.message
+
+
+@pytest.mark.anyio
 async def test_the_owner_may_write_although_the_share_object_reports_read_alone(
     clients: NcClients,
 ) -> None:

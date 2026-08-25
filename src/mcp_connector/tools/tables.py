@@ -217,6 +217,13 @@ def _by_column_id(
     same column, and a title that matches two columns ends the call instead of picking one
     of them and writing into the wrong column.
 
+    The normalisation has a mirror case with the same rule (review finding WR-04): two
+    **keys** of ``values`` that normalise to the same column, "Task" and "task " in one
+    object, would silently overwrite each other in the mapping, and the loser would vanish
+    from a **write** without the caller ever seeing an error. Refused before anything is
+    resolved, because a silent last wins on a write path is data loss with a healthy looking
+    answer.
+
     The same trap has a second entrance, one level down: a column object without an ``id``
     would produce the key ``"None"``, and ``(int)"None"`` is ``0`` as well. That takes a
     deformed answer of the app, which the rest of this family treats as a real case
@@ -233,8 +240,19 @@ def _by_column_id(
     unknown: list[str] = []
     data: dict[str, Any] = {}
     written: dict[str, Any] = {}
+    seen: dict[str, str] = {}
     for title, value in wanted.items():
-        matches = by_title.get(_normalise(title), [])
+        key = _normalise(title)
+        if key in seen:
+            raise ToolError(
+                message=f"values names the column {seen[key]!r} twice (also as {str(title)!r}).",
+                hint=(
+                    f"{titles_hint} The comparison ignores case and surrounding spaces; "
+                    "keep one key per column."
+                ),
+            )
+        seen[key] = str(title)
+        matches = by_title.get(key, [])
         if not matches:
             unknown.append(str(title))
             continue
