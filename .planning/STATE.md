@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Pflege und 0.1.9
 status: executing
-stopped_at: "Completed 13-03-PLAN.md (CIMD-Nachmessung gegen den 0.1.9-Kandidaten: Messweg A mit echtem Client, Digest sha256:1183f845, kein POST /register, Gegenprobe 0 gegen 5 Sockets, Proof-Zeile in docs/oauth-setup.md, vier tote .planning-Verweise geschlossen)"
-last_updated: "2026-08-25T18:06:52.665Z"
+stopped_at: "Completed 13-04-PLAN.md (sechs Gates lokal gruen auf dem 0.1.9-Kandidaten: 2812 Tests bei 163 deselektiert, 199 Dateien formatiert, Werkzeugoberflaeche 15711 Bytes ueber 21 Werkzeuge gegen 18000; Store-Paket mit genau einem Top-Level-Ordner und der Statuszeile 0.1.9 darin, 47546 Bytes lokal; drei Proof-Zeilen zu den Runbook-Schritten 1 bis 3; kein Tag v0.1.9)"
+last_updated: "2026-08-25T18:18:35.578Z"
 last_activity: 2026-08-25
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 10
-  completed_plans: 7
+  completed_plans: 8
   percent: 50
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 13 (CIMD-Nachmessung und Release 0.1.9) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
 Last activity: 2026-08-25
 
@@ -153,6 +153,7 @@ Last activity: 2026-08-25
 | Phase 13 P01 | 12 min | 2 tasks tasks | 8 files files |
 | Phase 13 P02 | 8min | 3 tasks | 6 files |
 | Phase 13 P03 | 40 min | 3 tasks tasks | 2 files files |
+| Phase 13 P04 | 12 min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -561,6 +562,9 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 13-03: occ mcp_connector:purge --force bewusst nicht gefahren, weil es jede Verbindung der Instanz beendet und zwei lebende Verbindungen des Kontos jane bestehen; claude mcp logout ruft /revoke und erfuellt beide Haelften der Vorgabe
 - [Phase ?]: Phase 13-03: alle vier .planning-Verweise in docs/oauth-setup.md geschlossen (Plan nannte zwei); jede Stelle traegt die Aussage jetzt selbst, mit Datum und Ergebnis
 - [Phase ?]: Phase 13-03: ConPTY per ctypes braucht STARTF_USESTDHANDLES mit den Konsolen-Handles 0x3/0x7/0xB, sonst haengt das Kind an der Pseudo-Konsole und schreibt trotzdem auf die Pipes des Elternprozesses
+- [Phase ?]: Phase 13 Plan 04: die Werkzeugoberflaeche traf den Erwartungswert 15711 Bytes ueber 21 Werkzeuge exakt; BUDGET_BYTES bleibt 18000 und MAX_TOOL_BYTES bleibt 1400 (D-04)
+- [Phase ?]: Phase 13 Plan 04: die Proof-Zeile zu Runbook-Schritt 3 nennt weder Signatur noch Bytezahl; 47546 Bytes und sha256 4f2a05fe stehen nur in der SUMMARY als Vergleichswert fuer Plan 13-06
+- [Phase ?]: Phase 13 Plan 04: die Testzahl 2812 bei 163 deselektiert kam aus einem zweiten Lauf ohne zusaetzliches -q, weil addopts bereits -q traegt und -qq die Summenzeile unterdrueckt; das Runbook-Kommando blieb woertlich
 
 ### Pending Todos
 
@@ -595,8 +599,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-25T18:06:52.645Z
-Stopped at: Completed 13-03-PLAN.md (CIMD-Nachmessung gegen den 0.1.9-Kandidaten: Messweg A mit echtem Client, Digest sha256:1183f845, kein POST /register, Gegenprobe 0 gegen 5 Sockets, Proof-Zeile in docs/oauth-setup.md, vier tote .planning-Verweise geschlossen)
+Last session: 2026-08-25T18:18:35.562Z
+Stopped at: Completed 13-04-PLAN.md (sechs Gates lokal gruen auf dem 0.1.9-Kandidaten: 2812 Tests bei 163 deselektiert, 199 Dateien formatiert, Werkzeugoberflaeche 15711 Bytes ueber 21 Werkzeuge gegen 18000; Store-Paket mit genau einem Top-Level-Ordner und der Statuszeile 0.1.9 darin, 47546 Bytes lokal; drei Proof-Zeilen zu den Runbook-Schritten 1 bis 3; kein Tag v0.1.9)
 Naechster Schritt: Plan 13-03 ausfuehren (CIMD-Nachmessung gegen den Kandidaten 0.1.9)
 Resume file: None
 

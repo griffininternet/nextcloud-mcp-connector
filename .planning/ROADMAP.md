@@ -109,7 +109,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 13-04-PLAN.md — Sechs Gates lokal grün, Archiv-Probelauf als Strukturprüfung, Proof-Zeilen der Schritte 1 bis 3
+- [x] 13-04-PLAN.md — Sechs Gates lokal grün, Archiv-Probelauf als Strukturprüfung, Proof-Zeilen der Schritte 1 bis 3
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -135,7 +135,7 @@ Plans:
 | 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 8/8 | Complete | 2026-08-24 |
 | 11. Bündelung, Budget und Release 0.1.8 | v1.2 | 10/10 | Complete | 2026-08-25 |
 | 12. Konsistenz und Härtungs-Nachzieher | v1.3 | 4/4 | Complete    | 2026-08-25 |
-| 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 3/6 | In Progress|  |
+| 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 4/6 | In Progress|  |
 
 ## Next
 
