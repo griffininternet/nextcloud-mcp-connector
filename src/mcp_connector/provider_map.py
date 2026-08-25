@@ -53,7 +53,19 @@ from . import ids
 #: Provider id as Nextcloud reports it at runtime, mapped to our resource kind. This is a
 #: translation table, never a list of installed providers: that list is fetched per call.
 PROVIDER_KINDS: Mapping[str, str] = {
+    # Verified against nextcloud/server v34.0.0, apps/files/lib/Search/FilesSearchProvider.php,
+    # class FilesSearchProvider implements IFilteringProvider: getId returns 'files', and search
+    # sets addAttribute('fileId', ...) and addAttribute('path', ...) while the link comes from
+    # linkToRoute('files.View.showFile', ['fileid' => ...]). That double track is the reason
+    # _file_id reads attributes.fileId first and only then falls back to the /f/ segment of the
+    # URL: both ways carry the same number, and one of them can be missing.
     "files": "file",
+    # Verified against nextcloud/notes v6.0.2, lib/AppInfo/SearchProvider.php, class
+    # SearchProvider implements IProvider: getId returns Application::APP_ID, and that constant
+    # is 'notes' (lib/AppInfo/Application.php:28, read at the same tag). The second sentence is
+    # the one that matters: this provider sets no attributes at all, the link is
+    # linkToRouteAbsolute('notes.page.indexnote', ['id' => ...]), and that is exactly why this
+    # module reads the note id with _last_numeric_segment(url) instead of from an attribute.
     "notes": "note",
     # Verified against nextcloud/deck lib/Search/DeckProvider.php. "deck" is wrong.
     "search-deck-card-board": "card",
