@@ -49,7 +49,7 @@ Audit: [milestones/v1.2-MILESTONE-AUDIT.md](milestones/v1.2-MILESTONE-AUDIT.md) 
 
 ### v1.3 Pflege und 0.1.9 (Phasen 12-13)
 
-- [ ] **Phase 12: Konsistenz und Härtungs-Nachzieher** - Die vier Schulden aus 11-REVIEW und 11-SECURITY abräumen: eine Bedeutung je Antwortschlüssel, der Id-Codec als einzige Quelle, keine Privat-Durchgriffe zwischen Tool-Modulen, und die drei Security-Nachzieher als Test statt als Prüfschritt
+- [x] **Phase 12: Konsistenz und Härtungs-Nachzieher** - Die vier Schulden aus 11-REVIEW und 11-SECURITY abräumen: eine Bedeutung je Antwortschlüssel, der Id-Codec als einzige Quelle, keine Privat-Durchgriffe zwischen Tool-Modulen, und die drei Security-Nachzieher als Test statt als Prüfschritt (completed 2026-08-25)
 - [ ] **Phase 13: CIMD-Nachmessung und Release 0.1.9** - Den CIMD-Weg nach den v1.1-Review-Fixes live nachmessen und die Fassung mit Proof-Zeilen als 0.1.9 in den Store bringen, Tag nur nach Owner-Freigabe
 
 ## Phase Details
@@ -78,7 +78,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 12-04-PLAN.md — TOOL-19: `talk.one_room` statt `talk_tools._room`, AST-Gate gegen Privat-Durchgriffe, README-Beispiel mit `talk-conversations`
+- [x] 12-04-PLAN.md — TOOL-19: `talk.one_room` statt `talk_tools._room`, AST-Gate gegen Privat-Durchgriffe, README-Beispiel mit `talk-conversations`
 
 ### Phase 13: CIMD-Nachmessung und Release 0.1.9
 
@@ -109,7 +109,7 @@ Plans:
 | 9. Talk | v1.2 | 5/5 | Complete | 2026-08-21 |
 | 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 8/8 | Complete | 2026-08-24 |
 | 11. Bündelung, Budget und Release 0.1.8 | v1.2 | 10/10 | Complete | 2026-08-25 |
-| 12. Konsistenz und Härtungs-Nachzieher | v1.3 | 3/4 | In Progress|  |
+| 12. Konsistenz und Härtungs-Nachzieher | v1.3 | 4/4 | Complete   | 2026-08-25 |
 | 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 0/? | Not started | - |
 
 ## Next

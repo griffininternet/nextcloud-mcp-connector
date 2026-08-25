@@ -10,7 +10,7 @@
 
 - [x] **TOOL-17**: `truncated` auf Nachrichtenebene von `talk_browse(level="messages")` heißt `message_truncated` (DF-11-01, Muster von IN-01/`preview_truncated` in Mail): die Antwortebene behält `truncated`, der Tool-Docstring sagt die eine Bedeutung je Ebene, die Umbenennung steht als Formatänderung im Changelog von 0.1.9, und Tests decken beide Ebenen getrennt ab.
 - [x] **TOOL-18**: Der Id-Codec ist die einzige Quelle für Id-Strings: der `_ID_KIND`-Workaround in `tools/mail.py` (Definition :70, Nutzung :490; die Fundstellenangabe "chatgpt.py" der ersten Fassung war falsch) ist durch `ids.encode_mail` ersetzt, und `ids.parse` lehnt eine `url:`-Id mit Whitespace im Rest ab statt sie durchzureichen; Negativtests für beide Wege.
-- [ ] **TOOL-19**: Öffentliche Schnittstellen statt Privat-Durchgriffen: `tools/context.py` bzw. `tools/chatgpt.py` rufen keine `_`-präfixte Funktion eines fremden Tool-Moduls mehr auf (heute `talk_tools._room`), und das README-Beispiel für einen unbekannten Suchprovider nutzt eine echte, nie registrierte Provider-Id statt `spreed` (IN-Reste aus 11-REVIEW.md); ein Gate oder Test hält den Privat-Durchgriff fest.
+- [x] **TOOL-19**: Öffentliche Schnittstellen statt Privat-Durchgriffen: `tools/context.py` bzw. `tools/chatgpt.py` rufen keine `_`-präfixte Funktion eines fremden Tool-Moduls mehr auf (heute `talk_tools._room`), und das README-Beispiel für einen unbekannten Suchprovider nutzt eine echte, nie registrierte Provider-Id statt `spreed` (IN-Reste aus 11-REVIEW.md); ein Gate oder Test hält den Privat-Durchgriff fest.
 
 ### Sicherheit (SEC)
 
@@ -47,7 +47,7 @@ Vorgemerkt, nicht in v1.3:
 |-------------|-------|--------|
 | TOOL-17 | Phase 12 | Complete |
 | TOOL-18 | Phase 12 | Complete |
-| TOOL-19 | Phase 12 | Pending |
+| TOOL-19 | Phase 12 | Complete |
 | SEC-02 | Phase 12 | Complete |
 | EXAPP-08 | Phase 13 | Pending |
 | EXAPP-09 | Phase 13 | Pending |

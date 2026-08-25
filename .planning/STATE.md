@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Pflege und 0.1.9
-status: executing
-stopped_at: "Completed 12-03-PLAN.md (SEC-02: die drei Nachzieher aus 11-SECURITY sind Belege)"
-last_updated: "2026-08-25T13:01:32.169Z"
+status: verifying
+stopped_at: "Completed 12-04-PLAN.md (TOOL-19: one_room ist oeffentlich, die Modulgrenze ist ein AST-Gate)"
+last_updated: "2026-08-25T13:25:36.666Z"
 last_activity: 2026-08-25
 progress:
   total_phases: 2
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
-  completed_plans: 3
-  percent: 0
+  completed_plans: 4
+  percent: 50
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 
 ## Current Position
 
-Phase: 12 (Konsistenz und Härtungs-Nachzieher) — EXECUTING
+Phase: 12 (Konsistenz und Härtungs-Nachzieher) — COMPLETE
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-25
 
 ## Performance Metrics
@@ -148,6 +148,7 @@ Last activity: 2026-08-25
 | Phase 12 P01 | 9 min | 2 tasks tasks | 4 files files |
 | Phase 12 P02 | 10 min | 2 tasks | 4 files |
 | Phase 12 P03 | 21 min | 3 tasks tasks | 3 files files |
+| Phase 12 P04 | 18 min | 3 tasks tasks | 7 files files |
 
 ## Accumulated Context
 
@@ -543,6 +544,10 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 12-03: ab jetzt steht CHANGELOG.md unter dem Vokabular-Gate, relevant fuer den 0.1.9-Block in Phase 13
 - [Phase ?]: Phase 12-03 (SEC-02b): die Nicht-leer-Behauptung eines Quelltext-Gates darf nicht auf der Zeile ankern, die die Gegenprobe manipuliert; Anker ist level=accounts, nicht level=mailboxes
 - [Phase ?]: Phase 12-03: Gegenproben, die eine echte Datei manipulieren, lesen und schreiben Bytes (write_bytes); read_text/write_text dreht auf diesem Windows-Host die Zeilenenden und hinterlaesst einen unsauberen Baum
+- [Phase ?]: Phase 12 TOOL-19: der oeffentliche Name ist one_room und nicht room_of (IN-06); one_message ist die vorhandene Konvention fuer 'genau ein Objekt aus einer gelesenen Menge', ein zweiter Namensstil im gleichen Modul waere eine Konvention mit zwei Formen
+- [Phase ?]: Phase 12 TOOL-19: Modulgrenze als AST-Gate in tests/contract/test_module_boundaries.py statt ruff --select SLF; die Messung im Modul-Docstring begruendet es (3 SLF-Treffer in src/, davon 2 legitime Klassen-Interna, 53 in tests/), und AST sieht die vier Prosa-Nennungen in tools/context.py konstruktionsbedingt nicht
+- [Phase ?]: Phase 12 TOOL-19: die Umbenennung _room zu one_room gehoert NICHT in den Changelog von 0.1.9 (kein Werkzeugname, kein Antwortschluessel, keine Id-Form, tools/list bleibt 15711 Bytes bei 21 Werkzeugen); die README-Korrektur spreed zu talk-conversations gehoert als Doku-Korrektur hinein
+- [Phase ?]: Phase 12 TOOL-19: REAL_BUT_UNREGISTERED lebt im Test und nicht in provider_map.py, weil das Produktionsmodul eine Uebersetzungstabelle fuehrt und keine Liste der Ids, die es nicht uebersetzt
 
 ### Pending Todos
 
@@ -577,9 +582,9 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-25T13:00:57.874Z
-Stopped at: Completed 12-03-PLAN.md (SEC-02: die drei Nachzieher aus 11-SECURITY sind Belege)
-Naechster Schritt: Plan 12-04 ausfuehren
+Last session: 2026-08-25T13:25:10.409Z
+Stopped at: Completed 12-04-PLAN.md (TOOL-19: one_room ist oeffentlich, die Modulgrenze ist ein AST-Gate, das README-Beispiel nennt talk-conversations)
+Naechster Schritt: Phase 12 verifizieren, dann Phase 13 (Release 0.1.9) planen
 Resume file: None
 
 ## Operator Next Steps
