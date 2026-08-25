@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: Kuratierte Breite
-status: Awaiting next milestone
-stopped_at: Completed 11-10-PLAN.md
-last_updated: "2026-08-25T04:36:31.884Z"
-last_activity: 2026-08-25 — Milestone v1.2 completed and archived
+milestone: v1.3
+milestone_name: Pflege und 0.1.9
+status: planning
+last_updated: "2026-08-25T05:01:42.543Z"
+last_activity: 2026-08-25
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 28
-  completed_plans: 28
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 
 ## Current Position
 
-Phase: Milestone v1.2 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-08-25 — Milestone v1.2 completed and archived
+Status: Defining requirements
+Last activity: 2026-08-25 — Milestone v1.3 started
 
 ## Performance Metrics
 

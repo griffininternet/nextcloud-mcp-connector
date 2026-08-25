@@ -8,9 +8,19 @@ Ein schlankes MCP-only-ExApp für Nextcloud: Nutzer installieren es per Klick au
 
 Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
 
-## Current Milestone
+## Current Milestone: v1.3 Pflege und 0.1.9
 
-Keiner aktiv. v1.2 ist am 2026-08-25 geshippt; der nächste Meilenstein entsteht mit `/gsd:new-milestone` (Kandidaten unter Next Milestone Goals).
+**Goal:** Die beim v1.2-Abschluss bewusst zurückgestellten Konsistenz- und Härtungs-Schulden abräumen, solange sie frisch sind, und die Fassung als Release 0.1.9 in den Store bringen.
+
+**Target features:**
+- `message_truncated` in tools/talk.py (DF-11-01: dieselbe truncated-Doppelbedeutung, die Mail als IN-01 gefixt hat; Antwortformat-Änderung, gehört in den Changelog)
+- Id-Codec-Hygiene: `_ID_KIND`-Workaround durch `ids.encode_mail` ersetzen (IN-05), url:-Whitespace-Lücke in `ids.parse` schließen (IN-06)
+- Kleinkram aus 11-REVIEW: echtes Provider-Id-Beispiel im README, `talk_tools._room`-Privataufruf über eine öffentliche Schnittstelle
+- Security-Nachzieher aus 11-SECURITY (UF-1..3): Verifikationskommentare für files/notes in PROVIDER_KINDS, Regressionstest für das Quelltext-Gate T-11-29, Vokabular-Gate über info.xml hinaus
+- CIMD-E2E-Live-Rerun (v1.1-Tech-Debt)
+- Release 0.1.9 im Store (Tag nur nach Owner-Freigabe, Runbook mit Proof-Zeilen)
+
+**Key context:** Reiner Pflege-Milestone, keine neuen Familien. Die Entscheidung zwischen "Breite 2" (Mail-Entwürfe/Talk-Threads) und v2.0 openDesk fällt danach, informiert durch Store-Feedback, Conference und it@M. UF-4 (uv.lock-Versionszeile) ist dokumentiert-akzeptiert, keine Aktion.
 
 ## Current State
 
@@ -135,4 +145,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-25 after v1.2 milestone*
+*Last updated: 2026-08-25 at v1.3 milestone start*
