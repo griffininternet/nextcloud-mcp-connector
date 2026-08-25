@@ -12,6 +12,16 @@ listed when it is off, and the answer says who can turn it on.
 
 Empty strings are the defaults instead of ``None``, so no ``anyOf`` of string and null reaches
 the schema; the bodies below turn them back into ``None`` before the call.
+
+The docstring of ``talk_browse`` names both truncation keys, and that is the one sentence of it
+that buys itself back: ``truncated`` is the cut **page** of the messages level, and a ``next``
+stands beside it, while ``message_truncated`` is the cut **text** of a single entry, which no
+cursor continues. Before plan 12-01 both were called ``truncated``, and a model that reads the
+entry level flag as a page flag pages in a circle, which costs more round trips than the fifty
+odd bytes this sentence occupies. Nothing was compressed in return for it, unlike the mail edit
+it follows: ``talk_browse`` stood at 858 of the 1400 bytes of ``MAX_TOOL_BYTES`` and the whole
+surface at 15657 of the 18000 of ``BUDGET_BYTES`` when the sentence was written, so the room was
+already there and neither gate moved (plan 12-01, ``scripts/check_tool_budget.py``).
 """
 
 from typing import Annotated, Literal
@@ -45,7 +55,8 @@ async def talk_browse(
 ) -> str:
     """List the conversations of this account, or the history of one.
 
-    The messages level answers newest first; the next page runs further into the past."""
+    The messages level answers newest first; the next page runs further into the past.
+    truncated: page cut; message_truncated: message cut."""
     clients = deps.resolve_clients(ctx)
     return compact(
         await talk_tools.browse(
