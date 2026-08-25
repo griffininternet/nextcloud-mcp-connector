@@ -138,17 +138,32 @@ def _reaches(source: str, relative: str) -> list[str]:
 
     ``self._state`` and a module internal ``_helper()`` are no finding by construction and not
     by exception: neither is an attribute on the name of an imported module.
+
+    Two spellings of the reach, two walks over the same tree: the attribute on a module alias
+    (``talk_tools._room``) and the direct symbol import (``from .talk import _conversation``),
+    which binds the private name locally and never produces an ``ast.Attribute`` at all. The
+    import itself is the finding there, aliased or not: the moment the name crosses the module
+    boundary, the promise of the underscore is broken, whatever it is called afterwards.
     """
     tree = ast.parse(source, filename=relative)
     aliases = _aliases(tree, relative)
+    package = _package_of(relative)
+    own = _dotted(relative)
+    tools = _tool_modules()
 
     hits: list[tuple[int, str]] = []
     for node in ast.walk(tree):
-        if not isinstance(node, ast.Attribute) or not isinstance(node.value, ast.Name):
-            continue
-        if node.value.id not in aliases or not _is_private(node.attr):
-            continue
-        hits.append((node.lineno, f"{node.value.id}.{node.attr}"))
+        if isinstance(node, ast.ImportFrom):
+            base = _base_of(node, package)
+            prefix, _, stem = base.rpartition(".")
+            if base == own or prefix != TOOLS_PACKAGE or stem not in tools:
+                continue
+            for alias in node.names:
+                if _is_private(alias.name):
+                    hits.append((node.lineno, f"from {base} import {alias.name}"))
+        elif isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+            if node.value.id in aliases and _is_private(node.attr):
+                hits.append((node.lineno, f"{node.value.id}.{node.attr}"))
     return [f"{relative}:{line}: {reach}" for line, reach in sorted(hits)]
 
 
@@ -248,6 +263,34 @@ def test_every_import_form_in_the_tree_is_resolved() -> None:
     # The same call inside the module it belongs to is nobody's business but its own.
     own = "from . import talk\n\nvalue = talk._conversation\n"
     assert _reaches(own, "tools/talk.py") == []
+
+
+def test_the_gate_finds_the_direct_import_of_a_private_name() -> None:
+    """Counter proof: ``from .talk import _conversation`` is the cheapest spelling of the break.
+
+    It binds the private name locally, so the later call is an ``ast.Name`` without any
+    attribute, and the attribute walk alone would never see it. Each of the three ``from``
+    depths the tree uses is checked, plus the aliased form: renaming the symbol on the way
+    in hides nothing, because the import itself is the reach.
+    """
+    forms = {
+        "tools/six.py": "from .talk import _conversation",
+        "server/seven.py": "from ..tools.talk import _conversation",
+        "oauth/eight.py": "from mcp_connector.tools.talk import _conversation",
+    }
+    for relative, line in forms.items():
+        wanted = f"{relative}:1: from mcp_connector.tools.talk import _conversation"
+        assert _reaches(f"{line}\n", relative) == [wanted], relative
+
+    aliased = "from .talk import _conversation as conversation\n"
+    assert _reaches(aliased, "tools/nine.py") == [
+        "tools/nine.py:1: from mcp_connector.tools.talk import _conversation"
+    ]
+
+    # The same import inside the module it belongs to is nobody's business but its own,
+    # and a public name over the same edge is what talk.one_room exists for, not a finding.
+    assert _reaches("from .talk import _conversation\n", "tools/talk.py") == []
+    assert _reaches("from .talk import one_room\n", "tools/ten.py") == []
 
 
 def test_the_gate_looks_at_the_files_it_claims_to_look_at() -> None:
