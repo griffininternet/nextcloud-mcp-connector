@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Pflege und 0.1.9
 status: executing
-stopped_at: Completed 12-01-PLAN.md (TOOL-17: message_truncated in talk_browse)
-last_updated: "2026-08-25T12:35:03.853Z"
-last_activity: 2026-08-25 -- Plan 12-01 abgeschlossen (TOOL-17)
+stopped_at: "Completed 12-02-PLAN.md (TOOL-18: der Id-Codec ist die einzige Quelle)"
+last_updated: "2026-08-25T12:45:18.953Z"
+last_activity: 2026-08-25 -- Plan 12-02 abgeschlossen (TOOL-18)
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 4
-  completed_plans: 1
-  percent: 25
+  completed_plans: 2
+  percent: 50
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 12 (Konsistenz und Härtungs-Nachzieher) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-08-25
 
@@ -146,6 +146,7 @@ Last activity: 2026-08-25
 | Phase 11 P09 | 25 min | 3 tasks | 6 files |
 | Phase 11 P10 | 20 min | 4 tasks | 2 files |
 | Phase 12 P01 | 9 min | 2 tasks tasks | 4 files files |
+| Phase 12 P02 | 10 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -533,6 +534,9 @@ Recent decisions affecting current work:
 - [Phase ?]: 12-01: TOOL-17 benennt die Eintragsebene um (message_truncated) und nicht die Antwortebene: die Antwortebene ist in vier Tests, der cursor-Field-Description und context._digest verankert
 - [Phase ?]: 12-01: metadata['truncated'] in fetch bleibt woertlich, weil fetch genau eine Nachricht und damit genau eine Ebene antwortet
 - [Phase ?]: 12-01: keine Gegenkompression in reg_talk.py (858 von 1400 Bytes Luft, Mail hatte 24); nach dem Edit 912 Bytes und 15711 von 18000, kein Gate angehoben
+- [Phase ?]: Phase 12 TOOL-18: Whitespace im url-Rest ist gegen encode_url ausgelegt: whitespace-only und fuehrender Whitespace werden von ids.parse abgelehnt, inneres Whitespace bleibt erlaubt, weil encode_url('https://a b') genau diesen Wert baut
+- [Phase ?]: Phase 12 TOOL-18: neue Funktion ids.encode_card_short, weil ids.parse die Kurzform card:cardId seit Phase 1 akzeptiert, der Codec sie aber nicht bauen konnte und provider_map sie deshalb von Hand baute (zweiter Handbau, den 12-02-PLAN nicht kannte)
+- [Phase ?]: Phase 12 TOOL-18: die Mail-Id-Ausgabe ist byte-identisch geblieben (Filter _number(databaseId) grosser 0 vor der Projektion); weder die Umstellung noch die neuen url-Ablehnungen gehen in den Changelog von 0.1.9
 
 ### Pending Todos
 
@@ -567,8 +571,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-25T12:34:56.993Z
-Stopped at: Completed 12-01-PLAN.md (TOOL-17: message_truncated in talk_browse)
+Last session: 2026-08-25T12:45:18.937Z
+Stopped at: Completed 12-02-PLAN.md (TOOL-18: der Id-Codec ist die einzige Quelle)
 Naechster Schritt: Plan 12-02 ausfuehren
 Resume file: None
 

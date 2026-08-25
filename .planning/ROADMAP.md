@@ -73,7 +73,7 @@ Plans:
 **Wave 1**
 
 - [x] 12-01-PLAN.md — TOOL-17: `message_truncated` auf der Nachrichtenebene von `talk_browse`, Verbraucher in `fetch` zieht mit, Tool-Docstring mit einer Bedeutung je Ebene
-- [ ] 12-02-PLAN.md — TOOL-18: `ids.encode_mail` statt `_ID_KIND`, und `ids.parse` liest im `url`-Zweig nur noch, was `ids.encode_url` bauen kann
+- [x] 12-02-PLAN.md — TOOL-18: `ids.encode_mail` statt `_ID_KIND`, und `ids.parse` liest im `url`-Zweig nur noch, was `ids.encode_url` bauen kann
 - [ ] 12-03-PLAN.md — SEC-02: Verifikationskommentare für `files` und `notes`, T-11-29 als Regressionstest, Vokabular-Gate über READMEs und Changelog
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -109,7 +109,7 @@ Plans:
 | 9. Talk | v1.2 | 5/5 | Complete | 2026-08-21 |
 | 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 8/8 | Complete | 2026-08-24 |
 | 11. Bündelung, Budget und Release 0.1.8 | v1.2 | 10/10 | Complete | 2026-08-25 |
-| 12. Konsistenz und Härtungs-Nachzieher | v1.3 | 1/4 | In Progress | - |
+| 12. Konsistenz und Härtungs-Nachzieher | v1.3 | 2/4 | In Progress|  |
 | 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 0/? | Not started | - |
 
 ## Next
