@@ -26,18 +26,16 @@ Drei Konventionen für dieses Protokoll, übernommen aus dem Vorlauf 06-09:
 * Die Version einer Instanz ist immer die Zeile aus `occ status`, nie ein Docker-Tag
   (Pitfall 6). Für den Connector ist die Pflichtangabe Version **und** Image-Digest.
 
-Zur zweiten Konvention gehört eine Prüfung und eine Genauigkeit. Geprüft wird mit
+Zur zweiten Konvention gehört eine Prüfung und eine Genauigkeit. Geprüft wurde mit einem
+`grep -nE` über diese Datei, das die fünf verbotenen Namen jeweils **mit** einem folgenden Wert
+sucht, also den Verifier, die Prüfsumme, einen Bearer-Kopf, einen `state` von mindestens acht
+Zeichen und eine Passwort-Zuweisung: **kein Treffer**. Das Suchmuster steht hier absichtlich
+nicht wörtlich, sonst fände es sich selbst.
 
-```
-grep -nE '(code_verifier=[A-Za-z0-9]|code_challenge=[A-Za-z0-9]|Bearer [A-Za-z0-9]|state=[A-Za-z0-9]{8}|password=)' 13-MEASUREMENTS.md
--> kein Treffer
-```
-
-Ein Grep nach den blossen Namen (`code_challenge` ohne Gleichheitszeichen und ohne Wert) findet
-dagegen drei Zeilen: die Konvention selbst, die den Namen nennen muss, um ihn zu verbieten, die
-gekürzte `/authorize`-Zeile in Abschnitt 2, und die Tabellenzeile, die `code_challenge_method`
-als `S256` nennt. Ein Verfahrensname ist kein Geheimnis. Verboten sind die Werte, und keiner
-steht hier.
+Ein Grep nach den blossen Namen ohne Wert findet dagegen drei Zeilen: diese Konvention, die den
+Namen nennen muss, um ihn zu verbieten, die gekürzte `/authorize`-Zeile in Abschnitt 2, und die
+Tabellenzeile, die `code_challenge_method` als `S256` nennt. Ein Verfahrensname ist kein
+Geheimnis. Verboten sind die Werte, und keiner steht hier.
 
 ## Topologie des Laufs
 
