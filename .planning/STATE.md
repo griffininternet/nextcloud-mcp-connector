@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Pflege und 0.1.9
-status: verifying
-stopped_at: "Completed 12-04-PLAN.md (TOOL-19: one_room ist oeffentlich, die Modulgrenze ist ein AST-Gate)"
-last_updated: "2026-08-25T13:25:36.666Z"
+status: ready_to_plan
+stopped_at: Phase 12 complete (4/4) — ready to discuss Phase 13
+last_updated: 2026-08-25T14:31:48.983Z
 last_activity: 2026-08-25
 progress:
   total_phases: 2
@@ -21,20 +21,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Current focus:** Phase 12 — Konsistenz und Härtungs-Nachzieher
+**Current focus:** Phase 13 — cimd nachmessung und release 0.1.9
 
 ## Current Position
 
-Phase: 12 (Konsistenz und Härtungs-Nachzieher) — COMPLETE
-Plan: 4 of 4
-Status: Phase complete — ready for verification
+Phase: 13
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-08-25
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 88
+- Total plans completed: 92
 - Average duration: 35 min
 - Total execution time: 15.2 hours
 
@@ -51,6 +51,7 @@ Last activity: 2026-08-25
 | 8 | 5 | - | - |
 | 9 | 5 | - | - |
 | 10 | 8 | - | - |
+| 12 | 4 | - | - |
 
 **Recent Trend:**
 
