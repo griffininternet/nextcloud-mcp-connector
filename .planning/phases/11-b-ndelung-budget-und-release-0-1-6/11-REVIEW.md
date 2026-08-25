@@ -47,6 +47,7 @@ status: issues_found
 **Depth:** standard
 **Files Reviewed:** 29
 **Status:** issues_found
+**Fix pass:** 2026-08-25, Scope Warnings: WR-01 bis WR-04 fixed (Commits e0150af, 5ab83e6, 33cae32, 5501b0a), IN-01 bis IN-07 deferred. Verifikation grün: ruff check ., ruff format --check ., pyright, pytest (voll und tests/contract), vulture, check_tool_budget (15657 Bytes, unverändert gegenüber dem Stand vor den Fixes, Gate 18000 nicht angehoben).
 
 ## Summary
 
@@ -61,6 +62,8 @@ Vier Warnungen bleiben stehen: eine Tokenisierungs-Lücke im Mail-Filter-Gate, d
 ## Warnings
 
 ### WR-01: Das Mail-Filter-Gate tokenisiert anders als die Mail-App und lässt damit genau die stille Falschantwort durch, gegen die es existiert
+
+**Status:** fixed (Commit e0150af). Refusal vor der Token-Schleife: jedes Whitespace-Zeichen außer dem Leerzeichen wird abgelehnt, danach sehen `.split()` und die App dieselbe Zerlegung. Docstring auf fünf Refusals korrigiert (die falsche "safe direction"-Behauptung ist raus). Negativtests für Tab, geschütztes Leerzeichen und Newline zwischen gültigen Tokens plus Edge-Test: umschließendes Whitespace wird gestript, nicht abgelehnt.
 
 **File:** `src/mcp_connector/tools/mail.py:253`
 **Issue:** `_checked_filter` prüft die Bedingungen über `wanted.split()` (jeder Unicode-Whitespace), die Mail-App splittet ihren Filter aber ausschließlich an Leerzeichen. Ein Filter, dessen Bedingungen durch einen Tab oder ein geschütztes Leerzeichen getrennt sind, besteht die Prüfung hier ("is:unread" und "from:chef" sind einzeln gültig), erreicht die App jedoch als **ein** Token `is:unread\tfrom:chef`, dessen Wert kein bekanntes Flag ist. Die App verwirft es wortlos und antwortet mit der ungefilterten Liste, exakt das gemessene `is:ungelesen`-Szenario, dessen Verhinderung der dokumentierte Zweck der Positivliste ist. Der Docstring behauptet die sichere Richtung ("a tab inside a value is checked as two tokens here and refused"); das stimmt nur, wenn der Tab ein einzelnes Token ungültig macht, nicht wenn er zwei gültige Tokens trennt. Nachgestellt: `"is:unread\tfrom:chef".split()` ergibt zwei gültige Tokens, `.split(" ")` (App-Sicht) ergibt eines.
@@ -78,6 +81,8 @@ if any(ch.isspace() and ch != " " for ch in wanted):
 
 ### WR-02: Das Mail-Bein von prepare_context verschluckt die Kappungen der Tool-Schicht und schreibt im Grenzfall einen faktisch falschen degraded-Satz
 
+**Status:** fixed (Commit 5ab83e6). `_mail` trägt beide Envelope-Kappungen weiter (`accounts_truncated` am Antwort-Dict, `boxes_truncated` je Konto ohne gefundene Inbox); `_counters` schreibt dafür eigene Sätze: gekappte Postfachliste ohne Inbox heißt jetzt "was cut at 50, so its inbox may be behind the cut" statt "has no mailbox with the inbox role", gekappte Kontenliste macht `total` als lower bound benannt. Das interne Flag wird gepoppt und erreicht die Antwort nie. Tests: 60 Postfächer mit Inbox an Position 55 (falscher Satz explizit ausgeschlossen), Inbox vor dem Schnitt (kein degraded), gekappte Kontenliste; das FakeMail wendet dafür denselben Envelope-Schnitt an wie `mail_tools._envelope`.
+
 **File:** `src/mcp_connector/tools/context.py:346-370` (`_mail`), `:389-395` (`_counter`), `:417-445` (`_counters`)
 **Issue:** Zwei Verstöße gegen die eigene Regel des Moduls "every cap writes its own degraded entry":
 1. Die Postfachliste je Konto ist über den Envelope von `mail_browse` bei `MAX_LIMIT` (50) gekappt. Liegt die Inbox eines Kontos mit mehr als 50 Postfächern hinter dem Schnitt, findet `_counter` keine Rolle `inbox` und `_counters` schreibt "The mail account X has no mailbox with the inbox role", eine falsche Aussage; `truncated`/`note` des Postfach-Envelopes werden in `_counter` kommentarlos verworfen. Der Modulkommentar adressiert die 20er-Falle durch `MAX_LIMIT`, dieselbe Falle eine Größe weiter bleibt offen und wird falsch benannt statt still.
@@ -86,11 +91,15 @@ if any(ch.isspace() and ch != " " for ch in wanted):
 
 ### WR-03: Die drei READMEs nennen "Version 0.1.7" und reisen so im signierten 0.1.8-Store-Archiv mit
 
+**Status:** fixed (Commit 33cae32). Statuszeile in allen drei READMEs auf 0.1.8 gehoben (nur die Zeile; info.xml, pyproject und Tag unangetastet, kein neues Release ausgelöst; das veröffentlichte 0.1.8-Archiv bleibt unveränderlich). Dauerhaft: Runbook-Schritt 1 nennt die README-Statuszeile jetzt als fünfte Stelle, die von Hand mitzuziehen ist.
+
 **File:** `README.md:27`, `README.de.md:29`, `README.fr.md:31`
 **Issue:** Release 0.1.8 ist im Store (CHANGELOG, `info.xml` `<version>0.1.8</version>`, Proof-Zeilen vom 2026-08-25 in `docs/store-submission.md`), die Statuszeile aller drei READMEs blieb aber auf 0.1.7 stehen (letzte Anhebung in Commit `6b67cbc`, dem 0.1.7-Release). `README.md` liegt laut Proof-Zeile 2026-08-24 22:39Z im Store-Archiv (`appinfo/info.xml`, `CHANGELOG.md`, `LICENSE`, `README.md`), das Archiv ist signiert und veröffentlicht: Wer 0.1.8 herunterlädt, liest darin "Version 0.1.7". Der Release-Runbook-Schritt 1 nennt vier Stellen für die Versionsanhebung, die README-Statuszeile ist keine davon, und kein Gate hält sie (der Tool-Count-Test prüft nur Tool-Zahlen), also wiederholt sich die Drift.
 **Fix:** Statuszeile in allen drei READMEs auf die aktuelle Version heben (nächstes Release, das Archiv von 0.1.8 ist unveränderlich). Dauerhaft: entweder die READMEs in Runbook-Schritt 1 aufnehmen oder ein Contract-Test, der `Version <x>` in den drei READMEs gegen `mcp_connector.__version__` vergleicht (analog zur bestehenden Tool-Count-Regel in `tests/contract/test_tool_surface.py`).
 
 ### WR-04: tables_create_row lässt zwei Eingabe-Schlüssel, die auf dieselbe Spalte normalisieren, still zum Last-wins werden
+
+**Status:** fixed (Commit 5501b0a). `_by_column_id` lehnt zwei `values`-Schlüssel, die auf dieselbe Spalte normalisieren, mit Refusal ab (Message nennt beide Schreibweisen, Hint die gültigen Titel plus "keep one key per column"), bevor irgendetwas aufgelöst oder geschrieben wird. Tests: Kollision "Aufgabe"/"aufgabe " ohne POST, plus Edge-Fall zweier kollidierender unbekannter Titel (Kollision gewinnt vor unknown).
 
 **File:** `src/mcp_connector/tools/tables.py:237-254` (`_by_column_id`)
 **Issue:** Die Titel-Auflösung normalisiert mit `strip().casefold()`. Zwei verschiedene JSON-Schlüssel in `values`, die auf dieselbe Spalte zeigen (etwa `"Task"` und `"task "`), überschreiben sich in `data[str(column_id)]` und in `written` gegenseitig: der zuletzt iterierte Wert wird geschrieben, der erste verschwindet ohne Refusal. Das widerspricht der Refusal-first-Linie der Familie, die den Spiegelfall (ein Titel, zwei Spalten) als "ambiguous" ablehnt, und ist auf einem Schreibpfad ein stiller Datenverlust: die Antwort (`values_written`) trägt nur den Gewinner, und der Aufrufer hat keinen Fehler gesehen.
