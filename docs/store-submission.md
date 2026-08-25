@@ -180,6 +180,11 @@ on, and step 4 is irreversible in public.
    string, and it has to be, because AppAPI pulls exactly the tag the manifest names: a
    tag that does not exist means an install that cannot start, and a tag that points
    somewhere else means an install that runs code nobody released.
+   A fifth place travels along and no gate holds it: the `Version <x>.` status line of
+   `README.md`, `README.de.md` and `README.fr.md`. `README.md` ships inside the signed
+   release tarball, so a stale line there is published and immutable (the 0.1.8 tarball
+   says 0.1.7 for exactly this reason, review finding WR-03 of phase 11). Raise all
+   three by hand in this step.
 2. **Write the changelog.** A new version block in `CHANGELOG.md`, in the shape of the
    existing ones, with the user relevant changes only, plus the two link references at
    the bottom of the file. This file travels inside the store archive.
