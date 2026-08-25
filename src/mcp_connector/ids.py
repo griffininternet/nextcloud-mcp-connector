@@ -125,6 +125,18 @@ def parse(raw: str) -> tuple[str, tuple[str, ...]]:
         raise ToolError(message=f"{raw!r} is not a valid resource id.", hint=_HINT)
 
     if kind == "url":
+        # Both halves of this guard stand here and not in the caller, and the yardstick is the
+        # mirror side: ``encode_url`` builds ``url:`` plus ``url.strip()`` and refuses an empty
+        # value, so exactly that set and no larger one may be read back (review finding IN-04).
+        # The whitespace only rest is refused today already, but only by way of the outer
+        # ``strip`` above, which stands there for a different reason; it is written out here so
+        # the promise does not hang on a foreign line. Leading whitespace is the half that is
+        # really reachable: ``url:  https://x`` used to parse into a value ``encode_url`` can
+        # never have built. Inner whitespace stays allowed on purpose, because
+        # ``encode_url("https://a b")`` builds exactly that, and a refusal would be stricter
+        # than the encode side and would only turn the asymmetry around.
+        if not rest.strip() or rest != rest.strip():
+            raise ToolError(message=f"{raw!r} is not a valid resource id.", hint=_HINT)
         return "url", (rest,)
     if kind in ("file", "note"):
         parts = (rest,)

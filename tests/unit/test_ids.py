@@ -179,6 +179,21 @@ def test_url_keeps_colons_and_slashes() -> None:
     assert parts == ("https://nc.test:8443/index.php/apps/deck/#/board/1",)
 
 
+def test_the_url_kind_reads_exactly_what_encode_url_can_build() -> None:
+    """The boundary in both directions, because one rejection alone does not say where it is.
+
+    ``encode_url`` strips and refuses an empty value, so a rest with leading whitespace is a
+    value it can never have built and ``parse`` must not hand it back (review finding IN-04).
+    Inner whitespace is the other side of the same statement: ``encode_url("https://a b")``
+    builds that id, so refusing it here would be stricter than the encode side.
+    """
+    assert ids.parse("url:https://a b") == ("url", ("https://a b",))
+
+    built = ids.encode_url("   https://x/y   ")
+    assert built == "url:https://x/y"
+    assert ids.parse(built) == ("url", ("https://x/y",))
+
+
 @pytest.mark.parametrize(
     "raw",
     [
@@ -193,6 +208,12 @@ def test_url_keeps_colons_and_slashes() -> None:
         "card:1:2:3:4",
         "event:personal",
         "url:",
+        # The whitespace half of the url kind: a rest that is only whitespace, and a rest that
+        # begins with whitespace. Neither is a value ``encode_url`` can build, because it
+        # strips (review finding IN-04).
+        "url:   ",
+        "url:  https://x/y",
+        "url:\thttps://x",
     ],
 )
 def test_invalid_ids_raise_toolerror_with_hint(raw: str) -> None:
