@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Pflege und 0.1.9
 status: executing
-stopped_at: Roadmap v1.3 erstellt (ROADMAP.md, REQUIREMENTS.md Traceability, STATE.md)
-last_updated: "2026-08-25T12:24:35.051Z"
-last_activity: 2026-08-25 -- Phase 12 planning complete
+stopped_at: Completed 12-01-PLAN.md (TOOL-17: message_truncated in talk_browse)
+last_updated: "2026-08-25T12:35:03.853Z"
+last_activity: 2026-08-25 -- Plan 12-01 abgeschlossen (TOOL-17)
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 4
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 25
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Current focus:** Phase 12 - Konsistenz und Härtungs-Nachzieher (TOOL-17, TOOL-18, TOOL-19, SEC-02)
+**Current focus:** Phase 12 — Konsistenz und Härtungs-Nachzieher
 
 ## Current Position
 
-Phase: 12 - Konsistenz und Härtungs-Nachzieher (v1.3, Phasen 12-13)
-Plan: — (keiner geplant)
+Phase: 12 (Konsistenz und Härtungs-Nachzieher) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-08-25 -- Phase 12 planning complete
+Last activity: 2026-08-25
 
 ## Performance Metrics
 
@@ -145,6 +145,7 @@ Last activity: 2026-08-25 -- Phase 12 planning complete
 | Phase 11 P08 | 30 min | 3 tasks tasks | 9 files files |
 | Phase 11 P09 | 25 min | 3 tasks | 6 files |
 | Phase 11 P10 | 20 min | 4 tasks | 2 files |
+| Phase 12 P01 | 9 min | 2 tasks tasks | 4 files files |
 
 ## Accumulated Context
 
@@ -529,6 +530,9 @@ Recent decisions affecting current work:
 - [Phase 11-b-ndelung-budget-und-release-0-1-6]: Release 0.1.8: der Tag entstand erst nach ausdrücklicher Owner-Freigabe, und die Freigabe umfasste auf Vorlage hin auch den Branch-Push, weil 42 Commits der Phase nur lokal lagen und die Store-Beschreibung Doku- und Screenshot-URLs auf main verlinkt
 - [Phase 11-b-ndelung-budget-und-release-0-1-6]: Release 0.1.8: signiert wurde das heruntergeladene Release-Asset (45546 Bytes) und nicht das lokal gebaute (45710 Bytes); die Signatur steht in keiner Datei und wird bei Bedarf neu berechnet
 - [Phase 11-b-ndelung-budget-und-release-0-1-6]: Release 0.1.8: die verzögerte Sichtbarkeit im Katalog-Endpunkt wurde als Cache-Verhalten notiert und abgewartet, nicht mit einer weiteren Version beantwortet
+- [Phase ?]: 12-01: TOOL-17 benennt die Eintragsebene um (message_truncated) und nicht die Antwortebene: die Antwortebene ist in vier Tests, der cursor-Field-Description und context._digest verankert
+- [Phase ?]: 12-01: metadata['truncated'] in fetch bleibt woertlich, weil fetch genau eine Nachricht und damit genau eine Ebene antwortet
+- [Phase ?]: 12-01: keine Gegenkompression in reg_talk.py (858 von 1400 Bytes Luft, Mail hatte 24); nach dem Edit 912 Bytes und 15711 von 18000, kein Gate angehoben
 
 ### Pending Todos
 
@@ -563,11 +567,12 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-25T06:20:00.000Z
-Stopped at: Roadmap v1.3 erstellt (ROADMAP.md, REQUIREMENTS.md Traceability, STATE.md)
-Naechster Schritt: /gsd:plan-phase 12
+Last session: 2026-08-25T12:34:56.993Z
+Stopped at: Completed 12-01-PLAN.md (TOOL-17: message_truncated in talk_browse)
+Naechster Schritt: Plan 12-02 ausfuehren
 Resume file: None
 
 ## Operator Next Steps
 
-- Phase 12 planen mit /gsd:plan-phase 12
+- Plan 12-02 ausfuehren (Phase 12, Plan 2 von 4)
+- Uebergabe an Phase 13: Changelog-Block 0.1.9 braucht die Zeile zur Umbenennung truncated -> message_truncated (siehe 12-01-SUMMARY.md)
