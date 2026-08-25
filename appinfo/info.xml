@@ -74,6 +74,12 @@ Reading text written by strangers next to private data would be a chain if there
 - **Nothing in the background**: no scheduled job, no indexing, no telemetry
 - **Your data stays yours**: what an assistant reads goes to that assistant, in most cases a hosted provider
 
+### Enterprise
+
+An audit log over every tool call, policies per group, and sign in through the identity provider an organisation already runs are planned as a separate commercial add-on. None of the three exists in this app today, in no version and behind no setting: this section names a plan, not a feature.
+
+If an organisation would need one of them before it allows this kind of access, write to k.cherif@outlook.de.
+
 ### Resources
 
 - [Set up a client](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/client-setup.md)
@@ -114,6 +120,12 @@ Von Fremden geschriebenen Text neben privaten Daten zu lesen wäre eine Kette, w
 - **Ihr eigener Schalter**: Zugang pausieren oder eine einzelne Assistenz trennen, pro Konto
 - **Nichts im Hintergrund**: keine geplante Aufgabe, keine Indizierung, keine Telemetrie
 - **Ihre Daten bleiben Ihre**: was eine Assistenz liest, geht an genau diese Assistenz, meist an einen gehosteten Anbieter
+
+### Enterprise
+
+Ein Audit-Log über jeden Tool-Aufruf, Policies pro Gruppe und die Anmeldung über den Identitätsanbieter, den eine Organisation ohnehin betreibt, sind als eigenes kommerzielles Add-on geplant. Keines der drei existiert heute in dieser App, in keiner Version und hinter keiner Einstellung: das ist ein Vorhaben, kein Feature.
+
+Wenn eine Organisation eines davon bräuchte, bevor sie einen solchen Zugang erlaubt, schreiben Sie an k.cherif@outlook.de.
 
 ### Weiterführendes
 
@@ -157,6 +169,12 @@ Lire des textes écrits par des inconnus à côté de données privées formerai
 - **Votre propre interrupteur** : suspendre l'accès ou déconnecter un seul assistant, par compte
 - **Rien en arrière-plan** : ni tâche planifiée, ni indexation, ni télémétrie
 - **Vos données restent les vôtres** : ce qu'un assistant lit va à cet assistant, dans la plupart des cas un fournisseur hébergé
+
+### Enterprise
+
+Un journal d'audit de chaque appel d'outil, des politiques par groupe et la connexion via le fournisseur d'identité que l'organisation exploite déjà sont prévus comme un module commercial distinct. Aucun des trois n'existe aujourd'hui dans cette application, dans aucune version et derrière aucun réglage : cette section nomme un projet, pas une fonctionnalité.
+
+Si une organisation avait besoin de l'un d'eux avant d'autoriser un tel accès, écrivez à k.cherif@outlook.de.
 
 ### Pour aller plus loin
 
