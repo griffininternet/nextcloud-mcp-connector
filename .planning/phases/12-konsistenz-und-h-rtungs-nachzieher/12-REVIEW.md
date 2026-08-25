@@ -33,6 +33,7 @@ status: issues_found
 **Depth:** standard
 **Files Reviewed:** 14
 **Status:** issues_found
+**Fix pass:** 2026-08-25, Scope Warnings: WR-01 bis WR-06 fixed (Commits 60ac592, a3a846b, 6318ba0, 85859e6, a7ee8ee, c9a6f9d), IN-01 bis IN-03 deferred. Verifikation grün: ruff check ., ruff format --check ., pyright (0 Fehler, 175 Dateien), pytest (voll, 2812 passed, und tests/contract), vulture, check_tool_budget (15711 Bytes, unverändert gegenüber dem Stand vor den Fixes, Gate 18000 nicht angehoben).
 
 ## Summary
 
@@ -47,6 +48,8 @@ Keine Critical-Befunde. Sechs Warnungen betreffen Lücken in genau den Härtunge
 ### Warnings
 
 #### WR-01: Modul-Grenzen-Gate übersieht den direkten Import eines privaten Namens
+
+**Status:** fixed (Commit 60ac592). `_reaches` läuft zusätzlich über jede `ast.ImportFrom`-Kante: der Import eines privaten Namens aus einem fremden Tool-Modul ist selbst der Befund (`from {base} import {name}`), aliased oder nicht; der Eigenimport bleibt frei. Gegenprobe für genau `from .talk import _conversation` in allen drei from-Tiefen des Baums plus Alias-Form; Red-Proof manuell verifiziert: Verstoß binärsicher (read_bytes/write_bytes) in chatgpt.py injiziert, Gate rot mit Datei, Zeile und Ausdruck, Restore im finally, `git diff --exit-code` sauber.
 
 **File:** `tests/contract/test_module_boundaries.py:90-122` (`_aliases`), `:145-151` (`_reaches`)
 **Issue:** Das Gate erkennt nur `ast.Attribute` auf Modul-Aliases. Die direkteste Schreibweise des Verstoßes bleibt unsichtbar: `from .talk import _conversation` (oder `from ..tools.talk import _room` aus `server/`) bindet den privaten Namen lokal. In `_aliases.keep()` ist der `prefix` dann `mcp_connector.tools.talk` und nicht `mcp_connector.tools`, also wird der Alias verworfen, und der spätere Aufruf ist ein `ast.Name` ohne Attribut, den `_reaches` nie sieht. Ebenso unsichtbar: `import mcp_connector.tools.talk` ohne Alias mit anschließender Attribut-Kette `mcp_connector.tools.talk._x` (der Kommentar in Zeile 116-118 räumt das ein, behandelt es aber als unmöglich statt als ungeprüft). Die Gegenprobe `test_every_import_form_in_the_tree_is_resolved` deckt fünf Modul-Import-Formen ab, aber keinen Symbol-Import. Damit ist genau der Verstoß, gegen den das Gate laut Docstring existiert (TOOL-19), in seiner billigsten Form nicht gedeckt.
@@ -71,11 +74,15 @@ Dazu eine Gegenprobe mit `from .talk import _conversation`, damit die neue Kante
 
 #### WR-02: `provider_map` prüft Ziffern mit `str.isdigit()` entgegen der eigenen `_DIGITS`-Begründung
 
+**Status:** fixed (Commit a3a846b). Alle drei Stellen messen jetzt mit `_DIGITS.fullmatch` (der Kommentar an `_DIGITS` benennt die Reader mit); Backstop in `dav.build_fileid_body` mit eigener `_DIGITS`-Konstante, da das Codec-Modul dort nicht importiert werden darf. Negativtests: `²` und `٤٢` degradieren als fileId-Attribut, als `/f/`-Segment und als letztes URL-Segment zur ehrlichen url-Art statt zu `file:٤٢`/`note:٤٢`; der dav-Refusal-Test ist parametrisiert und enthält beide Zeichen.
+
 **File:** `src/mcp_connector/provider_map.py:198`, `:203`, `:259`
 **Issue:** Der Kommentar an `_DIGITS` (Zeile 98-100) benennt selbst, dass `str.isdigit()` auch eine hochgestellte Zwei und arabisch-indische Ziffern akzeptiert (WR-04-Klasse aus dem Mail-Review). Trotzdem verwenden `_file_id` (zweimal) und `_last_numeric_segment` (Quelle der note- und card-Ids) `isdigit()`. Ein manipulierter oder deformierter Suchtreffer mit `fileId: "٤٢"` baut so `file:٤٢`; `ids.parse` hat für `file`/`note`/`card` keinen Ziffern-Guard, also stoppt erst `dav.build_fileid_body`, das mit `isdigit()` ebenfalls Nicht-ASCII durchlässt (dav.py:285). Konsequenz ist kein Fremdobjekt-Zugriff, aber eine Anfrage mit einem Wert, den Nextcloud nie ausgegeben hat, statt der Zero-Request-Ablehnung, die das Projekt für genau diese Klasse eingeführt hat.
 **Fix:** In allen drei Stellen `_DIGITS.fullmatch(candidate)` statt `candidate.isdigit()` (die Konstante steht bereits im Modul); in `dav.build_fileid_body` denselben Tausch als Backstop.
 
 #### WR-03: `ids.parse` liest für `file:`, `note:` und `event:` eine größere Menge zurück als die Encode-Seite bauen kann
+
+**Status:** fixed (Commit 6318ba0). `file`/`note` refusen den Separator im Rest, `event` splittet voll und verlangt exakt zwei Segmente; beide Kommentare im Code spiegeln den url-Maßstab dieser Phase (nur die Menge lesen, die `_join` bauen kann). Negativtests `note:4:2`, `file:a:b`, `event:a:b:c` gepinnt; keine legitime Form verändert (alle Roundtrips und alle Id-Verbraucher grün, `card:1:2` war schon vorher refused).
 
 **File:** `src/mcp_connector/ids.py:141-142` (file/note), `:178-181` (event)
 **Issue:** Genau der Maßstab, den 12-02 für `url:` in den Code geschrieben hat ("exactly that set and no larger one may be read back", Zeile 128-131), gilt für drei andere Arten nicht: `_join` refust den SEPARATOR in jedem Segment, aber `parse("note:4:2")` liefert `("4:2",)`, `parse("file:a:b")` liefert `("a:b",)`, und `parse("event:a:b:c")` liefert wegen `maxsplit=1` `("a", "b:c")`. Alle drei sind Ids, die dieses Modul nie gebaut haben kann. Die Folge ist heute eine 404/Ablehnung eine Schicht tiefer (caldav quotet, dav prüft numerisch), also kein falsches Objekt, aber die Asymmetrie ist dieselbe, die diese Phase für `url:` als IN-04 geschlossen hat, und sie kostet pro erfundener Id eine Anfrage, die eine Zero-Request-Ablehnung wäre.
@@ -95,6 +102,8 @@ Dazu in `test_ids.py` die Fälle `note:4:2`, `file:a:b`, `event:a:b:c` als Ableh
 
 #### WR-04: Drei `fetch`-Zweige filtern den Titel nicht durch `marks.without_marks`
 
+**Status:** fixed (Commit 85859e6). Datei-, Notiz- und Kartentitel laufen durch `marks.without_marks`, analog Mail/Message/Table, mit je einem Kommentar, warum der Titel Fremdtext ist. Drei Tests mit präpariertem Titel (Dateiname mit geschmiedeter `TRUNCATION_NOTE`, Notiz- und Kartentitel mit `FINAL_TRUNCATION`): der Marker verschwindet, die eigenen Worte des Titels bleiben.
+
 **File:** `src/mcp_connector/tools/chatgpt.py:269` (`_fetch_file`), `:288` (`_fetch_note`), `:313` (`_fetch_card`)
 **Issue:** Die drei neueren Zweige derselben Funktion filtern den Titel als Fremdtext: `_fetch_mail:464`, `_fetch_message:664` und `_fetch_table:735` laufen durch `marks.without_marks`. Die drei älteren tun es nicht, obwohl der Titel dort genauso Fremdtext ist: der Dateiname wird von wem auch immer die Datei teilt gewählt, Notiz- und Kartentitel von jedem Schreibberechtigten (`notes_tools.read` filtert den Titel ebenfalls nicht, geprüft in notes.py:109; `deck.py` enthält kein `without_marks`). Ein Titel, der eine der Marker-Sequenzen dieses Servers trägt, landet damit ungefiltert im `title`-Feld der Fetch-Antwort, direkt neben dem gefilterten `text`, und kann die Rahmung beanspruchen, gegen die ME-03/BL-09 den Rest der Antwort härten. Die Modulregel (Docstring Zeile 43-53) ist auf `text` formuliert, aber die Mail-/Message-/Table-Zweige zeigen, dass das Projekt die Regel bereits breiter anwendet, nur nicht rückwirkend.
 **Fix:** In den drei Rückgaben `marks.without_marks(...)` um den Titel legen, analog `_fetch_mail`:
@@ -105,6 +114,8 @@ Dazu in `test_ids.py` die Fälle `note:4:2`, `file:a:b`, `event:a:b:c` als Ableh
 ```
 
 #### WR-05: Vokabular-Gate erreicht Unterordner von `docs/` nicht, beansprucht aber "the rest of docs/"
+
+**Status:** fixed (Commit a7ee8ee). `rglob` statt `glob`; `docs/contrib/227-pr-body.md` ist clean (per Grep verifiziert) und wird jetzt mitgelesen statt ausgenommen. Der Selbsttest pinnt die Unterordner-Seite namentlich, damit ein Rückbau auf das nicht-rekursive `glob` rot wird; der Docstring von `public_markdown_pages` benennt die Entscheidung.
 
 **File:** `tests/unit/test_exapp_env_setup.py:2017` (`public_markdown_pages`)
 **Issue:** `(ROOT / "docs").glob("*.md")` ist nicht rekursiv. `docs/contrib/227-pr-body.md` existiert und liegt außerhalb der Reichweite des Gates, obwohl Testname und Docstring (Zeile 2030-2031, UF-3) beanspruchen, die Regel erreiche neben den vier benannten Seiten "the rest of docs/". Die Datei ist heute clean (per Grep verifiziert), aber jede künftige Seite unter einem `docs/`-Unterordner entkommt still, und der Selbsttest `test_the_vocabulary_gate_reads_a_list_that_is_not_empty` bemerkt das nicht, weil er nur eine Untermenge und die Nicht-Leere prüft. Das ist exakt die Sorte "Gate, das grün ist, ohne hinzusehen", gegen die derselbe Testblock seine Gegenproben baut.
@@ -117,6 +128,8 @@ docs = sorted(
 Falls Unterordner bewusst ausgenommen bleiben sollen (z. B. `docs/contrib/` als Fremd-Repo-Text), die Ausnahme wie `VOCABULARY_EXCEPTION` benennen und im Selbsttest pinnen, statt sie im Glob verschwinden zu lassen.
 
 #### WR-06: `encode_card_short` ohne direkten Unit-Test, Fehlerpfad ungetestet
+
+**Status:** fixed (Commit c9a6f9d). `encode_card_short` steht jetzt im Roundtrip (`card:99`), in den stabilen Präfixen (`card:3`), in `test_encode_rejects_empty_parts` (leerer Wert) und im Separator-Reject (`9:9`); der Docstring des Reject-Tests benennt den Kommentar in `provider_map.extract_id`, auf den sich die Refusals verlassen.
 
 **File:** `tests/unit/test_ids.py:20-35` (Roundtrip-Liste), `:225-238` (`test_encode_rejects_empty_parts`)
 **Issue:** Die in dieser Phase neu eingeführte Codec-Funktion `ids.encode_card_short` (ids.py:96-105) wird in `test_ids.py` weder im Roundtrip (`parse(encode_card_short("99")) == ("card", ("99",))`) noch im Fehlerpfad (`encode_card_short("")` und `encode_card_short("9:9")` müssen ToolError werfen) geprüft; `test_encode_rejects_empty_parts` wurde nicht erweitert. Der Happy Path ist nur indirekt über `test_provider_map.py` gedeckt. Das verletzt die Projektregel, alle Pfade (Fehler/Edge) zu testen, und lässt genau die `_join`-Refusals ungeprüft, auf die der Kommentar in `provider_map.extract_id` (Zeile 153-156, T-12-05) sich verlässt.
