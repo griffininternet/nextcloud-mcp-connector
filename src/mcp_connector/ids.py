@@ -93,6 +93,18 @@ def encode_card(board_id: str | int, stack_id: str | int, card_id: str | int) ->
     return _join("card", str(board_id), str(stack_id), str(card_id))
 
 
+def encode_card_short(card_id: str | int) -> str:
+    """The one segment card form, and the only place that is allowed to build it.
+
+    :func:`parse` accepts ``card:<cardId>`` beside the full triple, because the Deck search
+    provider knows neither board nor stack, and an invented one would address a card that
+    does not exist. This function is the encode side of that acceptance: without it the one
+    caller who needs the short form has to build the prefix itself, and then this module is
+    no longer the only place a card id comes from.
+    """
+    return _join("card", str(card_id))
+
+
 def encode_event(calendar_uri: str, object_name: str) -> str:
     return _join("event", calendar_uri, object_name)
 

@@ -138,8 +138,10 @@ def extract_id(
         card_id = _last_numeric_segment(url)
         if card_id:
             # Short form on purpose: the provider knows no board and no stack, and an
-            # invented one would address a card that does not exist.
-            return "card", f"card{ids.SEPARATOR}{card_id}", False
+            # invented one would address a card that does not exist. The form comes from the
+            # codec like every other id of this module, so the refusals of ``_join`` apply
+            # here too (threat T-12-05).
+            return "card", ids.encode_card_short(card_id), False
     elif kind == "message":
         target = _message_target(attributes, url)
         if target is not None:
@@ -169,8 +171,12 @@ def hit_url(base_url: str, kind: str, identifier: str, entry: Mapping[str, Any])
         _, parts = ids.parse(identifier)
         return f"{base_url}{FILE_WEB_PREFIX}/{parts[0]}"
     # A url id carries its own absolute link, and no other kind reaches this line without
-    # a resourceUrl, because extract_id would have skipped the entry.
-    return identifier.partition(ids.SEPARATOR)[2] or base_url
+    # a resourceUrl, because extract_id would have skipped the entry. The link is read with
+    # the codec rather than split on the separator: reading an id is the codec's other half,
+    # and a hand split would have handed back the bare id segment of any other kind, which is
+    # not a link at all.
+    read_kind, parts = ids.parse(identifier)
+    return parts[0] if read_kind == UNKNOWN_KIND else base_url
 
 
 def _file_id(attributes: Mapping[str, Any], url: str) -> str:

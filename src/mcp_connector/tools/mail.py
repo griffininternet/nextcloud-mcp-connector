@@ -64,11 +64,6 @@ MAX_PREVIEW_BYTES = 400
 #: is a Unix timestamp here rather than an index.
 _SCOPE = "m"
 
-#: The id kind of a mail, in the spelling ``fetch`` expects. Plan 10-05 is the one that adds
-#: ``ids.encode_mail`` and teaches ``ids.parse`` this kind; until then the prefix is built
-#: from the separator of that module rather than from a second copy of the colon.
-_ID_KIND = "mail"
-
 _LEVEL_HINT = f"Use one of: {', '.join(LEVELS)}."
 
 #: The way out of a missing account number. No default and no "first account": a guessed
@@ -487,7 +482,7 @@ def _message(raw: dict[str, Any]) -> dict[str, Any]:
     flags = flags if isinstance(flags, dict) else {}
 
     entry: dict[str, Any] = {
-        "id": f"{_ID_KIND}{ids.SEPARATOR}{_number(raw.get('databaseId'))}",
+        "id": ids.encode_mail(_number(raw.get("databaseId"))),
         "subject": _text(raw.get("subject") or ""),
         "from": _sender(raw.get("from")),
         "unread": not flags.get("seen"),
