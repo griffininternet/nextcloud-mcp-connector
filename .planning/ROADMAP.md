@@ -95,11 +95,28 @@ Plans:
 **Plans**: 6 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 13-01-PLAN.md — Versions-Bump 0.1.9 an sechs Stellen und der Changelog-Block mit `message_truncated`
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 13-02-PLAN.md — Enterprise-Fake-Door: `## Enterprise` in drei READMEs, drei Store-Beschreibungen, Issue-Entwurf (D-05 bis D-07)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 13-03-PLAN.md — CIMD-Nachmessung gegen den 0.1.9-Kandidaten, Gegenprobe, Proof-Zeile in `docs/oauth-setup.md` (EXAPP-08)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 13-04-PLAN.md — Sechs Gates lokal grün, Archiv-Probelauf als Strukturprüfung, Proof-Zeilen der Schritte 1 bis 3
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 13-05-PLAN.md — Push vor dem Tag, Owner-Freigabe, Tag `v0.1.9`, Workflow, Proof-Zeile der Schritte 4 und 5 (nicht autonom)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 13-06-PLAN.md — Signatur über das heruntergeladene Asset, Store-Upload, vier Nachweise, Proof-Zeilen 6 bis 8 (nicht autonom)
 
 ## Progress

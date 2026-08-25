@@ -811,28 +811,28 @@ ein Ankerkunde mit Pilotwunsch.
 | A5 | Der Mischstand der laufenden Topologie (AppAPI 0.1.7, Container-Image 0.1.6) ist ein Restzustand eines früheren Update-Versuchs und kein Defekt | Runtime State Inventory | Gering: Weg A ersetzt beides ohnehin. Wenn es doch ein Defekt ist, fällt er beim Registrieren auf |
 | A6 | Der Store nimmt die 0.1.9-Beschreibung mit dem Enterprise-Absatz ohne 500er an (keine leeren Elemente, kein neues Element) | Release-Pipeline | Gering: der Variablen-Gate hält die bekannte 500er-Ursache, und die Beschreibung ist ein bestehendes Element |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Wird Weg A mit echtem Client innerhalb der Phase machbar, oder fällt sie auf Weg B?**
+1. RESOLVED (Plan 13-03 Task 2: Weg A mit benanntem Fallback B). **Wird Weg A mit echtem Client innerhalb der Phase machbar, oder fällt sie auf Weg B?**
    - Bekannt: Client-Version identisch, `claude mcp login` verlangt ein tty, der Vorlauf löste
      das mit `CreatePseudoConsole` per `ctypes`.
    - Unklar: ob der Treiber in vertretbarer Zeit wieder entsteht.
    - Empfehlung: Der Plan beginnt mit Weg A und trägt Weg B als benannten Fallback mit
      Pflicht zur ehrlichen Einordnung im Protokoll. Nicht beide Wege parallel bauen.
 
-2. **Gehört die Enterprise-Zeile in den Changelog?**
+2. RESOLVED (Plan 13-02 Task 3: Zeile unter Added). **Gehört die Enterprise-Zeile in den Changelog?**
    - Bekannt: Präzedenz existiert (0.1.5 bis 0.1.7 beschreiben Store-Text-Änderungen), keine
      Übergabe fordert sie.
    - Empfehlung: ja, eine Zeile unter `### Added`, denn für einen Store-Leser ist es die
      sichtbarste Änderung dieses Releases. Discretion des Planers.
 
-3. **Wird der tote Verweis in `docs/oauth-setup.md` in dieser Phase geschlossen?**
+3. RESOLVED (Plan 13-03 Task 3: Verweis wird geschlossen). **Wird der tote Verweis in `docs/oauth-setup.md` in dieser Phase geschlossen?**
    - Bekannt: Der Link zeigt auf ein mit `02dd6e1` entferntes Phasenverzeichnis, und die neue
      Proof-Zeile entsteht genau in diesem Kapitel.
    - Empfehlung: ja, im selben Edit; sonst entsteht beim nächsten Milestone-Abschluss der
      zweite tote Link derselben Art. Kleiner Task, klar abgegrenzt.
 
-4. **Wie viel Gegenprobe braucht die Nachmessung?**
+4. RESOLVED (Plan 13-03 Task 3: genau eine Gegenprobe NC_MCP_OAUTH_CIMD=0). **Wie viel Gegenprobe braucht die Nachmessung?**
    - Bekannt: Der Vorlauf hatte drei Schalter-Kontrollen mit gezählten ausgehenden Sockets und
      vier Rückadressen-Varianten. Erfolgskriterium 1 verlangt nur den geglückten Rundlauf.
    - Empfehlung: eine Gegenprobe genügt und ist Pflicht (globale Regel "alle Pfade"):
