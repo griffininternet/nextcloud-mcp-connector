@@ -101,11 +101,53 @@ CIMD als DCR-Alternative (live mit Claude Code bewiesen), SSRF-gehärteter Dokum
 - Sessions: 1 Arbeitstag (20.08., Milestone-Init bis Abschluss inkl. Audit-Fixes).
 - Notable: 1 roter CI-Lauf, 1 API-Abbruch mit sauberem Retry (06-02), 2 menschliche Checkpoints (Cursor-Login, Owner-Entscheide).
 
+## Milestone: v1.2 — Kuratierte Breite
+
+**Shipped:** 2026-08-25
+**Phasen:** 4 | **Pläne:** 28
+
+### What Was Built
+
+Talk, Tables und Mail als drei neue Familien (21 Tools gesamt), Mail strikt lesend mit benannter Lethal-Trifecta-Grenze und Admin-Schalter für den einzigen Ausgangskanal; prepare_context mit vier gemessenen Beinen; fetch löst sieben Id-Arten auf; Budget-Gate erstmals aus einer Messung gesenkt (18500 auf 18000); Releases 0.1.4 bis 0.1.8 im Store, 0.1.8 macht den Spendenlink sichtbar.
+
+### What Worked
+
+- Risiko-Reihenfolge statt Attraktivität: der blockierende Mail-Spike (Phase 8) beantwortete die einzige Unbekannte, bevor Phasen 10/11 geplant wurden; der Schnitt hielt unverändert.
+- Die "mechanische Checkliste" einer neuen Familie, einmal an Tables etabliert, machte Talk und Mail zu kürzeren Phasen.
+- Messen statt behaupten als Phasen-Muster: Nebenwirkungsfreiheit, 1+N-Kosten und Zeitbudgets wurden live gemessen; drei Setzungen wurden Messungen, keine musste geändert werden.
+- Owner-Gates an den irreversiblen Stellen (Tag-Push, Store-Upload) funktionierten sauber als Checkpoints, der Rest lief autonom.
+- Planzeit-Threat-Register in allen Plänen machte secure-phase zur reinen Verifikation (74/74 ohne Neubau).
+
+### What Was Inefficient
+
+- Die Release-Nummer im ROADMAP-Titel (0.1.6) war zweimal überholt, bevor die Phase startete; vorgezogene Releases müssen die Roadmap sofort mitziehen.
+- Ein Planner-Verifikationsschnipsel nannte eine falsche Signatur, ein Plan einen falschen Antwortschlüssel (conversations statt results) — beides fingen die Executor am echten Code ab, kostete aber Aufmerksamkeit.
+- Der Runbook-Text und das Build-Skript widersprachen sich bei der Signatur bis nach dem Release (erst eb05a6f räumte auf).
+
+### Patterns Established
+
+- Ein Bein je Quelle in prepare_context: eigenes asyncio.timeout-Budget, eigener degraded-Satz, Tool-Schicht statt Client-Schicht (Gate-Test erzwingt es).
+- Jede Kappung schreibt ihren eigenen degraded-Satz; verschluckte Envelope-Kappungen sind Review-Warnings.
+- Budget-Gate-Regel: Messung plus 15 Prozent, aufgerundet auf 500, nur mit neuer Messzeile; ein ehrliches "Marke nicht erreicht" ist ein gültiger Ausgang.
+- Release-Reihenfolge: Branch-Push vor Tag, Signatur nur über das heruntergeladene Asset, Cache-Verzögerung ist kein 0.1.9-Grund.
+
+### Key Lessons
+
+- Navigations-unread=0 trotz ungelesener Mails: fremde Felder erst messen, dann benutzen — die Postfachliste war der ehrliche Zähler.
+- Ein assistententauglicher Suchtreffer braucht beide Hälften: provider_map-Eintrag UND die resolvable-Wahrheit im Bündel (_short war die versteckte zweite Hälfte von TOOL-16).
+- tar.gz ist nicht byte-reproduzierbar: 45710 lokal vs 45546 publiziert; jede lokale Signatur ist wertlos für den Store.
+
+### Cost Observations
+
+- Modell-Mix: Executor/Planner/Researcher/Security-Auditor opus, Checker/Verifier/Integration sonnet.
+- Sessions: 4 Arbeitstage (21.08. Phasen 8+9, 24.08. Phase 10, 25.08. Phase 11 inkl. Release und Milestone-Abschluss).
+- Notable: 1 API-Abbruch (11-01) mit sauberem Continuation-Agent; 2 Owner-Checkpoints (Tag-Freigabe, Store-Sitzung); Store-Upload aus dem Browser-Seitenkontext, HTTP 201 beim ersten Versuch.
+
 ## Cross-Milestone Trends
 
-| Metrik | v1.0 | v1.1 |
-|--------|------|------|
-| Phasen / Pläne / Tasks | 5 / 50 / 111 | 1 / 11 / 20 |
-| Kalenderzeit | 7 Tage | 1 Tag |
-| Verifier-Gap-Runden | 1 (Phase 5) | 1 (Phase 6, CLIENT-04) |
-| Live-Releases im Milestone | 3 (0.1.0, 0.1.1, 0.1.2) | 0 (0.1.3-Kandidat wartet auf Owner-Freigabe) |
+| Metrik | v1.0 | v1.1 | v1.2 |
+|--------|------|------|------|
+| Phasen / Pläne / Tasks | 5 / 50 / 111 | 1 / 11 / 20 | 4 / 28 / 67 |
+| Kalenderzeit | 7 Tage | 1 Tag | 5 Tage (21.-25.08.) |
+| Verifier-Gap-Runden | 1 (Phase 5) | 1 (Phase 6, CLIENT-04) | 0 (alle 4 Phasen passed im ersten Lauf) |
+| Live-Releases im Milestone | 3 (0.1.0, 0.1.1, 0.1.2) | 0 (0.1.3-Kandidat wartet auf Owner-Freigabe) | 5 (0.1.4 bis 0.1.8, drei davon vorgezogen) |

@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Kuratierte Breite
-status: milestone_complete
-stopped_at: Milestone complete (Phase 11 was final phase)
-last_updated: 2026-08-25T03:50:35.055Z
-last_activity: 2026-08-25
+status: Awaiting next milestone
+stopped_at: Completed 11-10-PLAN.md
+last_updated: "2026-08-25T04:36:31.884Z"
+last_activity: 2026-08-25 — Milestone v1.2 completed and archived
 progress:
   total_phases: 4
   completed_phases: 4
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 
 ## Current Position
 
-Phase: 11
-Plan: Not started
-Status: Milestone complete
-Last activity: 2026-08-25
+Phase: Milestone v1.2 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-08-25 — Milestone v1.2 completed and archived
 
 ## Performance Metrics
 
@@ -564,4 +564,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Plan phase 8 with /gsd:plan-phase 8 (der Mail-Erreichbarkeits-Spike MAIL-04 gehoert als erster, blockierender Plan hinein)
+- Start the next milestone with /gsd-new-milestone
