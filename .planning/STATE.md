@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Pflege und 0.1.9
 status: executing
-stopped_at: "Completed 13-01-PLAN.md (EXAPP-09 zur Haelfte: Version 0.1.9 an sechs Stellen, Changelog-Block 0.1.9 mit message_truncated und talk-conversations, kein Tag)"
-last_updated: "2026-08-25T17:11:29.882Z"
+stopped_at: "Completed 13-02-PLAN.md (Enterprise-Fake-Door: Abschnitt Enterprise in drei READMEs, Kurzfassung in drei Manifest-Beschreibungen, Issue-Entwurf als Datei nicht veroeffentlicht, Changelog-Rubrik Added; kein Tag)"
+last_updated: "2026-08-25T17:21:07.964Z"
 last_activity: 2026-08-25
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 10
-  completed_plans: 5
+  completed_plans: 6
   percent: 50
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 13 (CIMD-Nachmessung und Release 0.1.9) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Last activity: 2026-08-25
 
@@ -151,6 +151,7 @@ Last activity: 2026-08-25
 | Phase 12 P03 | 21 min | 3 tasks tasks | 3 files files |
 | Phase 12 P04 | 18 min | 3 tasks tasks | 7 files files |
 | Phase 13 P01 | 12 min | 2 tasks tasks | 8 files files |
+| Phase 13 P02 | 8min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -553,6 +554,8 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 13 Plan 01: die uv.lock-Selbstangabe (Zeile 472) wird beim Bump mitgezogen wie beim 0.1.8-Vorbild 8392680, aber per Texteditierung statt per uv lock: kein Gate haelt sie, ein Lock-Lauf haette Dependency-Zeilen bewegt
 - [Phase ?]: Phase 13 Plan 01: CRLF-Dateien (appinfo/info.xml, drei READMEs) werden byte-exakt per Python rb/wb ersetzt, mit Vorab-Zaehlung der Treffer je Datei; belegt durch Ein-Zeilen-Diffs statt Massen-Diffs
 - [Phase ?]: Phase 13 Plan 01: der 0.1.9-Changelog-Block nennt nur die zwei nutzersichtbaren Phase-12-Uebergaben (message_truncated, talk-conversations); die Rubrik Added bleibt leer und gehoert Plan 13-02 (Enterprise-Fake-Door)
+- [Phase ?]: Phase 13 Plan 02: Enterprise-Fake-Door in vier Fassungen (drei READMEs plus drei Manifest-Beschreibungen); Ueberschrift unuebersetzt, Ehrlichkeitssatz je Fassung eigenstaendig, kein Preis und kein free/kostenlos
+- [Phase ?]: Phase 13 Plan 02: der Issue-Entwurf bleibt eine Datei (docs/contrib/enterprise-signals-issue.md); Veroeffentlichung ist Owner-Entscheidung (D-07), das Go-Kriterium steht im HTML-Kommentar und nicht im Body
 
 ### Pending Todos
 
@@ -587,9 +590,9 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-25T17:11:29.864Z
-Stopped at: Completed 13-01-PLAN.md (EXAPP-09 zur Haelfte: Version 0.1.9 an sechs Stellen, Changelog-Block 0.1.9 mit message_truncated und talk-conversations, kein Tag)
-Naechster Schritt: Phase 12 verifizieren, dann Phase 13 (Release 0.1.9) planen
+Last session: 2026-08-25T17:20:45.175Z
+Stopped at: Completed 13-02-PLAN.md (Enterprise-Fake-Door: Abschnitt Enterprise in drei READMEs, Kurzfassung in drei Manifest-Beschreibungen, Issue-Entwurf als Datei nicht veroeffentlicht, Changelog-Rubrik Added; kein Tag)
+Naechster Schritt: Plan 13-03 ausfuehren (CIMD-Nachmessung gegen den Kandidaten 0.1.9)
 Resume file: None
 
 ## Operator Next Steps
