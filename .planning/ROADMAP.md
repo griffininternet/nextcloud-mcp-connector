@@ -70,9 +70,14 @@ Audit: [milestones/v1.2-MILESTONE-AUDIT.md](milestones/v1.2-MILESTONE-AUDIT.md) 
 **Plans**: 4 plans (2 Wellen: 12-01, 12-02 und 12-03 parallel, danach 12-04)
 
 Plans:
+**Wave 1**
+
 - [ ] 12-01-PLAN.md — TOOL-17: `message_truncated` auf der Nachrichtenebene von `talk_browse`, Verbraucher in `fetch` zieht mit, Tool-Docstring mit einer Bedeutung je Ebene
 - [ ] 12-02-PLAN.md — TOOL-18: `ids.encode_mail` statt `_ID_KIND`, und `ids.parse` liest im `url`-Zweig nur noch, was `ids.encode_url` bauen kann
 - [ ] 12-03-PLAN.md — SEC-02: Verifikationskommentare für `files` und `notes`, T-11-29 als Regressionstest, Vokabular-Gate über READMEs und Changelog
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 12-04-PLAN.md — TOOL-19: `talk.one_room` statt `talk_tools._room`, AST-Gate gegen Privat-Durchgriffe, README-Beispiel mit `talk-conversations`
 
 ### Phase 13: CIMD-Nachmessung und Release 0.1.9

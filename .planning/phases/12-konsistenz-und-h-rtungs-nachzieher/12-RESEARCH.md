@@ -521,7 +521,9 @@ Der Planner sollte diese vier Abweichungen kennen, bevor er Tasks schneidet. Die
 | A5 | Phase 12 darf den Changelog-Block 0.1.9 anlegen, Phase 13 vervollständigt ihn | TOOL-17, Changelog | Gering. Kein Gate hält den obersten Block gegen `__version__`; Phase 13 SC2 verlangt den vollständigen Block ohnehin |
 | A6 | Ein neuer Test in `tests/contract/` oder `tests/unit/` braucht keine CI-Änderung | Architecture Patterns | Gering. `ci.yml:36` führt `pytest tests/unit tests/contract` aus, verifiziert durch Lesen der Datei |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+Alle vier Fragen sind in den Plänen entschieden: Frage 1 (Name für `_room`) = `one_room` in 12-04 Task 1; Frage 2 (Gate-Bauweise) = AST-Gate in tests/contract in 12-04 Task 2; Frage 3 (Ort der Vokabular-Wortliste) = bleibt in test_exapp_env_setup.py, 12-03 Task 3; Frage 4 (README-Provider-Gate) = aufgenommen als Halter in test_provider_map.py, 12-04 Task 3.
 
 1. **Welcher öffentliche Name für `_room`?**
    - Was wir wissen: `one_message` ist der Präzedenzfall im gleichen Modul; `room_of` ist der wörtliche Review-Vorschlag. Drei Aufrufstellen, keine externe API.
