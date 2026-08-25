@@ -22,8 +22,9 @@ the documentation that named a provider which never existed.
   does not exist: an audit log over every tool call, policies per group, and sign in through
   the identity provider an organisation already runs. Not one of the three is implemented in
   this release, and each of the four texts says so in a sentence of its own; the description
-  travels with this release because the store reads the manifest at upload time, which is
-  what made the corrections of 0.1.5 and 0.1.6 invisible.
+  travels with this release because the store reads the manifest only at upload time, so a
+  corrected text in the repository reaches nobody until the next release; 0.1.5 and 0.1.6
+  were both releases for exactly that reason.
 
 ### Changed
 
