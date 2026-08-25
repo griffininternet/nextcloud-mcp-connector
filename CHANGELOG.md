@@ -9,6 +9,33 @@ All notable changes to this app are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.9] - 2026-08-25
+
+A maintenance release, and not a new family of tools. The same twenty one tools 0.1.8
+published answer the same questions, and an instance that updates keeps the behaviour it
+had. What changed is one key of one answer that carried two meanings, and one example in
+the documentation that named a provider which never existed.
+
+### Changed
+
+- A change of the answer format, named here because a reader of the old key has to be
+  updated: in an answer of `talk_browse` on the message level, the key `truncated` of a
+  single entry is now called `message_truncated`. The same word meant two things in the
+  same answer, and only one of them was about the entry: on the answer level `truncated`
+  says that the window of messages was cut and that there may be a next one, on a single
+  entry it says that the text of that message was cut and that there is no next one for it.
+  The answer level keeps `truncated` unchanged, the conversation level keeps it as well,
+  and no other tool is affected. A client that stores the tool list of a connection reads
+  the new description only after its next refresh, so the first answer after the update can
+  arrive before the description that explains it.
+
+### Fixed
+
+- The `unified_search` example in the READMEs named `spreed`, which was never a provider
+  id; it now names `talk-conversations`. What the example shows was right all along, an
+  unknown provider answering with a URL that nothing resolves further, and only the name in
+  it was wrong.
+
 ## [0.1.8] - 2026-08-25
 
 Mail is the newest family an assistant can reach, and it is the first one that only reads.
@@ -440,7 +467,8 @@ First release, submitted to the Nextcloud App Store.
   never sees more than that user sees in the web interface.
 - A privacy and data flow description, see [docs/privacy.md](docs/privacy.md).
 
-[Unreleased]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.8...HEAD
+[Unreleased]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.9...HEAD
+[0.1.9]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.5...v0.1.6
