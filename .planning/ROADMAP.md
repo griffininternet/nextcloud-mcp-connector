@@ -40,7 +40,7 @@ Audit: [milestones/v1.1-MILESTONE-AUDIT.md](milestones/v1.1-MILESTONE-AUDIT.md) 
 - [x] **Phase 10: Mail strikt lesend und die Trifecta-Grenze** - Konten, Postfächer, Envelopes und Volltext lesen ohne jeden Schreibpfad, App-Erkennung für alle drei Familien, Exfiltrationskette benannt statt beschwiegen
  (completed 2026-08-24)
 
-- [ ] **Phase 11: Bündelung, Budget und Release 0.1.6** - Talk- und Mail-Anteil in prepare_context, Suchtreffer auflösbar, Budget-Gate neu verankert, Fassung im Store
+- [x] **Phase 11: Bündelung, Budget und Release 0.1.6** - Talk- und Mail-Anteil in prepare_context, Suchtreffer auflösbar, Budget-Gate neu verankert, Fassung im Store (completed 2026-08-25)
 
 ## Phase Details
 
@@ -202,7 +202,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 11-10-PLAN.md: Release 0.1.8 veröffentlichen, Tag nach Owner-Freigabe, Signatur, Store, Nachweise
+- [x] 11-10-PLAN.md: Release 0.1.8 veröffentlichen, Tag nach Owner-Freigabe, Signatur, Store, Nachweise
 
 **UI hint**: nein (kein eigenes Frontend)
 
@@ -260,7 +260,7 @@ Plans:
 | 8. Erreichbarkeits-Spike und Tables | v1.2 | 5/5 | Complete    | 2026-08-21 |
 | 9. Talk | v1.2 | 5/5 | Complete    | 2026-08-21 |
 | 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 8/8 | Complete    | 2026-08-24 |
-| 11. Bündelung, Budget und Release 0.1.6 | v1.2 | 9/10 | In Progress|  |
+| 11. Bündelung, Budget und Release 0.1.6 | v1.2 | 10/10 | Complete   | 2026-08-25 |
 
 ## Next
 

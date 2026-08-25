@@ -45,7 +45,7 @@
 
 ### Store und Release (EXAPP)
 
-- [ ] **EXAPP-07**: Release 0.1.8 ist im Store (0.1.4 am 21.08.2026, 0.1.5, 0.1.6 und 0.1.7 am 22.08.2026 vorgezogen, Owner-Entscheid; 0.1.8 ist die nächste freie Nummer und macht den Spendenlink paypal.me/KhaledCherifDev sichtbar): Version an allen vier Stellen, Changelog-Block, READMEs EN/DE/FR und Store-Texte nachgezogen (Vokabular-Gate), alle Gates grün, Tag erst nach Owner-Freigabe, Runbook docs/store-submission.md Schritte 4 bis 8 mit Proof-Zeilen.
+- [x] **EXAPP-07**: Release 0.1.8 ist im Store (0.1.4 am 21.08.2026, 0.1.5, 0.1.6 und 0.1.7 am 22.08.2026 vorgezogen, Owner-Entscheid; 0.1.8 ist die nächste freie Nummer und macht den Spendenlink paypal.me/KhaledCherifDev sichtbar): Version an allen vier Stellen, Changelog-Block, READMEs EN/DE/FR und Store-Texte nachgezogen (Vokabular-Gate), alle Gates grün, Tag erst nach Owner-Freigabe, Runbook docs/store-submission.md Schritte 4 bis 8 mit Proof-Zeilen.
 
 ## Future Requirements
 
@@ -95,7 +95,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TOOL-15 | Phase 11 | Complete |
 | TOOL-16 | Phase 11 | Complete |
 | SEC-01 | Phase 10 | Complete |
-| EXAPP-07 | Phase 11 | Pending |
+| EXAPP-07 | Phase 11 | Complete |
 
 **Coverage:**
 - v1.2 requirements: 17 total

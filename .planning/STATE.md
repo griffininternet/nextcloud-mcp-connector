@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Kuratierte Breite
-status: executing
-stopped_at: Completed 11-09-PLAN.md
-last_updated: "2026-08-24T22:42:57.707Z"
-last_activity: 2026-08-24
+status: verifying
+stopped_at: Completed 11-10-PLAN.md
+last_updated: "2026-08-25T03:11:14.099Z"
+last_activity: 2026-08-25
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 28
-  completed_plans: 27
-  percent: 75
+  completed_plans: 28
+  percent: 100
 ---
 
 # Project State
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 
 Phase: 11 (Bündelung, Budget und Release 0.1.8) — EXECUTING
 Plan: 10 of 10
-Status: Ready to execute
-Last activity: 2026-08-24
+Status: Phase complete — ready for verification
+Last activity: 2026-08-25
 
 ## Performance Metrics
 
@@ -144,6 +144,7 @@ Last activity: 2026-08-24
 | Phase 11 P07 | 19 min | 2 tasks tasks | 5 files files |
 | Phase 11 P08 | 30 min | 3 tasks tasks | 9 files files |
 | Phase 11 P09 | 25 min | 3 tasks | 6 files |
+| Phase 11 P10 | 20 min | 4 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -519,6 +520,9 @@ Recent decisions affecting current work:
 - [Phase ?]: 11-09: Release-Nummer ist 0.1.8 (0.1.4 bis 0.1.7 liegen im Store); die 0.1.6 im Phasentitel ist ueberholt
 - [Phase ?]: 11-09: IN-02 geschlossen durch die nachgetragene CHANGELOG-Sektion 0.1.5, nicht durch Linkkorrektur: der Tag v0.1.5 existiert (Run 32569019469)
 - [Phase ?]: 11-09: uv.lock wird bei einem Versions-Bump mitcommittet: uv schreibt die eigene Projektversion hinein, so wie in den Release-Commits 0.1.5, 0.1.6 und 0.1.7
+- [Phase 11-b-ndelung-budget-und-release-0-1-6]: Release 0.1.8: der Tag entstand erst nach ausdrücklicher Owner-Freigabe, und die Freigabe umfasste auf Vorlage hin auch den Branch-Push, weil 42 Commits der Phase nur lokal lagen und die Store-Beschreibung Doku- und Screenshot-URLs auf main verlinkt
+- [Phase 11-b-ndelung-budget-und-release-0-1-6]: Release 0.1.8: signiert wurde das heruntergeladene Release-Asset (45546 Bytes) und nicht das lokal gebaute (45710 Bytes); die Signatur steht in keiner Datei und wird bei Bedarf neu berechnet
+- [Phase 11-b-ndelung-budget-und-release-0-1-6]: Release 0.1.8: die verzögerte Sichtbarkeit im Katalog-Endpunkt wurde als Cache-Verhalten notiert und abgewartet, nicht mit einer weiteren Version beantwortet
 
 ### Pending Todos
 
@@ -553,8 +557,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-24T22:42:50.875Z
-Stopped at: Completed 11-09-PLAN.md
+Last session: 2026-08-25T03:10:50.545Z
+Stopped at: Completed 11-10-PLAN.md
 Naechster Schritt: /gsd:plan-phase 8
 Resume file: None
 
