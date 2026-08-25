@@ -327,8 +327,13 @@ async def _mail(clients: NcClients) -> dict[str, Any]:
     Both calls ask for ``mail_tools.MAX_LIMIT`` because both lists are capped in the envelope
     of that tool, at 20 without a limit: an account with more than twenty folders can lose its
     inbox when the inbox is not near the front. The account list is asked the same way for the
-    same reason, and :data:`MAX_MAIL_ACCOUNTS` is far below that ceiling, so the cut that
-    decides this answer is always this module's own and never the one of the tool layer.
+    same reason, and :data:`MAX_MAIL_ACCOUNTS` is far below that ceiling, so the cut over the
+    **kept** accounts is always this module's own. The ceiling of the tool layer itself can
+    still bite, at 50, and a cut this leg did not make must not become a silent one (review
+    finding WR-02): the ``truncated`` flag of the account envelope travels onwards as
+    ``accounts_truncated``, the one of a cut mailbox list as ``boxes_truncated`` on the
+    account that lost its inbox to it, and :func:`_counters` turns both into sentences
+    instead of a wrong "has no inbox" or an understated total.
 
     ``account_id`` is explicit for every single mailbox list, never the first account of the
     list and never a default: "the first account of the list is not the account somebody
@@ -367,6 +372,7 @@ async def _mail(clients: NcClients) -> dict[str, Any]:
     return {
         "results": [_counter(account, answer) for account, answer in zip(kept, boxes, strict=True)],
         "total": len(accounts),
+        "accounts_truncated": bool(listed.get("truncated")),
     }
 
 
@@ -377,6 +383,13 @@ def _counter(account: dict[str, Any], answer: dict[str, Any]) -> dict[str, Any]:
     Reporting a missing inbox as 0 would be a number that looks like a measurement and is
     none; the missing field plus the sentence :func:`_counters` writes for it are the honest
     pair.
+
+    A missing inbox has two different reasons with two different sentences, and this is where
+    they are told apart (review finding WR-02): when the mailbox list arrived ``truncated``
+    from the envelope of the tool layer, the inbox may simply be behind that cut, so the entry
+    carries ``boxes_truncated`` for :func:`_counters` to read, and "has no mailbox with the
+    inbox role" would be a claim this leg cannot make. The flag is internal to this leg and
+    never reaches the answer: :func:`_counters` pops it.
 
     The role is read with ``get`` and not with an index, because ``mail_tools._special_role``
     answers the number zero with an empty string and leaves the field out entirely, so an
@@ -392,6 +405,8 @@ def _counter(account: dict[str, Any], answer: dict[str, Any]) -> dict[str, Any]:
     )
     if inbox is not None:
         entry["inbox_unread"] = _count(inbox.get("unread"))
+    elif answer.get("truncated"):
+        entry["boxes_truncated"] = True
     return entry
 
 
@@ -410,8 +425,13 @@ def _counters(
     other by asking an administrator, and neither of them writes an entry that claims the
     counters could not be read.
 
-    Two caps of this leg name themselves, both with a number: the account cap of this module,
-    and every account whose inbox is not in its mailbox list.
+    Four caps of this leg name themselves, each with a number: the account cap of this
+    module, every account whose inbox is not in its mailbox list, and the two envelope cuts
+    of the tool layer that :func:`_mail` carries onwards as flags (review finding WR-02). A
+    cut account list makes ``total`` a lower bound and says so; a cut mailbox list without a
+    found inbox gets "may be behind the cut" instead of "has no mailbox with the inbox role",
+    because the second sentence is a claim about a list this leg has not seen to the end. The
+    ``boxes_truncated`` flag is popped either way, so it never leaves this leg as data.
     """
     if isinstance(outcome, BaseException):
         degraded.append({"source": "mail", "reason": _reason(outcome, "mail", MAIL_BUDGET)})
@@ -420,6 +440,16 @@ def _counters(
     degraded.extend(_degraded_of(outcome))
     entries = _entries(outcome)
     total = _count(outcome.get("total"))
+    if outcome.get("accounts_truncated"):
+        degraded.append(
+            {
+                "source": "mail",
+                "reason": (
+                    f"The account list was cut at {mail_tools.MAX_LIMIT} by the mail tool, "
+                    f"so the total of {total} mail accounts is a lower bound."
+                ),
+            }
+        )
     if total > MAX_MAIL_ACCOUNTS:
         degraded.append(
             {
@@ -430,9 +460,22 @@ def _counters(
             }
         )
     for entry in entries:
+        cut = bool(entry.pop("boxes_truncated", False))
         if "inbox_unread" in entry:
             continue
         label = str(entry.get("email") or "") or f"#{entry.get('account_id')}"
+        if cut:
+            degraded.append(
+                {
+                    "source": "mail",
+                    "reason": (
+                        f"The mailbox list of the account {label} was cut at "
+                        f"{mail_tools.MAX_LIMIT}, so its inbox may be behind the cut and it "
+                        "carries no counter here."
+                    ),
+                }
+            )
+            continue
         degraded.append(
             {
                 "source": "mail",

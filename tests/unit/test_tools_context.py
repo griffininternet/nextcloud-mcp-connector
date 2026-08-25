@@ -251,6 +251,11 @@ class FakeMail:
     was actually asked for. An account that is asked for and has no entry here answers with an
     empty mailbox list, which is what an account without a readable mailbox looks like.
 
+    The mailbox level applies the same cut as ``mail_tools._envelope``: the list is capped at
+    ``mail_tools.MAX_LIMIT`` and the answer says ``truncated`` when the cap bit. That is what
+    lets a test hand in sixty mailboxes and measure what the bundle makes of the envelope cut
+    of the tool layer (review finding WR-02) instead of building that envelope by hand.
+
     The barrier is only met on the account level. The mailbox calls happen after it, so
     waiting there as well would deadlock the concurrency test against its own fake.
     """
@@ -284,7 +289,9 @@ class FakeMail:
         if level == "accounts":
             return mail_answer(self.accounts, truncated=self.truncated)
         asked = str(kwargs.get("account_id") or "")
-        return mail_answer(self.mailboxes.get(asked, []), level="mailboxes")
+        boxes = self.mailboxes.get(asked, [])
+        kept = boxes[: mail_tools.MAX_LIMIT]
+        return mail_answer(kept, level="mailboxes", truncated=len(boxes) > len(kept))
 
     def of(self, level: str) -> list[dict[str, Any]]:
         """The keyword arguments of every call of one level, in the order they happened."""
@@ -1666,6 +1673,110 @@ async def test_the_mail_key_is_there_and_a_list_in_every_situation(
     assert "mail" in result, situation
     assert isinstance(result["mail"], list), situation
     assert set(result) - {"degraded"} == ANSWER_KEYS, situation
+
+
+def sixty_boxes(inbox_at: int | None = None) -> list[dict[str, Any]]:
+    """Sixty mailboxes without a role, with the inbox at the named position when given."""
+    boxes = [mailbox(index, f"Ordner {index}") for index in range(1, 61)]
+    if inbox_at is not None:
+        boxes[inbox_at - 1] = mailbox(inbox_at, "INBOX", unread=6, role="inbox")
+    return boxes
+
+
+@pytest.mark.anyio
+async def test_an_inbox_behind_the_envelope_cut_is_blamed_on_the_cut_and_not_on_the_role(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """WR-02: sixty mailboxes, the inbox at position 55, the envelope cuts at 50.
+
+    "Has no mailbox with the inbox role" would be a false statement about this account: the
+    inbox exists, it is behind a cut this module did not make. The cut of the tool layer must
+    write its own sentence, and the internal flag that carries it must never reach the answer.
+    """
+    wire(
+        monkeypatch,
+        mail=FakeMail(
+            accounts=[account(7, "büro@example.test")],
+            mailboxes={"7": sixty_boxes(inbox_at=55)},
+        ),
+    )
+
+    result = await context_tools.prepare_context(clients, query="budget")
+
+    assert result["mail"] == [{"account_id": 7, "email": "büro@example.test"}], (
+        "no counter, and no internal flag leaks into the answer"
+    )
+    assert result["degraded"] == [
+        {
+            "source": "mail",
+            "reason": (
+                "The mailbox list of the account büro@example.test was cut at 50, so its "
+                "inbox may be behind the cut and it carries no counter here."
+            ),
+        }
+    ]
+    assert "inbox role" not in json.dumps(result), (
+        "the false 'has no mailbox with the inbox role' sentence must not appear"
+    )
+
+
+@pytest.mark.anyio
+async def test_an_inbox_in_front_of_the_envelope_cut_keeps_its_counter_without_a_complaint(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The edge of WR-02: a cut list whose inbox survived the cut is a complete answer."""
+    wire(
+        monkeypatch,
+        mail=FakeMail(
+            accounts=[account(7, "büro@example.test")],
+            mailboxes={"7": sixty_boxes(inbox_at=1)},
+        ),
+    )
+
+    result = await context_tools.prepare_context(clients, query="budget")
+
+    assert result["mail"] == [{"account_id": 7, "email": "büro@example.test", "inbox_unread": 6}]
+    assert "degraded" not in result, (
+        "the counter of the inbox is not affected by a cut behind it, so nothing degraded"
+    )
+
+
+@pytest.mark.anyio
+async def test_a_cut_account_list_names_its_total_as_a_lower_bound(
+    clients: NcClients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """WR-02: ``total = len(accounts)`` of a truncated envelope understates, and must say so."""
+    wire(
+        monkeypatch,
+        mail=FakeMail(
+            accounts=[
+                account(7, "büro@example.test"),
+                account(8, "privat@example.test"),
+                account(9, "verein@example.test"),
+            ],
+            mailboxes={
+                "7": [INBOX],
+                "8": [mailbox(2, "INBOX", unread=0, role="inbox")],
+                "9": [mailbox(3, "INBOX", unread=12, role="inbox")],
+            },
+            truncated=True,
+        ),
+    )
+
+    result = await context_tools.prepare_context(clients, query="budget")
+
+    assert [entry["inbox_unread"] for entry in result["mail"]] == [6, 0, 12], (
+        "the counters of the accounts in front of the cut stay counters"
+    )
+    assert result["degraded"] == [
+        {
+            "source": "mail",
+            "reason": (
+                "The account list was cut at 50 by the mail tool, so the total of 3 mail "
+                "accounts is a lower bound."
+            ),
+        }
+    ]
 
 
 @pytest.mark.anyio
