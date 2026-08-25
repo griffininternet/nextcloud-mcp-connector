@@ -1950,6 +1950,165 @@ def test_the_text_gate_rejects_the_forbidden_vocabulary(manifest_root: etree._El
     assert any("forbidden word" in problem for problem in problems)
 
 
+# --------------------------------------------------------------------------------------
+# The same rule, at the reach of its own wording (SEC-02c, UF-3, plan 12-03)
+#
+# The vocabulary rule was always meant for every public artefact of this repository, while
+# the gate above reads the manifest only. So the gate grows and the word list stays exactly
+# where it is: two places holding the same word would be two truths, which is the mistake
+# this project named IN-03 and removed, and moving the list into a new file would rebuild a
+# green security gate without making the rule any better. The price is a file name that is
+# thematically wider than its content, and that is cheaper than either.
+# --------------------------------------------------------------------------------------
+
+#: The public pages outside ``docs/``, named one by one instead of globbed: a glob would
+#: silently start or stop covering a page, while this tuple is the statement about reach.
+PUBLIC_MARKDOWN = (
+    ROOT / "README.md",
+    ROOT / "README.de.md",
+    ROOT / "README.fr.md",
+    ROOT / "CHANGELOG.md",
+)
+
+#: The one page exempt by name. Internal release documentation that does not travel in the
+#: store archive, holding two dated proof lines (``:124`` and ``:125``) whose later rewording
+#: would reverse the direction of the evidence (T-11-63), and a foreign Nextcloud class name
+#: in ``:281`` that cannot be renamed without making the sentence false. The exemption is
+#: bound to a checkable property below rather than to this comment.
+VOCABULARY_EXCEPTION = ROOT / "docs" / "store-submission.md"
+
+#: Verbatim third party text inside the store archive. The AGPL-3.0 wording carries the word
+#: in its own sentence about a source link (``LICENSE:653``). It is not this project's prose,
+#: and editing a license text to satisfy a house rule would falsify the license, so it is
+#: exempt for a sharper reason than the release log.
+VERBATIM_ARCHIVE_TEXT = ("LICENSE",)
+
+#: The build script is the only truth about what the store gets, so the list is read from it.
+STORE_RELEASE_SCRIPT = ROOT / "scripts" / "build_store_release.sh"
+
+#: One copied file of ``scripts/build_store_release.sh``, as a repository relative path.
+ARCHIVE_MEMBER = re.compile(r'cp "\$ROOT/([^"]+)"')
+
+
+def vocabulary_findings(text: str, name: str) -> list[str]:
+    """Return one entry per line of ``text`` carrying the forbidden word, name and line first.
+
+    Text and name are parameters and nothing is read inside, so the gate can point this at a
+    real page while its counter probe points the same function at a constructed one. Case is
+    ignored exactly as in the manifest gate, and a finding names the line, so a violation is a
+    one line correction and not a search through the tree.
+    """
+    needle = FORBIDDEN_VOCABULARY.casefold()
+    return [
+        f"{name}:{number}: {line.strip()}"
+        for number, line in enumerate(text.splitlines(), start=1)
+        if needle in line.casefold()
+    ]
+
+
+def public_markdown_pages() -> list[Path]:
+    """Every markdown page the rule reaches: the four public documents plus ``docs/*.md``.
+
+    Markdown and the manifest, and deliberately nothing else. ``scripts/build_store_release.sh``
+    and its neighbours stay out: ``ARCHIVE`` is a variable name there and ``tar`` is the tool
+    that builds the package, so a check over the scripts would turn the gate red in a place the
+    rule never addressed.
+    """
+    docs = sorted(page for page in (ROOT / "docs").glob("*.md") if page != VOCABULARY_EXCEPTION)
+    pages = [*PUBLIC_MARKDOWN, *docs]
+    assert pages, f"no public markdown found under {ROOT}"
+    return pages
+
+
+def archive_members() -> list[str]:
+    """The repository relative files ``scripts/build_store_release.sh`` puts into the archive."""
+    members = ARCHIVE_MEMBER.findall(STORE_RELEASE_SCRIPT.read_text(encoding="utf-8"))
+    assert members, f"no copied files found in {STORE_RELEASE_SCRIPT}"
+    return members
+
+
+def test_no_public_markdown_page_carries_the_forbidden_vocabulary() -> None:
+    """UF-3: the rule now reaches the three READMEs, the changelog and the rest of ``docs/``.
+
+    ``CHANGELOG.md`` is covered from here on, which matters for the 0.1.9 entry: it is written
+    under this rule instead of being checked after the fact. The single exemption is
+    :data:`VOCABULARY_EXCEPTION`, and the reason is not convenience: rewriting a dated proof
+    line afterwards would turn a record into a claim.
+    """
+    findings = [
+        finding
+        for page in public_markdown_pages()
+        for finding in vocabulary_findings(
+            page.read_text(encoding="utf-8"), page.relative_to(ROOT).as_posix()
+        )
+    ]
+
+    assert findings == [], (
+        f"a public page carries the forbidden word {FORBIDDEN_VOCABULARY!r}: " + "; ".join(findings)
+    )
+
+
+def test_the_vocabulary_gate_reads_a_list_that_is_not_empty() -> None:
+    """Without this, a wrong directory would make the gate above green over nothing.
+
+    That is the way a gate which is green on arrival becomes worthless: it keeps passing, and
+    the run that should have caught the word never looked at a file.
+    """
+    names = {page.relative_to(ROOT).as_posix() for page in public_markdown_pages()}
+
+    assert {"README.md", "README.de.md", "README.fr.md", "CHANGELOG.md"} <= names, names
+    assert "docs/store-submission.md" not in names, "the exemption is exempt, not silently read"
+    assert len(names) > len(PUBLIC_MARKDOWN), "the docs pages belong to the covered set too"
+    for page in public_markdown_pages():
+        assert page.read_text(encoding="utf-8").strip(), f"{page} was read as empty"
+
+
+def test_the_store_archive_carries_no_exempt_page() -> None:
+    """The exemption hangs on a checkable property instead of on a sentence of prose.
+
+    The list comes from the build script, not from memory: everything the store gets is clean,
+    and the exempt release log is not among it. ``LICENSE`` is the one member that carries the
+    word and stays untouched, because it is the verbatim AGPL text (:data:`VERBATIM_ARCHIVE_TEXT`).
+    """
+    members = archive_members()
+
+    assert {"appinfo/info.xml", "CHANGELOG.md", "LICENSE", "README.md"} <= set(members), members
+    assert VOCABULARY_EXCEPTION.relative_to(ROOT).as_posix() not in members, (
+        "the exempt page must not travel in the store archive"
+    )
+
+    findings = [
+        finding
+        for member in members
+        if member not in VERBATIM_ARCHIVE_TEXT
+        for finding in vocabulary_findings((ROOT / member).read_text(encoding="utf-8"), member)
+    ]
+    assert findings == [], "everything the store receives is clean: " + "; ".join(findings)
+
+
+def test_the_widened_vocabulary_gate_reports_the_word_with_its_line() -> None:
+    """Counter proof, and it has to be constructed: no covered page carries the word today.
+
+    A probe against a real file would only prove that the file is clean. This one proves that
+    the check sees the word in either spelling and points at the right line.
+    """
+    constructed = "\n".join(
+        [
+            "# Release notes",
+            "Nothing is deleted and nothing is moved.",
+            "The Archive of your data stays untouched.",
+            "ARCHIVIERUNG is the same word in shouting.",
+        ]
+    )
+
+    findings = vocabulary_findings(constructed, "README.md")
+
+    assert [finding.split(": ", 1)[0] for finding in findings] == [
+        "README.md:3",
+        "README.md:4",
+    ], findings
+
+
 def test_no_declared_variable_carries_an_empty_default(manifest_root: etree._Element) -> None:
     """The shipped state: six variables, not one default among them."""
     assert variable_problems(manifest_root) == []
