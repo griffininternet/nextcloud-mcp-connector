@@ -613,7 +613,7 @@ async def _fetch_message(clients: NcClients, token: str, message_id: str) -> dic
     beside the text as ``metadata["truncated"]`` instead.
     """
     await capabilities.require_app(clients, talk_tools.APP)
-    room = await talk_tools._room(clients, token, include_last_message=False)
+    room = await talk_tools.one_room(clients, token, include_last_message=False)
     window = await talk_client.get_message_context(
         clients.client, clients.creds, token, message_id, limit=MESSAGE_CONTEXT_LIMIT
     )

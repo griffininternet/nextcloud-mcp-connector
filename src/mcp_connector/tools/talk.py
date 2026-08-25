@@ -235,7 +235,7 @@ async def send(clients: NcClients, token: str, message: str) -> dict[str, Any]:
     list, and matching it there is worse than not asking.
 
     The token has to stand in the conversation list of this account, so the pre-check goes
-    through ``talk_client.get_rooms`` (in :func:`_room`) and never through the single
+    through ``talk_client.get_rooms`` (in :func:`one_room`) and never through the single
     conversation route: an unknown token there is a counted brute force attempt against the
     address of this whole container, which is one address for every user of the instance.
 
@@ -292,7 +292,7 @@ async def send(clients: NcClients, token: str, message: str) -> dict[str, Any]:
         raise ToolError(
             message="Sending needs the token of a conversation.", hint=_CONVERSATION_HINT
         )
-    room = await _room(clients, conversation, include_last_message=False)
+    room = await one_room(clients, conversation, include_last_message=False)
     name = _text(room.get("displayName") or "")
     allowed_here, why = _may_send(room)
     if not allowed_here:
@@ -482,7 +482,7 @@ async def _messages(
         paging.check_scope(state, "c", token, "conversation")
         last_known = paging.read_offset(state)
 
-    room = await _room(clients, token, include_last_message=False)
+    room = await one_room(clients, token, include_last_message=False)
     raw, last_given = await talk_client.get_messages(
         clients.client, clients.creds, token, limit=limit, last_known_message_id=last_known
     )
@@ -623,8 +623,14 @@ def _capped(text: str) -> tuple[str, bool]:
     return blob[:MAX_MESSAGE_BYTES].decode("utf-8", errors="ignore"), True
 
 
-async def _room(clients: NcClients, token: str, *, include_last_message: bool) -> dict[str, Any]:
+async def one_room(clients: NcClients, token: str, *, include_last_message: bool) -> dict[str, Any]:
     """The conversation with this token out of this account's own list, or a refusal.
+
+    Public for the same reason :func:`one_message` is: ``tools/chatgpt.py`` needs it for
+    ``fetch``, and a private name with a caller in another module is exactly the shape in which
+    a refactoring inside this module carries the mitigation below away with it and no gate says
+    a word (TOOL-19). The boundary is held by ``tests/contract/test_module_boundaries.py``
+    instead of by the underscore.
 
     Never ``GET /room/{token}`` with a token that came out of a model. That route answers an
     unknown token with a counted brute force attempt against the address of this container,
