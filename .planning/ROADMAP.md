@@ -97,7 +97,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 13-01-PLAN.md — Versions-Bump 0.1.9 an sechs Stellen und der Changelog-Block mit `message_truncated`
+- [x] 13-01-PLAN.md — Versions-Bump 0.1.9 an sechs Stellen und der Changelog-Block mit `message_truncated`
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -135,7 +135,7 @@ Plans:
 | 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 8/8 | Complete | 2026-08-24 |
 | 11. Bündelung, Budget und Release 0.1.8 | v1.2 | 10/10 | Complete | 2026-08-25 |
 | 12. Konsistenz und Härtungs-Nachzieher | v1.3 | 4/4 | Complete    | 2026-08-25 |
-| 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 0/6 | Planned | - |
+| 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 1/6 | In Progress|  |
 
 ## Next
 

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Pflege und 0.1.9
 status: executing
-stopped_at: "Completed 12-04-PLAN.md (TOOL-19: one_room ist oeffentlich, die Modulgrenze ist ein AST-Gate, das README-Beispiel nennt talk-conversations)"
-last_updated: "2026-08-25T17:04:31.876Z"
-last_activity: 2026-08-25 -- Phase 13 planning complete
+stopped_at: "Completed 13-01-PLAN.md (EXAPP-09 zur Haelfte: Version 0.1.9 an sechs Stellen, Changelog-Block 0.1.9 mit message_truncated und talk-conversations, kein Tag)"
+last_updated: "2026-08-25T17:11:29.882Z"
+last_activity: 2026-08-25
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 10
-  completed_plans: 4
-  percent: 40
+  completed_plans: 5
+  percent: 50
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Current focus:** Phase 13 — cimd nachmessung und release 0.1.9
+**Current focus:** Phase 13 — CIMD-Nachmessung und Release 0.1.9
 
 ## Current Position
 
-Phase: 13
-Plan: Not started
+Phase: 13 (CIMD-Nachmessung und Release 0.1.9) — EXECUTING
+Plan: 2 of 6
 Status: Ready to execute
-Last activity: 2026-08-25 -- Phase 13 planning complete
+Last activity: 2026-08-25
 
 ## Performance Metrics
 
@@ -150,6 +150,7 @@ Last activity: 2026-08-25 -- Phase 13 planning complete
 | Phase 12 P02 | 10 min | 2 tasks | 4 files |
 | Phase 12 P03 | 21 min | 3 tasks tasks | 3 files files |
 | Phase 12 P04 | 18 min | 3 tasks tasks | 7 files files |
+| Phase 13 P01 | 12 min | 2 tasks tasks | 8 files files |
 
 ## Accumulated Context
 
@@ -549,6 +550,9 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 12 TOOL-19: Modulgrenze als AST-Gate in tests/contract/test_module_boundaries.py statt ruff --select SLF; die Messung im Modul-Docstring begruendet es (3 SLF-Treffer in src/, davon 2 legitime Klassen-Interna, 53 in tests/), und AST sieht die vier Prosa-Nennungen in tools/context.py konstruktionsbedingt nicht
 - [Phase ?]: Phase 12 TOOL-19: die Umbenennung _room zu one_room gehoert NICHT in den Changelog von 0.1.9 (kein Werkzeugname, kein Antwortschluessel, keine Id-Form, tools/list bleibt 15711 Bytes bei 21 Werkzeugen); die README-Korrektur spreed zu talk-conversations gehoert als Doku-Korrektur hinein
 - [Phase ?]: Phase 12 TOOL-19: REAL_BUT_UNREGISTERED lebt im Test und nicht in provider_map.py, weil das Produktionsmodul eine Uebersetzungstabelle fuehrt und keine Liste der Ids, die es nicht uebersetzt
+- [Phase ?]: Phase 13 Plan 01: die uv.lock-Selbstangabe (Zeile 472) wird beim Bump mitgezogen wie beim 0.1.8-Vorbild 8392680, aber per Texteditierung statt per uv lock: kein Gate haelt sie, ein Lock-Lauf haette Dependency-Zeilen bewegt
+- [Phase ?]: Phase 13 Plan 01: CRLF-Dateien (appinfo/info.xml, drei READMEs) werden byte-exakt per Python rb/wb ersetzt, mit Vorab-Zaehlung der Treffer je Datei; belegt durch Ein-Zeilen-Diffs statt Massen-Diffs
+- [Phase ?]: Phase 13 Plan 01: der 0.1.9-Changelog-Block nennt nur die zwei nutzersichtbaren Phase-12-Uebergaben (message_truncated, talk-conversations); die Rubrik Added bleibt leer und gehoert Plan 13-02 (Enterprise-Fake-Door)
 
 ### Pending Todos
 
@@ -583,8 +587,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-25T13:25:10.409Z
-Stopped at: Completed 12-04-PLAN.md (TOOL-19: one_room ist oeffentlich, die Modulgrenze ist ein AST-Gate, das README-Beispiel nennt talk-conversations)
+Last session: 2026-08-25T17:11:29.864Z
+Stopped at: Completed 13-01-PLAN.md (EXAPP-09 zur Haelfte: Version 0.1.9 an sechs Stellen, Changelog-Block 0.1.9 mit message_truncated und talk-conversations, kein Tag)
 Naechster Schritt: Phase 12 verifizieren, dann Phase 13 (Release 0.1.9) planen
 Resume file: None
 
