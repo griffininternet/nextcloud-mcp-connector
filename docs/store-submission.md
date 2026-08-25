@@ -206,8 +206,14 @@ on, and step 4 is irreversible in public.
    scripts/build_store_release.sh
    tar -tzf dist/mcp_connector-<version>.tar.gz
    ```
-4. **Tag and push, with exactly that version.** This is the irreversible step.
+4. **Push the branch, then tag and push, with exactly that version.** This is the
+   irreversible step. The branch push comes first and is not optional: the store
+   description links to `blob/main/...` docs and the screenshots load from
+   `raw.githubusercontent.com/.../main/...`, so a tag whose commits are not on the
+   public `main` publishes a release whose linked pages show an older state (the
+   0.1.8 release found 42 unpushed commits at exactly this point).
    ```
+   git push origin main
    git tag v<version>
    git push origin v<version>
    ```

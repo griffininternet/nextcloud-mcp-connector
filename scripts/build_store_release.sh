@@ -13,8 +13,14 @@
 #   scripts/build_store_release.sh [VERSION]
 #
 # VERSION defaults to the <version> in appinfo/info.xml. The signing key is read
-# from NC_SIGN_KEY (default ~/.nextcloud/certificates/mcp_connector.key). The
-# script prints the base64 SHA-512 signature to paste into the store upload form.
+# from NC_SIGN_KEY (default ~/.nextcloud/certificates/mcp_connector.key).
+#
+# The signature printed at the end is over the LOCALLY built archive and exists
+# only for the local store pipeline diagnosis (structure and signing sanity).
+# It is NOT the signature the store accepts: tar.gz is not byte reproducible,
+# so the store submission signature must be computed over the asset DOWNLOADED
+# from the GitHub release (runbook step 6 in docs/store-submission.md). The
+# 0.1.8 release measured the difference: 45710 bytes local vs 45546 published.
 set -euo pipefail
 
 APP_ID="mcp_connector"
@@ -52,5 +58,9 @@ fi
 
 SIG="$(openssl dgst -sha512 -sign "$KEY" "$ARCHIVE" | openssl base64 -A)"
 echo
-echo "base64 SHA-512 signature (paste into the store upload form):"
+echo "base64 SHA-512 signature over the LOCAL archive (diagnosis only):"
 echo "$SIG"
+echo
+echo "note: do NOT submit this signature. The store checks the bytes it downloads," >&2
+echo "      and tar.gz is not byte reproducible. Sign the downloaded release asset" >&2
+echo "      instead (docs/store-submission.md, runbook step 6)." >&2
