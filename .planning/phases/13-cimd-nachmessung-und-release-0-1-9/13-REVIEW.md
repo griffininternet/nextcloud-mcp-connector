@@ -49,6 +49,7 @@ Gefunden wurden drei Warnungen (zwei Faktenfehler in Proof-Zeile bzw. Changelog,
 
 ### WR-01: Proof-Zeile behauptet falsche Herkunft der Messzahl 15711
 
+**Status:** FIXED (Commit `c564a6b`)
 **File:** `docs/store-submission.md:135`
 **Issue:** Die Step-3-Zeile sagt: "the tool surface measures 15711 bytes across 21 tools ... That is the same number the v1.2 measurement recorded, because this phase touched no tool and no docstring." Die v1.2-Messung hat aber 15612 Bytes festgehalten, nicht 15711: `.planning/MILESTONES.md:33` ("gerechnet aus 15612 gemessenen Bytes bei 21 Werkzeugen") und `CHANGELOG.md:114` (0.1.8: "15612 bytes across 21 tools"). Die 15711 stammen aus Phase 12 (Plan 12-01, `mail_browse`-Docstring, dokumentiert in `12-01-SUMMARY.md`: 15657 zu 15711). Die Kernaussage der Zeile (Phase 13 hat nichts angehoben) stimmt, aber die Herleitung ist falsch, und ein Leser, der die Proof-Zeile mit dem Changelog 0.1.8 vergleicht, findet einen Widerspruch in einem Dokument, dessen einziger Zweck belegbare Aussagen sind.
 **Fix:** In der Zeile "the v1.2 measurement" durch die tatsächliche Referenz ersetzen, etwa:
@@ -60,6 +61,7 @@ touched no tool and no docstring, and the budget was not raised to make it fit.
 
 ### WR-02: Changelog-0.1.9-Begründung widerspricht dem eigenen 0.1.5-Eintrag
 
+**Status:** FIXED (Commit `9ac0a3c`, nur der 0.1.9-Block im Repo; das veröffentlichte Release-Asset bleibt unangetastet)
 **File:** `CHANGELOG.md:24-26`
 **Issue:** Der Added-Eintrag von 0.1.9 schließt mit: "the description travels with this release because the store reads the manifest at upload time, which is what made the corrections of 0.1.5 and 0.1.6 invisible." Das ist doppelt schief: (1) Die Korrekturen von 0.1.5 und 0.1.6 wurden nicht unsichtbar, sie sind die heutige Store-Seite; unsichtbar war die 0.1.5-Änderung nur für Minuten. (2) Der 0.1.5-Eintrag derselben Datei (Zeilen 170 bis 176) benennt als Ursache ausdrücklich die Store-Caches ("the store serves the app page, the catalogue and the search index from caches that refresh minutes apart"), nicht das Manifest-Lesen beim Upload. Zwei Erklärungen desselben Vorfalls in einer Datei, von denen eine falsch ist, in einem Release-Dokument, dessen Korrektheit Prüfschwerpunkt war.
 **Fix:** Den Halbsatz auf die tatsächlich gemeinte Aussage kürzen:
@@ -71,6 +73,7 @@ the next release; 0.1.5 and 0.1.6 were both releases for exactly that reason.
 
 ### WR-03: Internes Go-Kriterium des Fake-Door-Tests liegt im öffentlichen Repo
 
+**Status:** FIXED (Commit `f3faefd`; Go-Kriterium verschoben nach `.planning/phases/13-cimd-nachmessung-und-release-0-1-9/enterprise-issue-go-kriterium.md`)
 **File:** `docs/contrib/enterprise-signals-issue.md:1-14`
 **Issue:** Der HTML-Kommentar am Dateikopf trägt die interne Versuchsanordnung in das öffentliche Repository: "Kind: fake door", das exakte Go-Kriterium ("at least five qualified organisation signals, each from an organisation with more than 100 users, within six weeks ... Anything short of that is a no-go and the add-on stays unbuilt") und den Hinweis "Not published ... owner decision (D-07)". Der Issue-Body selbst ist ehrlich (er sagt, dass nichts implementiert ist), aber die Schwelle, an der die Antworten gemessen werden, ist damit für genau die Zielgruppe lesbar, die sie messen soll, bevor der Owner über die Veröffentlichung entschieden hat. Das kontaminiert das Messergebnis des Experiments und legt Geschäftsstrategie offen, ohne dass es dafür einen Grund im Repo gibt.
 **Fix:** Den Kommentarkopf auf die technischen Metadaten reduzieren (Ziel-Repo, Titel, "Not published, owner decision D-07") und Go-Kriterium samt Fake-Door-Einordnung in die private Planung verschieben (z. B. `.planning/`-Phase oder BACKLOG-Eintrag), bevor jemand die Datei zitiert.
