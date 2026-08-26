@@ -143,11 +143,51 @@ Talk, Tables und Mail als drei neue Familien (21 Tools gesamt), Mail strikt lese
 - Sessions: 4 Arbeitstage (21.08. Phasen 8+9, 24.08. Phase 10, 25.08. Phase 11 inkl. Release und Milestone-Abschluss).
 - Notable: 1 API-Abbruch (11-01) mit sauberem Continuation-Agent; 2 Owner-Checkpoints (Tag-Freigabe, Store-Sitzung); Store-Upload aus dem Browser-Seitenkontext, HTTP 201 beim ersten Versuch.
 
+## Milestone: v1.3 — Pflege und 0.1.9
+
+**Shipped:** 2026-08-26
+**Phasen:** 2 | **Pläne:** 10
+
+### What Was Built
+
+Die vier v1.2-Schulden geschlossen (message_truncated je Ebene eine Bedeutung, Id-Codec als einzige Quelle, AST-Gate gegen Privat-Durchgriffe, drei Security-Nachzieher als Regressionstests); CIMD nach den v1.1-Review-Fixes live nachgemessen statt behauptet (Messweg A mit echtem Client, Gegenprobe mit abgeschaltetem Schalter); Release 0.1.9 im Store mit elf Proof-Zeilen; Enterprise-Fake-Door (ISV-Vorhaben) in READMEs und Store-Beschreibungen; GitHub-Actions auf Node-24-Majors.
+
+### What Worked
+
+- Owner-Anweisungen mitten im Lauf ("ISV-Vorhaben berücksichtigen", "nichts Enterprise-Internes im Repo") ließen sich sauber als CONTEXT-Decisions bzw. Nachtrags-Commits einarbeiten, ohne die Phase neu zu schneiden.
+- Die Messung gegen den Kandidaten VOR dem Tag entkoppelte den CIMD-Beweis von der Owner-Freigabe; der leere Diff Quellstand==Tag-Stand machte den Beweis übertragbar.
+- Der Review-Fix WR-03 (interne Go-Kriterien aus der öffentlichen Datei) fing einen Fake-Door-Konstruktionsfehler, bevor er die Messung verfälschen konnte; der Owner-Entscheid D-07 zog die Linie dann noch schärfer.
+- Der workflow_dispatch-Dry-Run in release.yml erlaubte, die Action-Bumps ohne Release zu validieren.
+
+### What Was Inefficient
+
+- Die "fünf Versionsstellen" der Roadmap waren real sechs (uv.lock) — der Pattern-Mapper fand es, aber die Requirement-Formulierung hätte es tragen sollen.
+- Zwei Doku-Fakten überlebten das Review nicht (falsche v1.2-Messzahl in einer Proof-Zeile, falsche Unsichtbarkeits-Begründung im Changelog); Beweisdokumente brauchen dieselbe Faktenprüfung wie Code.
+- Nach dem Tag driftet der Repo-Changelog vom signierten Asset (WR-02-Fix) — bekanntes, akzeptiertes Muster, aber jedes Mal eine Audit-Zeile wert.
+
+### Patterns Established
+
+- Fake-Door-Regel: öffentlicher Text nennt nur das Angebot und den Kontakt; Go-Kriterien und Messlogik bleiben außerhalb des Repos (D-07).
+- CIMD-/Feature-Beweise gegen den Release-Kandidaten im lokalen Registry fahren, Quellstand-Gleichheit zum Tag per Diff belegen.
+- Fremde Actions: exakte Version verifizieren (setup-uv pflegt seit v8 keine floating Major-Tags), Bumps via CI-Push plus Dry-Run validieren, nie im Release-Moment.
+
+### Key Lessons
+
+- ConPTY per ctypes braucht STARTF_USESTDHANDLES mit den Konsolen-Handles, sonst hängt das Kind an der Pseudo-Konsole (Messweg-A-Treiber).
+- bootstrap_exapp.sh braucht HP_SHARED_KEY für jeden compose-Aufruf, sonst lügt die Fehlermeldung ("Nextcloud is still not installed").
+- Ein Akzeptanzkriterium darf nicht das Muster verbieten, das seine eigene Regel nennen muss (Credential-Grep vs. code_challenge).
+
+### Cost Observations
+
+- Modell-Mix: Executor/Planner/Researcher/Security-Auditor opus, Checker/Verifier/Integration sonnet; Store-Upload-Plan im Catch-all-Agenten (Playwright-Zugriff).
+- Sessions: 2 Arbeitstage (25.08. Planung+Execution+Release, 26.08. D-07 + Action-Bumps + Abschluss); 1 Session-Limit-Abbruch des Planners, sauber per Resume fortgesetzt.
+- Notable: 1 Owner-Checkpoint (Tag-Freigabe mit Store-Weg-Abfrage), Store-Upload HTTP 201 beim ersten Versuch, Review 0C/3W alle gefixt.
+
 ## Cross-Milestone Trends
 
-| Metrik | v1.0 | v1.1 | v1.2 |
-|--------|------|------|------|
-| Phasen / Pläne / Tasks | 5 / 50 / 111 | 1 / 11 / 20 | 4 / 28 / 67 |
-| Kalenderzeit | 7 Tage | 1 Tag | 5 Tage (21.-25.08.) |
-| Verifier-Gap-Runden | 1 (Phase 5) | 1 (Phase 6, CLIENT-04) | 0 (alle 4 Phasen passed im ersten Lauf) |
-| Live-Releases im Milestone | 3 (0.1.0, 0.1.1, 0.1.2) | 0 (0.1.3-Kandidat wartet auf Owner-Freigabe) | 5 (0.1.4 bis 0.1.8, drei davon vorgezogen) |
+| Metrik | v1.0 | v1.1 | v1.2 | v1.3 |
+|--------|------|------|------|------|
+| Phasen / Pläne / Tasks | 5 / 50 / 111 | 1 / 11 / 20 | 4 / 28 / 67 | 2 / 10 / 26 |
+| Kalenderzeit | 7 Tage | 1 Tag | 5 Tage (21.-25.08.) | 2 Tage (25.-26.08.) |
+| Verifier-Gap-Runden | 1 (Phase 5) | 1 (Phase 6, CLIENT-04) | 0 (alle 4 Phasen passed im ersten Lauf) | 0 (beide Phasen passed im ersten Lauf) |
+| Live-Releases im Milestone | 3 (0.1.0, 0.1.1, 0.1.2) | 0 (0.1.3-Kandidat wartet auf Owner-Freigabe) | 5 (0.1.4 bis 0.1.8, drei davon vorgezogen) | 1 (0.1.9) |
