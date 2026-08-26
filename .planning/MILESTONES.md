@@ -1,5 +1,24 @@
 # Milestones
 
+## v1.3 Pflege und 0.1.9 (Shipped: 2026-08-26)
+
+**Phases completed:** 2 phases, 10 plans, 26 tasks
+
+**Key accomplishments:**
+
+- Die Nachrichtenebene von `talk_browse(level="messages")` heißt jetzt `message_truncated`, die Antwortebene behält `truncated` samt `next`, `fetch` meldet die Kappung weiterhin, und die Messung belegt 912 statt 858 Bytes bei unangetasteten Gates.
+- Jede Id im Produktionsbaum entsteht jetzt in `ids.py`, und `ids.parse` liest im `url`-Zweig genau die Menge, die `ids.encode_url` bauen kann.
+- Die drei Nachzieher aus 11-SECURITY.md sind von Prüfschritten zu Belegen geworden: PROVIDER_KINDS trägt für jeden der sechs Einträge Repository, Datei und Klasse, das Quelltext-Gate zu T-11-29 läuft als Regressionstest mit Gegenprobe, und die Vokabular-Regel reicht jetzt so weit wie ihre Formulierung, mit zwei begründeten Ausnahmen.
+- Der letzte Privat-Durchgriff im Produktionsbaum ist eine öffentliche Schnittstelle mit ihrer Sicherheitsbegründung, die Modulgrenze zwischen den Tool-Familien ist ein AST-Gate mit drei Gegenproben statt einer Absprache, und das README-Beispiel für einen unbekannten Suchprovider nennt in allen drei Sprachen eine Id, die es wirklich gibt.
+- Die Zeichenkette 0.1.9 steht an allen sechs Stellen, der Changelog-Block darueber nennt `message_truncated` als Formataenderung und `talk-conversations` als Doku-Korrektur, und `git tag --list v0.1.9` ist leer.
+- Vier Fassungen desselben Textes nennen Audit-Log, Gruppen-Policies und SSO als geplantes kommerzielles Add-on und sagen in jeder Sprache in einem eigenen Satz, dass heute keiner der drei Bausteine existiert; der Issue-Entwurf liegt als Datei im Repo und ist nicht veroeffentlicht.
+- Claude Code 2.1.233 verbindet sich live mit dem 0.1.9-Kandidaten allein über die Adresse seines Metadatendokuments, ohne eine einzige `/register`-Zeile im ganzen Containerleben, und mit abgeschaltetem Schalter geht null statt fünf Sockets nach außen.
+- Alle sechs Gates laufen auf dem 0.1.9-Kandidaten gruen, das Werkzeugoberflaechen-Mass steht unveraendert bei 15711 Bytes ueber 21 Werkzeuge gegen 18000, das Store-Paket hat genau einen Top-Level-Ordner und traegt die Statuszeile 0.1.9, und drei datierte Proof-Zeilen belegen die Runbook-Schritte 1 bis 3, ohne dass ein Tag existiert.
+- Der Branch war auf GitHub, bevor irgendein Tag existierte, die Owner-Antwort lautete um 18:27Z wörtlich `freigeben`, der Tag `v0.1.9` entstand danach auf demselben Commit `685295d`, den `origin/main` schon trug, und der Release-Lauf `32883904698` ist in jedem Schritt grün: das Multi-Arch-Image liegt unter `ghcr.io/street1983nk/mcp_connector:0.1.9`, und `mcp_connector-0.1.9.tar.gz` mit 47264 Bytes hängt am GitHub-Release.
+- Release 0.1.9 ist im Nextcloud App Store: die Signatur ueber genau die veroeffentlichten 47264 Bytes verifizierte mit `Verified OK` gegen das Zertifikat, der POST aus dem Seitenkontext der angemeldeten Store-Sitzung antwortete HTTP 201, der Katalog listet 0.1.9 mit dem Span `>=32.0.0 <35.0.0` neben allen neun frueheren Releases, und die Runbook-Schritte 6 bis 8 tragen sieben datierte Proof-Zeilen.
+
+---
+
 ## v1.2 Kuratierte Breite (Shipped: 2026-08-25)
 
 **Phases completed:** 4 phases, 28 plans, 67 tasks

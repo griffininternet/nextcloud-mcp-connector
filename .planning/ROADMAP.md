@@ -5,7 +5,7 @@
 - **v1.0 MVP im Store**: Phasen 1-5 (shipped 2026-08-20, Release 0.1.2 live im Nextcloud App Store)
 - **v1.1 Verwaltungs-Clients und Härtungs-Reste**: Phase 6 (shipped 2026-08-20; Phase 7 deferred, extern getaktet)
 - **v1.2 Kuratierte Breite**: Phasen 8-11 (shipped 2026-08-25, Release 0.1.8 live im Store; Talk, Tables und Mail dazu, ohne das Sicherheitsversprechen oder die Schlankheit aufzugeben)
-- **v1.3 Pflege und 0.1.9**: Phasen 12-13 (aktiv; die beim v1.2-Abschluss zurückgestellten Konsistenz- und Härtungs-Schulden abräumen und als Release 0.1.9 in den Store bringen, keine neuen Familien)
+- **v1.3 Pflege und 0.1.9**: Phasen 12-13 (shipped 2026-08-26, Release 0.1.9 live im Store; Konsistenz- und Härtungs-Schulden abgeräumt, CIMD live nachgemessen, Enterprise-Fake-Door)
 
 ## Phases
 
@@ -47,77 +47,16 @@ Audit: [milestones/v1.2-MILESTONE-AUDIT.md](milestones/v1.2-MILESTONE-AUDIT.md) 
 
 </details>
 
-### v1.3 Pflege und 0.1.9 (Phasen 12-13)
+<details>
+<summary>v1.3 Pflege und 0.1.9 (Phasen 12-13), SHIPPED 2026-08-26</summary>
 
-- [x] **Phase 12: Konsistenz und Härtungs-Nachzieher** - Die vier Schulden aus 11-REVIEW und 11-SECURITY abräumen: eine Bedeutung je Antwortschlüssel, der Id-Codec als einzige Quelle, keine Privat-Durchgriffe zwischen Tool-Modulen, und die drei Security-Nachzieher als Test statt als Prüfschritt (completed 2026-08-25)
-- [x] **Phase 13: CIMD-Nachmessung und Release 0.1.9** - Den CIMD-Weg nach den v1.1-Review-Fixes live nachmessen und die Fassung mit Proof-Zeilen als 0.1.9 in den Store bringen, Tag nur nach Owner-Freigabe (completed 2026-08-25)
+- [x] Phase 12: Konsistenz und Härtungs-Nachzieher (4/4 Pläne), completed 2026-08-25
+- [x] Phase 13: CIMD-Nachmessung und Release 0.1.9 (6/6 Pläne, davon 2 mit Owner-Gate), completed 2026-08-25
 
-## Phase Details
+Volle Phasendetails: [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
+Audit: [milestones/v1.3-MILESTONE-AUDIT.md](milestones/v1.3-MILESTONE-AUDIT.md) (passed, 6/6 Requirements)
 
-### Phase 12: Konsistenz und Härtungs-Nachzieher
-
-**Goal**: Die beim v1.2-Abschluss bewusst zurückgestellten Konsistenz- und Härtungs-Schulden sind geschlossen, solange sie frisch sind: ein Antwortschlüssel bedeutet je Ebene genau eine Sache, Id-Strings entstehen ausschließlich im Codec, kein Tool-Modul greift in die Privatteile eines anderen, und die drei Security-Nachzieher aus 11-SECURITY.md sind Tests statt einmaliger Prüfschritte. Keine neuen Tools, keine neuen Familien, keine Anhebung eines Gates.
-**Depends on**: Phase 11 (v1.2 abgeschlossen, Release 0.1.8 live im Store)
-**Requirements**: TOOL-17, TOOL-18, TOOL-19, SEC-02
-**Success Criteria** (was wahr sein muss):
-
-  1. Die Nachrichtenebene von `talk_browse(level="messages")` heißt `message_truncated`, die Antwortebene behält `truncated`, der Tool-Docstring nennt für jede Ebene genau eine Bedeutung, und Tests decken beide Ebenen getrennt ab (Muster von IN-01/`preview_truncated` in Mail). Die Umbenennung ist als Formatänderung im Changelog-Block für 0.1.9 vermerkt, nicht stillschweigend gemacht.
-  2. Kein Produktionsmodul baut einen Id-String außerhalb des Codecs: `tools/mail.py` ruft `ids.encode_mail` statt des `_ID_KIND`-Workarounds (Fundstelle mail.py:70/:490, nicht chatgpt.py wie zuerst notiert), und `ids.parse` lehnt eine `url:`-Id mit Whitespace im Rest ab statt sie durchzureichen; für beide Wege existiert je ein Negativtest.
-  3. Kein Tool-Modul ruft eine `_`-präfixte Funktion eines fremden Tool-Moduls: der heutige Aufruf von `talk_tools._room` läuft über eine öffentliche Schnittstelle, und ein Gate oder Test wird rot, wenn ein Privat-Durchgriff zurückkehrt. Das README-Beispiel für einen unbekannten Suchprovider nennt eine echte, nie registrierte Provider-Id statt `spreed`.
-  4. Die drei Nachzieher aus 11-SECURITY.md sind geschlossen: jeder Eintrag in `PROVIDER_KINDS` trägt den Verifikationskommentar mit Repository, Datei und Klasse (auch `files` und `notes`), das Quelltext-Gate aus T-11-29 läuft als Regressionstest in der Suite, und das Vokabular-Gate prüft über `appinfo/info.xml` hinaus mindestens die drei READMEs und `CHANGELOG.md`, wobei `docs/store-submission.md` entweder bereinigt oder als interne Ausnahme im Gate begründet ist.
-  5. Die Werkzeugoberfläche ist unverändert groß und alle Gates bleiben ohne Anhebung grün: `BUDGET_BYTES` steht weiter auf 18000, `MAX_TOOL_BYTES` weiter auf 1400, die Zahl der Werkzeuge bleibt 21, und die einzige nutzersichtbare Änderung ist der umbenannte Nachrichten-Schlüssel.
-
-**Plans**: 4 plans (2 Wellen: 12-01, 12-02 und 12-03 parallel, danach 12-04)
-
-Plans:
-**Wave 1**
-
-- [x] 12-01-PLAN.md — TOOL-17: `message_truncated` auf der Nachrichtenebene von `talk_browse`, Verbraucher in `fetch` zieht mit, Tool-Docstring mit einer Bedeutung je Ebene
-- [x] 12-02-PLAN.md — TOOL-18: `ids.encode_mail` statt `_ID_KIND`, und `ids.parse` liest im `url`-Zweig nur noch, was `ids.encode_url` bauen kann
-- [x] 12-03-PLAN.md — SEC-02: Verifikationskommentare für `files` und `notes`, T-11-29 als Regressionstest, Vokabular-Gate über READMEs und Changelog
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 12-04-PLAN.md — TOOL-19: `talk.one_room` statt `talk_tools._room`, AST-Gate gegen Privat-Durchgriffe, README-Beispiel mit `talk-conversations`
-
-### Phase 13: CIMD-Nachmessung und Release 0.1.9
-
-**Goal**: Der CIMD-Weg ist nach den v1.1-Review-Fixes nicht mehr behauptet, sondern gegen die laufende Topologie nachgemessen, und die Fassung aus Phase 12 liegt als Release 0.1.9 im Nextcloud App Store, mit Proof-Zeilen für jeden Runbook-Schritt und einem Tag, der erst nach ausdrücklicher Owner-Freigabe entsteht.
-**Depends on**: Phase 12
-**Requirements**: EXAPP-08, EXAPP-09
-**Success Criteria** (was wahr sein muss):
-
-  1. Ein E2E-Lauf gegen die laufende Topologie zeigt, dass ein CIMD-Client sich weiterhin ohne Registrierung verbindet (client_id = https-URL seines Dokuments), und die Proof-Zeile mit Datum, Befehl und Ergebnis steht in der Doku oder im Messdokument der Phase, nicht in einer Zusammenfassung.
-  2. Die Version 0.1.9 steht als derselbe String an allen fünf Stellen (vier Code-Stellen plus README-Statuszeile in EN, DE und FR), und der Changelog-Block 0.1.9 nennt jede nutzerrelevante Änderung der Phase 12, `message_truncated` ausdrücklich als Formatänderung.
-  3. Alle Gates laufen lokal grün, das Vokabular-Gate in seiner neuen Reichweite aus Phase 12 eingeschlossen, und der Branch ist gepusht, bevor irgendein Tag existiert (Runbook Schritt 4); der Tag `v0.1.9` entsteht erst nach ausdrücklicher Owner-Freigabe.
-  4. Release 0.1.9 ist im Store gelistet: signiert wurde das heruntergeladene Release-Asset und nicht das lokal gebaute (Runbook Schritt 6), und die Runbook-Schritte 4 bis 8 tragen je eine Proof-Zeile mit Datum, Befehl und Ergebnis in `docs/store-submission.md`.
-
-**Plans**: 6 plans
-
-Plans:
-**Wave 1**
-
-- [x] 13-01-PLAN.md — Versions-Bump 0.1.9 an sechs Stellen und der Changelog-Block mit `message_truncated`
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 13-02-PLAN.md — Enterprise-Fake-Door: `## Enterprise` in drei READMEs, drei Store-Beschreibungen, Issue-Entwurf (D-05 bis D-07)
-
-**Wave 3** *(blocked on Wave 2 completion)*
-
-- [x] 13-03-PLAN.md — CIMD-Nachmessung gegen den 0.1.9-Kandidaten, Gegenprobe, Proof-Zeile in `docs/oauth-setup.md` (EXAPP-08)
-
-**Wave 4** *(blocked on Wave 3 completion)*
-
-- [x] 13-04-PLAN.md — Sechs Gates lokal grün, Archiv-Probelauf als Strukturprüfung, Proof-Zeilen der Schritte 1 bis 3
-
-**Wave 5** *(blocked on Wave 4 completion)*
-
-- [x] 13-05-PLAN.md — Push vor dem Tag, Owner-Freigabe, Tag `v0.1.9`, Workflow, Proof-Zeile der Schritte 4 und 5 (nicht autonom)
-
-**Wave 6** *(blocked on Wave 5 completion)*
-
-- [x] 13-06-PLAN.md — Signatur über das heruntergeladene Asset, Store-Upload, vier Nachweise, Proof-Zeilen 6 bis 8 (nicht autonom)
+</details>
 
 ## Progress
 
@@ -134,12 +73,12 @@ Plans:
 | 9. Talk | v1.2 | 5/5 | Complete | 2026-08-21 |
 | 10. Mail strikt lesend und die Trifecta-Grenze | v1.2 | 8/8 | Complete | 2026-08-24 |
 | 11. Bündelung, Budget und Release 0.1.8 | v1.2 | 10/10 | Complete | 2026-08-25 |
-| 12. Konsistenz und Härtungs-Nachzieher | v1.3 | 4/4 | Complete    | 2026-08-25 |
-| 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 6/6 | Complete    | 2026-08-25 |
+| 12. Konsistenz und Härtungs-Nachzieher | v1.3 | 4/4 | Complete | 2026-08-25 |
+| 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 6/6 | Complete | 2026-08-25 |
 
 ## Next
 
-`/gsd:complete-milestone` — Milestone v1.3 abschließen: beide Phasen (12 und 13) sind komplett, Release 0.1.9 ist im Store gelistet
+`/gsd:new-milestone` — nächsten Milestone aufsetzen (Kandidaten: Tech-Debt-Reste DF-11-01/IN-05/UF-4, Mail-Entwürfe, Talk-Threads, v2.0 openDesk; dazu Enterprise-Signal-Auswertung ab Oktober)
 
 ---
-*Roadmap created: 2026-08-14 (granularity: coarse, mode: mvp); v1.0 abgeschlossen: 2026-08-20; v1.1 abgeschlossen: 2026-08-20 (Phase 7 deferred); v1.2 abgeschlossen: 2026-08-25 (Release 0.1.8 live); v1.3 aufgesetzt: 2026-08-25 (2 Phasen, 6 Requirements)*
+*Roadmap created: 2026-08-14 (granularity: coarse, mode: mvp); v1.0 abgeschlossen: 2026-08-20; v1.1 abgeschlossen: 2026-08-20 (Phase 7 deferred); v1.2 abgeschlossen: 2026-08-25 (Release 0.1.8 live); v1.3 abgeschlossen: 2026-08-26 (Release 0.1.9 live, CIMD nachgemessen, Enterprise-Fake-Door)*

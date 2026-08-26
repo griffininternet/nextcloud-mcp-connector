@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Pflege und 0.1.9
-status: milestone_complete
-stopped_at: Milestone complete (Phase 13 was final phase)
-last_updated: 2026-08-25T19:08:17.870Z
-last_activity: 2026-08-25
+status: Awaiting next milestone
+stopped_at: Completed 13-05-PLAN.md (Tag v0.1.9 auf 685295d nach Owner-Freigabe, Release-Lauf 32883904698 gruen, Job publish 1m40s, Asset mcp_connector-0.1.9.tar.gz mit 47264 Bytes am Release)
+last_updated: "2026-08-26T03:09:59.511Z"
+last_activity: 2026-08-26 — Milestone v1.3 completed and archived
 progress:
   total_phases: 2
   completed_phases: 2
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 
 ## Current Position
 
-Phase: 13
-Plan: Not started
-Status: Milestone complete
-Last activity: 2026-08-25
+Phase: Milestone v1.3 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-08-26 — Milestone v1.3 completed and archived
 
 ## Performance Metrics
 
@@ -611,6 +611,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Plan 12-04 ausfuehren (Phase 12, Plan 4 von 4)
-- Uebergabe an Phase 13: Changelog-Block 0.1.9 braucht die Zeile zur Umbenennung truncated -> message_truncated (siehe 12-01-SUMMARY.md)
-- Uebergabe an Phase 13: CHANGELOG.md steht ab 12-03 unter dem Vokabular-Gate; der 0.1.9-Block entsteht unter dieser Regel (siehe 12-03-SUMMARY.md)
+- Start the next milestone with /gsd-new-milestone

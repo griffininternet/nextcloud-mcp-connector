@@ -8,21 +8,13 @@ Ein schlankes MCP-only-ExApp für Nextcloud: Nutzer installieren es per Klick au
 
 Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
 
-## Current Milestone: v1.3 Pflege und 0.1.9
+## Current Milestone
 
-**Goal:** Die beim v1.2-Abschluss bewusst zurückgestellten Konsistenz- und Härtungs-Schulden abräumen, solange sie frisch sind, und die Fassung als Release 0.1.9 in den Store bringen.
-
-**Target features:**
-- `message_truncated` in tools/talk.py (DF-11-01: dieselbe truncated-Doppelbedeutung, die Mail als IN-01 gefixt hat; Antwortformat-Änderung, gehört in den Changelog)
-- Id-Codec-Hygiene: `_ID_KIND`-Workaround durch `ids.encode_mail` ersetzen (IN-05), url:-Whitespace-Lücke in `ids.parse` schließen (IN-06)
-- Kleinkram aus 11-REVIEW: echtes Provider-Id-Beispiel im README, `talk_tools._room`-Privataufruf über eine öffentliche Schnittstelle
-- Security-Nachzieher aus 11-SECURITY (UF-1..3): Verifikationskommentare für files/notes in PROVIDER_KINDS, Regressionstest für das Quelltext-Gate T-11-29, Vokabular-Gate über info.xml hinaus
-- CIMD-E2E-Live-Rerun (v1.1-Tech-Debt)
-- Release 0.1.9 im Store (Tag nur nach Owner-Freigabe, Runbook mit Proof-Zeilen)
-
-**Key context:** Reiner Pflege-Milestone, keine neuen Familien. Die Entscheidung zwischen "Breite 2" (Mail-Entwürfe/Talk-Threads) und v2.0 openDesk fällt danach, informiert durch Store-Feedback, Conference und it@M. UF-4 (uv.lock-Versionszeile) ist dokumentiert-akzeptiert, keine Aktion.
+Kein aktiver Milestone. v1.3 "Pflege und 0.1.9" shipped 2026-08-26 (Audit passed 6/6); der nächste entsteht über `/gsd:new-milestone`. Die Entscheidung zwischen "Breite 2" (Mail-Entwürfe/Talk-Threads) und v2.0 openDesk fällt informiert durch Store-Feedback, ISV-Call (14.09.) und it@M; dazu kommt ab Oktober die Auswertung der Enterprise-Fake-Door-Signale.
 
 ## Current State
+
+**v1.3 shipped 2026-08-26** (Audit passed 6/6, Release 0.1.9 live im Store): Konsistenz- und Härtungs-Schulden aus v1.2 geschlossen (`message_truncated` je Ebene eine Bedeutung, Id-Codec einzige Quelle, AST-Gate gegen Privat-Durchgriffe, drei Security-Nachzieher als Regressionstests). CIMD nach den v1.1-Review-Fixes live NACHGEMESSEN statt behauptet (Messweg A, echter Client, POST /register = 0, Gegenprobe mit abgeschaltetem Schalter). Enterprise-Fake-Door (ISV-Vorhaben) in READMEs und Store-Beschreibungen EN/DE/FR, ohne Preis, Kontakt k.cherif@outlook.de; Owner-Entscheid D-07: kein Issue, keine Enterprise-Interna im Repo. GitHub-Actions auf Node-24-Majors (setup-uv exakt gepinnt), per CI-Lauf und release.yml-Dry-Run validiert. Codebasis: ~2812 Tests grün, Budget 15711/18000 über 21 Tools.
 
 **v1.2 shipped 2026-08-25** (Audit passed 17/17, Release 0.1.8 live im Store): 21 Tools über neun Familien. Talk (Konversationen/Verlauf nachweislich nebenwirkungsfrei lesen, Senden als einziger direkter Nachrichtenkanal, instanzweit abschaltbar per NC_MCP_TALK_SEND), Tables (lesen über drei Ebenen, Zeile anlegen über Spaltentitel), Mail strikt lesend (Konten/Postfächer/Envelopes/Volltext, AST-Grep-Gate gegen jeden Schreibaufruf, Lethal-Trifecta-Doku). prepare_context mit vier Beinen (Termine, Suche, Talk-Digest, Mail-Ungelesen-Zähler), je eigenes Zeitbudget und degraded-Eintrag, live gemessen. fetch löst sieben Id-Arten auf (file/note/card/event/mail/message/table). Budget-Gate erstmals gesenkt statt angehoben: 18000 aus 15612 gemessenen Bytes. Codebasis: ~2770 Tests grün, ruff/pyright/vulture sauber.
 
@@ -38,12 +30,11 @@ BL-12 MUCGPT-Verprobung wartet auf it@M-Antwort).
 ## Next Milestone Goals
 
 Kandidaten:
-- Tech-Debt 0.1.9: DF-11-01 (talk.py message_truncated), IN-05 (_ID_KIND-Workaround durch ids.encode_mail ersetzen), UF-1..4 aus 11-SECURITY.md
 - Mail-Entwürfe (create draft, nie Senden; Trigger Store-Feedback), Talk-Threads (capability-gated), Mail-Deep-Link-Auflösung (RFC-Message-Id zu databaseId, erst nach Messung)
 - MUCGPT/F13/BaerGPT live verproben, sobald externer Zugang besteht (deferred CLIENT-01..03, Protokoll in docs/client-setup.md)
-- Nextcloud Conference September 2026: Demo fahren, Talk-Entwurf verwenden (Contributor Week / Gespräche; CfP ist zu)
-- Tech-Debt aus v1.1-Audit (acceptance_all_tools-Zählung 15 vs 16, CIMD-E2E-Live-Rerun nach den Review-Fixes, E5-Wortlaut bei CIMD-off; uv.lock-Selbstangabe am 21.08. mit 0.1.3 erledigt)
-- Querschnitt: Prototype Fund Frist 1.10. bis 30.11.2026 (Solo-Dev, 47,5k)
+- Enterprise-Signale auswerten (Fake-Door seit 0.1.9 live; Go: >=5 qualifizierte Org-Signale in 6 Wochen oder 1 Ankerkunde; Kriterium lokal beim Owner) und ISV-Call 14.09. einarbeiten
+- Rest-Tech-Debt: IN-Punkte aus 13-REVIEW (FR-Wortlaut "confidemment", Proof-Zeilen-Sortierung), Vokabular-Gate-Reichweite auf .planning prüfen (I-2 aus v1.3-Audit), W-2 (13-VERIFICATION nennt entfernte Datei)
+- Querschnitt: Prototype Fund Frist 1.10. bis 30.11.2026 (Solo-Dev, 47,5k); UG-Gründung als Träger (ISV)
 - v2.0 "openDesk/Behörden" als Einzeiler (OpenProject/XWiki/Matrix/OX, Gruppen-Policies, Audit-Log, ZenDiS)
 
 ## Requirements
@@ -70,6 +61,10 @@ Kandidaten:
 - ✓ prepare_context mit Talk-Digest und Mail-Zählern, gemessen statt geschätzt — v1.2 (CTX-01..02)
 - ✓ Budget-Gate auf Messung verankert (18000), Suchtreffer aus Talk/Tables auflösbar — v1.2 (TOOL-15..16)
 - ✓ Release 0.1.8 im Store mit vier Nachweisen und Owner-Tag-Gate — v1.2 (EXAPP-07)
+- ✓ Konsistenz-Nachzieher: eine Bedeutung je Antwortschlüssel, Id-Codec als einzige Quelle, keine Privat-Durchgriffe (AST-Gate) — v1.3 (TOOL-17..19)
+- ✓ Security-Nachzieher als Regressionstests statt Prüfschritte, Vokabular-Gate in voller Reichweite — v1.3 (SEC-02)
+- ✓ CIMD live nachgemessen: echter Client verbindet ohne Registrierung, Gegenprobe mit Schalter aus, selbsttragende Proof-Zeile — v1.3 (EXAPP-08)
+- ✓ Release 0.1.9 im Store mit elf Proof-Zeilen, Owner-Tag-Gate und Signatur über das heruntergeladene Asset — v1.3 (EXAPP-09)
 
 ### Active
 
@@ -125,7 +120,10 @@ Kandidaten:
 | v1.2 "Kuratierte Breite" vorgezogen statt auf Store-Feedback zu warten (Owner, 21.08.) | Talk/Tables/Mail sind die meistgefragten Familien; Schlankheit bleibt über Schema-Diät und Budget-Gate | ✓ Good — 21 Tools bei 15657/18000 Bytes, Gate gesenkt statt angehoben |
 | talk_send kommt, hinter neuem Admin-Schalter (Owner, 21.08., Lethal-Trifecta-Entscheid) | Ausgangskanal gehört der Administration; Kette benannt statt beschwiegen | ✓ Good — Ende-zu-Ende gemessen, SEC-01 dreisprachig im Store-Text |
 | Mail strikt lesend, kein Schreibpfad im Client | Sensibelste Familie; "kann nichts zerstören" bleibt wörtlich wahr | ✓ Good — AST-Grep-Gate mit 9 Nadeln + Gegenproben, live nebenwirkungsfrei bewiesen |
-| Release-Signatur immer über das heruntergeladene Asset, Branch-Push vor dem Tag | tar.gz nicht byte-reproduzierbar (45710 lokal vs 45546 publiziert bei 0.1.8); Store-Links zeigen auf main | ✓ Good — Runbook Schritt 4/6 präzisiert, Skript-Ausgabe entschärft (eb05a6f) |
+| Release-Signatur immer über das heruntergeladene Asset, Branch-Push vor dem Tag | tar.gz nicht byte-reproduzierbar (45710 lokal vs 45546 publiziert bei 0.1.8); Store-Links zeigen auf main | ✓ Good — Runbook Schritt 4/6 präzisiert, Skript-Ausgabe entschärft (eb05a6f); bei 0.1.9 wörtlich eingehalten (47546 lokal vs 47264 publiziert, Verified OK) |
+| Enterprise-Fake-Door mit dem Release 0.1.9 ausgeliefert (Owner, 25.08., ISV-Vorhaben) | Store liest das Manifest nur beim Upload; READMEs waren ohnehin offen; Signale messen statt bauen | — Pending (Go-Kriterium: >=5 Org-Signale in 6 Wochen oder 1 Ankerkunde; Auswertung ab Oktober) |
+| D-07: kein Enterprise-Issue, keine Enterprise-Interna im Repo (Owner, 26.08.) | Interne Messkriterien gehören nicht vor die Zielgruppe, die gemessen wird | ✓ Good — Entwurf + Go-Kriterium aus dem Repo entfernt (f9b3d2d), nur lokal beim Owner |
+| CIMD-Nachmessung über Messweg A gegen den Kandidaten VOR dem Tag (25.08.) | Beweis darf nicht von der Owner-Freigabe abhängen; Quellstand == Tag-Stand per leerem Diff belegt | ✓ Good — echter Client, POST /register = 0, Gegenprobe 0 Sockets |
 
 ## Evolution
 
@@ -145,4 +143,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-25 at v1.3 milestone start*
+*Last updated: 2026-08-26 after v1.3 milestone*
