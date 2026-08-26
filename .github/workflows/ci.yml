@@ -13,8 +13,8 @@ jobs:
   unit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
         with:
           enable-cache: true
       - name: Install locked environment
@@ -48,12 +48,12 @@ jobs:
   image:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       # QEMU is what makes the arm64 half of the matrix runnable on an amd64 runner: the
       # Dockerfile installs packages and unpacks frpc for the target architecture, so
       # those layers execute emulated instead of being cross compiled.
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
       - name: ExApp image build (no push)
         # Both architectures are built and none of them is published: registry publishing
         # belongs to phase 5 (D-25), so there is no login and no registry step in this
@@ -64,8 +64,8 @@ jobs:
   exapp:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
         with:
           enable-cache: true
       - name: Generate a fresh HaRP shared key
@@ -124,8 +124,8 @@ jobs:
   integration:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
         with:
           enable-cache: true
           # prune-cache is off for this job only, and it is a real failure that was measured
