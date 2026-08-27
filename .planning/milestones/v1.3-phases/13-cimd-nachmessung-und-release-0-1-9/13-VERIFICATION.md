@@ -133,6 +133,13 @@ gegenstandslos: die Datei, deren Aufzählung abwich, gibt es nicht mehr. Beleg:
 `git log --diff-filter=D -- docs/contrib/enterprise-signals-issue.md` nennt `f9b3d2d` als
 den Commit, der den Pfad entfernt hat.
 
+Ebenfalls aus Phase 14: die hängende Linkdefinition `[Unreleased]` wurde am 2026-08-28
+(Phase 14, DOC-01b) aus `CHANGELOG.md` entfernt. Seither greifen der Verweis in Zeile 28
+dieses Berichts (Link-Referenz `compare/v0.1.9...HEAD` auf Zeile 480-481) und der grep
+der 18:14Z-Proof-Zeile in `docs/store-submission.md` (`grep -n 'compare/v0.1.9'
+CHANGELOG.md`) ins Leere; beide Befunde waren am Prüfzeitpunkt 2026-08-25 richtig und
+bleiben unverändert.
+
 Geschrieben in Phase 14 des Milestones v1.4 unter der Anforderung DOC-02. Auslöser ist
 Tech-Debt-Punkt W-2 aus `.planning/milestones/v1.3-MILESTONE-AUDIT.md`, der genau diese
 Abweichung zwischen Bericht und heutigem Repository-Stand festgehalten hat.
