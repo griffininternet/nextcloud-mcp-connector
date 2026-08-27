@@ -8,7 +8,7 @@
 
 ### Dokumentation (DOC)
 
-- [ ] **DOC-01**: Die Info-Findings aus 13-REVIEW.md sind geschlossen: (a) der französische Enterprise-/README-Wortlaut ist echtes Französisch (kein "confidemment", kein englisches "for" in einer FR-Überschrift; nach der Kürzung vom 27.08. gegen den aktuellen Stand prüfen, Reste können anderswo im README.fr.md liegen), (b) die hängende `[Unreleased]`-Linkdefinition in CHANGELOG.md ist entfernt oder wieder referenziert, (c) der veraltete Ampersand-Kommentar in appinfo/info.xml ist korrigiert oder entfernt, (d) die Proof-Zeilen in docs/store-submission.md sind präzisiert (Rückverweis der 18:21Z-Zeile auf den getaggten Commit, chronologische Sortierung), ohne dass eine bestehende Proof-Aussage verfälscht wird.
+- [x] **DOC-01**: Die Info-Findings aus 13-REVIEW.md sind geschlossen: (a) der französische Enterprise-/README-Wortlaut ist echtes Französisch (kein "confidemment", kein englisches "for" in einer FR-Überschrift; nach der Kürzung vom 27.08. gegen den aktuellen Stand prüfen, Reste können anderswo im README.fr.md liegen), (b) die hängende `[Unreleased]`-Linkdefinition in CHANGELOG.md ist entfernt oder wieder referenziert, (c) der veraltete Ampersand-Kommentar in appinfo/info.xml ist korrigiert oder entfernt, (d) die Proof-Zeilen in docs/store-submission.md sind präzisiert (Rückverweis der 18:21Z-Zeile auf den getaggten Commit, chronologische Sortierung), ohne dass eine bestehende Proof-Aussage verfälscht wird.
 - [ ] **DOC-02**: Die veraltete Angabe in der archivierten 13-VERIFICATION (Truth 9 nennt docs/contrib/enterprise-signals-issue.md als vorhanden; Datei seit f9b3d2d entfernt, Owner-Entscheid D-07) trägt eine datierte Nachtrags-Notiz in der archivierten Datei (.planning/milestones/v1.3-phases/...), die den Entfernungs-Commit nennt; der Verifikationsbefund selbst bleibt unverändert (er war zum Prüfzeitpunkt korrekt).
 
 ### Sicherheit und Gates (SEC)
@@ -44,7 +44,7 @@ Vorgemerkt, nicht in v1.4:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DOC-01 | Phase 14 | Pending |
+| DOC-01 | Phase 14 | Complete |
 | DOC-02 | Phase 14 | Pending |
 | SEC-03 | Phase 14 | Pending |
 | EXAPP-10 | Phase 15 | Pending |

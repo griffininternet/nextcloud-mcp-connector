@@ -4,13 +4,13 @@ milestone: v1.4
 milestone_name: Pflege und 0.1.10
 status: executing
 stopped_at: Roadmap v1.4 erstellt (Phasen 14-15, Coverage 4/4, Traceability gefüllt)
-last_updated: "2026-08-27T22:27:18.240Z"
-last_activity: 2026-08-27 -- Phase 14 planning complete
+last_updated: "2026-08-27T22:33:27.949Z"
+last_activity: 2026-08-27
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 2
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Current focus:** v1.4 Pflege und 0.1.10, Phase 14 (Doku-Reste und Gate-Entscheid)
+**Current focus:** Phase 14 — Doku-Reste und Gate-Entscheid
 
 ## Current Position
 
-Phase: 14 of 15 (Doku-Reste und Gate-Entscheid)
-Plan: (noch keiner erstellt)
+Phase: 14 (Doku-Reste und Gate-Entscheid) — EXECUTING
+Plan: 2 of 2
 Status: Ready to execute
-Last activity: 2026-08-27 -- Phase 14 planning complete
+Last activity: 2026-08-27
 
 ## Performance Metrics
 
@@ -157,6 +157,7 @@ Last activity: 2026-08-27 -- Phase 14 planning complete
 | Phase 13 P04 | 12 min | 2 tasks | 1 files |
 | Phase 13 P05 | 13 min | 3 tasks tasks | 1 file files |
 | Phase 13 P06 | 12 min | 3 tasks | 1 file |
+| Phase 14 P01 | 3 min | 2 tasks tasks | 4 files files |
 
 ## Accumulated Context
 
@@ -574,6 +575,8 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 13 Plan 04: die Testzahl 2812 bei 163 deselektiert kam aus einem zweiten Lauf ohne zusaetzliches -q, weil addopts bereits -q traegt und -qq die Summenzeile unterdrueckt; das Runbook-Kommando blieb woertlich
 - [Phase ?]: Phase 13: der Tag v0.1.9 entstand erst nach der woertlichen Owner-Antwort freigeben (2026-08-25T18:27Z), Branch-Push davor; Weg fuer Schritt 7 ist die angemeldete Store-Sitzung im Browser
 - [Phase ?]: Phase 13: die Proof-Zeile zu Runbook-Schritt 4 wurde geteilt, eine Zeile fuer den Push vor dem Checkpoint und eine fuer Tag und Workflow nach dem gruenen Lauf
+- [Phase ?]: Phase 14-01: DOC-01b per Entfernung der [Unreleased]-Linkdefinition gelöst, weil CHANGELOG.md keinen solchen Abschnitt führt; Regel für Phase 15: eine Definition entsteht erst wieder mit dem Abschnitt, der sie referenziert
+- [Phase ?]: Phase 14-01: der Ampersand-Kommentar in appinfo/info.xml beschreibt jetzt den Zustand (keine der beiden Spendenadressen trägt einen Ampersand) plus die Entity-Regel für eine künftige Adresse; keine URL und keine Elementfolge angefasst
 
 ### Pending Todos
 
@@ -608,7 +611,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-27T22:09:52.000Z
+Last session: 2026-08-27T22:33:21.414Z
 Stopped at: Roadmap v1.4 erstellt (Phasen 14-15, Coverage 4/4, Traceability gefüllt)
 Naechster Schritt: /gsd:plan-phase 14 (Doku-Reste und Gate-Entscheid: DOC-01, DOC-02, SEC-03)
 Resume file: None

@@ -78,7 +78,7 @@ Audit: [milestones/v1.3-MILESTONE-AUDIT.md](milestones/v1.3-MILESTONE-AUDIT.md) 
   5. Die Gate-Reichweite ist einheitlich entschieden: entweder prüft das Vokabular-Gate zusätzlich .planning/**/*.md (Treffer dort bereinigt oder als begründete Ausnahme gelistet) oder .planning steht als dokumentierte Ausnahme im Gate-Docstring; der gewählte Weg steht als Kommentar am Gate und die Entscheidung im Plan-/Summary-Text
 **Plans**: 2 plans
 Plans:
-- [ ] 14-01-PLAN.md , Sprachreste IN-05, hängende Linkdefinition IN-06 und veralteter Ampersand-Kommentar IN-03 (DOC-01a bis DOC-01c)
+- [x] 14-01-PLAN.md , Sprachreste IN-05, hängende Linkdefinition IN-06 und veralteter Ampersand-Kommentar IN-03 (DOC-01a bis DOC-01c)
 - [ ] 14-02-PLAN.md , Proof-Zeilen chronologisch samt Rückverweis IN-01/IN-02/IN-07 (DOC-01d), datierter Nachtrag in der abgelegten 13-VERIFICATION (DOC-02) und entschiedene Gate-Reichweite (SEC-03)
 
 ### Phase 15: Release 0.1.10
@@ -110,7 +110,7 @@ Plans:
 | 11. Bündelung, Budget und Release 0.1.8 | v1.2 | 10/10 | Complete | 2026-08-25 |
 | 12. Konsistenz und Härtungs-Nachzieher | v1.3 | 4/4 | Complete | 2026-08-25 |
 | 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 6/6 | Complete | 2026-08-25 |
-| 14. Doku-Reste und Gate-Entscheid | v1.4 | 0/TBD | Not started | - |
+| 14. Doku-Reste und Gate-Entscheid | v1.4 | 1/2 | In Progress|  |
 | 15. Release 0.1.10 | v1.4 | 0/TBD | Not started | - |
 
 ## Next
