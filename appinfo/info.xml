@@ -180,7 +180,7 @@ Journal d'audit, politiques de groupe et SSO via votre fournisseur d'identité s
 
 Les pages liées sont en anglais.
 	]]></description>
-	<version>0.1.9</version>
+	<version>0.1.10</version>
 	<licence>agpl</licence>
 	<author mail="k.cherif@outlook.de">street1983nk</author>
 	<namespace>McpConnector</namespace>
@@ -255,7 +255,7 @@ Les pages liées sont en anglais.
 			-->
 			<registry>ghcr.io</registry>
 			<image>street1983nk/mcp_connector</image>
-			<image-tag>0.1.9</image-tag>
+			<image-tag>0.1.10</image-tag>
 		</docker-install>
 		<!--
 		  - Exactly thirteen routes, and they are the whole external attack surface of this app.
