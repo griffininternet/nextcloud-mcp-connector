@@ -123,7 +123,7 @@ Was Truth 9 belegt, hängt nicht an dieser Datei. Die drei WR-Fixes sind die Com
 `c564a6b` (WR-01, Herkunft der 15711 Bytes in der Step-3-Proof-Zeile), `9ac0a3c` (WR-02,
 Changelog-Begründung an den 0.1.5-Cache-Befund angeglichen) und `f3faefd` (WR-03,
 Go-Kriterium aus dem öffentlichen Issue-Entwurf herausgenommen). Alle drei sind in der
-Historie nachweisbar, unabhaengig davon, ob die vierte Datei heute noch existiert.
+Historie nachweisbar, unabhängig davon, ob die vierte Datei heute noch existiert.
 
 Der Befund IN-04 aus `13-REVIEW.md` (die SSO-Aufzählung des Entwurfs ließ den Schluss
 "and a way to withdraw them" weg, den `README.md` trägt) ist mit derselben Entfernung
