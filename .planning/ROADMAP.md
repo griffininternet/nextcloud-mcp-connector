@@ -67,35 +67,53 @@ Audit: [milestones/v1.3-MILESTONE-AUDIT.md](milestones/v1.3-MILESTONE-AUDIT.md) 
 ## Phase Details (v1.4)
 
 ### Phase 14: Doku-Reste und Gate-Entscheid
+
 **Goal**: Die dokumentarischen Reste aus v1.3 sind abgeräumt und die Reichweite des Vokabular-Gates gegenüber .planning ist entschieden statt offen
 **Depends on**: Nichts (Phase 13 abgeschlossen; erste Phase von v1.4)
 **Requirements**: DOC-01, DOC-02, SEC-03
 **Success Criteria** (was wahr sein muss):
+
   1. Der französische Enterprise-/README-Wortlaut ist echtes Französisch: kein "confidemment" und kein englisches "for" in einer FR-Überschrift, geprüft gegen den Stand nach der Kürzung vom 27.08. (Reste können auch anderswo in README.fr.md liegen)
   2. CHANGELOG.md trägt keine hängende [Unreleased]-Linkdefinition mehr (entfernt oder wieder referenziert) und der veraltete Ampersand-Kommentar in appinfo/info.xml ist korrigiert oder entfernt
   3. Die Proof-Zeilen in docs/store-submission.md sind chronologisch sortiert und die 18:21Z-Zeile verweist auf den getaggten Commit zurück, ohne dass eine bestehende Proof-Aussage verfälscht wurde
   4. Die abgelegte 13-VERIFICATION unter .planning/milestones/v1.3-phases/ trägt eine datierte Nachtrags-Notiz, die den Entfernungs-Commit f9b3d2d zur ehemaligen Datei docs/contrib/enterprise-signals-issue.md nennt; der ursprüngliche Verifikationsbefund bleibt unverändert (er war zum Prüfzeitpunkt korrekt)
   5. Die Gate-Reichweite ist einheitlich entschieden: entweder prüft das Vokabular-Gate zusätzlich .planning/**/*.md (Treffer dort bereinigt oder als begründete Ausnahme gelistet) oder .planning steht als dokumentierte Ausnahme im Gate-Docstring; der gewählte Weg steht als Kommentar am Gate und die Entscheidung im Plan-/Summary-Text
+
 **Plans**: 2 plans
 Plans:
+
 - [x] 14-01-PLAN.md , Sprachreste IN-05, hängende Linkdefinition IN-06 und veralteter Ampersand-Kommentar IN-03 (DOC-01a bis DOC-01c)
 - [x] 14-02-PLAN.md , Proof-Zeilen chronologisch samt Rückverweis IN-01/IN-02/IN-07 (DOC-01d), datierter Nachtrag in der abgelegten 13-VERIFICATION (DOC-02) und entschiedene Gate-Reichweite (SEC-03)
 
 ### Phase 15: Release 0.1.10
+
 **Goal**: Der gekürzte Enterprise-Text mit dem Kontaktwechsel zu admin@infranode.dev ist als Release 0.1.10 im Store, und die Doku-Fixes aus Phase 14 fahren im Asset mit
 **Depends on**: Phase 14 (die Doku-Fixes müssen vor dem Tag im Branch liegen, damit sie ins Store-Asset fahren)
 **Requirements**: EXAPP-10
 **Success Criteria** (was wahr sein muss):
+
   1. Die Zeichenkette 0.1.10 steht an allen sechs Versionsstellen (pyproject, __init__, info.xml version + image-tag, drei README-Statuszeilen, uv.lock)
   2. Der Changelog-Block 0.1.10 nennt den gekürzten Enterprise-Abschnitt und den Kontaktwechsel zu admin@infranode.dev als nutzersichtbare Änderung; damit fährt auch die WR-02-Korrektur aus dem Repo-Changelog mit ins Asset und der Changelog-Drift W-1 ist erledigt
   3. Alle Gates laufen lokal grün auf dem Release-Kandidaten, ohne Anhebung (18000/1400 bei 21 Tools)
   4. Der Branch ist auf GitHub, bevor ein Tag existiert; der Tag v0.1.10 entsteht NUR nach ausdrücklicher Owner-Freigabe; die Signatur läuft über das heruntergeladene Asset, nicht über das lokal gebaute
   5. Release 0.1.10 ist im Store gelistet und die Runbook-Schritte tragen datierte Proof-Zeilen in docs/store-submission.md
+
 **Plans**: 4 plans
 Plans:
+**Wave 1**
+
 - [ ] 15-01-PLAN.md , Versions-Bump auf 0.1.10 an sechs Stellen und Changelog-Block 0.1.10 mit Enterprise-Kürzung, Kontaktwechsel und Übersetzungs-Korrekturen
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 15-02-PLAN.md , Sechs Gates lokal grün ohne Anhebung, Archiv-Strukturprüfung mit Statuszeile und Changelog im Tarball, Proof-Zeilen der Schritte 1 bis 3
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 15-03-PLAN.md , Push vor dem Tag, blockierende Owner-Freigabe, Tag v0.1.10 und grüner Release-Workflow, Proof-Zeile der Schritte 4 und 5
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 15-04-PLAN.md , Signatur über das heruntergeladene Asset, Store-Einreichung mit 201 und die vier Nachweise, Proof-Zeilen der Schritte 6 bis 8
 
 ## Progress
