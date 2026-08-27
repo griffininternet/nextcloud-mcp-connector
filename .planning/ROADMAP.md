@@ -76,7 +76,10 @@ Audit: [milestones/v1.3-MILESTONE-AUDIT.md](milestones/v1.3-MILESTONE-AUDIT.md) 
   3. Die Proof-Zeilen in docs/store-submission.md sind chronologisch sortiert und die 18:21Z-Zeile verweist auf den getaggten Commit zurück, ohne dass eine bestehende Proof-Aussage verfälscht wurde
   4. Die abgelegte 13-VERIFICATION unter .planning/milestones/v1.3-phases/ trägt eine datierte Nachtrags-Notiz, die den Entfernungs-Commit f9b3d2d zur ehemaligen Datei docs/contrib/enterprise-signals-issue.md nennt; der ursprüngliche Verifikationsbefund bleibt unverändert (er war zum Prüfzeitpunkt korrekt)
   5. Die Gate-Reichweite ist einheitlich entschieden: entweder prüft das Vokabular-Gate zusätzlich .planning/**/*.md (Treffer dort bereinigt oder als begründete Ausnahme gelistet) oder .planning steht als dokumentierte Ausnahme im Gate-Docstring; der gewählte Weg steht als Kommentar am Gate und die Entscheidung im Plan-/Summary-Text
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 14-01-PLAN.md , Sprachreste IN-05, hängende Linkdefinition IN-06 und veralteter Ampersand-Kommentar IN-03 (DOC-01a bis DOC-01c)
+- [ ] 14-02-PLAN.md , Proof-Zeilen chronologisch samt Rückverweis IN-01/IN-02/IN-07 (DOC-01d), datierter Nachtrag in der abgelegten 13-VERIFICATION (DOC-02) und entschiedene Gate-Reichweite (SEC-03)
 
 ### Phase 15: Release 0.1.10
 **Goal**: Der gekürzte Enterprise-Text mit dem Kontaktwechsel zu admin@infranode.dev ist als Release 0.1.10 im Store, und die Doku-Fixes aus Phase 14 fahren im Asset mit
