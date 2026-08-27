@@ -91,7 +91,12 @@ Plans:
   3. Alle Gates laufen lokal grün auf dem Release-Kandidaten, ohne Anhebung (18000/1400 bei 21 Tools)
   4. Der Branch ist auf GitHub, bevor ein Tag existiert; der Tag v0.1.10 entsteht NUR nach ausdrücklicher Owner-Freigabe; die Signatur läuft über das heruntergeladene Asset, nicht über das lokal gebaute
   5. Release 0.1.10 ist im Store gelistet und die Runbook-Schritte tragen datierte Proof-Zeilen in docs/store-submission.md
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+- [ ] 15-01-PLAN.md , Versions-Bump auf 0.1.10 an sechs Stellen und Changelog-Block 0.1.10 mit Enterprise-Kürzung, Kontaktwechsel und Übersetzungs-Korrekturen
+- [ ] 15-02-PLAN.md , Sechs Gates lokal grün ohne Anhebung, Archiv-Strukturprüfung mit Statuszeile und Changelog im Tarball, Proof-Zeilen der Schritte 1 bis 3
+- [ ] 15-03-PLAN.md , Push vor dem Tag, blockierende Owner-Freigabe, Tag v0.1.10 und grüner Release-Workflow, Proof-Zeile der Schritte 4 und 5
+- [ ] 15-04-PLAN.md , Signatur über das heruntergeladene Asset, Store-Einreichung mit 201 und die vier Nachweise, Proof-Zeilen der Schritte 6 bis 8
 
 ## Progress
 
@@ -111,11 +116,11 @@ Plans:
 | 12. Konsistenz und Härtungs-Nachzieher | v1.3 | 4/4 | Complete | 2026-08-25 |
 | 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 6/6 | Complete | 2026-08-25 |
 | 14. Doku-Reste und Gate-Entscheid | v1.4 | 2/2 | Complete    | 2026-08-27 |
-| 15. Release 0.1.10 | v1.4 | 0/TBD | Not started | - |
+| 15. Release 0.1.10 | v1.4 | 0/4 | Planned | - |
 
 ## Next
 
-`/gsd:plan-phase 14`: Phase 14 (Doku-Reste und Gate-Entscheid) planen
+`/gsd:execute-phase 15`: Phase 15 (Release 0.1.10) ausführen, 4 Pläne in 4 Wellen
 
 ---
 *Roadmap created: 2026-08-14 (granularity: coarse, mode: mvp); v1.0 abgeschlossen: 2026-08-20; v1.1 abgeschlossen: 2026-08-20 (Phase 7 deferred); v1.2 abgeschlossen: 2026-08-25 (Release 0.1.8 live); v1.3 abgeschlossen: 2026-08-26 (Release 0.1.9 live, CIMD nachgemessen, Enterprise-Fake-Door); v1.4 aufgesetzt: 2026-08-28 (Phasen 14-15: Doku-Reste, Gate-Entscheid, Release 0.1.10)*
