@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Pflege und 0.1.10
 status: executing
-stopped_at: Plan 15-01 abgeschlossen (Version 0.1.10 an allen sechs Stellen, Changelog-Block 2026-08-28, kein Tag)
-last_updated: "2026-08-27T23:24:52.693Z"
-last_activity: 2026-08-27 -- Plan 15-01 abgeschlossen, Phase 15 weiter mit Plan 15-02
+stopped_at: Plan 15-02 abgeschlossen (sechs Gates gruen, Archiv-Probelauf, drei Proof-Zeilen; kein Tag)
+last_updated: "2026-08-27T23:40:14.352Z"
+last_activity: 2026-08-27 -- Plan 15-02 abgeschlossen (sechs Gates gruen bei 15712 Bytes ohne Anhebung, Archiv-Probelauf 47299 Bytes, drei Proof-Zeilen), Phase 15 weiter mit Plan 15-03
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 6
-  completed_plans: 3
-  percent: 50
+  completed_plans: 4
+  percent: 67
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 15 (Release 0.1.10) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
-Last activity: 2026-08-27 -- Plan 15-01 abgeschlossen (Versions-Bump 0.1.10 und Changelog-Block), kein Tag
+Last activity: 2026-08-27 -- Plan 15-02 abgeschlossen (Runbook-Schritt 3 belegt, kein Tag); Plan 15-03 braucht die Owner-Freigabe fuer den Tag v0.1.10
 
 ## Performance Metrics
 
@@ -161,6 +161,7 @@ Last activity: 2026-08-27 -- Plan 15-01 abgeschlossen (Versions-Bump 0.1.10 und 
 | Phase 14 P01 | 3 min | 2 tasks tasks | 4 files files |
 | Phase 14 P02 | 6 min | 3 tasks tasks | 3 files files |
 | Phase 15 P01 | 8 min | 2 tasks | 8 files |
+| Phase 15 P02 | 20 min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -584,6 +585,8 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 15-01: EXAPP-10 bleibt Pending, weil die Anforderung Release 0.1.10 im Store verlangt; alle vier Pläne der Phase tragen sie, abgehakt wird sie erst am Ende von Plan 15-04 nach Tag, Signatur und Upload
 - [Phase ?]: Phase 15-01: die WR-02-Korrektur am 0.1.9-Block bekommt keinen eigenen Changelog-Eintrag; sie fährt als Prosa des Vorversions-Blocks mit dem 0.1.10-Asset mit und schließt damit W-1 des v1.3-Audits
 - [Phase ?]: Phase 15-01: uv.lock ist die sechste Versionsstelle und wird per Texteditierung gehoben, nie per uv lock oder uv sync; alle Prüfläufe der Phase laufen mit uv run --no-sync
+- [Phase 15-release-0-1-10]: Werkzeugoberflaeche misst 15712 statt 15711 Bytes; Ursache ist die serverInfo-Versionszeichenkette im tools/list-Envelope (0.1.9 auf 0.1.10 = ein Zeichen mehr), per Gegenprobe auf 15711 zurueckgerechnet; kein Grenzwert angehoben, Erwartungswert fuer den naechsten Lauf ist 15712
+- [Phase 15-release-0-1-10]: das lokal gebaute 0.1.10-Archiv misst 47299 Bytes (sha256 4682e06d) und ist NICHT das signierte Artefakt; Plan 15-04 signiert das heruntergeladene Asset
 
 ### Pending Todos
 
@@ -618,8 +621,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-27T23:24:23.257Z
-Stopped at: Roadmap v1.4 erstellt (Phasen 14-15, Coverage 4/4, Traceability gefüllt)
+Last session: 2026-08-27T23:40:06.294Z
+Stopped at: Plan 15-02 abgeschlossen (sechs Gates gruen, Archiv-Probelauf, drei Proof-Zeilen; kein Tag)
 Naechster Schritt: /gsd:plan-phase 14 (Doku-Reste und Gate-Entscheid: DOC-01, DOC-02, SEC-03)
 Resume file: None
 

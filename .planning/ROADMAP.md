@@ -106,7 +106,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 15-02-PLAN.md , Sechs Gates lokal grün ohne Anhebung, Archiv-Strukturprüfung mit Statuszeile und Changelog im Tarball, Proof-Zeilen der Schritte 1 bis 3
+- [x] 15-02-PLAN.md , Sechs Gates lokal grün ohne Anhebung, Archiv-Strukturprüfung mit Statuszeile und Changelog im Tarball, Proof-Zeilen der Schritte 1 bis 3
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -134,7 +134,7 @@ Plans:
 | 12. Konsistenz und Härtungs-Nachzieher | v1.3 | 4/4 | Complete | 2026-08-25 |
 | 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 6/6 | Complete | 2026-08-25 |
 | 14. Doku-Reste und Gate-Entscheid | v1.4 | 2/2 | Complete    | 2026-08-27 |
-| 15. Release 0.1.10 | v1.4 | 1/4 | In Progress|  |
+| 15. Release 0.1.10 | v1.4 | 2/4 | In Progress|  |
 
 ## Next
 
