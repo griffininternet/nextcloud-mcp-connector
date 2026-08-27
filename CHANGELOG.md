@@ -477,7 +477,6 @@ First release, submitted to the Nextcloud App Store.
   never sees more than that user sees in the web interface.
 - A privacy and data flow description, see [docs/privacy.md](docs/privacy.md).
 
-[Unreleased]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.9...HEAD
 [0.1.9]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.6...v0.1.7
