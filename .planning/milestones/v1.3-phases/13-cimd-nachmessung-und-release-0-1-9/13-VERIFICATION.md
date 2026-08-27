@@ -101,3 +101,33 @@ Keine Gaps. Alle neun abgeleiteten Wahrheiten sind durch Codebase-Evidenz bestä
 
 _Verified: 2026-08-25T21:15:00Z_
 _Verifier: Claude (gsd-verifier)_
+
+## Nachtrag 2026-08-28 (Milestone v1.4, Phase 14, DOC-02)
+
+`docs/contrib/enterprise-signals-issue.md` ist seit Commit `f9b3d2d` vom 2026-08-26 nicht
+mehr im Repository. Die Commit-Botschaft lautet "docs: remove enterprise issue draft from
+repo per owner decision (D-07: no issue, no internals in repo)".
+
+Drei Stellen dieses Berichts nennen die Datei als vorhanden: Zeile 34 (Truth 9), Zeile 48
+(Artefakt-Tabelle) und Zeile 67 (Em-Dash-Prüfung). Alle drei waren am Prüfzeitpunkt
+`2026-08-25T21:15:00Z` richtig und bleiben unverändert. Ein Verifikationsbericht, der
+später an die Welt angepasst wird, ist kein Bericht mehr, sondern eine Behauptung über
+einen Zustand, den niemand mehr nachprüfen kann.
+
+Was Truth 9 belegt, hängt nicht an dieser Datei. Die drei WR-Fixes sind die Commits
+`c564a6b` (WR-01, Herkunft der 15711 Bytes in der Step-3-Proof-Zeile), `9ac0a3c` (WR-02,
+Changelog-Begründung an den 0.1.5-Cache-Befund angeglichen) und `f3faefd` (WR-03,
+Go-Kriterium aus dem öffentlichen Issue-Entwurf herausgenommen). Alle drei sind in der
+Historie nachweisbar, unabhaengig davon, ob die vierte Datei heute noch existiert.
+
+Der Befund IN-04 aus `13-REVIEW.md` (die SSO-Aufzählung des Entwurfs ließ den Schluss
+"and a way to withdraw them" weg, den `README.md` trägt) ist mit derselben Entfernung
+gegenstandslos: die Datei, deren Aufzählung abwich, gibt es nicht mehr. Beleg:
+`git ls-files docs/contrib/` nennt nur noch `docs/contrib/227-pr-body.md`,
+`test -f docs/contrib/enterprise-signals-issue.md` ist falsch, und
+`git log --diff-filter=D -- docs/contrib/enterprise-signals-issue.md` nennt `f9b3d2d` als
+den Commit, der den Pfad entfernt hat.
+
+Geschrieben in Phase 14 des Milestones v1.4 unter der Anforderung DOC-02. Auslöser ist
+Tech-Debt-Punkt W-2 aus `.planning/milestones/v1.3-MILESTONE-AUDIT.md`, der genau diese
+Abweichung zwischen Bericht und heutigem Repository-Stand festgehalten hat.
