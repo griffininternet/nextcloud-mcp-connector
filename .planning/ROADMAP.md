@@ -61,7 +61,7 @@ Audit: [milestones/v1.3-MILESTONE-AUDIT.md](milestones/v1.3-MILESTONE-AUDIT.md) 
 
 ### v1.4 Pflege und 0.1.10 (Phasen 14-15), AKTIV
 
-- [ ] **Phase 14: Doku-Reste und Gate-Entscheid** - Info-Findings aus 13-REVIEW und W-2 schließen, Reichweite des Vokabular-Gates gegenüber .planning entscheiden
+- [x] **Phase 14: Doku-Reste und Gate-Entscheid** - Info-Findings aus 13-REVIEW und W-2 schließen, Reichweite des Vokabular-Gates gegenüber .planning entscheiden (completed 2026-08-27)
 - [ ] **Phase 15: Release 0.1.10** - Gekürzten Enterprise-Text und Kontaktwechsel als Store-Release mit Standard-Runbook ausliefern
 
 ## Phase Details (v1.4)
@@ -79,7 +79,7 @@ Audit: [milestones/v1.3-MILESTONE-AUDIT.md](milestones/v1.3-MILESTONE-AUDIT.md) 
 **Plans**: 2 plans
 Plans:
 - [x] 14-01-PLAN.md , Sprachreste IN-05, hängende Linkdefinition IN-06 und veralteter Ampersand-Kommentar IN-03 (DOC-01a bis DOC-01c)
-- [ ] 14-02-PLAN.md , Proof-Zeilen chronologisch samt Rückverweis IN-01/IN-02/IN-07 (DOC-01d), datierter Nachtrag in der abgelegten 13-VERIFICATION (DOC-02) und entschiedene Gate-Reichweite (SEC-03)
+- [x] 14-02-PLAN.md , Proof-Zeilen chronologisch samt Rückverweis IN-01/IN-02/IN-07 (DOC-01d), datierter Nachtrag in der abgelegten 13-VERIFICATION (DOC-02) und entschiedene Gate-Reichweite (SEC-03)
 
 ### Phase 15: Release 0.1.10
 **Goal**: Der gekürzte Enterprise-Text mit dem Kontaktwechsel zu admin@infranode.dev ist als Release 0.1.10 im Store, und die Doku-Fixes aus Phase 14 fahren im Asset mit
@@ -110,7 +110,7 @@ Plans:
 | 11. Bündelung, Budget und Release 0.1.8 | v1.2 | 10/10 | Complete | 2026-08-25 |
 | 12. Konsistenz und Härtungs-Nachzieher | v1.3 | 4/4 | Complete | 2026-08-25 |
 | 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 6/6 | Complete | 2026-08-25 |
-| 14. Doku-Reste und Gate-Entscheid | v1.4 | 1/2 | In Progress|  |
+| 14. Doku-Reste und Gate-Entscheid | v1.4 | 2/2 | Complete   | 2026-08-27 |
 | 15. Release 0.1.10 | v1.4 | 0/TBD | Not started | - |
 
 ## Next
