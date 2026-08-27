@@ -2018,6 +2018,17 @@ def public_markdown_pages() -> list[Path]:
     ``docs/contrib/227-pr-body.md`` already lives one folder down: a non-recursive glob would
     let every future page under a subfolder escape silently (review finding WR-05). The
     subfolder reach is pinned in the self test below, so a change back to ``glob`` goes red.
+
+    ``.planning`` stays out too, and that is a decision rather than an oversight (SEC-03,
+    milestone v1.4). The rule addresses the published surface: what the store receives, and what
+    a reader of this repository's documentation gets, which is the three READMEs, the changelog,
+    everything under ``docs/`` and the manifest texts. ``.planning`` is the internal planning
+    area on the other side of that border. It travels in no store archive, and its filed
+    milestone and phase documents carry the word in a technical ``tar`` context as a dated
+    measurement, so cleaning them would falsify a record instead of improving a text. The same
+    border is already drawn in ``pyproject.toml``, where ruff excludes ``.planning`` for the same
+    reason. ``test_the_vocabulary_gate_stops_at_the_internal_planning_area`` below holds it, so
+    the reach cannot widen without someone taking the decision again.
     """
     docs = sorted(page for page in (ROOT / "docs").rglob("*.md") if page != VOCABULARY_EXCEPTION)
     pages = [*PUBLIC_MARKDOWN, *docs]
@@ -2116,6 +2127,26 @@ def test_the_widened_vocabulary_gate_reports_the_word_with_its_line() -> None:
         "README.md:3",
         "README.md:4",
     ], findings
+
+
+def test_the_vocabulary_gate_stops_at_the_internal_planning_area() -> None:
+    """SEC-03: ``.planning`` is out of reach by decision, and the decision hangs on a property.
+
+    The rule addresses the published surface, the store archive and the documentation a reader of
+    this repository gets. The internal planning area travels in no archive, and its filed
+    milestone documents carry the word as a dated measurement in a technical ``tar`` context, so
+    cleaning them would falsify a record. If this goes red the border has moved: take the
+    decision again in the open, instead of quietly pushing the border back to where it was.
+    """
+    for page in public_markdown_pages():
+        assert ".planning" not in page.parts, (
+            f"{page.relative_to(ROOT).as_posix()} is internal planning, not a published page"
+        )
+
+    for member in archive_members():
+        assert not member.startswith(".planning/"), (
+            f"{member} would carry the internal planning area into the store archive"
+        )
 
 
 def test_no_declared_variable_carries_an_empty_default(manifest_root: etree._Element) -> None:
