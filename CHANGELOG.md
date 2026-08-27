@@ -9,6 +9,33 @@ All notable changes to this app are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.10] - 2026-08-28
+
+A release without a code change. The same twenty one tools answer the same questions they
+answered in 0.1.9, and an instance that updates keeps every behaviour it had. What changed is
+text, and text is the one kind of change that only a release carries to the people who read it.
+
+### Changed
+
+- The enterprise section of the store description and of all three READMEs is a few sentences
+  now instead of a page, and the contact address in it moved from k.cherif@outlook.de to
+  admin@infranode.dev. The three things that section names, an audit log over every tool call,
+  policies per group, and sign in through the identity provider an organisation already runs,
+  exist in this version in no form and behind no setting: the section describes a plan and not
+  a feature, and the short wording says so as plainly as the long one did. The texts travel
+  with this release because the store reads the manifest only at upload time, so a corrected
+  text in the repository reaches nobody until the next release; 0.1.5, 0.1.6 and 0.1.9 were
+  all releases for exactly that reason.
+
+### Fixed
+
+- Three wordings in the translated READMEs. The main heading of README.fr.md is French now and
+  no longer English. The invented word "confidemment", which is not a French word, is replaced
+  at both of its places in README.fr.md by a real formulation carrying the meaning the English
+  text has at the same two places. README.de.md writes the product term the way the German
+  store summary writes it. These are word corrections in the reading versions; no tool, no
+  answer and no setting behaves differently because of them.
+
 ## [0.1.9] - 2026-08-25
 
 A maintenance release, and not a new family of tools. The same twenty one tools 0.1.8
@@ -477,6 +504,7 @@ First release, submitted to the Nextcloud App Store.
   never sees more than that user sees in the web interface.
 - A privacy and data flow description, see [docs/privacy.md](docs/privacy.md).
 
+[0.1.10]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.6...v0.1.7
