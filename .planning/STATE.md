@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Pflege und 0.1.10
 status: executing
-stopped_at: Roadmap v1.4 erstellt (Phasen 14-15, Coverage 4/4, Traceability gefüllt)
-last_updated: "2026-08-27T23:18:35.477Z"
-last_activity: 2026-08-27 -- Phase 15 planning complete
+stopped_at: Plan 15-01 abgeschlossen (Version 0.1.10 an allen sechs Stellen, Changelog-Block 2026-08-28, kein Tag)
+last_updated: "2026-08-27T23:24:52.693Z"
+last_activity: 2026-08-27 -- Plan 15-01 abgeschlossen, Phase 15 weiter mit Plan 15-02
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 6
-  completed_plans: 2
-  percent: 33
+  completed_plans: 3
+  percent: 50
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Current focus:** Phase 15 — release 0.1.10
+**Current focus:** Phase 15 — Release 0.1.10
 
 ## Current Position
 
-Phase: 15
-Plan: Not started
+Phase: 15 (Release 0.1.10) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-08-27 -- Phase 15 planning complete
+Last activity: 2026-08-27 -- Plan 15-01 abgeschlossen (Versions-Bump 0.1.10 und Changelog-Block), kein Tag
 
 ## Performance Metrics
 
@@ -160,6 +160,7 @@ Last activity: 2026-08-27 -- Phase 15 planning complete
 | Phase 13 P06 | 12 min | 3 tasks | 1 file |
 | Phase 14 P01 | 3 min | 2 tasks tasks | 4 files files |
 | Phase 14 P02 | 6 min | 3 tasks tasks | 3 files files |
+| Phase 15 P01 | 8 min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -579,6 +580,10 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 13: die Proof-Zeile zu Runbook-Schritt 4 wurde geteilt, eine Zeile fuer den Push vor dem Checkpoint und eine fuer Tag und Workflow nach dem gruenen Lauf
 - [Phase ?]: Phase 14-01: DOC-01b per Entfernung der [Unreleased]-Linkdefinition gelöst, weil CHANGELOG.md keinen solchen Abschnitt führt; Regel für Phase 15: eine Definition entsteht erst wieder mit dem Abschnitt, der sie referenziert
 - [Phase ?]: Phase 14-01: der Ampersand-Kommentar in appinfo/info.xml beschreibt jetzt den Zustand (keine der beiden Spendenadressen trägt einen Ampersand) plus die Entity-Regel für eine künftige Adresse; keine URL und keine Elementfolge angefasst
+- [Phase ?]: Phase 15-01: der Changelog-Block 0.1.10 trägt die Kopfzeile 2026-08-28 (lokaler Kalendertag; in UTC war beim Commit noch der 2026-08-27); Plan 15-03 prüft das Datum vor dem Tag und hebt es, falls der Tag an einem anderen Kalendertag entsteht
+- [Phase ?]: Phase 15-01: EXAPP-10 bleibt Pending, weil die Anforderung Release 0.1.10 im Store verlangt; alle vier Pläne der Phase tragen sie, abgehakt wird sie erst am Ende von Plan 15-04 nach Tag, Signatur und Upload
+- [Phase ?]: Phase 15-01: die WR-02-Korrektur am 0.1.9-Block bekommt keinen eigenen Changelog-Eintrag; sie fährt als Prosa des Vorversions-Blocks mit dem 0.1.10-Asset mit und schließt damit W-1 des v1.3-Audits
+- [Phase ?]: Phase 15-01: uv.lock ist die sechste Versionsstelle und wird per Texteditierung gehoben, nie per uv lock oder uv sync; alle Prüfläufe der Phase laufen mit uv run --no-sync
 
 ### Pending Todos
 
@@ -613,7 +618,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-27T22:43:13.095Z
+Last session: 2026-08-27T23:24:23.257Z
 Stopped at: Roadmap v1.4 erstellt (Phasen 14-15, Coverage 4/4, Traceability gefüllt)
 Naechster Schritt: /gsd:plan-phase 14 (Doku-Reste und Gate-Entscheid: DOC-01, DOC-02, SEC-03)
 Resume file: None

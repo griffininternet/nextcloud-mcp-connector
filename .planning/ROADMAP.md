@@ -102,7 +102,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 15-01-PLAN.md , Versions-Bump auf 0.1.10 an sechs Stellen und Changelog-Block 0.1.10 mit Enterprise-Kürzung, Kontaktwechsel und Übersetzungs-Korrekturen
+- [x] 15-01-PLAN.md , Versions-Bump auf 0.1.10 an sechs Stellen und Changelog-Block 0.1.10 mit Enterprise-Kürzung, Kontaktwechsel und Übersetzungs-Korrekturen
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -134,7 +134,7 @@ Plans:
 | 12. Konsistenz und Härtungs-Nachzieher | v1.3 | 4/4 | Complete | 2026-08-25 |
 | 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 6/6 | Complete | 2026-08-25 |
 | 14. Doku-Reste und Gate-Entscheid | v1.4 | 2/2 | Complete    | 2026-08-27 |
-| 15. Release 0.1.10 | v1.4 | 0/4 | Planned | - |
+| 15. Release 0.1.10 | v1.4 | 1/4 | In Progress|  |
 
 ## Next
 
