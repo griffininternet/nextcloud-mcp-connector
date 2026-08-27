@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.3
-milestone_name: Pflege und 0.1.9
-status: Awaiting next milestone
-stopped_at: Completed 13-05-PLAN.md (Tag v0.1.9 auf 685295d nach Owner-Freigabe, Release-Lauf 32883904698 gruen, Job publish 1m40s, Asset mcp_connector-0.1.9.tar.gz mit 47264 Bytes am Release)
-last_updated: "2026-08-26T03:09:59.511Z"
-last_activity: 2026-08-26 — Milestone v1.3 completed and archived
+milestone: v1.4
+milestone_name: Pflege und 0.1.10
+status: planning
+last_updated: "2026-08-27T22:04:09.476Z"
+last_activity: 2026-08-27
 progress:
-  total_phases: 2
-  completed_phases: 2
-  total_plans: 10
-  completed_plans: 10
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 
 ## Current Position
 
-Phase: Milestone v1.3 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-08-26 — Milestone v1.3 completed and archived
+Status: Defining requirements
+Last activity: 2026-08-27 — Milestone v1.4 started
 
 ## Performance Metrics
 

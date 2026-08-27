@@ -8,9 +8,17 @@ Ein schlankes MCP-only-ExApp für Nextcloud: Nutzer installieren es per Klick au
 
 Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
 
-## Current Milestone
+## Current Milestone: v1.4 Pflege und 0.1.10
 
-Kein aktiver Milestone. v1.3 "Pflege und 0.1.9" shipped 2026-08-26 (Audit passed 6/6); der nächste entsteht über `/gsd:new-milestone`. Die Entscheidung zwischen "Breite 2" (Mail-Entwürfe/Talk-Threads) und v2.0 openDesk fällt informiert durch Store-Feedback, ISV-Call (14.09.) und it@M; dazu kommt ab Oktober die Auswertung der Enterprise-Fake-Door-Signale.
+**Goal:** Den gekürzten Enterprise-Text (Kontakt admin@infranode.dev, Commit 55a5822) als Release 0.1.10 in den Store bringen und die dokumentarischen Reste aus v1.3 abräumen.
+
+**Target features:**
+- Release 0.1.10 im Store (Standard-Runbook mit Proof-Zeilen, Tag nur nach Owner-Freigabe); Changelog nennt den gekürzten Enterprise-Abschnitt und den Kontaktwechsel; der Changelog-Drift W-1 aus dem v1.3-Audit erledigt sich damit
+- Doku-Reste aus 13-REVIEW (Info-Findings): FR-Wortlaut, Proof-Zeilen-Präzisierungen, hängende [Unreleased]-Linkdefinition, veralteter Ampersand-Kommentar in info.xml
+- W-2 aus dem v1.3-Audit: veraltete Verifikations-Notiz zur entfernten Enterprise-Issue-Datei nachziehen
+- Vokabular-Gate-Reichweite entschieden: .planning ist öffentlich, trägt aber "archiv"-Substrings (I-2) — Reichweite erweitern oder Ausnahme begründen
+
+**Key context:** Bewusst kleiner Pflege-Milestone (1-2 Phasen), keine neuen Tools, Gates bleiben 18000/1400/21. Der große Schnitt (Breite 2: Mail-Entwürfe/Talk-Threads vs. v2.0 openDesk) fällt nach dem ISV-Call am 14.09., informiert durch Store-Feedback und die Enterprise-Signale (Auswertung ab Oktober).
 
 ## Current State
 
@@ -143,4 +151,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-26 after v1.3 milestone*
+*Last updated: 2026-08-28 at v1.4 milestone start*
