@@ -108,6 +108,11 @@ _Verifier: Claude (gsd-verifier)_
 mehr im Repository. Die Commit-Botschaft lautet "docs: remove enterprise issue draft from
 repo per owner decision (D-07: no issue, no internals in repo)".
 
+Derselbe Commit `f9b3d2d` hat auch
+`.planning/phases/13-cimd-nachmessung-und-release-0-1-9/enterprise-issue-go-kriterium.md`
+entfernt, das Truth 9 (Zeile 34) als Ablageort des Go-Kriteriums nennt; auch diese
+Nennung war am Prüfzeitpunkt richtig und bleibt unverändert.
+
 Drei Stellen dieses Berichts nennen die Datei als vorhanden: Zeile 34 (Truth 9), Zeile 48
 (Artefakt-Tabelle) und Zeile 67 (Em-Dash-Prüfung). Alle drei waren am Prüfzeitpunkt
 `2026-08-25T21:15:00Z` richtig und bleiben unverändert. Ein Verifikationsbericht, der
