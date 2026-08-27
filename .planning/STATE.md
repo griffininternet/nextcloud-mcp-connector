@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Pflege und 0.1.10
-status: verifying
-stopped_at: Roadmap v1.4 erstellt (Phasen 14-15, Coverage 4/4, Traceability gefüllt)
-last_updated: "2026-08-27T22:43:17.184Z"
+status: ready_to_plan
+stopped_at: Phase 14 complete (2/2) — ready to discuss Phase 15
+last_updated: 2026-08-27T22:59:25.181Z
 last_activity: 2026-08-27
 progress:
   total_phases: 2
@@ -21,20 +21,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Current focus:** Phase 14 — Doku-Reste und Gate-Entscheid
+**Current focus:** Phase 15 — release 0.1.10
 
 ## Current Position
 
-Phase: 14 (Doku-Reste und Gate-Entscheid) — EXECUTING
-Plan: 2 of 2
-Status: Phase complete — ready for verification
+Phase: 15
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-08-27
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 98
+- Total plans completed: 100
 - Average duration: 35 min
 - Total execution time: 15.2 hours
 
@@ -53,6 +53,7 @@ Last activity: 2026-08-27
 | 10 | 8 | - | - |
 | 12 | 4 | - | - |
 | 13 | 6 | - | - |
+| 14 | 2 | - | - |
 
 **Recent Trend:**
 

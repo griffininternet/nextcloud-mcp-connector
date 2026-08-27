@@ -110,7 +110,7 @@ Plans:
 | 11. Bündelung, Budget und Release 0.1.8 | v1.2 | 10/10 | Complete | 2026-08-25 |
 | 12. Konsistenz und Härtungs-Nachzieher | v1.3 | 4/4 | Complete | 2026-08-25 |
 | 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 6/6 | Complete | 2026-08-25 |
-| 14. Doku-Reste und Gate-Entscheid | v1.4 | 2/2 | Complete   | 2026-08-27 |
+| 14. Doku-Reste und Gate-Entscheid | v1.4 | 2/2 | Complete    | 2026-08-27 |
 | 15. Release 0.1.10 | v1.4 | 0/TBD | Not started | - |
 
 ## Next
