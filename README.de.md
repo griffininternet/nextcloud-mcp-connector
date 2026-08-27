@@ -526,32 +526,9 @@ von denen es abhing:
 
 ## Enterprise
 
-Drei Dinge entscheiden darüber, ob eine Organisation eine Assistenz überhaupt an ihre Nextcloud
-lässt, und keines davon beantwortet diese App heute. Wer gestern welche Datei gelesen hat, und
-über welchen Client. Warum eine Gruppe die Mail-Tools aufrufen darf und eine andere nicht. Wie
-einige hundert Konten sich an dem Identitätsanbieter anmelden, den die Organisation ohnehin
-betreibt. Diese drei sind als eigenes kommerzielles Add-on geplant, und dieser Abschnitt sagt
-das, bevor Sie danach suchen.
-
-- **Ein Audit-Log**: ein strukturiertes Ereignis pro Tool-Aufruf, das das Konto, den Client,
-  das Tool, die berührte Ressource und den Ausgang des Aufrufs benennt, mit einer Aufbewahrung,
-  die die Administration festlegt, und einem Export, der die App verlässt.
-- **Gruppen-Policies**: welche Tools eine Gruppe überhaupt aufrufen darf, Lese-Bereiche auf
-  einen Ordner verengt, eine Positivliste der Clients, und ein Schalter, der den Zugang für ein
-  einzelnes Konto oder für alle schließt.
-- **SSO**: die Anmeldung über den Identitätsanbieter, den die Organisation ohnehin betreibt,
-  vor der OAuth-Anmeldung dieser App, mit einem zentralen Bestand der ausgegebenen Tokens und
-  einem Weg, sie zu entziehen.
-
-**Keines der drei existiert heute in dieser App, in keiner Version und hinter keiner
-Einstellung.** Dieser Abschnitt beschreibt ein Vorhaben, kein Feature, und er steht hier, weil
-ein Vorhaben, das man für sich behält, im schlechtesten Moment als Lücke entdeckt wird. Was die
-App heute tut, ist der Rest dieses Dokuments, und der Schalter, den ein Konto über seinen
-eigenen Zugang hält, ist bisher alles, was Steuerung hier bedeutet.
-
-Wenn Ihre Organisation eines der drei bräuchte, bevor sie einen solchen Zugang erlaubt, ist
-genau das die nützliche Auskunft, und sie entscheidet darüber, ob das Add-on überhaupt gebaut
-wird. Schreiben Sie an k.cherif@outlook.de und nennen Sie das eine der drei, das Sie blockiert.
+Audit-Log, Gruppen-Policies und SSO über den Identitätsanbieter, den Ihre Organisation
+ohnehin betreibt, sind als kommerzielles Add-on geplant. Für Evaluierung und Einsatz in
+Ihrer Organisation stehen wir zur Verfügung: admin@infranode.dev
 
 ## Entwicklung
 

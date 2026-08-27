@@ -76,9 +76,7 @@ Reading text written by strangers next to private data would be a chain if there
 
 ### Enterprise
 
-An audit log over every tool call, policies per group, and sign in through the identity provider an organisation already runs are planned as a separate commercial add-on. None of the three exists in this app today, in no version and behind no setting: this section names a plan, not a feature.
-
-If an organisation would need one of them before it allows this kind of access, write to k.cherif@outlook.de.
+Audit log, group policies and SSO through your identity provider are planned as a commercial add-on for organisations. Want to run this app in your organisation? Talk to us: admin@infranode.dev
 
 ### Resources
 
@@ -123,9 +121,7 @@ Von Fremden geschriebenen Text neben privaten Daten zu lesen wäre eine Kette, w
 
 ### Enterprise
 
-Ein Audit-Log über jeden Tool-Aufruf, Policies pro Gruppe und die Anmeldung über den Identitätsanbieter, den eine Organisation ohnehin betreibt, sind als eigenes kommerzielles Add-on geplant. Keines der drei existiert heute in dieser App, in keiner Version und hinter keiner Einstellung: das ist ein Vorhaben, kein Feature.
-
-Wenn eine Organisation eines davon bräuchte, bevor sie einen solchen Zugang erlaubt, schreiben Sie an k.cherif@outlook.de.
+Audit-Log, Gruppen-Policies und SSO über Ihren Identitätsanbieter sind als kommerzielles Add-on für Organisationen geplant. Sie möchten die App in Ihrer Organisation einsetzen? Sprechen Sie uns an: admin@infranode.dev
 
 ### Weiterführendes
 
@@ -172,9 +168,7 @@ Lire des textes écrits par des inconnus à côté de données privées formerai
 
 ### Enterprise
 
-Un journal d'audit de chaque appel d'outil, des politiques par groupe et la connexion via le fournisseur d'identité que l'organisation exploite déjà sont prévus comme un module commercial distinct. Aucun des trois n'existe aujourd'hui dans cette application, dans aucune version et derrière aucun réglage : cette section nomme un projet, pas une fonctionnalité.
-
-Si une organisation avait besoin de l'un d'eux avant d'autoriser un tel accès, écrivez à k.cherif@outlook.de.
+Journal d'audit, politiques de groupe et SSO via votre fournisseur d'identité sont prévus comme module commercial pour les organisations. Vous souhaitez déployer l'application dans votre organisation ? Contactez-nous : admin@infranode.dev
 
 ### Pour aller plus loin
 
