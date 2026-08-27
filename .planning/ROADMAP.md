@@ -6,6 +6,7 @@
 - **v1.1 Verwaltungs-Clients und Härtungs-Reste**: Phase 6 (shipped 2026-08-20; Phase 7 deferred, extern getaktet)
 - **v1.2 Kuratierte Breite**: Phasen 8-11 (shipped 2026-08-25, Release 0.1.8 live im Store; Talk, Tables und Mail dazu, ohne das Sicherheitsversprechen oder die Schlankheit aufzugeben)
 - **v1.3 Pflege und 0.1.9**: Phasen 12-13 (shipped 2026-08-26, Release 0.1.9 live im Store; Konsistenz- und Härtungs-Schulden abgeräumt, CIMD live nachgemessen, Enterprise-Fake-Door)
+- **v1.4 Pflege und 0.1.10**: Phasen 14-15 (AKTIV seit 2026-08-28; gekürzter Enterprise-Text und Kontaktwechsel zu admin@infranode.dev als Release 0.1.10, Doku-Reste aus v1.3 abgeräumt)
 
 ## Phases
 
@@ -58,6 +59,37 @@ Audit: [milestones/v1.3-MILESTONE-AUDIT.md](milestones/v1.3-MILESTONE-AUDIT.md) 
 
 </details>
 
+### v1.4 Pflege und 0.1.10 (Phasen 14-15), AKTIV
+
+- [ ] **Phase 14: Doku-Reste und Gate-Entscheid** - Info-Findings aus 13-REVIEW und W-2 schließen, Reichweite des Vokabular-Gates gegenüber .planning entscheiden
+- [ ] **Phase 15: Release 0.1.10** - Gekürzten Enterprise-Text und Kontaktwechsel als Store-Release mit Standard-Runbook ausliefern
+
+## Phase Details (v1.4)
+
+### Phase 14: Doku-Reste und Gate-Entscheid
+**Goal**: Die dokumentarischen Reste aus v1.3 sind abgeräumt und die Reichweite des Vokabular-Gates gegenüber .planning ist entschieden statt offen
+**Depends on**: Nichts (Phase 13 abgeschlossen; erste Phase von v1.4)
+**Requirements**: DOC-01, DOC-02, SEC-03
+**Success Criteria** (was wahr sein muss):
+  1. Der französische Enterprise-/README-Wortlaut ist echtes Französisch: kein "confidemment" und kein englisches "for" in einer FR-Überschrift, geprüft gegen den Stand nach der Kürzung vom 27.08. (Reste können auch anderswo in README.fr.md liegen)
+  2. CHANGELOG.md trägt keine hängende [Unreleased]-Linkdefinition mehr (entfernt oder wieder referenziert) und der veraltete Ampersand-Kommentar in appinfo/info.xml ist korrigiert oder entfernt
+  3. Die Proof-Zeilen in docs/store-submission.md sind chronologisch sortiert und die 18:21Z-Zeile verweist auf den getaggten Commit zurück, ohne dass eine bestehende Proof-Aussage verfälscht wurde
+  4. Die abgelegte 13-VERIFICATION unter .planning/milestones/v1.3-phases/ trägt eine datierte Nachtrags-Notiz, die den Entfernungs-Commit f9b3d2d zur ehemaligen Datei docs/contrib/enterprise-signals-issue.md nennt; der ursprüngliche Verifikationsbefund bleibt unverändert (er war zum Prüfzeitpunkt korrekt)
+  5. Die Gate-Reichweite ist einheitlich entschieden: entweder prüft das Vokabular-Gate zusätzlich .planning/**/*.md (Treffer dort bereinigt oder als begründete Ausnahme gelistet) oder .planning steht als dokumentierte Ausnahme im Gate-Docstring; der gewählte Weg steht als Kommentar am Gate und die Entscheidung im Plan-/Summary-Text
+**Plans**: TBD
+
+### Phase 15: Release 0.1.10
+**Goal**: Der gekürzte Enterprise-Text mit dem Kontaktwechsel zu admin@infranode.dev ist als Release 0.1.10 im Store, und die Doku-Fixes aus Phase 14 fahren im Asset mit
+**Depends on**: Phase 14 (die Doku-Fixes müssen vor dem Tag im Branch liegen, damit sie ins Store-Asset fahren)
+**Requirements**: EXAPP-10
+**Success Criteria** (was wahr sein muss):
+  1. Die Zeichenkette 0.1.10 steht an allen sechs Versionsstellen (pyproject, __init__, info.xml version + image-tag, drei README-Statuszeilen, uv.lock)
+  2. Der Changelog-Block 0.1.10 nennt den gekürzten Enterprise-Abschnitt und den Kontaktwechsel zu admin@infranode.dev als nutzersichtbare Änderung; damit fährt auch die WR-02-Korrektur aus dem Repo-Changelog mit ins Asset und der Changelog-Drift W-1 ist erledigt
+  3. Alle Gates laufen lokal grün auf dem Release-Kandidaten, ohne Anhebung (18000/1400 bei 21 Tools)
+  4. Der Branch ist auf GitHub, bevor ein Tag existiert; der Tag v0.1.10 entsteht NUR nach ausdrücklicher Owner-Freigabe; die Signatur läuft über das heruntergeladene Asset, nicht über das lokal gebaute
+  5. Release 0.1.10 ist im Store gelistet und die Runbook-Schritte tragen datierte Proof-Zeilen in docs/store-submission.md
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -75,10 +107,12 @@ Audit: [milestones/v1.3-MILESTONE-AUDIT.md](milestones/v1.3-MILESTONE-AUDIT.md) 
 | 11. Bündelung, Budget und Release 0.1.8 | v1.2 | 10/10 | Complete | 2026-08-25 |
 | 12. Konsistenz und Härtungs-Nachzieher | v1.3 | 4/4 | Complete | 2026-08-25 |
 | 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 6/6 | Complete | 2026-08-25 |
+| 14. Doku-Reste und Gate-Entscheid | v1.4 | 0/TBD | Not started | - |
+| 15. Release 0.1.10 | v1.4 | 0/TBD | Not started | - |
 
 ## Next
 
-`/gsd:new-milestone` — nächsten Milestone aufsetzen (Kandidaten: Tech-Debt-Reste DF-11-01/IN-05/UF-4, Mail-Entwürfe, Talk-Threads, v2.0 openDesk; dazu Enterprise-Signal-Auswertung ab Oktober)
+`/gsd:plan-phase 14`: Phase 14 (Doku-Reste und Gate-Entscheid) planen
 
 ---
-*Roadmap created: 2026-08-14 (granularity: coarse, mode: mvp); v1.0 abgeschlossen: 2026-08-20; v1.1 abgeschlossen: 2026-08-20 (Phase 7 deferred); v1.2 abgeschlossen: 2026-08-25 (Release 0.1.8 live); v1.3 abgeschlossen: 2026-08-26 (Release 0.1.9 live, CIMD nachgemessen, Enterprise-Fake-Door)*
+*Roadmap created: 2026-08-14 (granularity: coarse, mode: mvp); v1.0 abgeschlossen: 2026-08-20; v1.1 abgeschlossen: 2026-08-20 (Phase 7 deferred); v1.2 abgeschlossen: 2026-08-25 (Release 0.1.8 live); v1.3 abgeschlossen: 2026-08-26 (Release 0.1.9 live, CIMD nachgemessen, Enterprise-Fake-Door); v1.4 aufgesetzt: 2026-08-28 (Phasen 14-15: Doku-Reste, Gate-Entscheid, Release 0.1.10)*

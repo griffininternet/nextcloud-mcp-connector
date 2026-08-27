@@ -44,4 +44,7 @@ Vorgemerkt, nicht in v1.4:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (wird von der Roadmap gefüllt) | | |
+| DOC-01 | Phase 14 | Pending |
+| DOC-02 | Phase 14 | Pending |
+| SEC-03 | Phase 14 | Pending |
+| EXAPP-10 | Phase 15 | Pending |

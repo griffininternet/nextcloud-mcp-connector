@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Pflege und 0.1.10
 status: planning
-last_updated: "2026-08-27T22:04:09.476Z"
-last_activity: 2026-08-27
+last_updated: "2026-08-27T22:09:52.000Z"
+last_activity: 2026-08-28
 progress:
-  total_phases: 0
+  total_phases: 2
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Current focus:** Milestone complete
+**Current focus:** v1.4 Pflege und 0.1.10, Phase 14 (Doku-Reste und Gate-Entscheid)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-08-27 — Milestone v1.4 started
+Phase: 14 of 15 (Doku-Reste und Gate-Entscheid)
+Plan: (noch keiner erstellt)
+Status: Ready to plan
+Last activity: 2026-08-28: Roadmap v1.4 erstellt (Phasen 14-15, 4/4 Requirements gemappt)
 
 ## Performance Metrics
 
@@ -163,6 +163,10 @@ Last activity: 2026-08-27 — Milestone v1.4 started
 
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
+
+- Roadmap v1.4: Phasennummerierung setzt bei 14 fort (v1.3 verbrauchte 12 und 13); zwei Phasen bei Granularität coarse, weil das Release die Doku-Fixes im Asset mitnehmen muss und deshalb zwingend nach ihnen liegt
+- Roadmap v1.4: DOC-01, DOC-02 und SEC-03 liegen in einer Phase, weil alle drei reine Text- und Gate-Nacharbeiten ohne gegenseitige Abhängigkeit sind und eine Aufteilung nur Reibung erzeugt
+- Roadmap v1.4: EXAPP-10 ist die einzige Anforderung der Release-Phase; Gates bleiben 18000/1400 bei 21 Tools, Tag v0.1.10 nur nach ausdrücklicher Owner-Freigabe, Branch-Push vor dem Tag, Signatur über das heruntergeladene Asset (Runbook-Muster 0.1.9)
 
 - Roadmap v1.3: Phasennummerierung setzt bei 12 fort (v1.2 verbrauchte 8 bis 11); zwei Phasen bei Granularität coarse, weil ein reiner Pflege-Milestone keine dritte Naht hat
 - Roadmap v1.3: alle vier Code-Schulden (TOOL-17, TOOL-18, TOOL-19, SEC-02) liegen in einer Phase, weil sie dieselben Dateien und dasselbe Gate-Set berühren und eine Aufteilung nur Reibung erzeugt
@@ -603,11 +607,11 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-25T18:35:38.613Z
-Stopped at: Completed 13-05-PLAN.md (Tag v0.1.9 auf 685295d nach Owner-Freigabe, Release-Lauf 32883904698 gruen, Job publish 1m40s, Asset mcp_connector-0.1.9.tar.gz mit 47264 Bytes am Release)
-Naechster Schritt: Plan 13-06 ausfuehren (Runbook-Schritte 6 bis 8: das Asset mcp_connector-0.1.9.tar.gz herunterladen und signieren, per angemeldeter Store-Sitzung einreichen, danach Store-Liste und OCI-Index nachpruefen)
+Last session: 2026-08-27T22:09:52.000Z
+Stopped at: Roadmap v1.4 erstellt (Phasen 14-15, Coverage 4/4, Traceability gefüllt)
+Naechster Schritt: /gsd:plan-phase 14 (Doku-Reste und Gate-Entscheid: DOC-01, DOC-02, SEC-03)
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Plan Phase 14 with /gsd:plan-phase 14
