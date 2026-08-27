@@ -46,6 +46,7 @@ Drei Warnungen bleiben, alle in der Kategorie "die Phase wendet ihren eigenen St
 
 ### WR-01: Nachtrag dokumentiert nur eine von zwei gelöschten Belegdateien
 
+**Status:** FIXED (Commit `be526ef`, 2026-08-28)
 **File:** `.planning/milestones/v1.3-phases/13-cimd-nachmessung-und-release-0-1-9/13-VERIFICATION.md:107-115`
 **Issue:** Commit `f9b3d2d` hat nicht nur `docs/contrib/enterprise-signals-issue.md` entfernt, sondern auch `.planning/phases/13-cimd-nachmessung-und-release-0-1-9/enterprise-issue-go-kriterium.md` (git show f9b3d2d, drei Pfade). Truth 9 (Zeile 34) zitiert genau diese zweite Datei als Beleg: "Go-Kriterium liegt in `.planning/.../enterprise-issue-go-kriterium.md`". Der Nachtrag, dessen einziger Zweck die Dokumentation der Bericht-Repo-Drift ist (DOC-02, W-2), nennt nur die erste Datei. Ein Leser, der Truth 9 heute nachvollzieht, findet auch die zweite zitierte Datei nicht mehr, ohne dass der Nachtrag ihn darauf vorbereitet.
 **Fix:** Einen Satz an den Nachtrag anfügen (nur anfügen, nicht umschreiben):
@@ -58,6 +59,7 @@ Nennung war am Prüfzeitpunkt richtig und bleibt unverändert.
 
 ### WR-02: ASCII-Ersatz "unabhaengig" statt "unabhängig" im neu geschriebenen Nachtrag
 
+**Status:** FIXED (Commit `7209bd6`, 2026-08-28)
 **File:** `.planning/milestones/v1.3-phases/13-cimd-nachmessung-und-release-0-1-9/13-VERIFICATION.md:121`
 **Issue:** "Alle drei sind in der Historie nachweisbar, unabhaengig davon, ..." verletzt die Projektregel (Umlaute immer, nie ae/oe/ue/ss, gilt auch in Markdown) und ist im selben Absatz inkonsistent: vier Zeilen darüber steht korrekt "hängt". Der Nachtrag ist Phase-14-Neutext, kein archivierter Bestand, und darf daher korrigiert werden.
 **Fix:**
@@ -67,6 +69,7 @@ Historie nachweisbar, unabhängig davon, ob die vierte Datei heute noch existier
 
 ### WR-03: Die Entfernung der [Unreleased]-Linkdefinition erzeugt selbst eine neue, unvermerkte Bericht-Repo-Drift
 
+**Status:** FIXED (Commit `38bee77`, 2026-08-28)
 **File:** `CHANGELOG.md:479` (entfernte Zeile), betrifft `.planning/milestones/v1.3-phases/13-cimd-nachmessung-und-release-0-1-9/13-VERIFICATION.md:28` und `docs/store-submission.md:137`
 **Issue:** Die Entfernung selbst ist richtig (der Link war hängend, nichts Automatisiertes hängt daran). Aber zwei archivierte Belege zitieren den Link als vorhanden: 13-VERIFICATION Truth 3 (Zeile 28: "Link-Referenzen `compare/v0.1.8...v0.1.9` und `compare/v0.1.9...HEAD` auf Zeile 480-481") und die Proof-Zeile 18:14Z in `docs/store-submission.md:137` (`grep -n 'compare/v0.1.9' CHANGELOG.md` nennt Zeile 479, ein grep, das heute leer ausgeht, weil `compare/v0.1.9` in `compare/v0.1.8...v0.1.9` nicht als Substring vorkommt). Genau für diese Klasse von Drift stellt dieselbe Phase im Nachtrag den Standard auf: die alte Aussage bleibt stehen, ein datierter Vermerk erklärt die Abweichung. Für die Drift, die die Phase selbst erzeugt hat, fehlt dieser Vermerk.
 **Fix:** Einen datierten Satz an den bestehenden Nachtrag in 13-VERIFICATION anfügen, z. B.:
