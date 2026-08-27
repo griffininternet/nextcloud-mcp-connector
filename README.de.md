@@ -4,7 +4,7 @@
 
 # MCP Connector für Nextcloud
 
-Ein kuratierter MCP server, der Ihr Nextcloud (Dateien, Kalender, Notizen, Deck, Kontakte, Tables, Talk
+Ein kuratierter MCP Server, der Ihr Nextcloud (Dateien, Kalender, Notizen, Deck, Kontakte, Tables, Talk
 und Mail) mit KI-Assistenten wie Claude, Cursor, ChatGPT oder Ihren eigenen Agenten verbindet.
 
 **Dieser Server kann niemals etwas löschen, überschreiben oder neu teilen.**
@@ -19,7 +19,7 @@ Zwei weitere Eigenschaften folgen aus derselben Idee:
 - **Der Assistent sieht nie mehr als Sie.** Jede Anfrage läuft mit Ihren eigenen Nextcloud-Zugangsdaten,
   sodass die Nextcloud-Berechtigungen unverändert gelten.
 - **Ein bewusst kleiner Tool-Satz.** Die 21 Tools sind so kuratiert, dass dieser Server neben Ihre
-  anderen MCP server passt, selbst in Clients mit einer harten Tool-Obergrenze.
+  anderen MCP Server passt, selbst in Clients mit einer harten Tool-Obergrenze.
 
 Lizenz: AGPL-3.0-or-later. App-ID, Paketnamen und Repository-Name sind eingefroren, siehe
 [docs/app-id-freeze.md](docs/app-id-freeze.md).

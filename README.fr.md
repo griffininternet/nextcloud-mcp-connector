@@ -2,7 +2,7 @@
 
 > Le README anglais (README.md) fait foi ; cette traduction est mise à jour ensuite.
 
-# MCP Connector for Nextcloud
+# MCP Connector pour Nextcloud
 
 Un serveur MCP soigneusement sélectionné qui relie votre Nextcloud (fichiers, agenda, notes, deck,
 contacts, Tables, Talk et Mail) à des assistants IA tels que Claude, Cursor, ChatGPT ou vos propres
@@ -271,7 +271,7 @@ est refusé plutôt que de renvoyer discrètement la mauvaise page.
 
 ### Heures de l'agenda
 
-CalDAV est le seul endroit où une petite erreur de temps produit une réponse confidemment fausse, si
+CalDAV est le seul endroit où une petite erreur de temps produit une réponse fausse mais assurée, si
 bien que les outils d'agenda sont explicites à ce sujet :
 
 - `start` et `end` sont requis et doivent porter un fuseau, par exemple `2026-09-01T00:00:00+02:00`
@@ -525,7 +525,7 @@ résultat vide.
 | **Une boîte aux lettres jamais synchronisée et un serveur de messagerie injoignable** | Les deux répondent par une erreur dont la phrase désigne le compte dans l'application Mail, pas Nextcloud | Ouvrir une fois le compte dans l'application Mail et le laisser se synchroniser, ou réparer le compte là-bas. Aucun des deux cas n'est un problème Nextcloud, et aucun n'est traité par une liste vide |
 | **Rien ne peut être supprimé ni écrasé** | `files_upload` refuse un chemin existant avec un conflit, et il n'y a aucun outil de mise à jour ou de suppression du tout | Choisir un autre nom. C'est la contrainte de conception, pas une fonctionnalité manquante |
 | **Aucune session, donc aucun état de pagination côté serveur** | Une liste longue remet un handle `next` que vous passez de nouveau | Rien. Le handle survit à un redémarrage, ce qui est le but |
-| **Les agendas ont besoin d'une fenêtre de temps explicite avec un fuseau** | Un `start` ou `end` sans fuseau est refusé | Envoyer `2026-09-01T00:00:00+02:00` ou `...Z`. Un fuseau deviné est une réponse confidemment fausse |
+| **Les agendas ont besoin d'une fenêtre de temps explicite avec un fuseau** | Un `start` ou `end` sans fuseau est refusé | Envoyer `2026-09-01T00:00:00+02:00` ou `...Z`. Un fuseau deviné est une réponse fausse mais assurée |
 | **Une seule IP pour de nombreux utilisateurs déclenche la protection anti-force brute** | `429` après un mauvais App password, pour tout le monde derrière le même déploiement | Attendre et utiliser un App password correct ; voir la section dépannage dans l'installation du client |
 | **Toutes les applications d'assistant ne peuvent pas terminer une connexion OAuth** | Une application qui demande à être renvoyée vers une adresse de son propre schéma, Cursor par exemple, est refusée à la connexion, et la page nomme la voie qui fonctionne | Utiliser un App password sur le même point de terminaison `/exapps/mcp_connector/mcp` ; le mode ExApp accepte les deux, voir [docs/client-setup.md](docs/client-setup.md) |
 
