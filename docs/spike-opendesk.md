@@ -284,20 +284,153 @@ Datei.
 kein Nebensatz: er ist vor der Einrichtung von Weg 0 aufgenommen, damit die 401 aus S2 später nicht mit
 "die Einrichtung war noch nicht fertig" verwechselt werden kann.
 
-#### Der Einrichtungsweg: noch offen, und der Grund ist gemessen
+#### Der Einrichtungsweg: gelaufen ist Weg B, und Weg A ist gemessen nicht gangbar
 
 Die Recherche nennt zwei Einrichtungswege, Weg A über den Ablagen-Assistenten von OpenProject (der Weg
 des openDesk-Bootstrap-Jobs, deshalb der mit der höheren Übertragbarkeit) und Weg B über
-`occ config:app:set` plus den persönlichen Durchlauf je Konto. **Weg A ist in dieser Topologie
-gemessen nicht gangbar**, und der Grund liegt nicht bei Nextcloud und nicht bei der Erreichbarkeit,
-sondern beim SSRF-Schutz von OpenProject: `safe_ip?` weist alle vier Namen ab, unter denen Nextcloud
-hier zu erreichen wäre, die Erlaubnisliste ist leer, und der Schlüssel dafür ist in der Oberfläche
-nicht setzbar. Die vollständige Messung samt Gegenprobe steht in 5.4.
+`occ config:app:set` plus den persönlichen Durchlauf je Konto. **Gelaufen ist Weg B.** Der Satz steht
+hier so deutlich, weil er die Übertragbarkeit der ganzen Weg-0-Messung auf openDesk begrenzt: gemessen
+ist, dass die App im Modus `oauth2` gegen eine lokale Instanz **arbeitet**, nicht, dass der
+openDesk-Bootstrap-Job durchläuft.
 
-Welcher Weg gelaufen ist, steht hier, sobald er gelaufen ist. Solange diese Zeile steht, ist die
-Einrichtung von Weg 0 `noch nicht gemessen, Plan 17-05, Entscheidung des Owners offen (siehe 5.4)`,
-und S2 bis S6 tragen deshalb noch keinen Wert. S1 ist davon unabhängig, weil die Route für S1 keine
-Vorprüfung fährt (K3) und damit auch ohne eingerichtete App messbar ist.
+**Weg A ist in dieser Topologie gemessen nicht gangbar**, und der Grund liegt nicht bei Nextcloud und
+nicht bei der Erreichbarkeit, sondern beim SSRF-Schutz von OpenProject: `safe_ip?` weist alle vier
+Namen ab, unter denen Nextcloud hier zu erreichen wäre, die Erlaubnisliste ist leer, und der Schlüssel
+dafür ist in der Oberfläche nicht setzbar, während die zwei Netzaufrufe danach beide gelingen. Die
+vollständige Messung samt Gegenprobe steht in 5.4. Weg A bleibt damit **ungemessen** und ist nicht
+verworfen: er wäre mit einem Neuerzeugen des OpenProject-Containers samt
+`OPENPROJECT_SSRF__PROTECTION__IP__ALLOWLIST` und einem für beide Seiten gleichlautenden Namen zu
+messen, und diese Phase erzeugt diesen Eingriff bewusst nicht (D-03).
+
+**Weg B verlangt fünf Werte, nicht vier.** Die Recherche nennt vier Schlüssel; gemessen sind fünf, und
+der fünfte ist der Grund, warum ein reiner `occ`-Weg nicht genügt. `GET /op-oauth-url` antwortete mit
+`HTTP 500` und im Protokoll stand wörtlich `OpenProject admin config is not valid!`, ausgelöst in
+`lib/Controller/OpenProjectController.php:199`. Die Ursache steht in der Prüfkette der App:
+
+```php
+// lib/Service/OpenProjectAPIService.php:931-934 (isAdminConfigOkForOauth2)
+$opClientId = $config->getAppValue(Application::APP_ID, 'openproject_client_id');
+$opClientSecret = $config->getAppValue(Application::APP_ID, 'openproject_client_secret');
+$ncClientId = $config->getAppValue(Application::APP_ID, 'nc_oauth_client_id');
+return !(empty($opClientId) || empty($opClientSecret) || empty($ncClientId));
+```
+
+```php
+// lib/Service/OpenProjectAPIService.php:902-911 (isCommonAdminConfigOk)
+$freshProjectFolderSetUp = (bool)$config->getAppValue(Application::APP_ID, 'fresh_project_folder_setup');
+if ($freshProjectFolderSetUp === true || empty($oauthInstanceUrl) || !self::validateURL($oauthInstanceUrl)) {
+    return false;
+}
+```
+
+Also braucht Weg 0 zusätzlich `nc_oauth_client_id`, das ist die OAuth-Anwendung auf der
+**Nextcloud**-Seite, und `fresh_project_folder_setup` muss aus sein. Der Wert steht nach der
+Installation auf `1`, gesetzt von der Migration `Version2400Date20230504144300`, gemessen als
+`fresh_project_folder_setup = 1` direkt nach `app:install`. Beides ist **nicht** von Hand gesetzt
+worden, sondern über die zwei Routen, die die App dafür selbst mitbringt:
+
+| Schritt | Aufruf | Messwert |
+|---------|--------|----------|
+| Nextcloud-seitige OAuth-Anwendung | `POST /index.php/apps/integration_openproject/nc-oauth` als Admin, mit `requesttoken` | **200**, Antwort nennt `nextcloud_oauth_client_name = OpenProject client`, `nextcloud_client_id` (64 Zeichen), `nextcloud_client_secret` (64 Zeichen) und die Rückadresse, die Weg A auf der OpenProject-Seite eingetragen hätte: `http://op.localtest.me:8082/oauth_clients/<64 Zeichen>/callback`. Danach `nc_oauth_client_id = 1` |
+| Setup-Schalter | `PUT /index.php/apps/integration_openproject/admin-config` mit `{"values":{"setup_project_folder":false,"setup_app_password":false}}` | **200**, Antwort wörtlich `{"status":true,"oPOAuthTokenRevokeStatus":"","oPUserAppPassword":null}`. Danach `fresh_project_folder_setup = 0` |
+
+Die `"status": true` in der zweiten Zeile ist der Messwert, auf den es ankommt: das ist
+`isAdminConfigOk()` aus der App selbst, nicht unsere Auslegung ihrer Bedingungen
+(`lib/Controller/ConfigController.php:398`). Die Route wurde mit beiden Setup-Schaltern **aus**
+aufgerufen, weil genau das die Bedingung von T-17-03 ist; gemessen bleiben `setup_app_password` und
+`setup_project_folder` danach leer, und `oPUserAppPassword` ist `null`. Es liegt also kein
+App-Passwort im Prozess, und S1 bleibt aussagekräftig.
+
+**Der Admin-Konfigstand, gelesen statt behauptet.** `occ config:list integration_openproject` nennt
+danach genau diese Schlüssel: `authorization_method = oauth2`,
+`openproject_instance_url = http://op.localtest.me:8082`, `openproject_client_id` (43 Zeichen),
+`openproject_client_secret` (43 Zeichen), `nc_oauth_client_id = 1`, `fresh_project_folder_setup = 0`,
+`installed_version = 3.1.1`. Kein `sso_provider_type`, kein `oidc_provider`, kein `token_exchange`:
+der OIDC-Zweig ist unberührt, was für S5 in 17-07 der Ausgangszustand ist.
+
+#### Der persönliche Durchlauf lief ohne Browser, und zwei Hürden dabei sind eigene Messwerte
+
+Der Plan sah für den persönlichen Zustimmungsdurchlauf einen Owner-Schritt in zwei Oberflächen vor.
+Gemessen ist er per Formular gelaufen, für beide Konten, in neun Schritten und ohne Browser. Die
+Schritte 5 bis 8 sind das Muster aus 2.2, hier nur mit der anderen OAuth-Anwendung:
+
+| Schritt | Aufruf | Messwert |
+|---------|--------|----------|
+| 1, 2 | `GET /login`, dann `POST /login` in Nextcloud | 200, `requesttoken` 89 Zeichen; die Anmeldung endet mit `303` auf `/apps/dashboard/` |
+| 3 | `GET /index.php/csrftoken` | 200, Token 89 Zeichen, an die Sitzung gebunden |
+| 4 | `GET /index.php/apps/integration_openproject/op-oauth-url` mit `requesttoken` | **200**, `application/json`. Die Adresse trägt `client_id` (43 Zeichen), `redirect_uri` (siehe unten), `response_type=code`, `state` (10 Zeichen), `code_challenge` (43 Zeichen) und `code_challenge_method=S256` |
+| 5, 6 | `GET /login`, `POST /login` in OpenProject als `opa` bzw. `opb` | 200, `authenticity_token` 86 Zeichen; die Kette endet auf der Startseite |
+| 7 | `GET /oauth/authorize` mit der Adresse aus Schritt 4 | **200**, Zustimmungsseite 13442 Zeichen (`opa`) bzw. 13440 (`opb`), wörtlich `Authorize nc-mcp-spike-weg0 to use your account opa?` bzw. `opb` |
+| 8 | `POST /oauth/authorize` | **302**, `Location` trägt `code` (43 Zeichen) und das `state` Zeichen für Zeichen zurück |
+| 9 | `GET /oauth-redirect` mit der Nextcloud-Sitzung des Nutzers | **303** auf `/apps/files/` |
+
+Die `redirect_uri` aus Schritt 4 ist gemessen
+`http://127.0.0.1:8091/index.php/apps/integration_openproject/oauth-redirect` und stimmt Zeichen für
+Zeichen mit dem Wert überein, den `IURLGenerator::getAbsoluteURL` in derselben Instanz liefert und den
+`getOauthRedirectUrl()` (`lib/Service/OpenProjectAPIService.php:697-701`) baut. Deshalb trägt die
+OAuth-Anwendung auf der OpenProject-Seite genau diese Zeichenkette.
+
+**Erste Hürde, ein eigener Messwert: ohne `Origin`-Kopf keine Anmeldung.** `POST /login` antwortete
+zunächst mit `303` auf `/login?direct=1&user=alice`, im Protokoll `Login failed: 'alice'`, und das
+sieht wie ein falsches Passwort aus. Es war keines: dieselben Zugangsdaten antworten per Basic-Auth auf
+`/ocs/v2.php/cloud/user` mit **200** (Gegenprobe: ein falsches Passwort dort **401**). Der Grund steht
+in dieser Nextcloud-Fassung:
+
+```php
+// core/Controller/LoginController.php:307-314
+$origin = $this->request->getHeader('Origin');
+$throttle = true;
+if ($origin === '' || !$trustedDomainHelper->isTrustedUrl($origin)) {
+    $error = self::LOGIN_MSG_INVALID_ORIGIN;
+    $throttle = false;
+}
+```
+
+Ein leerer `Origin` bricht die Anmeldung ab, **bevor** das Passwort geprüft wird. Mit
+`Origin: http://127.0.0.1:8091` antwortet derselbe Aufruf `303` auf `/apps/dashboard/`. Wer diese Zeile
+nicht kennt, liest den Zustand als falsches Passwort und geht in den Browser-Rückfall, obwohl der
+Formularweg trägt. Das ist dieselbe Klasse von Falle wie der 2FA-Umweg aus 2.2.
+
+**Zweite Hürde, und die ist der interessantere Befund: auch Nextcloud verweigert Loopback.** Der
+Rückweg in Schritt 9 antwortete `303`, die Verbindung war aber **nicht** hergestellt:
+`oauth_connection_result` stand auf `error`, und `oauth_connection_error_message` lautete wörtlich
+
+```
+Error getting OAuth access token. Host "127.0.0.1" (op.localtest.me:80) violates local access rules
+```
+
+Das ist die Prüfung auf lokale Adressen von Nextcloud selbst, nicht die von OpenProject aus 5.4. Zwei
+Beobachtungen dazu, beide gemessen: die Meldung nennt `127.0.0.1`, also die **öffentliche** Auflösung
+von `op.localtest.me`, und nicht die `172.29.43.10` aus dem `extra_hosts`-Eintrag, mit der der
+PHP-`curl` desselben Containers in 5.2 gemessen 200 bekommt; und sie nennt Port `80`, obwohl der
+Aufruf an `:8082` geht. Aufgelöst wurde es mit der dafür vorgesehenen Systemeinstellung,
+`occ config:system:set allow_local_remote_servers --value=true --type=boolean` (vorher leer, danach
+`true`); danach antwortete derselbe Durchlauf mit `oauth_connection_result = success`.
+
+**Der Befund dahinter, und er ist mehr als eine Fußnote:** beide Produkte sperren Loopback- und
+private Adressen in der Vorgabe, jedes mit seinem eigenen Mechanismus und an einer anderen Stelle der
+Kette. Ein Spike von Weg 0 auf einem Entwicklungsrechner braucht deshalb **auf jeder Seite eine
+Lockerung**, und nur eine davon ist hier gefallen: die Nextcloud-Seite per Systemeinstellung zur
+Laufzeit, die OpenProject-Seite nicht (sie hätte den Container neu erzeugt, siehe 5.4). Für eine
+openDesk-Installation sagt das nichts, weil dort beide Seiten routbare Adressen haben; für jeden, der
+diesen Aufbau nachbaut, ist es der teuerste Teil des Tages.
+
+#### Der Zustand nach der Einrichtung, je Konto gelesen
+
+| Konto | `oauth_connection_result` | `user_name` und `user_id` aus OpenProject | `token_expires_at` |
+|-------|---------------------------|-------------------------------------------|--------------------|
+| `alice` | `success` | `Alice Spike`, `5` | `1787949009`, in der Zukunft, Restlaufzeit 7181 s |
+| `bob` | `success` | `Bob Spike`, `6` | `1787949020`, in der Zukunft, Restlaufzeit 7192 s |
+| `carol` | Schlüssel existiert nicht | Schlüssel existiert nicht | Schlüssel existiert nicht |
+
+Die zwei Ids sind der Beleg, dass die Zuordnung die beabsichtigte ist und nicht zufällig: `5` ist
+`opa` und `6` ist `opb` aus 5.3, und `opb` ist das Konto, das Mitglied des privaten Projekts ist. Damit
+steht der Negativbeweis von 17-06 auf derselben Asymmetrie wie der von 2.2. Die Restlaufzeit von rund
+7200 Sekunden ist derselbe Wert, den 2.2 als `expires_in` gemessen hat, hier über einen zweiten,
+unabhängigen Weg bestätigt.
+
+`carol` trägt für alle drei Schlüssel `token`, `refresh_token` und `token_expires_at` wörtlich
+`The setting does not exist for user "carol".` Das ist Absicht und der Messweg von S2.
 
 ### 2.2 Weg 1: PKCE, `expires_in`, Erneuerung ohne Browsersitzung, Zwei-Konten-Negativbeweis
 
