@@ -97,7 +97,23 @@ Audit: [milestones/v1.4-MILESTONE-AUDIT.md](milestones/v1.4-MILESTONE-AUDIT.md) 
   4. Die Signatur ist über das heruntergeladene Asset gerechnet und verifiziert, nicht über das lokal gebaute, und `docs/store-submission.md` trägt für jeden Runbook-Schritt eine datierte Proof-Zeile
   5. Alle Gates laufen auf dem Kandidaten grün, ohne dass ein Grenzwert angehoben wurde; die Werkzeugoberfläche bleibt bei 21 Werkzeugen
 
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+**Wave 1**
+
+- [ ] 16-01-PLAN.md , Versions-Bump auf 0.1.11 an sechs Stellen, und aus dem [Unreleased]-Block wird der Changelog-Block 0.1.11 samt getauschter Linkdefinition
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 16-02-PLAN.md , sechs Gates lokal grün ohne Anhebung, Archiv-Probelauf mit Nutzlast-Zählung, Proof-Zeilen der Runbook-Schritte 1 bis 3
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 16-03-PLAN.md , Branch-Push vor dem Tag, blockierende Owner-Freigabe, Tag v0.1.11 und grüner Release-Workflow, Proof-Zeile der Schritte 4 und 5
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 16-04-PLAN.md , Signatur über das heruntergeladene Asset, Store-Einreichung mit 201, die fünf Nachweise aus Schritt 8 in einer Proof-Zeile
 
 ### Phase 17: openDesk-Spike
 
@@ -163,7 +179,7 @@ Audit: [milestones/v1.4-MILESTONE-AUDIT.md](milestones/v1.4-MILESTONE-AUDIT.md) 
 | 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 6/6 | Complete | 2026-08-25 |
 | 14. Doku-Reste und Gate-Entscheid | v1.4 | 2/2 | Complete | 2026-08-27 |
 | 15. Release 0.1.10 | v1.4 | 4/4 | Complete | 2026-08-28 |
-| 16. Release 0.1.11 | v1.5 | 0/? | Not started | - |
+| 16. Release 0.1.11 | v1.5 | 0/4 | Planned | - |
 | 17. openDesk-Spike | v1.5 | 0/? | Not started | - |
 | 18. Audit-Log Kern | v1.5 | 0/? | Not started | - |
 | 19. Audit-Log Bedienung und Textnachzug | v1.5 | 0/? | Not started | - |
