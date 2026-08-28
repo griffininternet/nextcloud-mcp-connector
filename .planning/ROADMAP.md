@@ -144,7 +144,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 17-04-PLAN.md , Weg 1 vollständig gemessen: PKCE mit Gegenprobe ohne code_challenge, expires_in, Refresh ohne Browsersitzung, Zwei-Konten-Negativbeweis
+- [x] 17-04-PLAN.md , Weg 1 vollständig gemessen: PKCE mit Gegenprobe ohne code_challenge, expires_in, Refresh ohne Browsersitzung, Zwei-Konten-Negativbeweis
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -218,7 +218,7 @@ Plans:
 | 14. Doku-Reste und Gate-Entscheid | v1.4 | 2/2 | Complete | 2026-08-27 |
 | 15. Release 0.1.10 | v1.4 | 4/4 | Complete | 2026-08-28 |
 | 16. Release 0.1.11 | v1.5 | 4/4 | Complete | 2026-08-28 |
-| 17. openDesk-Spike | v1.5 | 3/9 | In Progress|  |
+| 17. openDesk-Spike | v1.5 | 4/9 | In Progress|  |
 | 18. Audit-Log Kern | v1.5 | 0/? | Not started | - |
 | 19. Audit-Log Bedienung und Textnachzug | v1.5 | 0/? | Not started | - |
 

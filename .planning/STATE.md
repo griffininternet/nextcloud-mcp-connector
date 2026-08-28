@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
 status: executing
-stopped_at: Completed 17-03-PLAN.md
-last_updated: "2026-08-28T17:30:47.918Z"
+stopped_at: Completed 17-04-PLAN.md
+last_updated: "2026-08-28T17:57:50.882Z"
 last_activity: 2026-08-28
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 13
-  completed_plans: 7
+  completed_plans: 8
   percent: 25
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 17 (openDesk-Spike) — EXECUTING
-Plan: 4 of 9
+Plan: 5 of 9
 Status: Ready to execute
 Last activity: 2026-08-28
 
@@ -170,6 +170,7 @@ Last activity: 2026-08-28
 | Phase 17-opendesk-spike P01 | 18 min | 3 tasks tasks | 1 file files |
 | Phase 17 P02 | 74 min | 3 tasks | 6 files |
 | Phase 17 P03 | 48 | 3 tasks | 3 files |
+| Phase 17 P04 | 41 min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -629,6 +630,11 @@ Recent decisions affecting current work:
 - [Phase ?]: 17-03: OAuth-Anwendung als nicht vertraulicher Client mit leerem Feld `Client Credentials User ID`, damit `force_pkce` aus `doorkeeper.rb:90` greift und der Berechtigungsdurchgriff nicht unauffällig bricht (Pitfall 2, T-17-03)
 - [Phase ?]: 17-03: das Seed-Passwort `admin` wurde von der Instanz abgelehnt (`failed_login_count` 6, `force_password_change` true, Konto nicht gesperrt); per `rails runner` gesetzt, **Ursache nicht untersucht**. Passwortregel dieser Fassung: alle vier Zeichenklassen
 - [Phase ?]: 17-03: OpenProject 17.7.2 bringt einen eigenen MCP-Server unter `/mcp` mit (`routes.rb:48`); in dieser Phase ungemessen und als DI-17-01 in `deferred-items.md` zurückgestellt, mit Behandlungsvorschlag für 17-08 und 17-09
+- [Phase ?]: 17-04: Weg 1 ist vollständig gemessen (D-04): PKCE Pflicht mit Gegenprobe (400 ohne code_challenge), expires_in 7200, Erneuerung ohne jeden Cookie
+- [Phase ?]: 17-04: Der Consent-Fluss von Weg 1 ist per Formular automatisierbar, ohne Browser und ohne Owner-Schritt; der Browser-Rückfall des Plans wurde nicht gebraucht. Zwei Fallen: `POST /login` endet auf `/two_factor_authentication/request` und braucht `curl -L`, und `curl -4` ist Pflicht wegen des AAAA-Eintrags von `localtest.me`
+- [Phase ?]: 17-04: Der Zwei-Konten-Negativbeweis auf Weg 1 ist geführt (D-05): opb 200, opa 404 mit `NotFound`, erfundene Id 999999999 Byte für Byte dieselbe Antwort; zusätzlich auf Projekt- und Listenebene gemessen (total 34 gegen 33), damit ein Listenleck ausgeschlossen ist
+- [Phase ?]: 17-04: Der vorherige `refresh_token` stirbt erst mit dem ersten Gebrauch des neuen `access_token`, nicht mit der Erneuerung und nicht mit der Zeit; mit zwei Ketten gemessen, Belegstelle `previous_refresh_token` in `/app/db/structure.sql:4383`. Als DI-17-02 für OD-04 zurückgestellt, kein Code in dieser Phase (D-12)
+- [Phase ?]: 17-04: OD-02 bleibt Pending, weil dieser Plan Weg 0 mit keinem Wert misst und OD-02 beide Wege nebeneinander verlangt; 17-09 hakt ab
 
 ### Pending Todos
 
@@ -668,7 +674,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-28T17:30:24.740Z
+Last session: 2026-08-28T17:57:14.640Z
 Stopped at: Completed 17-02-PLAN.md
 Naechster Schritt: 16-02 (sechs Gates lokal grün, Archiv-Probelauf, Proof-Zeilen der Runbook-Schritte 1 bis 3); der Tag v0.1.11 entsteht erst in 16-03 nach ausdrücklicher Owner-Freigabe
 Resume file: None
