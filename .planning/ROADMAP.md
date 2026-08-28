@@ -73,7 +73,7 @@ Audit: [milestones/v1.4-MILESTONE-AUDIT.md](milestones/v1.4-MILESTONE-AUDIT.md) 
 
 ### v1.5 Vorlauf openDesk (Phasen 16-19), AKTIV
 
-- [ ] **Phase 16: Release 0.1.11** - Den wartenden Textrest ausliefern und den `[Unreleased]`-Block leerräumen, bevor das Audit-Log ihn wieder füllt
+- [x] **Phase 16: Release 0.1.11** - Den wartenden Textrest ausliefern und den `[Unreleased]`-Block leerräumen, bevor das Audit-Log ihn wieder füllt (4/4 Pläne, completed 2026-08-28, Release live im Store)
 - [ ] **Phase 17: openDesk-Spike** - Installierbarkeit und Nutzeridentität gegen OpenProject messen statt argumentieren, plus die Fragenliste für den 14.09.
 - [ ] **Phase 18: Audit-Log Kern** - Jeder Werkzeugaufruf hinterlässt einen prüfbaren Metadaten-Eintrag, der keine Inhalte trägt und den OAuth-Speicher nicht gefährdet
 - [ ] **Phase 19: Audit-Log Bedienung und Textnachzug** - Administrator schaltet ein und liest über `occ`, und jede bestehende Aussage über Speicherung und Enterprise-Stand sagt danach die Wahrheit
@@ -179,7 +179,7 @@ Plans:
 | 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 6/6 | Complete | 2026-08-25 |
 | 14. Doku-Reste und Gate-Entscheid | v1.4 | 2/2 | Complete | 2026-08-27 |
 | 15. Release 0.1.10 | v1.4 | 4/4 | Complete | 2026-08-28 |
-| 16. Release 0.1.11 | v1.5 | 3/4 | In Progress|  |
+| 16. Release 0.1.11 | v1.5 | 4/4 | Complete | 2026-08-28 |
 | 17. openDesk-Spike | v1.5 | 0/? | Not started | - |
 | 18. Audit-Log Kern | v1.5 | 0/? | Not started | - |
 | 19. Audit-Log Bedienung und Textnachzug | v1.5 | 0/? | Not started | - |

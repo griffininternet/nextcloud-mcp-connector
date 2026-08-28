@@ -22,7 +22,7 @@ Nicht in diesem Milestone entschieden, weil Verhandlungssache: die AGPL-Konseque
 
 ### Release-Pflege
 
-- [ ] **EXAPP-11**: Die im `[Unreleased]`-Block wartenden Textänderungen (gekürzter Trifecta-Absatz samt Teilen-Formulierung, Autorenkontakt admin@infranode.dev; zwei Changelog-Punkte, drei inhaltliche Änderungen) sind als Release 0.1.11 im Nextcloud App Store, mit der Versionszeichenkette an allen sechs Stellen, einem Changelog-Block samt Linkdefinition, dem Branch-Push vor dem Tag, der ausdrücklichen Owner-Freigabe vor dem Tag und der Signatur über das heruntergeladene Asset
+- [x] **EXAPP-11**: Die im `[Unreleased]`-Block wartenden Textänderungen (gekürzter Trifecta-Absatz samt Teilen-Formulierung, Autorenkontakt admin@infranode.dev; zwei Changelog-Punkte, drei inhaltliche Änderungen) sind als Release 0.1.11 im Nextcloud App Store, mit der Versionszeichenkette an allen sechs Stellen, einem Changelog-Block samt Linkdefinition, dem Branch-Push vor dem Tag, der ausdrücklichen Owner-Freigabe vor dem Tag und der Signatur über das heruntergeladene Asset
 
 ### openDesk-Erkundung (Erkenntnis, kein Produktionscode)
 
@@ -79,7 +79,7 @@ Bei der Roadmap-Erstellung am 2026-08-28 gefüllt. Die Phasennummerierung setzt 
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EXAPP-11 | Phase 16 (Release 0.1.11) | Pending |
+| EXAPP-11 | Phase 16 (Release 0.1.11) | Complete |
 | OD-01 | Phase 17 (openDesk-Spike) | Pending |
 | OD-02 | Phase 17 (openDesk-Spike) | Pending |
 | OD-03 | Phase 17 (openDesk-Spike) | Pending |
