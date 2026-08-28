@@ -22,7 +22,8 @@ text, and text is the one kind of change that only a release carries to the peop
   admin@infranode.dev. The three things that section names, an audit log over every tool call,
   policies per group, and sign in through the identity provider an organisation already runs,
   exist in this version in no form and behind no setting: the section describes a plan and not
-  a feature, and the short wording says so as plainly as the long one did. The texts travel
+  a feature. The short wording carries that in one word, planned, where the long one spelled it
+  out in a sentence of its own. The texts travel
   with this release because the store reads the manifest only at upload time, so a corrected
   text in the repository reaches nobody until the next release; 0.1.5, 0.1.6 and 0.1.9 were
   all releases for exactly that reason.
