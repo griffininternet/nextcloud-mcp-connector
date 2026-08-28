@@ -2,15 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
-status: planning
-last_updated: "2026-08-28T07:10:00.000Z"
-last_activity: 2026-08-28
+status: executing
+stopped_at: Completed 16-01-PLAN.md (Version 0.1.11 an sechs Stellen, Changelog-Block 0.1.11 statt [Unreleased], kein Tag)
+last_updated: "2026-08-28T08:39:42.201Z"
+last_activity: 2026-08-28, Plan 16-01 ausgeführt (sechs Versionsstellen auf 0.1.11, Changelog-Block 0.1.11 statt [Unreleased])
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_plans: 4
+  completed_plans: 1
+  percent: 25
 ---
 
 # Project State
@@ -24,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 
 ## Current Position
 
-Phase: keine begonnen; die Roadmap steht mit den Phasen 16 bis 19
-Plan: keiner
-Status: Roadmap erstellt, Phasenplanung offen
-Last activity: 2026-08-28, Roadmap v1.5 erstellt (Phasen 16 bis 19, 10 von 10 Requirements gemappt)
+Phase: 16 (Release 0.1.11), 1 von 4 Plänen abgeschlossen
+Plan: 16-01 abgeschlossen; als nächstes 16-02 (sechs Gates lokal, Archiv-Probelauf, Proof-Zeilen)
+Status: in Ausführung; die Version steht auf 0.1.11, kein Tag existiert
+Last activity: 2026-08-28, Plan 16-01 ausgeführt (sechs Versionsstellen auf 0.1.11, Changelog-Block 0.1.11 statt [Unreleased])
 
 ## Performance Metrics
 
@@ -163,6 +164,7 @@ Last activity: 2026-08-28, Roadmap v1.5 erstellt (Phasen 16 bis 19, 10 von 10 Re
 | Phase 15 P01 | 8 min | 2 tasks | 8 files |
 | Phase 15 P02 | 20 min | 2 tasks | 1 files |
 | Phase 15 P03 | 12 min | 3 tasks | 1 files |
+| Phase 16-release-0-1-11 P01 | 7 min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -602,6 +604,7 @@ Recent decisions affecting current work:
 - [Phase 15-release-0-1-10]: Plan 15-03: die Owner-Freigabe fuer den Tag v0.1.10 kam am 2026-08-28 04:49Z woertlich als freigeben; Weg fuer Runbook-Schritt 7 in Plan 15-04 ist die angemeldete Store-Sitzung im Browser
 - [Phase 15-release-0-1-10]: Plan 15-03: die Changelog-Kopfzeile 2026-08-28 blieb vor dem Tag unangetastet, weil das Datum der Tag-Tag sein muss und der Tag wegen der ausstehenden Freigabe fruehestens am 2026-08-28 entstehen konnte; er entstand um 04:50Z
 - [Phase 15-release-0-1-10]: Plan 15-03: das veroeffentlichte Asset misst 46973 Bytes gegen die 47299 des lokalen Baus; Plan 15-04 signiert die heruntergeladenen Bytes unter https://github.com/street1983nk/nextcloud-mcp-connector/releases/download/v0.1.10/mcp_connector-0.1.10.tar.gz
+- [Phase 16]: Der Changelog-Block trägt die Kopfzeile ## [0.1.11] - 2026-08-28. Lokal (10:35 Europe/Berlin) und in UTC (08:35Z) derselbe Kalendertag; Plan 16-03 prüft die Zeile vor dem Tag erneut, weil ein Release-Notes-Datum im signierten Asset unveränderlich ist
 
 ### Pending Todos
 
@@ -641,9 +644,9 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-28T07:10:00.000Z
-Stopped at: Roadmap v1.5 erstellt (Phasen 16 bis 19), Traceability in REQUIREMENTS.md gefüllt, 10 von 10 Requirements gemappt
-Naechster Schritt: /gsd:plan-phase 16 (Release 0.1.11); Phase 17 und Phase 18 können parallel geplant werden, Phase 19 erst nach 16 und 18
+Last session: 2026-08-28T08:38:53.602Z
+Stopped at: Completed 16-01-PLAN.md (Version 0.1.11 an sechs Stellen, Changelog-Block 0.1.11 statt [Unreleased], kein Tag)
+Naechster Schritt: 16-02 (sechs Gates lokal grün, Archiv-Probelauf, Proof-Zeilen der Runbook-Schritte 1 bis 3); der Tag v0.1.11 entsteht erst in 16-03 nach ausdrücklicher Owner-Freigabe
 Resume file: None
 
 ## Operator Next Steps

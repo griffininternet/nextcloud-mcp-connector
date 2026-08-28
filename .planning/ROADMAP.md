@@ -101,7 +101,7 @@ Audit: [milestones/v1.4-MILESTONE-AUDIT.md](milestones/v1.4-MILESTONE-AUDIT.md) 
 Plans:
 **Wave 1**
 
-- [ ] 16-01-PLAN.md , Versions-Bump auf 0.1.11 an sechs Stellen, und aus dem [Unreleased]-Block wird der Changelog-Block 0.1.11 samt getauschter Linkdefinition
+- [x] 16-01-PLAN.md , Versions-Bump auf 0.1.11 an sechs Stellen, und aus dem [Unreleased]-Block wird der Changelog-Block 0.1.11 samt getauschter Linkdefinition
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -179,7 +179,7 @@ Plans:
 | 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 6/6 | Complete | 2026-08-25 |
 | 14. Doku-Reste und Gate-Entscheid | v1.4 | 2/2 | Complete | 2026-08-27 |
 | 15. Release 0.1.10 | v1.4 | 4/4 | Complete | 2026-08-28 |
-| 16. Release 0.1.11 | v1.5 | 0/4 | Planned | - |
+| 16. Release 0.1.11 | v1.5 | 1/4 | In Progress|  |
 | 17. openDesk-Spike | v1.5 | 0/? | Not started | - |
 | 18. Audit-Log Kern | v1.5 | 0/? | Not started | - |
 | 19. Audit-Log Bedienung und Textnachzug | v1.5 | 0/? | Not started | - |
