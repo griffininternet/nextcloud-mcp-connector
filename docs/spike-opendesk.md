@@ -266,6 +266,17 @@ ISV-Liste: das fehlende `code_challenge_methods_supported` ist der konkretere un
 für den Community-Kanal als jede Beschwerde, weil die Fähigkeit vorhanden ist und nur die Ansage
 fehlt.
 
+**Zum Wort `client_credentials` im Dokument oben, und es ist der zweite Ort dieses Berichts, an den
+der Griff aus Pitfall 2 gehört.** Der Grant steht in `grant_types_supported` der laufenden Instanz;
+das ist ein wörtliches Zitat des Serverdokuments und keine Einladung. **Kein Aufruf dieses Abschnitts
+hat diesen Grant benutzt**, und er könnte auch nichts liefern, was diese Phase braucht: das Feld
+`Client Credentials User ID` der Anwendung ist leer geblieben (Abschnitt 5.3), und ohne einen Nutzer
+darin gibt OpenProject auf diesem Grant kein Token im Namen eines Menschen aus. Ein Token aus
+`client_credentials` wäre genau der Dienstkonto-Weg, der den Satz "der Assistent sieht niemals mehr
+als der angemeldete Nutzer" unauffällig unwahr macht (Pitfall 1, T-17-03). Der Griff nach
+`client_credentials` findet in diesem Bericht deshalb zwei Stellen, dieses Zitat samt diesem Absatz und
+den Absatz in 5.3; jeder Treffer darüber hinaus ist ein Befund.
+
 **Der Messweg des Hauptlaufs, in vier Schritten, alle mit `curl -4` vom Host und einem Cookie-Speicher
 außerhalb des Repositoriums.** Verifier und Challenge kommen aus dem bestehenden Weg dieses Projekts
 (`pkce()` in `scripts/oauth_flow_check.py:160-164`, per Import aufgerufen, keine Zeile geändert und
@@ -415,7 +426,85 @@ auf Deutsch und in einem anderen auf Englisch zurück, bei identischem Aufruf oh
 | Nimmt `/oauth/authorize` PKCE an | Schritte 1 bis 4 oben, Konto `opb`, `code_challenge_method=S256`, Code eingelöst | 200 und ein Token, aus `force_pkce` (`doorkeeper.rb:90`) | **ja**: 200 auf der Zustimmungsseite, 302 mit `code` (43 Zeichen), 200 am Token-Endpunkt | derselbe Client **ohne code_challenge**, dieselbe Sitzung: **400** an `/oauth/authorize`, "Code challenge is required.", kein Code |
 | `expires_in` | Feld der Antwort von `POST /oauth/token` | `7200`, aus `access_token_expires_in 2.hours` (`doorkeeper.rb:61-64`) | **7200 Sekunden** | Code, Admin-Dokumentation und Messwert nennen denselben Wert; `custom_access_token_expires_in` ist in dieser Instanz nicht gesetzt |
 | Trägt die Erneuerung ohne Browsersitzung | `grant_type=refresh_token` an `/oauth/token`, **kein Cookie-Speicher**, kein `-b`, kein `-c` | neues Paar, aus `use_refresh_token` (`doorkeeper.rb:115`) | **ja**: 200, neues `access_token` und neues `refresh_token`, `expires_in` wieder 7200, `login opb` aus dem neuen Token | erfundener Wert: 400 `invalid_grant`. Entwerteter Wert: 400 `invalid_grant`. Der Zeitpunkt der Entwertung ist mit zwei Ketten gemessen (Tabelle oben) |
-| Zwei-Konten-Negativbeweis (D-05) | siehe die Tabelle im nächsten Unterabschnitt | 404 mit `urn:openproject-org:api:v3:errors:NotFound`, nicht 403 | siehe nächster Unterabschnitt | siehe nächster Unterabschnitt |
+| Zwei-Konten-Negativbeweis (D-05) | `GET /api/v3/work_packages/38` mit dem Token von `opb` und mit dem von `opa`, dazu eine erfundene Id | 404 mit `urn:openproject-org:api:v3:errors:NotFound`, nicht 403 | **404** für `opa`, **200** für `opb`, und die 404 ist von der auf eine nicht existierende Id nicht zu unterscheiden | der Lauf unter `opb` liefert 200 mit dem richtigen Betreff; ohne ihn wäre die 404 auch eine falsche Id. Dazu die erfundene Id 999999999 als zweite Gegenprobe |
+
+#### Der Zwei-Konten-Negativbeweis auf Weg 1 (D-05)
+
+Das zweite Token entstand auf demselben Weg wie das erste: eigener Cookie-Speicher, eigener Verifier,
+eigene Zustimmungsseite, Schritte 1 bis 4 unverändert. Beide Läufe endeten mit 200 am Token-Endpunkt,
+`expires_in` 7200, `scope api_v3`, `access_token` je 43 Zeichen. Ein Nebenbefund aus dem Lauf von
+`opa`: die Anmeldung landete auf `/?first_time_user=true`, es war die erste Anmeldung dieses Kontos
+überhaupt, und der Consent-Fluss trug trotzdem im ersten Versuch.
+
+**Wer die Tokens tragen, ist aus den Tokens gemessen und nicht aus dem Skript geschlossen.**
+`GET /api/v3/users/me` mit `Authorization: Bearer` und ohne Cookie: das eine Token nennt `login opb`,
+`id 6`, das andere `login opa`, `id 5`. Beide `admin` nicht gesetzt. Das sind genau die zwei Ids, die
+Abschnitt 5.3 für Konto B und Konto A nennt, und Mitglied des privaten Projekts `spike-privat-b`
+(id 3) ist laut 5.3 **nur** `opb`.
+
+| Aufruf | Konto | Status | `errorIdentifier` | Bedeutung |
+|--------|-------|--------|-------------------|-----------|
+| `GET /api/v3/work_packages/38` | `opb` (Mitglied) | **200** | keiner | die Id ist richtig und das Arbeitspaket existiert: `subject` ist `SPIKE-OD-8471 privat`, `project` ist `Spike Privat B`. Ohne diese Zeile wäre jede 404 unten auch mit einer falschen Id erklärbar |
+| `GET /api/v3/work_packages/38` | `opa` (kein Mitglied) | **404** | `urn:openproject-org:api:v3:errors:NotFound` | die Berechtigungsgrenze hält auf Weg 1, unter dem Token des Kontos selbst und nicht unter einem Dienstkonto |
+| `GET /api/v3/work_packages/999999999` | `opa` | **404** | `urn:openproject-org:api:v3:errors:NotFound` | dieselbe Antwort wie in der Zeile darüber, und zwar Byte für Byte: je 166 Bytes, gleicher SHA-256 (`96f26f0149c7be10...`), `cmp` meldet keinen Unterschied. OpenProject verrät die Existenz also nicht |
+
+Die `message` ist in beiden 404 wortwörtlich "The work package you are looking for cannot be found or
+has been deleted." Kein 403 an keiner Stelle, und kein Unterschied zwischen "gibt es nicht" und "darfst
+du nicht".
+
+**Dieselbe Grenze, zwei Ebenen höher gemessen, weil eine Einzelressource allein eine Ausnahme sein
+könnte:**
+
+| Aufruf | `opb` | `opa` |
+|--------|-------|-------|
+| `GET /api/v3/projects/3` | 200 | **404**, `urn:openproject-org:api:v3:errors:NotFound` |
+| `GET /api/v3/projects/3/work_packages` | 200, `total 1`, Ids `[38]` | **404**, dieselbe Fehlerkennung |
+| `GET /api/v3/work_packages?pageSize=100` | 200, `total 34`, enthält 38 | 200, `total 33`, enthält 38 **nicht** |
+
+Die letzte Zeile ist die aussagekräftigste, weil sie nicht auf eine Id zielt, sondern die Liste
+vergleicht: derselbe Endpunkt, dieselbe Seitengröße, ein Arbeitspaket Unterschied, und der Unterschied
+ist genau das private. Ein Berechtigungsleck, das eine Einzelabfrage abweist und die Liste nicht,
+wäre hier sichtbar geworden.
+
+**Dieselbe Eigenschaft, dieselbe Sprache wie beim DAV-Nachweis dieses Projekts.**
+`docs/spike-dav.md` belegt für Nextcloud-Dateien: bob kennt den genauen Pfad von alices Datei, nichts
+als die Berechtigungsprüfung steht dazwischen, und die Antwort ist "`404`, never `200`". Für
+OpenProject-Arbeitspakete gilt auf Weg 1 wortwörtlich dasselbe: `opa` kennt die genaue Id, und die
+Antwort ist 404 und nie 200, ohne Unterschied zu einer Id, die es nicht gibt. Beide Negativbeweise
+lassen sich damit in einem Satz führen, und beide gelten unter dem Konto selbst und nicht unter einem
+Dienstkonto.
+
+#### Abschluss von 2.2: Leistung, Kosten, und was der lokale Aufbau nicht reproduziert
+
+**Was Weg 1 gemessen leistet.** Ein eigener Autorisierungscode je Nutzer trägt vollständig: PKCE ist
+Pflicht und die Pflicht ist mit ihrer Gegenprobe belegt, das Token lebt gemessene 7200 Sekunden, die
+Erneuerung trägt ohne jeden Cookie und ohne Browsersitzung, und die Berechtigungsgrenze des
+angemeldeten Nutzers hält bis auf die Ebene der Liste, ohne dass irgendwo ein Dienstkonto oder ein
+Administratorschlüssel im Spiel wäre.
+
+**Was Weg 1 kostet.** Einen Zustimmungsschritt im Browser je Nutzer, der nicht wegzuautomatisieren ist,
+weil `/oauth/authorize` eine OpenProject-Sitzung verlangt (`resource_owner_authenticator`,
+`doorkeeper.rb:35-39`); einen zweiten OAuth-Client, den ein Betreiber in der OpenProject-Verwaltung
+von Hand anlegen muss, weil sich zu 17.7.2 kein dokumentierter Weg zum Seeden einer OAuth-Anwendung
+finden ließ und `registration_endpoint` in den Metadaten fehlt; und ein zweites Tokenlager neben dem
+bestehenden, samt der Erneuerungsregel aus dem Befund oben.
+
+**Was der lokale Aufbau ausdrücklich nicht reproduziert, und deshalb steht in diesem Abschnitt kein
+Satz, der "in openDesk" sagt und auf einen der Messwerte oben zeigt.** In openDesk gibt es wegen
+`OPENPROJECT_OMNIAUTH__DIRECT__LOGIN__PROVIDER: "keycloak"` kein lokales Anmeldeformular; genau dieses
+Formular ist aber der zweite Schritt des gemessenen Messwegs oben. Der Zustimmungsfluss hat dort einen
+zusätzlichen Umleitungsschritt über Keycloak, und dieser Schritt ist hier **ungemessen**. Ebenfalls
+ungemessen ist die Scope-Pflicht für ein OIDC-JWT (`scope`-Anspruch mit `api_v3`, Breaking Change in
+OpenProject 16.0.0): im lokalen OAuth-Modus, in dem alle Messwerte oben entstanden sind, ist sie
+unsichtbar, weil OpenProject die Tokens selbst ausgibt. Beide Punkte gehören auf die ISV-Liste in
+Abschnitt 4 und nicht in die Messwerttabelle.
+
+**Aufräumen, und es ist gegengeprobt.** Alle in diesem Abschnitt entstandenen Tokens sind nach der
+letzten Messung über `POST /oauth/revoke` widerrufen worden, zwanzig Werte, je Status 200. Die
+Gegenprobe: `GET /api/v3/users/me` mit dem Token von `opb` und mit dem von `opa` antwortet danach je
+**401**. Die Cookie-Speicher und die Zwischendateien lagen unter dem Temporärverzeichnis und niemals im
+Repositorium; sie sind gelöscht. Kein Wert steht in diesem Bericht, nur Längen, Vier-Zeichen-Präfixe,
+Statuscodes und Feldnamen (T-17-01).
 
 ### 2.3 Die SSRF-Grenze und was sie wirklich abdeckt
 
