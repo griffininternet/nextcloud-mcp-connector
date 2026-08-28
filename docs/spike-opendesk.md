@@ -221,7 +221,103 @@ noch nicht gemessen, Plan 17-05 und 17-06
 
 ### 2.2 Weg 1: PKCE, `expires_in`, Erneuerung ohne Browsersitzung, Zwei-Konten-Negativbeweis
 
-noch nicht gemessen, Plan 17-04
+**Gemessen am 2026-08-28 (D-04, voller Consent-Fluss), lokal gegen die laufende Instanz OpenProject
+17.7.2 aus dem Kopfblock, ausschließlich über `http://op.localtest.me:8082`.** Der Client ist die
+OAuth-Anwendung `nc-mcp-spike-weg1` aus Abschnitt 5.3: **nicht vertraulich** (Häkchen "Confidential"
+aus), Scope nur `api_v3`, Rückadresse `http://127.0.0.1:8099/callback`, Feld
+`Client Credentials User ID` leer. Dass der Client nicht vertraulich ist, ist die Voraussetzung der
+ersten Messung und keine Nachlässigkeit: `force_pkce` gilt wortwörtlich nur für nicht vertrauliche
+Clients (K2 Punkt 1), ein vertraulicher Client hätte die falsche Frage beantwortet.
+
+Kein Aufruf dieses Abschnitts benutzt den API-Schlüssel des Kontos `admin`, mit dem der Grundzustand
+aus 5.3 entstanden ist. Jede Zeile nennt das Konto, unter dem sie lief.
+
+**Nebenbefund vorweg: die Metadatenlücke ist auch lokal da, und sie ist ein Metadatenmangel und kein
+Fähigkeitsmangel.** Beide Wohlbekannt-Dokumente der laufenden Instanz, mit `curl` vom Host geholt,
+je Status 200:
+
+```
+GET /.well-known/oauth-authorization-server   -> 200
+{"issuer":"http://op.localtest.me:8082",
+ "authorization_endpoint":"http://op.localtest.me:8082/oauth/authorize",
+ "token_endpoint":"http://op.localtest.me:8082/oauth/token",
+ "introspection_endpoint":"http://op.localtest.me:8082/oauth/introspect",
+ "scopes_supported":["api_v3","scim_v2","mcp","bcf_v2_1"],
+ "response_types_supported":["code"],
+ "grant_types_supported":["authorization_code","client_credentials","refresh_token"],
+ "service_documentation":"https://www.openproject.org/docs/system-admin-guide/authentication/oauth-applications/?go_to_locale=en"}
+
+GET /.well-known/oauth-protected-resource     -> 200
+{"resource":"http://op.localtest.me:8082","resource_name":"OpenProject",
+ "authorization_servers":["http://op.localtest.me:8082"],
+ "scopes_supported":["scim_v2","mcp","bcf_v2_1","api_v3"],
+ "bearer_methods_supported":["header"],
+ "resource_documentation":"https://www.openproject.org/docs/api/?go_to_locale=en"}
+```
+
+Weder ein `registration_endpoint` noch ein `code_challenge_methods_supported` steht darin. Ein Client,
+der sich allein nach diesen Dokumenten richtet, verzichtet also auf PKCE und wird abgewiesen: der
+Messwert unten belegt beides in derselben Instanz. Der Grund liegt nicht in der Fähigkeit, sondern in
+ihrer Bekanntmachung: `force_pkce` steht unbedingt in `config/initializers/doorkeeper.rb:90` am Tag
+`v17.7.2` (K2). Diese Instanz ist dabei nicht der Sonderfall, die Dokumente der öffentlichen
+Community-Instanz tragen dieselbe Lücke (17-RESEARCH.md, "Die Endpunkte und die Metadatenlücke").
+Damit ist der Nebenbefund kein lokales Artefakt, und er geht als **Frage 9 in Abschnitt 4** auf die
+ISV-Liste: das fehlende `code_challenge_methods_supported` ist der konkretere und dankbarere Beitrag
+für den Community-Kanal als jede Beschwerde, weil die Fähigkeit vorhanden ist und nur die Ansage
+fehlt.
+
+**Der Messweg des Hauptlaufs, in vier Schritten, alle mit `curl -4` vom Host und einem Cookie-Speicher
+außerhalb des Repositoriums.** Verifier und Challenge kommen aus dem bestehenden Weg dieses Projekts
+(`pkce()` in `scripts/oauth_flow_check.py:160-164`, per Import aufgerufen, keine Zeile geändert und
+nichts neu erfunden); der Verifier ist 86 Zeichen lang, die Challenge nach S256 43 Zeichen.
+
+| Schritt | Aufruf | Status | Was belegt ist |
+|---------|--------|--------|----------------|
+| 1 | `GET /login` | 200 | die Seite trägt zwei Formulare, beide mit `authenticity_token` (86 Zeichen); genommen wurde das des Formulars `user-login--form` |
+| 2 | `POST /login` mit `username=opb`, Passwort aus `.env.spike-opendesk`, `authenticity_token` | 302 | Ziel ist **nicht** `/my/page`, sondern `/two_factor_authentication/request`; die Kette endet nach zwei weiteren 302 auf `/my/page`, und die Seite nennt oben rechts `Bob Spike` |
+| 3 | `GET /oauth/authorize` mit `client_id`, `response_type=code`, `redirect_uri`, `scope=api_v3`, `state`, `code_challenge`, `code_challenge_method=S256` | 200 | die Zustimmungsseite, wortwörtlich `Authorize nc-mcp-spike-weg1 to use your account opb?` und `Full API v3 access`; das Formular trägt `code_challenge` und `code_challenge_method` als versteckte Felder weiter |
+| 4 | `POST /oauth/authorize` mit denselben Parametern plus `authenticity_token` und `commit=Authorize`, ohne Weiterleitungen zu folgen | 302 | `Location: http://127.0.0.1:8099/callback?code=<43 Zeichen>&state=<der gesendete Wert>`; das `state` der Antwort ist Zeichen für Zeichen das gesendete |
+
+Der Browser-Rückfall des Plans wurde **nicht** gebraucht: der Formularweg trug im ersten Versuch. Auf
+dem Port 8099 hörte dabei nichts, und das musste es auch nicht, weil der Code aus dem
+`Location`-Kopf gelesen wird und nicht aus einer Zustellung (T-17-02).
+
+**Der Messwert, das Einlösen des Codes.** `POST /oauth/token`, mit `curl -d` und damit
+`Content-Type: application/x-www-form-urlencoded` (Pflicht wegen `enforce_content_type`,
+`doorkeeper.rb:55`), Parameter `grant_type=authorization_code`, `code`, `redirect_uri`, `client_id`,
+`code_verifier`, und **ohne** `client_secret`, weil der Client öffentlich ist. Ebenfalls ohne jeden
+Cookie-Speicher.
+
+| Feld der Antwort | Gemessener Wert |
+|------------------|-----------------|
+| HTTP-Status | **200** |
+| `token_type` | `Bearer` |
+| `scope` | `api_v3` |
+| `expires_in` | **7200**, Einheit Sekunden, also zwei Stunden |
+| `created_at` | `1787938654` (Unix-Sekunden, 2026-08-28) |
+| `access_token` | Länge **43** Zeichen, Präfix `rN3W` |
+| `refresh_token` | Länge **43** Zeichen, Präfix `xK-Z` |
+| Konto, unter dem der Lauf lief | **`opb`** |
+
+**`expires_in` stimmt mit der Erwartung aus der Quelle überein.** Erwartet waren 7200 aus
+`access_token_expires_in 2.hours` (`doorkeeper.rb:61-64`), gemessen sind 7200. Die Admin-Dokumentation
+sagt dasselbe ("expire after two hours (default)"). Code, Dokumentation und Messwert nennen denselben
+Wert, damit ist er belastbar. Der Wert ist trotzdem gemessen und nicht zitiert worden, weil
+`custom_access_token_expires_in` im Initializer auskommentiert vorliegt (Zeile 73-75) und ein
+Betreiber ihn setzen kann; in dieser Instanz hat es niemand getan.
+
+**Der Nutzername ist nicht nur behauptet, er ist aus dem Token gemessen.** `GET /api/v3/users/me` mit
+`Authorization: Bearer <access_token>` und **ohne** Cookie antwortet 200 und nennt `login opb`, `id 6`,
+`admin` nicht gesetzt, `status active`. Das ist genau die Id, die 5.3 für Konto B nennt. Zwei
+Gegenproben dazu, weil eine 200 auch von einer offenen Instanz kommen könnte: ein Bearer-Wert aus 43
+Nullen antwortet 401 mit `errorIdentifier urn:openproject-org:api:v3:errors:Unauthenticated`, und
+ohne den Kopf `Authorization` antwortet derselbe Aufruf ebenfalls 401.
+
+**Ein 415 an diesem Endpunkt ist kein PKCE-Befund, und das ist gemessen statt vermutet.** Derselbe
+Endpunkt, mit `Content-Type: application/json` und einem JSON-Körper aufgerufen, antwortet **415**
+mit leerem Körper `{}`. Wer `enforce_content_type` übersieht, liest diese 415 als Abweisung des
+Flusses; sie ist eine Abweisung der Verpackung. Die Zeile steht hier, damit ein Wiederholungslauf den
+Unterschied kennt, bevor er ihn falsch deutet.
 
 ### 2.3 Die SSRF-Grenze und was sie wirklich abdeckt
 
@@ -294,6 +390,13 @@ noch nicht gemessen, Plan 17-09
 ## 4. Fragenliste für den ISV-Call am 14.09. (OD-03)
 
 noch nicht gemessen, Plan 17-08
+
+**Vorgemerkt aus Abschnitt 2.2, damit der Verweis dort nicht ins Leere zeigt.** Frage 9: OpenProject
+17.7.2 erzwingt PKCE für nicht vertrauliche Clients (`force_pkce`, gemessen in 2.2), bewirbt in
+`/.well-known/oauth-authorization-server` aber kein `code_challenge_methods_supported` und keinen
+`registration_endpoint`. Die Frage lautet, ob die Lücke Absicht ist, und der Grund, sie zu stellen,
+ist ein gemessener Fehlschlag: ein Client, der sich allein nach diesem Dokument richtet, lässt PKCE
+weg und wird abgewiesen. Plan 17-08 formuliert die Frage aus und ordnet sie in die Liste ein.
 
 ## 5. Rohmesswerte
 
