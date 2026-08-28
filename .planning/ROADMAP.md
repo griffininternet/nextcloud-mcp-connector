@@ -179,7 +179,7 @@ Plans:
 | 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 6/6 | Complete | 2026-08-25 |
 | 14. Doku-Reste und Gate-Entscheid | v1.4 | 2/2 | Complete | 2026-08-27 |
 | 15. Release 0.1.10 | v1.4 | 4/4 | Complete | 2026-08-28 |
-| 16. Release 0.1.11 | v1.5 | 1/4 | In Progress|  |
+| 16. Release 0.1.11 | v1.5 | 2/4 | In Progress|  |
 | 17. openDesk-Spike | v1.5 | 0/? | Not started | - |
 | 18. Audit-Log Kern | v1.5 | 0/? | Not started | - |
 | 19. Audit-Log Bedienung und Textnachzug | v1.5 | 0/? | Not started | - |

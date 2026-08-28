@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
 status: executing
-stopped_at: Completed 16-01-PLAN.md (Version 0.1.11 an sechs Stellen, Changelog-Block 0.1.11 statt [Unreleased], kein Tag)
-last_updated: "2026-08-28T08:39:42.201Z"
-last_activity: 2026-08-28, Plan 16-01 ausgeführt (sechs Versionsstellen auf 0.1.11, Changelog-Block 0.1.11 statt [Unreleased])
+stopped_at: Completed 16-02-PLAN.md (sechs Gates lokal grün, Werkzeugoberfläche 15712 über 21 gegen 18000, Paket-Probelauf, drei Proof-Zeilen, kein Tag)
+last_updated: "2026-08-28T08:50:00.000Z"
+last_activity: 2026-08-28, Plan 16-02 ausgeführt (sechs Gates grün ohne Anhebung, Store-Paket geprüft, Proof-Zeilen der Runbook-Schritte 1 bis 3)
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 4
-  completed_plans: 1
-  percent: 25
+  completed_plans: 2
+  percent: 50
 ---
 
 # Project State
@@ -25,16 +25,16 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 
 ## Current Position
 
-Phase: 16 (Release 0.1.11), 1 von 4 Plänen abgeschlossen
-Plan: 16-01 abgeschlossen; als nächstes 16-02 (sechs Gates lokal, Archiv-Probelauf, Proof-Zeilen)
-Status: in Ausführung; die Version steht auf 0.1.11, kein Tag existiert
-Last activity: 2026-08-28, Plan 16-01 ausgeführt (sechs Versionsstellen auf 0.1.11, Changelog-Block 0.1.11 statt [Unreleased])
+Phase: 16 (Release 0.1.11), 2 von 4 Plänen abgeschlossen
+Plan: 16-02 abgeschlossen; als nächstes 16-03 (Branch-Push und Tag, beides nur nach ausdrücklicher Owner-Freigabe)
+Status: in Ausführung; der Kandidat 0.1.11 ist geprüft, kein Tag existiert, nichts ist gepusht
+Last activity: 2026-08-28, Plan 16-02 ausgeführt (sechs Gates grün ohne Anhebung, Store-Paket geprüft, Proof-Zeilen der Runbook-Schritte 1 bis 3)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 104
+- Total plans completed: 105
 - Average duration: 35 min
 - Total execution time: 15.2 hours
 
@@ -165,6 +165,7 @@ Last activity: 2026-08-28, Plan 16-01 ausgeführt (sechs Versionsstellen auf 0.1
 | Phase 15 P02 | 20 min | 2 tasks | 1 files |
 | Phase 15 P03 | 12 min | 3 tasks | 1 files |
 | Phase 16-release-0-1-11 P01 | 7 min | 2 tasks | 8 files |
+| Phase 16-release-0-1-11 P02 | 11 min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -182,6 +183,7 @@ Recent decisions affecting current work:
 - Roadmap v1.5: das Audit-Log ist auf zwei Phasen geschnitten, weil Phase 19 ein feststehendes Satzschema und einen feststehenden Speicher braucht, bevor gelesen, geschaltet und beschrieben werden kann
 - Roadmap v1.5: EXAPP-12 (Auslieferung des Audit-Logs als 0.1.12) ist per Owner-Entscheid Future Requirement und in keiner Phase abgebildet; die AUDIT-06-Texte warten im `[Unreleased]`-Block, ohne Tag und ohne Store-Upload
 - Roadmap v1.5: kein Feature dieses Meilensteins fasst die Werkzeugoberfläche an; 15712 von 18000 Bytes über 21 Werkzeuge bleiben stehen, kein Gate-Grenzwert wird angehoben
+- [Phase 16]: die Werkzeugoberfläche misst weiter 15712 Bytes über 21 Werkzeuge gegen ein Budget von 18000, byte-gleich zum 0.1.10-Lauf, weil `0.1.10` und `0.1.11` beide sechs Zeichen lang sind; kein Grenzwert wurde angehoben, das lokal gebaute Store-Paket hat 47349 Bytes und wird nicht signiert
 - Roadmap v1.5: für EXAPP-11 gelten die Release-Regeln unverändert (Versionszeichenkette an sechs Stellen, Changelog-Block samt Linkdefinition, Branch-Push vor dem Tag, Tag nur nach wörtlicher Owner-Freigabe, Signatur über das heruntergeladene Asset, datierte Proof-Zeilen in docs/store-submission.md)
 
 - Roadmap v1.4: Phasennummerierung setzt bei 14 fort (v1.3 verbrauchte 12 und 13); zwei Phasen bei Granularität coarse, weil das Release die Doku-Fixes im Asset mitnehmen muss und deshalb zwingend nach ihnen liegt
