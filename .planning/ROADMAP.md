@@ -110,7 +110,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 15-03-PLAN.md , Push vor dem Tag, blockierende Owner-Freigabe, Tag v0.1.10 und grüner Release-Workflow, Proof-Zeile der Schritte 4 und 5
+- [x] 15-03-PLAN.md , Push vor dem Tag, blockierende Owner-Freigabe, Tag v0.1.10 und grüner Release-Workflow, Proof-Zeile der Schritte 4 und 5
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -134,7 +134,7 @@ Plans:
 | 12. Konsistenz und Härtungs-Nachzieher | v1.3 | 4/4 | Complete | 2026-08-25 |
 | 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 6/6 | Complete | 2026-08-25 |
 | 14. Doku-Reste und Gate-Entscheid | v1.4 | 2/2 | Complete    | 2026-08-27 |
-| 15. Release 0.1.10 | v1.4 | 2/4 | In Progress|  |
+| 15. Release 0.1.10 | v1.4 | 3/4 | In Progress|  |
 
 ## Next
 

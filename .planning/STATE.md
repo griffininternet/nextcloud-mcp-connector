@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Pflege und 0.1.10
 status: executing
-stopped_at: Plan 15-02 abgeschlossen (sechs Gates gruen, Archiv-Probelauf, drei Proof-Zeilen; kein Tag)
-last_updated: "2026-08-27T23:40:14.352Z"
-last_activity: 2026-08-27 -- Plan 15-02 abgeschlossen (sechs Gates gruen bei 15712 Bytes ohne Anhebung, Archiv-Probelauf 47299 Bytes, drei Proof-Zeilen), Phase 15 weiter mit Plan 15-03
+stopped_at: Plan 15-03 abgeschlossen (main gepusht vor dem Tag, Owner-Freigabe 04:49Z, Tag v0.1.10, Release-Workflow 33142956284 gruen, Asset 46973 Bytes)
+last_updated: "2026-08-28T04:56:49.737Z"
+last_activity: 2026-08-28 -- Plan 15-03 abgeschlossen (Tag v0.1.10 nach ausdruecklicher Owner-Freigabe, Workflow gruen, Asset mcp_connector-0.1.10.tar.gz mit 46973 Bytes am Release), Phase 15 weiter mit Plan 15-04
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 6
-  completed_plans: 4
-  percent: 67
+  completed_plans: 5
+  percent: 83
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 15 (Release 0.1.10) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
-Last activity: 2026-08-27 -- Plan 15-02 abgeschlossen (Runbook-Schritt 3 belegt, kein Tag); Plan 15-03 braucht die Owner-Freigabe fuer den Tag v0.1.10
+Last activity: 2026-08-28 -- Plan 15-03 abgeschlossen (Runbook-Schritte 4 und 5 belegt); Plan 15-04 signiert das heruntergeladene Asset und reicht im Store ein
 
 ## Performance Metrics
 
@@ -162,6 +162,7 @@ Last activity: 2026-08-27 -- Plan 15-02 abgeschlossen (Runbook-Schritt 3 belegt,
 | Phase 14 P02 | 6 min | 3 tasks tasks | 3 files files |
 | Phase 15 P01 | 8 min | 2 tasks | 8 files |
 | Phase 15 P02 | 20 min | 2 tasks | 1 files |
+| Phase 15 P03 | 12 min | 3 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -587,6 +588,9 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 15-01: uv.lock ist die sechste Versionsstelle und wird per Texteditierung gehoben, nie per uv lock oder uv sync; alle Prüfläufe der Phase laufen mit uv run --no-sync
 - [Phase 15-release-0-1-10]: Werkzeugoberflaeche misst 15712 statt 15711 Bytes; Ursache ist die serverInfo-Versionszeichenkette im tools/list-Envelope (0.1.9 auf 0.1.10 = ein Zeichen mehr), per Gegenprobe auf 15711 zurueckgerechnet; kein Grenzwert angehoben, Erwartungswert fuer den naechsten Lauf ist 15712
 - [Phase 15-release-0-1-10]: das lokal gebaute 0.1.10-Archiv misst 47299 Bytes (sha256 4682e06d) und ist NICHT das signierte Artefakt; Plan 15-04 signiert das heruntergeladene Asset
+- [Phase 15-release-0-1-10]: Plan 15-03: die Owner-Freigabe fuer den Tag v0.1.10 kam am 2026-08-28 04:49Z woertlich als freigeben; Weg fuer Runbook-Schritt 7 in Plan 15-04 ist die angemeldete Store-Sitzung im Browser
+- [Phase 15-release-0-1-10]: Plan 15-03: die Changelog-Kopfzeile 2026-08-28 blieb vor dem Tag unangetastet, weil das Datum der Tag-Tag sein muss und der Tag wegen der ausstehenden Freigabe fruehestens am 2026-08-28 entstehen konnte; er entstand um 04:50Z
+- [Phase 15-release-0-1-10]: Plan 15-03: das veroeffentlichte Asset misst 46973 Bytes gegen die 47299 des lokalen Baus; Plan 15-04 signiert die heruntergeladenen Bytes unter https://github.com/street1983nk/nextcloud-mcp-connector/releases/download/v0.1.10/mcp_connector-0.1.10.tar.gz
 
 ### Pending Todos
 
@@ -621,9 +625,9 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-27T23:40:06.294Z
-Stopped at: Plan 15-02 abgeschlossen (sechs Gates gruen, Archiv-Probelauf, drei Proof-Zeilen; kein Tag)
-Naechster Schritt: /gsd:plan-phase 14 (Doku-Reste und Gate-Entscheid: DOC-01, DOC-02, SEC-03)
+Last session: 2026-08-28T04:56:37.000Z
+Stopped at: Plan 15-03 abgeschlossen (Tag v0.1.10 nach Owner-Freigabe, Workflow gruen, Asset am Release)
+Naechster Schritt: Plan 15-04 ausfuehren (Signatur ueber das heruntergeladene Asset, Store-Einreichung ueber die angemeldete Store-Sitzung, Proof-Zeilen der Schritte 6 bis 8)
 Resume file: None
 
 ## Operator Next Steps
