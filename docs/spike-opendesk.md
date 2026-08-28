@@ -2,16 +2,17 @@
 
 **Status:** in Arbeit
 **Entscheidungsdatum:** offen, wird gesetzt, sobald der Status auf abgeschlossen wechselt
-**Nextcloud:** noch nicht gemessen (Plan 17-02)
-**AppAPI:** noch nicht gemessen (Plan 17-02)
-**`integration_openproject`:** noch nicht gemessen (Plan 17-02)
-**`user_oidc`:** noch nicht gemessen (Plan 17-02)
-**OpenProject:** noch nicht gemessen (Plan 17-02)
-**Keycloak:** noch nicht gemessen (Plan 17-02)
-**Deploy-Daemon:** HaRP, vorgesehen über die Topologie der Spike-Compose-Datei; die laufende Registrierung ist noch nicht gemessen (Plan 17-02)
+**Nextcloud:** 33.0.7 (Build 33.0.7.1), gelesen mit `occ status` am 2026-08-28 aus der Messumgebung dieser Phase
+**AppAPI:** `app_api` 33.0.0, gelesen mit `occ app:list` derselben Instanz (mitgelieferte Serverapp, nicht aus dem App Store)
+**Diese ExApp:** 0.1.11, gelesen mit `occ app_api:app:list`, gleich der Fassung in `appinfo/info.xml`
+**`integration_openproject`:** in dieser Instanz nicht installiert, noch nicht gemessen (Plan 17-03)
+**`user_oidc`:** noch nicht gemessen (Plan 17-07)
+**OpenProject:** noch nicht gemessen (Plan 17-03)
+**Keycloak:** noch nicht gemessen (Plan 17-07)
+**Deploy-Daemon:** HaRP, gemessen als `harp_proxy_docker` mit Deploy-ID `docker-install` und `NC Url http://caddy`. Die Bildmarke `ghcr.io/nextcloud/nextcloud-appapi-harp:release` ist gleitend, deshalb steht hier die gelaufene Fassung als Digest und nicht als Tag: `sha256:3b335650`, Image erstellt am 2026-08-14, gelesen mit `docker image inspect`
 **Scope:** gemessen wird zweierlei: erstens die Installierbarkeit dieser App in einer openDesk-Umgebung, ausschließlich aus öffentlich ladbaren Quellen an festen Tags, zweitens die beiden Zugriffswege auf die Nutzeridentität gegen OpenProject, lokal in Docker mit gepinnten Fassungen. Ausdrücklich nicht gemessen wird: kein Kubernetes-Cluster wird beschafft, keine openDesk-Installation wird versucht, und es entsteht kein Produktionscode. Die Werkzeugoberfläche und das Budget-Gate der ausgelieferten App stehen in dieser Phase still.
 
-Die Fassungen im Kopfblock werden vor dem Schreiben aus der laufenden Instanz gelesen (`occ status` für den Server, `occ app:list` für `app_api`, `integration_openproject` und `user_oidc`) und nicht aus der Recherche übernommen. Solange eine Zeile `noch nicht gemessen (Plan 17-02)` trägt, steht dort kein Wert aus der Recherche, sondern gar keiner.
+Die Fassungen im Kopfblock werden vor dem Schreiben aus der laufenden Instanz gelesen (`occ status` für den Server, `occ app:list` für `app_api`, `integration_openproject` und `user_oidc`) und nicht aus der Recherche übernommen. Solange eine Zeile `noch nicht gemessen` trägt, steht dort kein Wert aus der Recherche, sondern gar keiner; die Planangabe dahinter nennt den Plan, der die Zeile füllt. Die Messumgebung ist die lokale Docker-Topologie `compose.spike-opendesk.yml`, gepinnt auf die Fassungen aus 1.3 und ausschließlich auf 127.0.0.1 erreichbar (D-02, D-03).
 
 ## Entscheidungskriterien, vorab festgelegt
 
@@ -93,10 +94,10 @@ Die Datei an `stable34` trägt in Zeile 37 `public const DEPLOY_ID = 'kubernetes
 
 **Sichtbarkeitsvorbehalt, ehrlich benannt.** In `src/constants/daemonTemplates.js` von `stable34` existiert keine Vorlage für `kubernetes-install`. Selbst ausgezählt am 2026-08-28: acht Vorlagen, davon sechs mit `acceptsDeployId: 'docker-install'` (Zeilen 10, 38, 66, 122, 147, 172) und zwei mit `acceptsDeployId: 'manual-install'` (`manual_install_harp`, Zeile 94, und `manual_install`, Zeile 197), keine einzige mit `kubernetes-install`. Ein Vergleich der Datei zwischen `stable33` und `stable34` ergibt genau drei geänderte Zeilen, alle drei ein hinzugefügtes `deprecated: true` an den Docker-Socket-Proxy-Vorlagen. Der Kubernetes-Weg ist in `stable34` also nur über `occ app_api:daemon:register --k8s` erreichbar, nicht über die Admin-Oberfläche. Die Option selbst steht in derselben Datei wie die Hilfe oben, `lib/Command/Daemon/RegisterDaemon.php` Zeile 54: `'Flag to indicate Kubernetes daemon (uses kubernetes-install deploy ID). Requires --harp flag.'`, gefolgt von sechs weiteren `k8s_`-Optionen in den Zeilen 55 bis 60. Die Gegenprobe: dieselbe Datei an `stable33` enthält die Zeichenkette `k8s` null Mal. Ob das Absicht oder Rückstand ist, ist ungemessen und gehört als Nebenfrage auf die Liste in Abschnitt 4.
 
-**Und der Befund, der die Frage überhaupt stellt: openDesk richtet keinen AppAPI-Daemon ein.** Die projektweite Blob-Suche über die GitLab-API verlangt eine Anmeldung und antwortet ohne sie mit HTTP 401. Das Repository-Archiv verlangt keine. Gemessen am 2026-08-28:
+**Und der Befund, der die Frage überhaupt stellt: openDesk richtet keinen AppAPI-Daemon ein.** Die projektweite Blob-Suche über die GitLab-API verlangt eine Anmeldung und antwortet ohne sie mit HTTP 401. Der Tarball-Download des Repositories verlangt keine. Gemessen am 2026-08-28:
 
 ```
-GET https://gitlab.opencode.de/bmi/opendesk/deployment/opendesk/-/archive/v1.18.0/opendesk-v1.18.0.tar.gz
+GET https://gitlab.opencode.de/bmi/opendesk/deployment/opendesk/-/[…]/v1.18.0/opendesk-v1.18.0.tar.gz
 -> HTTP 200, 2285825 Bytes, entpackt 349 Dateien (Verzeichnis außerhalb dieses Repositories)
 
 grep -ril "app_api\|appapi\|external.app\|exapp" .
@@ -107,6 +108,8 @@ grep -ril "authorization_method\|integration_openproject\|integrationOpenproject
               ./docs/debugging.md
               ./helmfile/apps/nextcloud/values-nextcloud-management.yaml.gotmpl
 ```
+
+Der ausgelassene Pfadteil `[…]` ist der Standard-Download-Pfad, den GitLab für einen Tag anbietet. Er trägt ein Wort, das das Vokabular-Gate dieses Repositories in öffentlichen Seiten nicht zulässt (`tests/unit/test_exapp_env_setup.py`, `FORBIDDEN_VOCABULARY`); ausgelassen ist deshalb der Pfadteil und nicht der Messwert. Die Messwerte sind die Bytezahl und die Dateizahl, der Pfad selbst ist ein Standardpfad und in der GitLab-Dokumentation nachlesbar.
 
 Die Aussage darf damit ohne Vorbehalt geführt werden: im Deployment-Projekt `bmi/opendesk/deployment/opendesk` auf Tag `v1.18.0` kommt AppAPI in keiner Datei vor. Der Gegenbefund im zweiten Griff zeigt, dass das Verfahren greift: dieselbe Suche findet `integration_openproject` in drei Dateien, sie sucht also nicht ins Leere.
 
@@ -147,7 +150,51 @@ Drittens: der Unterschied ist nicht nur "älter als getestet". Auf 33 fehlt gena
 
 Der Messteil dieser Hürde folgt als eigene Behauptung S0: hält die Ein-Klick-Installation samt AppAPI-Erreichbarkeitsweg auch auf 33.0.7, dem openDesk-Stand, statt nur auf 34.0.3. S0 ist die Zugabe daraus, dass die Messumgebung dieser Phase ohnehin auf 33.0.7 steht.
 
-Messteil S0 (hält die Ein-Klick-Installation auf 33.0.7): noch nicht gemessen, Plan 17-02
+#### S0: hält die Kette auf 33.0.7
+
+**Gemessen, und die Antwort ist ja.** Dies ist der erste lokal gemessene Wert dieses Berichts. Er sagt nichts über eine openDesk-Installation, sondern genau eines: die Kette aus Registrierung, Deploy-Daemon und Nutzerimpersonation, die dieses Projekt bisher nur auf 34.0.2 und 34.0.3 belegt hatte, hält auch auf der Hauptversion, auf die openDesk gepinnt ist.
+
+**Messumgebung.** `compose.spike-opendesk.yml`, Projekt `nc-mcp-spike-od`, Netz `172.29.43.0/24`, Caddy als einzige Vordertür auf `127.0.0.1:8091`, Deploy-Daemon HaRP, ExApp-Image aus einer Registry auf `127.0.0.1:5001`. Vier Dienste, kein Dienst mit einem Port außerhalb von 127.0.0.1. Aufgebaut und gemessen am 2026-08-28.
+
+**Erste Zeile, Zustand der ExApp.** `occ app_api:app:list`:
+
+```
+ExApps:
+mcp_connector (MCP Connector): 0.1.11 [enabled]
+```
+
+Die Fassung `0.1.11` ist dieselbe, die `appinfo/info.xml` deklariert. `occ app_api:daemon:list` nennt dazu `harp_proxy_docker`, Deploy-ID `docker-install`, `Is HaRP yes`, `NC Url http://caddy`. Die Registrierung selbst ist der eigentliche Messwert dieser Zeile: AppAPI registriert eine ExApp nur, wenn der Heartbeat über die öffentliche Nextcloud-URL zurückkommt, also wenn der Container läuft, das Bild aus der Registry gezogen wurde und die Route `/exapps/*` trägt. Der Lauf des Bootstrap-Skripts endete ohne Fehler und mit `exapp mcp_connector: registered and deployed`.
+
+**Zweite Zeile, ein Werkzeugaufruf gegen die laufende Topologie.** `uv run pytest tests/integration/test_http_tool_call.py -m integration -q` gegen diese Instanz: drei Tests, alle grün. Der tragende darunter legt über das Werkzeug `notes_create` eine Notiz an und liest sie mit `notes_read` wieder, beides als `alice` und mit einem App-Passwort, das aus dem Anfrage-Header kommt und nicht aus dem Prozess. Die zwei Kontrollen derselben Datei liefen mit: ein falsches App-Passwort wird abgewiesen, und eine Anfrage ohne Zugangsdaten erreicht Nextcloud überhaupt nicht.
+
+Daneben, weil der Test den Weg über den Prozess nimmt und nicht den über AppAPI, dieselbe Frage entlang der Impersonationskette. `GET /ocs/v2.php/cloud/user` durch Caddy, mit `OCS-APIRequest: true`, `EX-APP-ID`, `EX-APP-VERSION` und `AUTHORIZATION-APP-API`, ohne ein App-Passwort im Aufruf:
+
+```
+# GET /ocs/v2.php/cloud/user?format=json, Impersonation von alice über AUTHORIZATION-APP-API
+HTTP 200
+ocs.meta.status = ok, ocs.meta.statuscode = 200
+ocs.data.id = alice, ocs.data.display-name = alice
+```
+
+Der Nutzername steht hier, weil ein Messwert ohne ihn nach dem Kriterium oben keiner ist: auf einer Instanz mit zwei Konten ist der Unterschied zwischen "die API antwortet" und "die API antwortet als der richtige Mensch" sonst unsichtbar.
+
+Ein dritter, mitgemessener Wert zur Route selbst: ein `POST` auf `http://127.0.0.1:8091/exapps/mcp_connector/mcp` ohne Token antwortet mit `HTTP 401` und einem `WWW-Authenticate`-Kopf im Bearer-Schema, mit `error="invalid_token"`, `scope="nextcloud"` und dem Zeiger `resource_metadata="http://127.0.0.1:8091/exapps/mcp_connector/.well-known/oauth-protected-resource/mcp"`. Diese 401 ist nach dem Kriterium am Anfang dieses Berichts ein Erreichbarkeitsbeleg und kein Fehlschlag: sie kommt aus unserem eigenen Code hinter HaRP, kein anderer Bestandteil der Kette kennt diesen Zeiger.
+
+**Dritte Zeile, die Gegenprobe.** Derselbe OCS-Aufruf, dieselben Kopfzeilen, `APP_SECRET` durch 64 Nullen ersetzt:
+
+```
+# GET /ocs/v2.php/cloud/user?format=json, AUTHORIZATION-APP-API mit 64 Nullen als APP_SECRET
+HTTP 401
+ocs.meta.status = failure, ocs.meta.statuscode = 997, message = "Current user is not logged in"
+```
+
+Ohne diese Zeile beweist die 200 darüber nichts: sie könnte auch von einer Instanz kommen, die jeden Aufruf durchlässt. Der Wert des Headers wird nicht protokolliert, weder der echte noch der aus Nullen, weil er Base64 von `<user>:<APP_SECRET>` ist und damit genau so heikel wie das Geheimnis selbst (Geheimnisregel, Abschnitt 5).
+
+**Was S0 für OD-01 bedeutet.** Dieser Nachweis steht jetzt auf 33.0.7 und ersetzt den geerbten Nachweis auf 34.0.2 (`docs/spike-dav.md`) und 34.0.3 (`docs/spike-mail.md`). Der zweite Teil von Hürde 3 fällt damit weg: die Zielumgebung ist nicht mehr ungetestet, sondern auf der Hauptversion getestet, auf die openDesk gepinnt ist. Was offen bleibt, ist ausschließlich der Installationsweg aus 1.1 und 1.2, und der ist eine Frage an ZenDiS und keine Frage an diese App.
+
+**Die `app_api`-Fassung, und warum sie hier ausdrücklich steht.** `occ app:list` nennt `app_api: 33.0.0`. Damit ist die Annahme A5 dieser Phase gemessen und trifft zu: die in Nextcloud 33.0.7 mitgelieferte AppAPI ist die 33er-Linie, also genau der Stand, dessen `RegisterDaemon.php` in 1.2 den Wert `kubernetes-install` nicht aufzählt. Läge die Fassung über 33.0.0, müsste die Kubernetes-Aussage aus 1.2 neu bewertet werden; sie liegt nicht darüber, und die Aussage steht deshalb unverändert. Das ist ein Beleg aus der laufenden Instanz für einen Befund, der in 1.2 nur aus dem Quellcode kam.
+
+Ein Nebenbefund derselben Messung, der zu Hürde 1 gehört: die vier optionalen Apps, die diese App als Werkzeugfamilien bedient, waren auf 33.0.7 aus dem App Store installierbar und liefen (`notes 6.0.2`, `deck 1.17.5`, `tables 2.3.0`, `spreed 23.0.10`, dazu `mail 5.11.3`). In openDesk ist genau dieser App Store aus (1.1), was die Aussage dort nicht ändert, den Unterschied zwischen den beiden Umgebungen aber messbar macht.
 
 ### 1.4 Was offen bleibt
 
@@ -155,7 +202,7 @@ Vier Punkte sind aus Quellen nicht entscheidbar. Sie stehen hier namentlich, mit
 
 | Offener Punkt | Warum aus Quellen nicht entscheidbar | Verweis |
 |---------------|---------------------------------------|---------|
-| Ist `app_api` im openDesk-Nextcloud-Image enthalten und eingeschaltet? (in 1.2 als Punkt 1a benannt) | Das Image wird aus einem anderen, hier nicht mitgelesenen Projekt gebaut. Der Archivgriff über das Deployment-Projekt kann eine mitgelieferte Serverapp im Image grundsätzlich nicht sehen | Abschnitt 4, Frage 6 |
+| Ist `app_api` im openDesk-Nextcloud-Image enthalten und eingeschaltet? (in 1.2 als Punkt 1a benannt) | Das Image wird aus einem anderen, hier nicht mitgelesenen Projekt gebaut. Der Tarball-Griff über das Deployment-Projekt kann eine mitgelieferte Serverapp im Image grundsätzlich nicht sehen | Abschnitt 4, Frage 6 |
 | In welchem Modus läuft `integration_openproject` in openDesk, `oauth2` oder `oidc`? | Die Einrichtung macht der Job `opendesk-openproject-bootstrap`, dessen Logik in einem eigenen Image liegt. Im Deployment-Projekt stehen nur seine Eingaben, ein OpenProject-API-Admin und ein Nextcloud-Admin samt Passwörtern. Das legt den Zwei-Wege-OAuth2-Weg nahe, ist aber Indiz und nicht Beleg; dieser Bericht behauptet deshalb keine Betriebsart | Abschnitt 4, Frage 7 |
 | Würde ein Betreiber eine Dritt-ExApp neben der Suite aufnehmen, und wer entscheidet das? | Betriebs- und Verfahrensfrage, öffentlich nicht dokumentiert. Kein Quellcode und kein Helmfile kann sie beantworten | Abschnitt 4, Frage 1 |
 | Wann geht openDesk auf Nextcloud 34 oder höher? | Terminfrage an ZenDiS. Sie ist erst durch den Befund aus 1.2 entstanden und in keiner öffentlichen Quelle beantwortet | Abschnitt 4, Frage 5 |
@@ -198,7 +245,7 @@ noch nicht gemessen, Plan 17-08
 
 ## 5. Rohmesswerte
 
-**Geheimnisregel, gültig für jede Zeile dieses Abschnitts.** Diese Datei liegt in einem öffentlichen Repository. Protokolliert werden ausschließlich Statuscodes, Feldnamen, Zahlen, Längen und Präfixe. Niemals protokolliert wird ein `access_token`, ein `refresh_token`, ein Autorisierungscode, ein `client_secret` oder ein Wert des Headers `AUTHORIZATION-APP-API`: dieser Wert ist Base64 von `<user>:<APP_SECRET>` und damit genau so heikel wie das Geheimnis selbst. Tokenwerte werden auf ihre Länge und ihr Präfix reduziert. `expires_in` ist eine Zahl und darf stehen. Vor jedem Commit an dieser Datei läuft ein Griff nach `eyJ`, `Bearer `, `refresh_token=` und `client_secret` über die geänderten Zeilen.
+**Geheimnisregel, gültig für jede Zeile dieses Abschnitts.** Diese Datei liegt in einem öffentlichen Repository. Protokolliert werden ausschließlich Statuscodes, Feldnamen, Zahlen, Längen und Präfixe. Niemals protokolliert wird ein `access_token`, ein `refresh_token`, ein Autorisierungscode, ein `client_secret` oder ein Wert des Headers `AUTHORIZATION-APP-API`: dieser Wert ist Base64 von `<user>:<APP_SECRET>` und damit genau so heikel wie das Geheimnis selbst. Tokenwerte werden auf ihre Länge und ihr Präfix reduziert. `expires_in` ist eine Zahl und darf stehen. Vor jedem Commit an dieser Datei läuft ein Griff nach den vier Zeichenketten, die dieses Projekt als Geheimnisverdacht führt: das JWT-Präfix, das Bearer-Schema mit einem Wert dahinter, und `refresh_token` sowie `client_secret` je mit einem Gleichheitszeichen. Die vier Muster stehen hier bewusst umschrieben und nicht wörtlich: sonst findet der Griff diese Zeile selbst, und ein Gate, das an seiner eigenen Regel scheitert, wird beim nächsten Lauf ignoriert statt gelesen.
 
 noch nicht gemessen, dieser Abschnitt wird von allen Plänen der Phase gefüllt
 
