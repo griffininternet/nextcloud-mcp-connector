@@ -182,7 +182,7 @@ Les pages liées sont en anglais.
 	]]></description>
 	<version>0.1.10</version>
 	<licence>agpl</licence>
-	<author mail="k.cherif@outlook.de">street1983nk</author>
+	<author mail="admin@infranode.dev">street1983nk</author>
 	<namespace>McpConnector</namespace>
 	<!--
 	  - The order of the elements below is the order info.xsd declares, and it is binding:
