@@ -148,7 +148,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 17-05-PLAN.md , Weg 0 eingerichtet (Zwei-Wege-OAuth2 per Owner-Gate), S1, S2, Capability-Befund und Egress-Kontrollmessung
+- [x] 17-05-PLAN.md , Weg 0 eingerichtet (Zwei-Wege-OAuth2 per Owner-Gate), S1, S2, Capability-Befund und Egress-Kontrollmessung
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -218,7 +218,7 @@ Plans:
 | 14. Doku-Reste und Gate-Entscheid | v1.4 | 2/2 | Complete | 2026-08-27 |
 | 15. Release 0.1.10 | v1.4 | 4/4 | Complete | 2026-08-28 |
 | 16. Release 0.1.11 | v1.5 | 4/4 | Complete | 2026-08-28 |
-| 17. openDesk-Spike | v1.5 | 4/9 | In Progress|  |
+| 17. openDesk-Spike | v1.5 | 5/9 | In Progress|  |
 | 18. Audit-Log Kern | v1.5 | 0/? | Not started | - |
 | 19. Audit-Log Bedienung und Textnachzug | v1.5 | 0/? | Not started | - |
 

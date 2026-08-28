@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
 status: executing
-stopped_at: Completed 17-04-PLAN.md
-last_updated: "2026-08-28T17:57:50.882Z"
+stopped_at: Completed 17-05-PLAN.md
+last_updated: "2026-08-28T18:45:25.408Z"
 last_activity: 2026-08-28
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 13
-  completed_plans: 8
+  completed_plans: 9
   percent: 25
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 17 (openDesk-Spike) — EXECUTING
-Plan: 5 of 9
+Plan: 6 of 9
 Status: Ready to execute
 Last activity: 2026-08-28
 
@@ -171,6 +171,7 @@ Last activity: 2026-08-28
 | Phase 17 P02 | 74 min | 3 tasks | 6 files |
 | Phase 17 P03 | 48 | 3 tasks | 3 files |
 | Phase 17 P04 | 41 min | 3 tasks | 2 files |
+| Phase 17 P05 | 78 | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -635,6 +636,9 @@ Recent decisions affecting current work:
 - [Phase ?]: 17-04: Der Zwei-Konten-Negativbeweis auf Weg 1 ist geführt (D-05): opb 200, opa 404 mit `NotFound`, erfundene Id 999999999 Byte für Byte dieselbe Antwort; zusätzlich auf Projekt- und Listenebene gemessen (total 34 gegen 33), damit ein Listenleck ausgeschlossen ist
 - [Phase ?]: 17-04: Der vorherige `refresh_token` stirbt erst mit dem ersten Gebrauch des neuen `access_token`, nicht mit der Erneuerung und nicht mit der Zeit; mit zwei Ketten gemessen, Belegstelle `previous_refresh_token` in `/app/db/structure.sql:4383`. Als DI-17-02 für OD-04 zurückgestellt, kein Code in dieser Phase (D-12)
 - [Phase ?]: 17-04: OD-02 bleibt Pending, weil dieser Plan Weg 0 mit keinem Wert misst und OD-02 beide Wege nebeneinander verlangt; 17-09 hakt ab
+- [Phase ?]: 17-05: Weg A des Einrichtungswegs ist gemessen nicht gangbar (SSRF-Schutz von OpenProject); gelaufen ist Weg B, Weg A bleibt ungemessen statt verworfen
+- [Phase ?]: 17-05: allow_local_remote_servers=true als dokumentierter Eingriff in die Messumgebung; beide Produkte sperren Loopback in der Vorgabe
+- [Phase ?]: 17-05: OD-02 bleibt Pending, von Weg 0 fehlen S3 bis S6; abgehakt wird es von 17-09
 
 ### Pending Todos
 
@@ -674,8 +678,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-28T17:57:14.640Z
-Stopped at: Completed 17-02-PLAN.md
+Last session: 2026-08-28T18:45:25.391Z
+Stopped at: Completed 17-05-PLAN.md
 Naechster Schritt: 16-02 (sechs Gates lokal grün, Archiv-Probelauf, Proof-Zeilen der Runbook-Schritte 1 bis 3); der Tag v0.1.11 entsteht erst in 16-03 nach ausdrücklicher Owner-Freigabe
 Resume file: None
 
