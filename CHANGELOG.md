@@ -9,14 +9,26 @@ All notable changes to this app are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.11] - 2026-08-28
 
-Text changes that landed after the tag v0.1.10 and therefore wait for the next release. The store reads the manifest only at upload time, so none of them is visible to a store reader yet.
+A release without a code change. The same twenty one tools answer the same questions they
+answered in 0.1.10, and an instance that updates keeps every behaviour it had. What changed is
+text in the manifest, and text is the one kind of change that only a release carries to the
+people who read the store page, because the store reads the manifest at upload time and at no
+other moment.
 
 ### Changed
 
-- The paragraph about reading text written by strangers, in all three store descriptions, is three short sentences instead of four nested ones. It still names the same four things: that an assistant reads foreign text next to your data, that a Talk message is the only direct way out, that an administrator can switch that way off, and that newly created files, cards or rows send nothing to anyone but can land somewhere the account shares.
-- The author contact in the manifest moved from k.cherif@outlook.de to admin@infranode.dev, so the private address leaves the public store entry. The enterprise contact inside the description already moved with 0.1.10; this is the `authors` field the store shows next to it.
+- The paragraph about reading text written by strangers, in all three store descriptions, is
+  three short sentences instead of four nested ones. It still names the same four things: that
+  an assistant reads foreign text next to your data, that a Talk message is the only direct way
+  out, that an administrator can switch that way off, and that newly created files, cards or
+  rows send nothing to anyone but can land somewhere the account shares. The last of those four
+  is one general phrase now, anywhere the account shares, where the longer version listed a
+  folder, a board and a table one by one.
+- The author contact in the manifest moved from k.cherif@outlook.de to admin@infranode.dev, so
+  the private address leaves the public store entry. The enterprise contact inside the
+  description already moved with 0.1.10; this is the `authors` field the store shows next to it.
 
 ## [0.1.10] - 2026-08-28
 
@@ -514,7 +526,7 @@ First release, submitted to the Nextcloud App Store.
   never sees more than that user sees in the web interface.
 - A privacy and data flow description, see [docs/privacy.md](docs/privacy.md).
 
-[Unreleased]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.10...HEAD
+[0.1.11]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.7...v0.1.8
