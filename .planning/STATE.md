@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
 status: executing
-stopped_at: Phase 17 geplant, 9 Pläne, bereit zur Ausführung
-last_updated: "2026-08-28T15:49:24.369Z"
-last_activity: 2026-08-28, Phase 17 (openDesk-Spike) geplant: Kontext mit 12 Entscheidungen, Recherche mit sechs Korrekturbefunden, 9 Pläne in 9 Wellen, Plan-Checker im zweiten Lauf bestanden, Decision-Coverage 12 von 12. Davor: Phase 16 komplett, Release 0.1.11 live im Store
+stopped_at: Completed 17-01-PLAN.md
+last_updated: "2026-08-28T16:02:27.002Z"
+last_activity: 2026-08-28
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 13
-  completed_plans: 4
+  completed_plans: 5
   percent: 25
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Current focus:** v1.5 Vorlauf openDesk, Phasen 16 bis 19 (Release 0.1.11, openDesk-Spike, Audit-Log in zwei Phasen)
+**Current focus:** Phase 17 — openDesk-Spike
 
 ## Current Position
 
-Phase: 17 (openDesk-Spike), geplant und bereit zur Ausführung; Phase 16 (Release 0.1.11) ist komplett, 4 von 4 Plänen, Verification bestanden
-Plan: als nächstes 17-01 (OD-01 rein aus Quellen, ohne Docker), danach 17-02 bis 17-09 seriell in den Wellen 2 bis 9
-Status: Ready to execute. 9 Pläne, 27 Aufgaben, Plan-Checker beim zweiten Lauf bestanden (ein Blocker zur Fallback-Reichweite behoben), Decision-Coverage 12 von 12. Drei blockierende Owner-Gates in 17-03, 17-05 und 17-08. Leitplanken: kein Produktionscode, src/ unberührt, keine gemietete Infrastruktur, gepinnte Bildmarken, "ungemessen" ist ein zulässiges Ergebnis
-Last activity: 2026-08-28, Phase 17 geplant (Kontext mit 12 Entscheidungen, Recherche mit den Korrekturbefunden K1 bis K6, 9 Pläne). Davor: Phase 16 abgeschlossen, Release 0.1.11 live im Store (Store-POST 201 um 09:46:55Z)
+Phase: 17 (openDesk-Spike) — EXECUTING
+Plan: 2 of 9
+Status: Ready to execute
+Last activity: 2026-08-28
 
 ## Performance Metrics
 
@@ -167,6 +167,7 @@ Last activity: 2026-08-28, Phase 17 geplant (Kontext mit 12 Entscheidungen, Rech
 | Phase 16-release-0-1-11 P01 | 7 min | 2 tasks | 8 files |
 | Phase 16-release-0-1-11 P02 | 11 min | 2 tasks | 1 files |
 | Phase 16-release-0-1-11 P03 | 9 min | 3 tasks | 1 files |
+| Phase 17-opendesk-spike P01 | 18 min | 3 tasks tasks | 1 file files |
 
 ## Accumulated Context
 
@@ -611,6 +612,9 @@ Recent decisions affecting current work:
 - [Phase 15-release-0-1-10]: Plan 15-03: die Changelog-Kopfzeile 2026-08-28 blieb vor dem Tag unangetastet, weil das Datum der Tag-Tag sein muss und der Tag wegen der ausstehenden Freigabe fruehestens am 2026-08-28 entstehen konnte; er entstand um 04:50Z
 - [Phase 15-release-0-1-10]: Plan 15-03: das veroeffentlichte Asset misst 46973 Bytes gegen die 47299 des lokalen Baus; Plan 15-04 signiert die heruntergeladenen Bytes unter https://github.com/street1983nk/nextcloud-mcp-connector/releases/download/v0.1.10/mcp_connector-0.1.10.tar.gz
 - [Phase 16]: Der Changelog-Block trägt die Kopfzeile ## [0.1.11] - 2026-08-28. Lokal (10:35 Europe/Berlin) und in UTC (08:35Z) derselbe Kalendertag; Plan 16-03 prüft die Zeile vor dem Tag erneut, weil ein Release-Notes-Datum im signierten Asset unveränderlich ist
+- [Phase 17]: die Kubernetes-Aussage von OD-01 wird in der korrigierten Fassung geführt: nicht 'AppAPI kann kein Kubernetes', sondern auf app_api 33 existiert kubernetes-install nicht (KubernetesActions.php HTTP 404) und auf app_api 34 existiert es (HTTP 200, DEPLOY_ID Zeile 37, über HaRP); damit ist OD-01 eine Terminfrage an ZenDiS und keine Absage
+- [Phase 17]: Versionspin und Kubernetes-Hürde sind dieselbe Hürde und fallen mit demselben Schritt (openDesk auf Nextcloud 34 oder höher); die Zielumgebung 33.0.7 gilt als ungetestet, nicht als unzulässig, weil appinfo/info.xml Zeile 235 min-version 32 bis max-version 34 erlaubt, alle Nachweise dieses Projekts aber auf 34.0.x stehen
+- [Phase 17]: die Betriebsart von integration_openproject in openDesk bleibt unbehauptet (der Bootstrap-Job ist Indiz, nicht Beleg) und geht als Frage 7 an den ISV-Call; die Formulierung 'manual-install ist ausdrücklich für Entwicklung' wird nicht geführt, weil sie auf der heutigen Nextcloud-Doku-Seite nicht mehr auffindbar ist
 
 ### Pending Todos
 
@@ -650,10 +654,10 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-28T14:27:03.063Z
-Stopped at: Phase 17 context gathered
+Last session: 2026-08-28T16:02:26.983Z
+Stopped at: Completed 17-01-PLAN.md
 Naechster Schritt: 16-02 (sechs Gates lokal grün, Archiv-Probelauf, Proof-Zeilen der Runbook-Schritte 1 bis 3); der Tag v0.1.11 entsteht erst in 16-03 nach ausdrücklicher Owner-Freigabe
-Resume file: .planning/phases/17-opendesk-spike/17-CONTEXT.md
+Resume file: None
 
 ## Operator Next Steps
 
