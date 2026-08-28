@@ -5,9 +5,9 @@
 **Nextcloud:** 33.0.7 (Build 33.0.7.1), gelesen mit `occ status` am 2026-08-28 aus der Messumgebung dieser Phase
 **AppAPI:** `app_api` 33.0.0, gelesen mit `occ app:list` derselben Instanz (mitgelieferte Serverapp, nicht aus dem App Store)
 **Diese ExApp:** 0.1.11, gelesen mit `occ app_api:app:list`, gleich der Fassung in `appinfo/info.xml`
-**`integration_openproject`:** in dieser Instanz nicht installiert, noch nicht gemessen (Plan 17-03)
+**`integration_openproject`:** in dieser Instanz nicht installiert, noch nicht gemessen (Plan 17-05)
 **`user_oidc`:** noch nicht gemessen (Plan 17-07)
-**OpenProject:** noch nicht gemessen (Plan 17-03)
+**OpenProject:** 17.7.2 (Community-Bildmarke `openproject/openproject:17.7.2`, Digest `sha256:19a828d6`, Image erstellt am 2026-08-13, gelesen mit `docker image inspect`). Die Instanz nennt dieselbe Fassung selbst: `MAJOR = 17`, `MINOR = 7`, `PATCH = 2` in `/app/lib/open_project/version.rb` des laufenden Containers. Die `coreVersion` aus `GET /api/v3` fehlt hier noch: der Aufruf antwortet unauthentifiziert mit 401 und wird nach der Anmeldung in Plan 17-03, Task 2 nachgetragen
 **Keycloak:** noch nicht gemessen (Plan 17-07)
 **Deploy-Daemon:** HaRP, gemessen als `harp_proxy_docker` mit Deploy-ID `docker-install` und `NC Url http://caddy`. Die Bildmarke `ghcr.io/nextcloud/nextcloud-appapi-harp:release` ist gleitend, deshalb steht hier die gelaufene Fassung als Digest und nicht als Tag: `sha256:3b335650`, Image erstellt am 2026-08-14, gelesen mit `docker image inspect`
 **Scope:** gemessen wird zweierlei: erstens die Installierbarkeit dieser App in einer openDesk-Umgebung, ausschließlich aus öffentlich ladbaren Quellen an festen Tags, zweitens die beiden Zugriffswege auf die Nutzeridentität gegen OpenProject, lokal in Docker mit gepinnten Fassungen. Ausdrücklich nicht gemessen wird: kein Kubernetes-Cluster wird beschafft, keine openDesk-Installation wird versucht, und es entsteht kein Produktionscode. Die Werkzeugoberfläche und das Budget-Gate der ausgelieferten App stehen in dieser Phase still.
@@ -299,7 +299,50 @@ noch nicht gemessen, Plan 17-08
 
 **Geheimnisregel, gültig für jede Zeile dieses Abschnitts.** Diese Datei liegt in einem öffentlichen Repository. Protokolliert werden ausschließlich Statuscodes, Feldnamen, Zahlen, Längen und Präfixe. Niemals protokolliert wird ein `access_token`, ein `refresh_token`, ein Autorisierungscode, ein `client_secret` oder ein Wert des Headers `AUTHORIZATION-APP-API`: dieser Wert ist Base64 von `<user>:<APP_SECRET>` und damit genau so heikel wie das Geheimnis selbst. Tokenwerte werden auf ihre Länge und ihr Präfix reduziert. `expires_in` ist eine Zahl und darf stehen. Vor jedem Commit an dieser Datei läuft ein Griff nach den vier Zeichenketten, die dieses Projekt als Geheimnisverdacht führt: das JWT-Präfix, das Bearer-Schema mit einem Wert dahinter, und `refresh_token` sowie `client_secret` je mit einem Gleichheitszeichen. Die vier Muster stehen hier bewusst umschrieben und nicht wörtlich: sonst findet der Griff diese Zeile selbst, und ein Gate, das an seiner eigenen Regel scheitert, wird beim nächsten Lauf ignoriert statt gelesen.
 
-noch nicht gemessen, dieser Abschnitt wird von allen Plänen der Phase gefüllt
+Die übrigen Unterabschnitte werden von den Plänen 17-04 bis 17-09 gefüllt.
+
+### 5.1 Stufe B: der erste Start von OpenProject 17.7.2
+
+Gemessen am 2026-08-28 in der Topologie `compose.spike-opendesk.yml`, Profil `op`.
+
+**Behauptung, die geprüft wurde (aus der Recherche, nicht aus der Instanz):** der erste Start dauert 30 bis 90 Minuten, davon meist Warten, und OpenProject allein braucht mindestens 4 GB Hauptspeicher. Beide Zahlen sind in 17-RESEARCH.md als Erwartung geführt, die eine aus der Fehlerbildtabelle von Pitfall 1, die andere aus den Systemanforderungen von openproject.org.
+
+**Messweg:** `docker compose -f compose.spike-opendesk.yml --profile op up -d openproject`, danach alle 20 Sekunden `curl` auf `http://op.localtest.me:8082/login` zusammen mit `docker inspect -f '{{.State.Status}}:{{.State.OOMKilled}}:{{.State.ExitCode}}'`, bis der erste Aufruf 200 antwortet oder der Container endet. Zeitmarken aus `docker logs -t`, Speicher aus `docker stats --no-stream`, freier Speicher der WSL2-VM aus `free -m` in einem Wegwerfcontainer.
+
+| Messwert | Ergebnis |
+|----------|----------|
+| Container gestartet | 2026-08-28 16:42:37 UTC (`docker inspect -f '{{.State.StartedAt}}'`) |
+| erste 200 auf `/login` | 16:44:14 UTC, also **95 Sekunden** nach der ersten Logzeile, nicht 30 bis 90 Minuten |
+| Speicher des Containers nach dem Start | **1,964 GiB** von 7,603 GiB, 25,83 Prozent, nicht die erwarteten mindestens 4 GB |
+| verfügbarer Speicher der WSL2-VM danach | 4036 MiB von 7785 MiB total |
+| OOM-Killer | `OOMKilled: false`, `ExitCode: 0`, kein Neustart, kein zweiter Versuch |
+| Platz | 925 GiB frei im Dateisystem der VM, die 20 GB der Systemanforderungen sind keine Grenze |
+| Bildmarke | `openproject/openproject:17.7.2`, Digest `sha256:19a828d66e7c23322d1fbbaa974e7b712ef03c2badf1b10466ca45710e6bbbe5`, 882512785 Bytes, erstellt 2026-08-13 |
+
+**Gegenprobe, ohne die die 95 Sekunden nichts wert wären:** eine 200 auf `/login` könnte auch von einem noch nicht fertig aufgesetzten Rails kommen, das die Seite schon ausliefert, während die Seed-Phase weiterläuft. Drei Belege dagegen, alle aus demselben Lauf:
+
+* Die vier Aufrufe vor dem letzten antworteten 502, 502, 502 und 503. Die 200 ist also der Übergang und nicht der Anfangszustand.
+* Die Seed-Phase steht namentlich und abgeschlossen im Log: die Reihe `*** Loading <modul> seed data` bis `*** Seeding data from environment variables`, und zwar **vor** der Zeile `=> Booting Puma`. Danach `Worker 0` und `Worker 1 ... booted`, beide um 16:44:13 UTC.
+* Die eingebaute Datenbank der All-in-one-Bildmarke läuft im selben Container: `listening on IPv4 address "0.0.0.0", port 5432` um 16:43:38 UTC. Ein Rails mit halb gefüllter Datenbank hätte die Seed-Reihe nicht zu Ende geschrieben.
+
+**Einordnung, damit die Zahl nicht überdehnt wird:** gemessen ist der erste Start dieser Bildmarke auf diesem Rechner, mit leeren Bänden und ohne Last. Die Zahl widerlegt die Systemanforderung von openproject.org nicht, denn die gilt für eine benutzte Instanz mit mehreren Nutzern; sie widerlegt nur die Annahme, dass dieser Aufbauschritt hier eine Stunde kostet und am Speicher dieser WSL2-VM scheitert. Das aus 17-02 mitgeführte Speicherrisiko ist damit für Stufe B **nicht eingetreten**: es war keine `.wslconfig` nötig, kein `wsl --shutdown`, und die Container der beiden fremden Projekte auf diesem Rechner liefen durch.
+
+### 5.2 Die Namensfalle, in beide Richtungen gemessen
+
+**Behauptung:** `op.localtest.me:8082` ist ein Name, der aus dem Browser des Entwicklers und aus dem Nextcloud-Container an dieselbe Instanz führt. Ohne das ist Weg 0 nicht einrichtbar, weil `integration_openproject` OpenProject aus dem Nextcloud-Container heraus unter genau der Adresse aufruft, die ein Mensch in `openproject_instance_url` eingetragen hat.
+
+| Messweg | Messwert |
+|---------|----------|
+| `curl` vom Host auf `http://op.localtest.me:8082/login` | 200 |
+| `curl` aus dem Nextcloud-Container auf denselben Namen | 200 |
+| dieselbe Anfrage aus dem Container mit `%{remote_ip}` | `172.29.43.10`, die feste Adresse von Caddy in dieser Topologie |
+| `curl` aus dem Container auf `http://127.0.0.1:8082/login` | scheitert, `curl: (7) Failed to connect`, Code `000` |
+| veröffentlichte Ports des Dienstes `openproject` | keine, `docker port` antwortet leer |
+| Bindung des Zugangs | `8082/tcp` auf `127.0.0.1:8082` am Caddy-Dienst, keine andere Adresse |
+
+**Gegenprobe:** die zwei gleichlautenden 200 allein beweisen noch nicht, dass der `extra_hosts`-Eintrag die Arbeit tut; sie könnten auch von einer öffentlichen Auflösung von `localtest.me` kommen. Die vierte Zeile schließt das aus: `127.0.0.1:8082` bedeutet im Nextcloud-Container der Container selbst, und dort hört nichts. Die dritte Zeile nennt die Adresse, die tatsächlich benutzt wurde, und es ist die aus `extra_hosts`.
+
+**Ein Fund, der für Plan 17-05 zählt.** `getent hosts op.localtest.me` antwortet im Nextcloud-Container mit `::1` und nicht mit `172.29.43.10`: `localtest.me` hat einen öffentlichen AAAA-Eintrag auf die IPv6-Loopbackadresse, und ein Aufruf, der IPv6 bevorzugt, landet damit im Container selbst statt bei Caddy. Der `extra_hosts`-Eintrag ist ein reiner IPv4-Eintrag, und `getent ahostsv4` liefert entsprechend `172.29.43.10`. Gemessen ist, dass der Aufrufer, auf den es ankommt, die IPv4-Adresse nimmt: derselbe Aufruf durch die PHP-Erweiterung `curl` desselben Containers, also durch den Weg, den `integration_openproject` geht, meldet `php_remote_ip=172.29.43.10` und Code 200. Sollte in 17-05 ein Aufruf von Nextcloud aus dennoch ins Leere laufen, ist dieser AAAA-Eintrag die erste Stelle, an der zu schauen ist, und nicht die Caddy-Regel.
 
 ## Was diese Messung nicht beweist
 
