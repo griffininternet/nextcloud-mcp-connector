@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.4
-milestone_name: Pflege und 0.1.10
-status: Awaiting next milestone
-stopped_at: Plan 15-03 abgeschlossen (Tag v0.1.10 nach Owner-Freigabe, Workflow gruen, Asset am Release)
-last_updated: "2026-08-28T06:26:27.770Z"
-last_activity: 2026-08-28 — Milestone v1.4 completed and archived
+milestone: v1.5
+milestone_name: Vorlauf openDesk
+status: planning
+last_updated: "2026-08-28T06:40:09.838Z"
+last_activity: 2026-08-28
 progress:
-  total_phases: 2
-  completed_phases: 2
-  total_plans: 6
-  completed_plans: 6
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 
 ## Current Position
 
-Phase: Milestone v1.4 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-08-28 — Milestone v1.4 completed and archived
+Status: Defining requirements
+Last activity: 2026-08-28 — Milestone v1.5 started
 
 ## Performance Metrics
 

@@ -8,9 +8,16 @@ Ein schlankes MCP-only-ExApp für Nextcloud: Nutzer installieren es per Klick au
 
 Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
 
-## Current Milestone
+## Current Milestone: v1.5 Vorlauf openDesk
 
-Kein aktiver Milestone. v1.4 "Pflege und 0.1.10" shipped 2026-08-28 (Audit passed 4/4). Drei Textänderungen warten im `[Unreleased]`-Block des Changelogs auf ein Release 0.1.11. Der größere Schnitt (Mail-Entwürfe, Talk-Threads, v2.0 openDesk) fällt nach dem ISV-Call am 14.09. und der Enterprise-Signal-Auswertung ab Oktober.
+**Goal:** Den offenen Textrest als Release 0.1.11 ausliefern und die openDesk-Frage vor dem ISV-Call am 14.09. belegbar machen, ohne den großen v2.0-Schnitt vorwegzunehmen.
+
+**Target features:**
+- Release 0.1.11 mit den Textänderungen aus dem `[Unreleased]`-Block: gekürzter Trifecta-Absatz samt Teilen-Formulierung, Autorenkontakt admin@infranode.dev im Manifest
+- Zeitboxierter openDesk-Spike auf OpenProject: Auth-Modell, API-Zugang, Machbarkeit innerhalb der ExApp-Architektur, dazu eine Fragenliste für den ISV-Call
+- Audit-Log über jeden Tool-Aufruf als erster Enterprise-Baustein, der unabhängig von openDesk trägt
+
+**Key context:** Der Enterprise-Abschnitt in READMEs und Store-Beschreibung nennt Audit-Log, Gruppen-Policies und SSO ausdrücklich als geplant und heute in keiner Form vorhanden. Sobald das Audit-Log existiert, muss dieser Text mitziehen, sonst wird eine wahre Aussage falsch. Tag und Store-Upload nur nach ausdrücklicher Owner-Freigabe. Der große Schnitt (Mail-Entwürfe, Talk-Threads, v2.0 openDesk in voller Breite) bleibt nach dem ISV-Call und der Enterprise-Signal-Auswertung ab Oktober.
 
 ## Current State
 
@@ -31,7 +38,8 @@ BL-12 MUCGPT-Verprobung wartet auf it@M-Antwort).
 
 ## Next Milestone Goals
 
-Kandidaten:
+Kandidaten nach v1.5:
+- openDesk in der Breite (v2.0): die im Spike nicht angefassten Komponenten (XWiki, Matrix, OX), Gruppen-Policies, ZenDiS-Kanal
 - Mail-Entwürfe (create draft, nie Senden; Trigger Store-Feedback), Talk-Threads (capability-gated), Mail-Deep-Link-Auflösung (RFC-Message-Id zu databaseId, erst nach Messung)
 - MUCGPT/F13/BaerGPT live verproben, sobald externer Zugang besteht (deferred CLIENT-01..03, Protokoll in docs/client-setup.md)
 - Enterprise-Signale auswerten (Fake-Door seit 0.1.9 live; Go: >=5 qualifizierte Org-Signale in 6 Wochen oder 1 Ankerkunde; Kriterium lokal beim Owner) und ISV-Call 14.09. einarbeiten
@@ -147,4 +155,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-28 after v1.4 milestone*
+*Last updated: 2026-08-28 at the start of milestone v1.5*
