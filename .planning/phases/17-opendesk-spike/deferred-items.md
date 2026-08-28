@@ -41,3 +41,32 @@ an zwei Stellen.
 **Vorgeschlagene Behandlung:** eine Frage in Plan 17-08 (Fragenliste OD-03) und ein Absatz in
 Plan 17-09 unter "Was diese Messung nicht beweist". Eine eigene Messung ist in dieser Phase
 **nicht** vorgesehen und würde den Stufenschnitt aus Pitfall 1 aufweichen.
+
+## DI-17-02: Der vorherige `refresh_token` stirbt erst mit dem ersten Gebrauch des neuen `access_token`
+
+**Gefunden:** 2026-08-28, Plan 17-04, Task 2, bei der zweiten Gegenprobe zur Erneuerung.
+
+**Gemessen und im Bericht in Abschnitt 2.2 belegt:** ein bereits eingelöster `refresh_token` liefert
+beim Wiedergebrauch **200** und ein weiteres vollständig gültiges Tokenpaar, solange das aus ihm
+entstandene `access_token` noch nie benutzt wurde. Zwei Ketten, unmittelbar hintereinander im selben
+Lauf und damit ohne Zeitunterschied: Kette A benutzt das neue `access_token` einmal, danach ist der
+alte `refresh_token` **400 invalid_grant**; Kette B benutzt es nicht, danach liefert derselbe alte
+Wert **200**. Der passende Beleg aus der laufenden Instanz ist die Spalte `previous_refresh_token` auf
+`oauth_access_tokens` (`/app/db/structure.sql:4383`).
+
+**Warum das hier steht und nicht als Aufgabe:** Der Befund ist eine Eigenschaft von OpenProject und
+verlangt in dieser Phase keine Zeile Code (D-12). Er ist aber eine Vorgabe für den Client, der in
+**OD-04** entsteht, und zwar in zwei Richtungen.
+
+1. **Wer erneuert, muss das neue `access_token` auch benutzen.** Ein Client, der auf Vorrat erneuert
+   und das Ergebnis wegwirft, sammelt gültige Tokenpaare an, ohne dass eines der alten entwertet wird.
+   Wer nach der Erneuerung sofort einen Aufruf mit dem neuen Token macht, schließt das von selbst.
+2. **Ein Wiederholungsversuch nach einer verlorenen Antwort ist ungefährlich.** Genau dafür ist die
+   aufgeschobene Entwertung gedacht, und das ist die gute Nachricht in diesem Befund: ein Client, dem
+   die Antwort auf die Erneuerung verloren geht, darf sie mit demselben Wert wiederholen.
+
+**Nicht gemessen:** ob es eine obere Zeitgrenze für den alten `refresh_token` gibt, und ob openDesk
+diese Doorkeeper-Einstellung mitbringt oder abweicht. Beides ist **ungemessen** und keine Vermutung.
+
+**Vorgeschlagene Behandlung:** ein Satz in Plan 17-09 unter Abschnitt 3 (API-Form, Vorarbeit für
+OD-04). Keine Frage für den ISV-Call, weil sie nicht ZenDiS betrifft, sondern OpenProject.
