@@ -284,6 +284,21 @@ Datei.
 kein Nebensatz: er ist vor der Einrichtung von Weg 0 aufgenommen, damit die 401 aus S2 später nicht mit
 "die Einrichtung war noch nicht fertig" verwechselt werden kann.
 
+#### Der Einrichtungsweg: noch offen, und der Grund ist gemessen
+
+Die Recherche nennt zwei Einrichtungswege, Weg A über den Ablagen-Assistenten von OpenProject (der Weg
+des openDesk-Bootstrap-Jobs, deshalb der mit der höheren Übertragbarkeit) und Weg B über
+`occ config:app:set` plus den persönlichen Durchlauf je Konto. **Weg A ist in dieser Topologie
+gemessen nicht gangbar**, und der Grund liegt nicht bei Nextcloud und nicht bei der Erreichbarkeit,
+sondern beim SSRF-Schutz von OpenProject: `safe_ip?` weist alle vier Namen ab, unter denen Nextcloud
+hier zu erreichen wäre, die Erlaubnisliste ist leer, und der Schlüssel dafür ist in der Oberfläche
+nicht setzbar. Die vollständige Messung samt Gegenprobe steht in 5.4.
+
+Welcher Weg gelaufen ist, steht hier, sobald er gelaufen ist. Solange diese Zeile steht, ist die
+Einrichtung von Weg 0 `noch nicht gemessen, Plan 17-05, Entscheidung des Owners offen (siehe 5.4)`,
+und S2 bis S6 tragen deshalb noch keinen Wert. S1 ist davon unabhängig, weil die Route für S1 keine
+Vorprüfung fährt (K3) und damit auch ohne eingerichtete App messbar ist.
+
 ### 2.2 Weg 1: PKCE, `expires_in`, Erneuerung ohne Browsersitzung, Zwei-Konten-Negativbeweis
 
 **Gemessen am 2026-08-28 (D-04, voller Consent-Fluss), lokal gegen die laufende Instanz OpenProject
@@ -729,6 +744,116 @@ Dieser Absatz ist zugleich die Stelle, an die der Griff aus Pitfall 2 gehört. E
 1. **Das Seed-Passwort `admin` wurde von der Instanz abgelehnt.** Der Owner konnte sich mit der dokumentierten Vorgabe `admin`/`admin` nicht anmelden: `User.check_password?` war falsch, `failed_login_count` stand auf 6, `force_password_change` auf true, das Konto war **nicht** gesperrt. Aufgelöst wurde es, indem das Passwort des Benutzers `admin` per `rails runner` auf den Wert in `OP_ADMIN_PASSWORD` gesetzt, `force_password_change` auf false und `failed_login_count` auf 0 gestellt wurde. **Warum das Seed-Passwort abwich, ist nicht untersucht** und steht hier als offener Punkt und nicht als Vermutung. Der erzwungene Passwortwechsel hat damit nicht stattgefunden; für die Messungen dieser Phase ist das ohne Folge, weil keiner der beiden Wege am Passwort des Administrators hängt.
 2. **Nebenbefund aus derselben Stelle, belegbar:** die Passwortregeln dieser Fassung verlangen alle vier Zeichenklassen. Die Fehlermeldung lautet wörtlich `Password Must include characters of the following types: lowercase, uppercase, numeric, special`. Die beiden Wegwerfpasswörter der Konten `opa` und `opb` sind 20 Zeichen lang und enthalten alle vier Klassen; die Regel ist damit der Grund für ihre Form und keine Zierde.
 3. **`OPENPROJECT_DEFAULT__LANGUAGE=en` regiert das Seed-Konto nicht.** Gemessen an `GET /api/v3/users`: `admin` trägt `language de`, die beiden in diesem Plan angelegten Konten tragen `language en`. Für die Messungen ist das ohne Folge, weil sie unter `opa` und `opb` laufen und die Feldnamen der API v3 ohnehin englisch sind. Wer in einem Folgeplan eine Beschriftung aus der Oberfläche abliest, muss aber wissen, unter welchem Konto er sie abliest.
+
+### 5.4 Warum der dokumentierte Einrichtungsweg von Weg 0 in dieser Topologie nicht gangbar ist
+
+**Behauptung:** Der Zwei-Wege-Weg über den Ablagen-Assistenten von OpenProject (Weg A der Recherche,
+derselbe Weg, den der openDesk-Bootstrap-Job geht) lässt sich in diesem Loopback-Aufbau nicht gehen,
+und zwar nicht wegen fehlender Erreichbarkeit, sondern wegen des SSRF-Schutzes von OpenProject.
+
+Diese Messung ist vor dem ersten Klick entstanden, weil die Alternative gewesen wäre, dem Owner eine
+Anweisung vorzulegen, die an der ersten Eingabe scheitert.
+
+**Messweg 1, die Rückrichtung überhaupt.** Aus dem laufenden OpenProject-Container gegen die vier
+Namen, unter denen Nextcloud in dieser Topologie zu erreichen wäre, je `curl -4` mit
+`%{http_code}` und `%{remote_ip}`:
+
+| Aufruf aus dem OpenProject-Container | Messwert |
+|--------------------------------------|----------|
+| `http://127.0.0.1:8091/status.php` | `code=000`, keine Adresse: im Container ist das der Container selbst, dort hört nichts |
+| `http://caddy/status.php` | `code=200`, `remote_ip=172.29.43.10`, die feste Adresse von Caddy |
+| `http://nextcloud/status.php` | `code=200`, `remote_ip=172.29.43.129`, Nextcloud direkt |
+| `http://op.localtest.me:8082/login` | `code=000`: der `extra_hosts`-Eintrag steht nur im Nextcloud-Container, nicht hier |
+
+Der Wert, den die Anweisung des Plans in das Feld Host schreiben wollte, ist `http://127.0.0.1:8091`,
+und das ist genau die Zeile mit `code=000`. Das ist die Namensfalle aus 5.2, gemessen in der
+**Gegenrichtung**: 5.2 hat sie für Nextcloud zu OpenProject aufgelöst, für OpenProject zu Nextcloud ist
+sie offen.
+
+**Messweg 2, der eigentliche Grund.** `NextcloudCompatibleHostValidator` der laufenden Fassung 17.7.2
+prüft den Host in drei Schritten, und der erste ist kein Netzaufruf:
+
+```ruby
+# /app/modules/storages/app/validator/nextcloud_compatible_host_validator.rb:48-53
+def host_allowed?(contract, attribute, value)
+  host = URI.parse(value).host
+  return false if host.blank?
+  return true if OpenProject::SsrfProtection.safe_ip?(host)
+
+  contract.errors.add(attribute, :ssrf_filtered)
+```
+
+```ruby
+# /app/lib/open_project/ssrf_protection.rb:158-169
+def allowed_ip_address?(ip_address)
+  OpenProject::Configuration.ssrf_protection_ip_allowlist.any? { |addr| addr.include? ip_address }
+end
+...
+def unsafe_ip_address?(ip_address)
+  return false if allowed_ip_address?(ip_address)
+```
+
+Gemessen mit `rails runner` in derselben laufenden Instanz, also nicht aus dem Quelltext geschlossen,
+sondern an ihm ausgeführt. `safe_ip?` gibt die Adresse zurück, wenn sie zulässig ist, und `nil`, wenn
+nicht:
+
+```
+allowlist = []
+safe_ip?("127.0.0.1")       = nil
+safe_ip?("caddy")           = nil
+safe_ip?("nextcloud")       = nil
+safe_ip?("op.localtest.me") = nil
+safe_ip?("localhost")       = nil
+Resolv::DNS "caddy"         = ["172.29.43.10"]
+```
+
+**Alle fünf Namen sind unzulässig, und die Erlaubnisliste ist leer.** Der Grund steht in der
+Beschreibung des Schlüssels `ssrf_protection_ip_allowlist` in
+`/app/config/constants/settings/definition.rb:1221-1266`, die die vom Gem `ssrf_filter` gesperrten
+Bereiche wörtlich aufzählt: `127.0.0.0/8` sperrt die Loopback-Adresse und `172.16.0.0/12` das Netz
+`172.29.43.0/24` dieser Topologie. Die letzte Zeile der Messung zeigt, dass auch der Dienstname nicht
+hilft: er löst nach `172.29.43.10` auf, und diese Adresse liegt in genau dem gesperrten Bereich.
+
+**Gegenprobe, ohne die der Befund auf Erreichbarkeit geschoben werden könnte.** Die zwei Netzaufrufe,
+die der Validator **nach** dem Namenscheck führen würde, sind einzeln gefahren, aus dem
+OpenProject-Container gegen `http://caddy`, und **beide gelingen**:
+
+| Validator-Aufruf | Erwartung des Validators | Messwert |
+|------------------|--------------------------|----------|
+| `GET /ocs/v2.php/cloud/capabilities` (Zeile 73), `Ocs-Apirequest: true` | 2xx, `ocs.data.version.major` mindestens 22 (Zeile 31) | **200**, `version.major = 33`, und der Abschnitt `integration_openproject` steht darin |
+| `GET /index.php/apps/integration_openproject/check-config` (Zeile 101), `Authorization: Bearer TESTBEARERTOKEN` (Zeile 32) | 2xx, und der Kopf muss unverändert zurückkommen | **200**, Körper wörtlich `{"user_id":"","authorization_header":"Bearer TESTBEARERTOKEN"}` |
+
+Damit ist gemessen, dass diese Instanz die zwei fachlichen Bedingungen erfüllt: sie ist ein Nextcloud
+33, die App ist installiert, und die Weiterleitungsfalle aus dem Kommentar des Validators
+(`op_application_not_installed` bei einer 3xx, weil Apache den `Authorization`-Kopf ohne
+`mod_rewrite` verschluckt) greift hier **nicht**. Der einzige Grund, an dem der Assistent scheitert,
+ist der Namenscheck davor.
+
+**Was daran gemessen ist und was nicht.** Gemessen ist die Antwort von `safe_ip?` für fünf Namen, die
+leere Erlaubnisliste, die vier Erreichbarkeitswerte und die zwei Validator-Antworten. **Nicht
+beobachtet** ist die Fehlermeldung des Assistenten in der Oberfläche: dass aus `:ssrf_filtered` eine
+Abweisung des Formulars wird, ist an den Zeilen 48 bis 53 der installierten Fassung gelesen und nicht
+im Browser gesehen. Der Bericht behauptet deshalb nicht, wie die Meldung lautet, sondern nur, welchen
+Wert die Prüfung liefert, die zu ihr führt.
+
+**Der Schlüssel ist nicht in der Oberfläche setzbar.** `ssrf_protection_ip_allowlist` trägt in
+derselben Datei `writable: false`, `default: ""` und `env_alias: "SSRF_PROTECTION_IP_ALLOWLIST"`. Ein
+Administrator kann ihn also nicht in OpenProject eintragen; er kommt aus der Umgebung des Prozesses,
+und das heißt in dieser Topologie: der Container muss mit einer zusätzlichen Umgebungsvariablen neu
+erzeugt werden.
+
+**Was das über openDesk sagt, und was nicht.** Über openDesk sagt es nichts Gemessenes. Die
+naheliegende Erklärung, warum der Bootstrap-Job dort denselben Weg gehen kann, ist, dass Nextcloud in
+einem Cluster unter einem öffentlichen Namen mit einer routbaren Adresse steht und der Schutz dort
+nicht greift; ob openDesk zusätzlich eine Erlaubnisliste setzt, ist in dieser Phase **ungemessen** und
+steht nicht im Deployment-Projekt, das für Abschnitt 1 gelesen wurde. Dieser Absatz ist eine
+Einordnung und kein Befund, und er ist als solcher gekennzeichnet, weil ein Satz ohne diese
+Kennzeichnung wie eine Aussage über eine Behördeninstallation liest (Pitfall 3).
+
+**Folge für die Einrichtung.** Weg A ist damit nicht ohne einen Eingriff in die Messumgebung gangbar,
+und Weg B, der Handweg über `occ config:app:set` plus den persönlichen Durchlauf je Konto, ist der Weg
+ohne Eingriff. Welcher der beiden genommen wurde, steht in 2.1; die Entscheidung liegt beim Owner, weil
+sie die Übertragbarkeit der Weg-0-Messung auf openDesk verändert und nicht nur den Aufwand.
 
 ## Was diese Messung nicht beweist
 
