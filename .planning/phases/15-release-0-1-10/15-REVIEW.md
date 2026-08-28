@@ -80,6 +80,8 @@ Ein `<structural_findings>`-Block wurde nicht übergeben, deshalb entfällt der 
 
 ### WR-01: Vierter Nachweis von Runbook-Schritt 8 wurde durch eine lokale Git-Abfrage ersetzt
 
+**Status:** FIXED in `901b294`
+
 **File:** `docs/store-submission.md:153` (Regel gegen `docs/store-submission.md:287-297`)
 **Issue:** Schritt 8 des eigenen Runbooks verlangt vier Nachweise, der vierte ist wörtlich
 `https://ghcr.io/v2/street1983nk/mcp_connector/tags/list  # every released tag` (Zeile 296). Die
@@ -113,6 +115,8 @@ which is not the registry check of step 8" ersetzen oder ganz streichen.
 
 ### WR-02: Die Adresse, die dieses Release entfernen sollte, wird vom Store weiter veröffentlicht
 
+**Status:** OWNER-ENTSCHEID OFFEN. Die `<author mail=...>`-Adresse ist die Store-Konto-Identität; ob sie ebenfalls auf admin@infranode.dev wechselt, entscheidet der Owner. Bis dahin bleibt sie unverändert.
+
 **File:** `appinfo/info.xml:185`, Anspruch in `CHANGELOG.md:20-22`
 **Issue:** Der Changelog-Block sagt: "the contact address in it moved from k.cherif@outlook.de to
 admin@infranode.dev". Das Manifest trägt aber unverändert
@@ -144,6 +148,8 @@ mit in die Zählung nehmen, sonst wiederholt sich die Lücke bei jedem Release.
 
 ### WR-03: Der gekürzte Trifecta-Absatz nennt einen falschen Restweg
 
+**Status:** FIXED in `901b294`
+
 **File:** `appinfo/info.xml:68` (EN), `appinfo/info.xml:113` (DE), `appinfo/info.xml:160` (FR)
 **Issue:** Die Kürzung `b3267cd` ersetzt "they can land in a folder, board or table that is shared
 with other people" durch "they can land in a shared folder". Eine Deck-Karte landet in einem Board,
@@ -166,6 +172,8 @@ Da `b3267cd` ohnehin erst mit 0.1.11 in den Store fährt, kostet die Korrektur k
 Release.
 
 ### WR-04: Die Manifest-Änderung nach dem Tag ist in keiner der geprüften Dateien festgehalten
+
+**Status:** FIXED in `901b294`
 
 **File:** `CHANGELOG.md:12-37`, `docs/store-submission.md:146-153`, `appinfo/info.xml:68,113,160`
 **Issue:** `b3267cd` ändert `appinfo/info.xml` nach dem Tag `v0.1.10` (`156280f`). Damit weicht das
@@ -201,6 +209,8 @@ Zusätzlich eine datierte Zeile in `docs/store-submission.md`, die festhält, da
 Repository seit `b3267cd` bewusst von der veröffentlichten 0.1.10-Kopie abweicht.
 
 ### WR-05: Der Changelog behauptet eine Deutlichkeit, die die gekürzten Texte nicht mehr haben
+
+**Status:** FIXED in `901b294`
 
 **File:** `CHANGELOG.md:20-28`
 **Issue:** Der Satz lautet: "the section describes a plan and not a feature, and the short wording
