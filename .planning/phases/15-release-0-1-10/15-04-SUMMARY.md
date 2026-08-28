@@ -59,12 +59,12 @@ eigenen Changelog-Eintrag.
 
 ## Abweichung vom Plan
 
-Plan 15-04 Task 3 sah vier getrennte Proof-Zeilen fuer die vier Nachweise des
+Plan 15-04 Task 3 sah vier getrennte Proof-Zeilen für die vier Nachweise des
 Runbook-Schritts 8 vor. Geschrieben wurde eine zusammengefasste Zeile, die alle
-vier Nachweise plus den Beschreibungs-Beleg traegt. Grund: die vier Messungen
+vier Nachweise plus den Beschreibungs-Beleg trägt. Grund: die vier Messungen
 entstanden in derselben Minute und aus demselben Katalog-Abruf, und eine
-gemeinsame Zeile haelt die Sortier-Falle an genau der Stelle fest, an der sie
-jemanden treffen wuerde. Inhaltlich fehlt kein Nachweis; die Zeile nennt jeden
+gemeinsame Zeile hält die Sortier-Falle an genau der Stelle fest, an der sie
+jemanden treffen würde. Inhaltlich fehlt kein Nachweis; die Zeile nennt jeden
 einzeln mit eigenem Befehl und eigenem Ergebnis. Nachgetragen am 2026-08-28
 nach dem Verifikationsbefund.
 
