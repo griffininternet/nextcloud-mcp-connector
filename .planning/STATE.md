@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Pflege und 0.1.10
-status: executing
-stopped_at: Plan 15-03 abgeschlossen (main gepusht vor dem Tag, Owner-Freigabe 04:49Z, Tag v0.1.10, Release-Workflow 33142956284 gruen, Asset 46973 Bytes)
-last_updated: "2026-08-28T04:56:49.737Z"
+status: milestone_complete
+stopped_at: Milestone complete (Phase 15 was final phase)
+last_updated: 2026-08-28T05:58:34.350Z
 last_activity: 2026-08-28 -- Plan 15-03 abgeschlossen (Tag v0.1.10 nach ausdruecklicher Owner-Freigabe, Workflow gruen, Asset mcp_connector-0.1.10.tar.gz mit 46973 Bytes am Release), Phase 15 weiter mit Plan 15-04
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 6
-  completed_plans: 5
-  percent: 83
+  completed_plans: 6
+  percent: 50
 ---
 
 # Project State
@@ -21,20 +21,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Current focus:** Phase 15 — Release 0.1.10
+**Current focus:** Milestone complete
 
 ## Current Position
 
-Phase: 15 (Release 0.1.10) — EXECUTING
-Plan: 4 of 4
-Status: Ready to execute
-Last activity: 2026-08-28 -- Plan 15-03 abgeschlossen (Runbook-Schritte 4 und 5 belegt); Plan 15-04 signiert das heruntergeladene Asset und reicht im Store ein
+Phase: 15
+Plan: Not started
+Status: Milestone complete
+Last activity: 2026-08-28
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 100
+- Total plans completed: 104
 - Average duration: 35 min
 - Total execution time: 15.2 hours
 
@@ -54,6 +54,7 @@ Last activity: 2026-08-28 -- Plan 15-03 abgeschlossen (Runbook-Schritte 4 und 5 
 | 12 | 4 | - | - |
 | 13 | 6 | - | - |
 | 14 | 2 | - | - |
+| 15 | 4 | - | - |
 
 **Recent Trend:**
 

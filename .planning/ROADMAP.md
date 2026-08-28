@@ -62,7 +62,7 @@ Audit: [milestones/v1.3-MILESTONE-AUDIT.md](milestones/v1.3-MILESTONE-AUDIT.md) 
 ### v1.4 Pflege und 0.1.10 (Phasen 14-15), AKTIV
 
 - [x] **Phase 14: Doku-Reste und Gate-Entscheid** - Info-Findings aus 13-REVIEW und W-2 schließen, Reichweite des Vokabular-Gates gegenüber .planning entscheiden (completed 2026-08-27)
-- [ ] **Phase 15: Release 0.1.10** - Gekürzten Enterprise-Text und Kontaktwechsel als Store-Release mit Standard-Runbook ausliefern
+- [x] **Phase 15: Release 0.1.10** - Gekürzten Enterprise-Text und Kontaktwechsel als Store-Release mit Standard-Runbook ausliefern (completed 2026-08-28)
 
 ## Phase Details (v1.4)
 
@@ -114,7 +114,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 15-04-PLAN.md , Signatur über das heruntergeladene Asset, Store-Einreichung mit 201 und die vier Nachweise, Proof-Zeilen der Schritte 6 bis 8
+- [x] 15-04-PLAN.md , Signatur über das heruntergeladene Asset, Store-Einreichung mit 201 und die vier Nachweise, Proof-Zeilen der Schritte 6 bis 8
 
 ## Progress
 
@@ -134,7 +134,7 @@ Plans:
 | 12. Konsistenz und Härtungs-Nachzieher | v1.3 | 4/4 | Complete | 2026-08-25 |
 | 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 6/6 | Complete | 2026-08-25 |
 | 14. Doku-Reste und Gate-Entscheid | v1.4 | 2/2 | Complete    | 2026-08-27 |
-| 15. Release 0.1.10 | v1.4 | 3/4 | In Progress|  |
+| 15. Release 0.1.10 | v1.4 | 4/4 | Complete    | 2026-08-28 |
 
 ## Next
 
