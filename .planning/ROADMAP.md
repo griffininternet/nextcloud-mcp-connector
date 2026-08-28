@@ -7,6 +7,7 @@
 - **v1.2 Kuratierte Breite**: Phasen 8-11 (shipped 2026-08-25, Release 0.1.8 live im Store; Talk, Tables und Mail dazu, ohne das Sicherheitsversprechen oder die Schlankheit aufzugeben)
 - **v1.3 Pflege und 0.1.9**: Phasen 12-13 (shipped 2026-08-26, Release 0.1.9 live im Store; Konsistenz- und Härtungs-Schulden abgeräumt, CIMD live nachgemessen, Enterprise-Fake-Door)
 - **v1.4 Pflege und 0.1.10**: Phasen 14-15 (shipped 2026-08-28, Release 0.1.10 live im Store; gekürzter Enterprise-Text und Kontaktwechsel zu admin@infranode.dev, Doku-Reste aus v1.3 abgeräumt)
+- **v1.5 Vorlauf openDesk**: Phasen 16-19 (AKTIV seit 2026-08-28; Release 0.1.11, zeitboxierter openDesk-Spike vor dem ISV-Call am 14.09., Audit-Log als erster Enterprise-Baustein)
 
 ## Phases
 
@@ -70,6 +71,79 @@ Audit: [milestones/v1.4-MILESTONE-AUDIT.md](milestones/v1.4-MILESTONE-AUDIT.md) 
 
 </details>
 
+### v1.5 Vorlauf openDesk (Phasen 16-19), AKTIV
+
+- [ ] **Phase 16: Release 0.1.11** - Den wartenden Textrest ausliefern und den `[Unreleased]`-Block leerräumen, bevor das Audit-Log ihn wieder füllt
+- [ ] **Phase 17: openDesk-Spike** - Installierbarkeit und Nutzeridentität gegen OpenProject messen statt argumentieren, plus die Fragenliste für den 14.09.
+- [ ] **Phase 18: Audit-Log Kern** - Jeder Werkzeugaufruf hinterlässt einen prüfbaren Metadaten-Eintrag, der keine Inhalte trägt und den OAuth-Speicher nicht gefährdet
+- [ ] **Phase 19: Audit-Log Bedienung und Textnachzug** - Administrator schaltet ein und liest über `occ`, und jede bestehende Aussage über Speicherung und Enterprise-Stand sagt danach die Wahrheit
+
+**Stränge:** Phase 16 und Phase 17 hängen an nichts und können ab Tag 1 laufen. Phase 18 hängt ebenfalls an nichts (der Spike-Ausgang berührt das Audit-Log nicht). Die einzige echte Serialisierung des Meilensteins ist Phase 19: sie braucht das feststehende Satzschema aus Phase 18 und den geleerten `[Unreleased]`-Block aus Phase 16.
+
+**Rahmenbedingung für alle vier Phasen:** Keines der beiden Features fasst die Werkzeugoberfläche an. 15712 von 18000 Bytes über 21 Werkzeuge bleiben stehen, kein Gate-Grenzwert wird angehoben.
+
+## Phase Details (v1.5)
+
+### Phase 16: Release 0.1.11
+
+**Goal**: Die im `[Unreleased]`-Block wartenden Textänderungen sind als Release 0.1.11 im Nextcloud App Store, und der Block ist danach leer
+**Depends on**: Nichts (Phase 15 abgeschlossen; der Stand ist heute release-fertig)
+**Requirements**: EXAPP-11
+**Success Criteria** (was wahr sein muss):
+
+  1. Wer die App im Nextcloud App Store aufruft, sieht die Fassung 0.1.11 mit dem gekürzten Trifecta-Absatz samt Teilen-Formulierung und mit admin@infranode.dev als Autorenkontakt im Manifest
+  2. Die Zeichenkette 0.1.11 steht an allen sechs Versionsstellen (pyproject, `__init__`, info.xml version und image-tag, drei README-Statuszeilen, uv.lock), der Changelog trägt einen Block 0.1.11 mit seiner Linkdefinition, und der `[Unreleased]`-Block ist danach leer
+  3. Der Branch liegt auf dem öffentlichen `main`, bevor ein Tag existiert; der Tag `v0.1.11` entsteht erst nach der wörtlichen Owner-Freigabe
+  4. Die Signatur ist über das heruntergeladene Asset gerechnet und verifiziert, nicht über das lokal gebaute, und `docs/store-submission.md` trägt für jeden Runbook-Schritt eine datierte Proof-Zeile
+  5. Alle Gates laufen auf dem Kandidaten grün, ohne dass ein Grenzwert angehoben wurde; die Werkzeugoberfläche bleibt bei 21 Werkzeugen
+
+**Plans**: TBD
+
+### Phase 17: openDesk-Spike
+
+**Goal**: Die openDesk-Frage ist vor dem ISV-Call gemessen und schriftlich belegt, ohne dass eine Zeile Produktionscode entsteht
+**Depends on**: Nichts (Strang S, parallel zu 16 und 18); intern gilt: OD-01 vor OD-02, weil Installierbarkeit über jeder API-Frage steht
+**Requirements**: OD-01, OD-02, OD-03
+**Success Criteria** (was wahr sein muss):
+
+  1. Ein Leser des Spike-Berichts erfährt zuerst, ob und auf welchem Weg diese ExApp in einer openDesk-Umgebung installierbar ist: je eine Antwort zum abgeschalteten App Store, zur fehlenden AppAPI auf Kubernetes und zur auf Nextcloud 33.0.7 gepinnten Zielumgebung gegenüber unseren auf 34.0.3 erbrachten Ein-Klick-Nachweisen, jede mit Quelle oder ausdrücklich als offene ISV-Call-Frage markiert
+  2. Weg 0 (über `integration_openproject`) und Weg 1 (eigener OAuth-Autorisierungscode je Nutzer) stehen im selben Bericht mit Messwerten nebeneinander, mindestens zu PKCE-Unterstützung, Token-Lebensdauer und Erneuerung ohne Browsersitzung, dazu die Antwort, ob die SSRF-Grenze aus v1.1 eine Nachbarkomponente unter internem Dienstnamen durchlässt
+  3. Welcher Weg trägt, steht im Bericht als Folge dieser Messungen da und nicht als Argument; ein Weg, der nicht gemessen werden konnte, steht als "ungemessen" da und nicht als "verworfen"
+  4. Eine Fragenliste für den 14.09. liegt vor und enthält das ZenDiS-Aufnahmeverfahren, den Installationsweg in openDesk, die AGPL-Konsequenz für die Enterprise-Positionierung und die Folge der in openDesk abgeschalteten Apps Talk und Kontakte für zwei unserer bestehenden Werkzeugfamilien
+  5. Der ausgelieferte Produktionsbaum ist nach der Phase unverändert: kein neues Werkzeug, kein neuer Client im Paket, Werkzeugoberfläche und Budget-Gate stehen still
+
+**Plans**: TBD
+
+### Phase 18: Audit-Log Kern
+
+**Goal**: Jeder Werkzeugaufruf hinterlässt einen prüfbaren Eintrag, der weder Parameterwerte noch Ergebnisinhalte trägt und den OAuth-Speicher nicht schreibunfähig machen kann
+**Depends on**: Nichts (Strang A, parallel zu 16 und 17; unabhängig vom Spike-Ausgang, trägt den Meilenstein auch allein)
+**Requirements**: AUDIT-01, AUDIT-02, AUDIT-03
+**Success Criteria** (was wahr sein muss):
+
+  1. Nach einem Werkzeugaufruf steht ein Eintrag mit Nutzer, Werkzeugname, Zeitpunkt, aufrufendem Client und Ergebnisstatus in der Ablage; ein abgelehnter Aufruf steht mit seinem Grund darin, und kein Werkzeug der 21 kann an dieser Erfassung vorbei
+  2. In keinem Eintrag steht ein Parameterwert oder ein Ergebnisinhalt; eine Erlaubnisliste je Werkzeug nennt die zulässigen Parameternamen, und ein Vertragstest nach dem Muster des Budget-Gates schlägt fehl, sobald ein Werkzeug diese Grenze überschreitet
+  3. Ein Prüfkommando bestätigt die ungebrochene Hash-Kette über alle Einträge oder benennt die erste gebrochene Stelle; eine nachträglich veränderte Zeile wird von diesem Kommando gefunden
+  4. Das Log liegt in einer eigenen Ablage neben dem OAuth-Speicher, hat eine Obergrenze und eine Aufbewahrungsfrist, die mindestens 180 Tage erreichen kann; bei vollem Volume bleiben Token-Rotation und neue Verbindungen funktionsfähig
+  5. `occ mcp_connector:purge` und die Deinstallation lassen das Audit-Log stehen, während alles andere verschwindet; Verbindung trennen und Pausieren lassen die Einträge ebenfalls stehen, und gelöscht wird nur durch die abgelaufene Aufbewahrungsfrist oder die Löschung des Nutzers in Nextcloud (D-v1.5-01)
+
+**Plans**: TBD
+
+### Phase 19: Audit-Log Bedienung und Textnachzug
+
+**Goal**: Ein Administrator schaltet das Log ein und liest es über `occ`, und jede bestehende Aussage über Speicherung, Purge und den Enterprise-Stand sagt danach die Wahrheit
+**Depends on**: Phase 18 (Satzschema und Speicher müssen feststehen, bevor etwas gelesen und beschrieben wird) und Phase 16 (der `[Unreleased]`-Block muss geleert sein, sonst führe 0.1.11 Text über ein Modul mit, das es zum Auslieferungszeitpunkt nicht gibt)
+**Requirements**: AUDIT-04, AUDIT-05, AUDIT-06
+**Success Criteria** (was wahr sein muss):
+
+  1. Ein Administrator liest und exportiert das Log über ein `occ`-Kommando; das Manifest deklariert dafür keine neue Route, und die von außen erreichbare Angriffsfläche der App ist unverändert
+  2. Ab Werk ist das Log aus; ein Administrator schaltet es in den Admin-Einstellungen ein, und die Beschriftung sagt, was das Log leistet, was es nicht leistet, und dass ein nutzerbezogenes Protokoll mitbestimmungsrelevant sein kann (D-v1.5-04, D-v1.5-02)
+  3. Die Admin-Einstellung bietet keine Stufe an, die Parameterwerte oder Ergebnisinhalte protokolliert; `keys` ist der einzige einschaltbare Inhaltsumfang, `full` existiert nirgends in der Oberfläche
+  4. `docs/privacy.md` und `docs/uninstall.md` sagen in ihrem eigenen Text, dass das Audit-Log Purge und Deinstallation übersteht und die Aufbewahrungsfrist der einzige automatische Löscher ist; das v1.0-Erfolgskriterium "eine Deinstallation entfernt alle Daten" ist entsprechend umgeschrieben statt stillschweigend falsch
+  5. Der Enterprise-Absatz nennt das Audit-Log in allen drei Sprachen nicht länger als geplant, ein Gate hält die Wörter revisionssicher, AI-Act-konform, DSGVO-konform und SIEM-zertifiziert draußen, und alle Textänderungen dieser Phase warten im `[Unreleased]`-Block: kein Tag, kein Store-Upload, die Auslieferung ist EXAPP-12 und ausdrücklich nicht Teil dieses Meilensteins (D-v1.5-03)
+
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -87,12 +161,16 @@ Audit: [milestones/v1.4-MILESTONE-AUDIT.md](milestones/v1.4-MILESTONE-AUDIT.md) 
 | 11. Bündelung, Budget und Release 0.1.8 | v1.2 | 10/10 | Complete | 2026-08-25 |
 | 12. Konsistenz und Härtungs-Nachzieher | v1.3 | 4/4 | Complete | 2026-08-25 |
 | 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 6/6 | Complete | 2026-08-25 |
-| 14. Doku-Reste und Gate-Entscheid | v1.4 | 2/2 | Complete    | 2026-08-27 |
-| 15. Release 0.1.10 | v1.4 | 4/4 | Complete    | 2026-08-28 |
+| 14. Doku-Reste und Gate-Entscheid | v1.4 | 2/2 | Complete | 2026-08-27 |
+| 15. Release 0.1.10 | v1.4 | 4/4 | Complete | 2026-08-28 |
+| 16. Release 0.1.11 | v1.5 | 0/? | Not started | - |
+| 17. openDesk-Spike | v1.5 | 0/? | Not started | - |
+| 18. Audit-Log Kern | v1.5 | 0/? | Not started | - |
+| 19. Audit-Log Bedienung und Textnachzug | v1.5 | 0/? | Not started | - |
 
 ## Next
 
-`/gsd:new-milestone`: nächsten Milestone aufsetzen. Drei Textänderungen warten im `[Unreleased]`-Block auf ein Release 0.1.11 (gekürzter Trifecta-Absatz, Teilen-Formulierung, Autoren-Adresse). Größerer Schnitt (Mail-Entwürfe, Talk-Threads, v2.0 openDesk) nach dem ISV-Call am 14.09. und der Enterprise-Signal-Auswertung ab Oktober.
+`/gsd:plan-phase 16`: Phase 16 (Release 0.1.11) planen. Sie hängt an nichts und räumt den `[Unreleased]`-Block, bevor Phase 19 ihn wieder füllt. Phase 17 (Spike) und Phase 18 (Audit-Log Kern) können parallel dazu geplant und ausgeführt werden.
 
 ---
-*Roadmap created: 2026-08-14 (granularity: coarse, mode: mvp); v1.0 abgeschlossen: 2026-08-20; v1.1 abgeschlossen: 2026-08-20 (Phase 7 deferred); v1.2 abgeschlossen: 2026-08-25 (Release 0.1.8 live); v1.3 abgeschlossen: 2026-08-26 (Release 0.1.9 live, CIMD nachgemessen, Enterprise-Fake-Door); v1.4 aufgesetzt: 2026-08-28 (Phasen 14-15: Doku-Reste, Gate-Entscheid, Release 0.1.10)*
+*Roadmap created: 2026-08-14 (granularity: coarse, mode: mvp); v1.0 abgeschlossen: 2026-08-20; v1.1 abgeschlossen: 2026-08-20 (Phase 7 deferred); v1.2 abgeschlossen: 2026-08-25 (Release 0.1.8 live); v1.3 abgeschlossen: 2026-08-26 (Release 0.1.9 live, CIMD nachgemessen, Enterprise-Fake-Door); v1.4 abgeschlossen: 2026-08-28 (Release 0.1.10 live); v1.5 aufgesetzt: 2026-08-28 (Phasen 16-19: Release 0.1.11, openDesk-Spike, Audit-Log in zwei Phasen)*

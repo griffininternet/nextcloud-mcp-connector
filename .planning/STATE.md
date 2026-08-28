@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
 status: planning
-last_updated: "2026-08-28T06:40:09.838Z"
+last_updated: "2026-08-28T07:10:00.000Z"
 last_activity: 2026-08-28
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Current focus:** Milestone complete
+**Current focus:** v1.5 Vorlauf openDesk, Phasen 16 bis 19 (Release 0.1.11, openDesk-Spike, Audit-Log in zwei Phasen)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-08-28 — Milestone v1.5 started
+Phase: keine begonnen; die Roadmap steht mit den Phasen 16 bis 19
+Plan: keiner
+Status: Roadmap erstellt, Phasenplanung offen
+Last activity: 2026-08-28, Roadmap v1.5 erstellt (Phasen 16 bis 19, 10 von 10 Requirements gemappt)
 
 ## Performance Metrics
 
@@ -170,6 +170,17 @@ Last activity: 2026-08-28 — Milestone v1.5 started
 
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
+
+- Roadmap v1.5: Phasennummerierung setzt bei 16 fort (v1.4 verbrauchte 14 und 15); vier Phasen bei Granularität coarse, weil der Meilenstein zwei fast unabhängige Stränge plus ein fertiges Release trägt
+- Roadmap v1.5: KEINE Entscheidungsphase, obwohl die Recherche eine vorschlägt; die vier Owner-Entscheidungen D-v1.5-01 bis D-v1.5-04 stehen bereits oben in REQUIREMENTS.md und werden in der Planung nicht wieder aufgemacht
+- Roadmap v1.5: die offene Architekturfrage aus SUMMARY.md (Weg 0 über `integration_openproject` gegen Weg 1 als eigener OAuth-Client) wird von der Roadmap NICHT vorentschieden; sie fällt in Phase 17 auf der Messung in OD-02
+- Roadmap v1.5: Phase 16 (Release 0.1.11) liegt vor Phase 19, weil beide dieselben Textstellen anfassen (CHANGELOG.md, info.xml, Versionszeichenketten); der `[Unreleased]`-Block muss geleert sein, bevor AUDIT-06 ihn wieder füllt, sonst führte 0.1.11 Text über ein Modul mit, das es beim Upload nicht gibt
+- Roadmap v1.5: Phase 17 (Spike) und Phase 18 (Audit-Log Kern) hängen an nichts und laufen parallel zu Phase 16; die einzige echte Serialisierung ist Phase 19
+- Roadmap v1.5: OD-01, OD-02 und OD-03 liegen in EINER Spike-Phase statt in dreien (Recherche-Vorschlag), weil keiner der drei Produktionscode erzeugt; die Reihenfolge Installierbarkeit vor Auth-Frage ist Phaseninterna, kein Phasenschnitt
+- Roadmap v1.5: das Audit-Log ist auf zwei Phasen geschnitten, weil Phase 19 ein feststehendes Satzschema und einen feststehenden Speicher braucht, bevor gelesen, geschaltet und beschrieben werden kann
+- Roadmap v1.5: EXAPP-12 (Auslieferung des Audit-Logs als 0.1.12) ist per Owner-Entscheid Future Requirement und in keiner Phase abgebildet; die AUDIT-06-Texte warten im `[Unreleased]`-Block, ohne Tag und ohne Store-Upload
+- Roadmap v1.5: kein Feature dieses Meilensteins fasst die Werkzeugoberfläche an; 15712 von 18000 Bytes über 21 Werkzeuge bleiben stehen, kein Gate-Grenzwert wird angehoben
+- Roadmap v1.5: für EXAPP-11 gelten die Release-Regeln unverändert (Versionszeichenkette an sechs Stellen, Changelog-Block samt Linkdefinition, Branch-Push vor dem Tag, Tag nur nach wörtlicher Owner-Freigabe, Signatur über das heruntergeladene Asset, datierte Proof-Zeilen in docs/store-submission.md)
 
 - Roadmap v1.4: Phasennummerierung setzt bei 14 fort (v1.3 verbrauchte 12 und 13); zwei Phasen bei Granularität coarse, weil das Release die Doku-Fixes im Asset mitnehmen muss und deshalb zwingend nach ihnen liegt
 - Roadmap v1.4: DOC-01, DOC-02 und SEC-03 liegen in einer Phase, weil alle drei reine Text- und Gate-Nacharbeiten ohne gegenseitige Abhängigkeit sind und eine Aufteilung nur Reibung erzeugt
@@ -608,6 +619,11 @@ Recent decisions affecting current work:
 
 ### Blockers/Concerns
 
+- v1.5 Termin: der ISV-Call am 14.09. ist der harte Anker für Phase 17; die Fragenliste (OD-03) muss auch dann vorliegen, wenn OD-01 oder OD-02 ergebnislos bleiben, denn ein ungemessener Punkt ist selbst eine Frage für den Call
+- v1.5 offene Architekturfrage: Weg 0 hängt an einer einzigen ungemessenen Tatsache (trägt die serverseitige Token-Erneuerung von `integration_openproject` auch in openDesks OIDC-gebundenem Betrieb, oder fällt sie nach Ablauf des zwischengespeicherten Tokens auf 401); fällt sie, ist Weg 1 der Rückfall, nicht ein Ausweichen
+- v1.5 Textkollision: EXAPP-11 (Phase 16) und AUDIT-06 (Phase 19) fassen dieselben Dateien an; wird Phase 19 vor dem Tag v0.1.11 fertig, darf ihr Text NICHT in das 0.1.11-Asset geraten
+- v1.5 Wortanspruch: sobald das Audit-Log existiert, wird der Satz "heute in keiner Form vorhanden" im Enterprise-Absatz falsch; die Grenzbeschreibung "was es nicht leistet" ist Pflichtbestandteil (D-v1.5-02), und die vier verbotenen Wörter gehören unter ein Gate
+- v1.5 Volumen-Risiko: Audit-Log und OAuth-Speicher liegen auf demselben Volume; ohne Obergrenze und Aufbewahrungsfrist macht ein volles Volume SQLite im WAL-Modus schreibunfähig und jede Token-Rotation scheitert (AUDIT-03)
 - Harte Deadline: Nextcloud Conference September 2026 (Demo und Talk-Entwurf liegen bereit; v1.2 darf den Termin nicht gefaehrden, Scope kuerzen statt schieben)
 - Offene Unbekannte v1.2: Mail-Erreichbarkeit unter reiner AppAPI-Impersonation ist nur aus Quellcode gelesen, nie in dieser Topologie gemessen; ein negatives Ergebnis aendert den Schnitt von Phase 10 und 11 (MAIL-01..03, CTX-02, SEC-01, Tool-Zahl in TOOL-15). Deshalb blockierender erster Plan in Phase 8
 - Talk-"Lesen" schreibt per Default in den Nutzerzustand (Lesemarker, Benachrichtigungs-Quittung, Online-Status) und es gibt keinen Reparaturweg, weil DELETE per Gate verboten ist; die vier Parameter gehoeren in den Client, nicht ins Tool, mit positiv behauptendem Test
@@ -625,11 +641,14 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-28T04:56:37.000Z
-Stopped at: Plan 15-03 abgeschlossen (Tag v0.1.10 nach Owner-Freigabe, Workflow gruen, Asset am Release)
-Naechster Schritt: Plan 15-04 ausfuehren (Signatur ueber das heruntergeladene Asset, Store-Einreichung ueber die angemeldete Store-Sitzung, Proof-Zeilen der Schritte 6 bis 8)
+Last session: 2026-08-28T07:10:00.000Z
+Stopped at: Roadmap v1.5 erstellt (Phasen 16 bis 19), Traceability in REQUIREMENTS.md gefüllt, 10 von 10 Requirements gemappt
+Naechster Schritt: /gsd:plan-phase 16 (Release 0.1.11); Phase 17 und Phase 18 können parallel geplant werden, Phase 19 erst nach 16 und 18
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Phase 16 planen: /gsd:plan-phase 16 (Release 0.1.11, räumt den `[Unreleased]`-Block)
+- Danach oder parallel: /gsd:plan-phase 17 (openDesk-Spike) und /gsd:plan-phase 18 (Audit-Log Kern)
+- Phase 19 erst planen, wenn 16 ausgeliefert und 18 abgeschlossen ist
+- Owner-Gate bleibt: der Tag v0.1.11 entsteht nur nach ausdrücklicher, wörtlicher Freigabe

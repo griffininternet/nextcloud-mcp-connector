@@ -22,7 +22,7 @@ Nicht in diesem Milestone entschieden, weil Verhandlungssache: die AGPL-Konseque
 
 ### Release-Pflege
 
-- [ ] **EXAPP-11**: Die zwei wartenden Textänderungen aus dem `[Unreleased]`-Block sind als Release 0.1.11 im Nextcloud App Store, mit der Versionszeichenkette an allen sechs Stellen, einem Changelog-Block samt Linkdefinition, dem Branch-Push vor dem Tag, der ausdrücklichen Owner-Freigabe vor dem Tag und der Signatur über das heruntergeladene Asset
+- [ ] **EXAPP-11**: Die im `[Unreleased]`-Block wartenden Textänderungen (gekürzter Trifecta-Absatz samt Teilen-Formulierung, Autorenkontakt admin@infranode.dev; zwei Changelog-Punkte, drei inhaltliche Änderungen) sind als Release 0.1.11 im Nextcloud App Store, mit der Versionszeichenkette an allen sechs Stellen, einem Changelog-Block samt Linkdefinition, dem Branch-Push vor dem Tag, der ausdrücklichen Owner-Freigabe vor dem Tag und der Signatur über das heruntergeladene Asset
 
 ### openDesk-Erkundung (Erkenntnis, kein Produktionscode)
 
@@ -75,26 +75,28 @@ Anerkannt, aber nicht in diesem Milestone.
 
 ## Traceability
 
-Wird bei der Roadmap-Erstellung gefüllt.
+Bei der Roadmap-Erstellung am 2026-08-28 gefüllt. Die Phasennummerierung setzt bei 16 fort, weil v1.4 die Phasen 14 und 15 verbraucht hat.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EXAPP-11 | — | Pending |
-| OD-01 | — | Pending |
-| OD-02 | — | Pending |
-| OD-03 | — | Pending |
-| AUDIT-01 | — | Pending |
-| AUDIT-02 | — | Pending |
-| AUDIT-03 | — | Pending |
-| AUDIT-04 | — | Pending |
-| AUDIT-05 | — | Pending |
-| AUDIT-06 | — | Pending |
+| EXAPP-11 | Phase 16 (Release 0.1.11) | Pending |
+| OD-01 | Phase 17 (openDesk-Spike) | Pending |
+| OD-02 | Phase 17 (openDesk-Spike) | Pending |
+| OD-03 | Phase 17 (openDesk-Spike) | Pending |
+| AUDIT-01 | Phase 18 (Audit-Log Kern) | Pending |
+| AUDIT-02 | Phase 18 (Audit-Log Kern) | Pending |
+| AUDIT-03 | Phase 18 (Audit-Log Kern) | Pending |
+| AUDIT-04 | Phase 19 (Audit-Log Bedienung und Textnachzug) | Pending |
+| AUDIT-05 | Phase 19 (Audit-Log Bedienung und Textnachzug) | Pending |
+| AUDIT-06 | Phase 19 (Audit-Log Bedienung und Textnachzug) | Pending |
 
 **Coverage:**
 - v1.5 requirements: 10 total
-- Mapped to phases: 0
-- Unmapped: 10
+- Mapped to phases: 10
+- Unmapped: 0
+
+EXAPP-12 steht per Owner-Entscheid unter Future Requirements und ist bewusst in keiner Phase dieses Meilensteins abgebildet.
 
 ---
 *Requirements defined: 2026-08-28*
-*Last updated: 2026-08-28 after initial definition*
+*Last updated: 2026-08-28 nach der Roadmap-Erstellung (Traceability gefüllt, Phasen 16-19)*
