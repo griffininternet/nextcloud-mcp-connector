@@ -17,7 +17,7 @@
 
 ### Store und Release (EXAPP)
 
-- [ ] **EXAPP-10**: Release 0.1.10 ist im Store: Version an allen sechs Stellen (pyproject, __init__, info.xml version+image-tag, drei README-Statuszeilen, uv.lock), der Changelog-Block 0.1.10 nennt den gekürzten Enterprise-Abschnitt und den Kontaktwechsel zu admin@infranode.dev als nutzersichtbare Änderung (damit fährt auch die WR-02-Korrektur aus dem Repo-Changelog mit ins Asset), alle Gates lokal grün, Branch-Push vor dem Tag, Tag v0.1.10 NUR nach ausdrücklicher Owner-Freigabe, Signatur über das heruntergeladene Asset, Runbook-Schritte mit Proof-Zeilen in docs/store-submission.md.
+- [x] **EXAPP-10**: Release 0.1.10 ist im Store: Version an allen sechs Stellen (pyproject, __init__, info.xml version+image-tag, drei README-Statuszeilen, uv.lock), der Changelog-Block 0.1.10 nennt den gekürzten Enterprise-Abschnitt und den Kontaktwechsel zu admin@infranode.dev als nutzersichtbare Änderung (damit fährt auch die WR-02-Korrektur aus dem Repo-Changelog mit ins Asset), alle Gates lokal grün, Branch-Push vor dem Tag, Tag v0.1.10 NUR nach ausdrücklicher Owner-Freigabe, Signatur über das heruntergeladene Asset, Runbook-Schritte mit Proof-Zeilen in docs/store-submission.md.
 
 ## Future Requirements
 
@@ -47,4 +47,4 @@ Vorgemerkt, nicht in v1.4:
 | DOC-01 | Phase 14 | Complete |
 | DOC-02 | Phase 14 | Complete |
 | SEC-03 | Phase 14 | Complete |
-| EXAPP-10 | Phase 15 | Pending |
+| EXAPP-10 | Phase 15 | Complete |
