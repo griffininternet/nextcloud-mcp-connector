@@ -235,7 +235,7 @@ dem Tag `v3.1.1`. Wäre eine andere Fassung installiert worden, müssten sie neu
 Satz dieses Abschnitts stehen bleibt. Sie sind nicht neu geholt worden, weil sie nicht neu geholt werden
 mussten.
 
-Der Store-Zugriff im Container hat getragen, der Rückfall über ein von Hand geladenes App-Archiv war
+Der Store-Zugriff im Container hat getragen, der Rückfall über ein von Hand geladenes Paket der App war
 nicht nötig, und die Plattformspanne `>=33.0.0 <35.0.0` aus der Versionsmatrix stimmt mit der Instanz
 zusammen: die Installation wurde von Nextcloud 33.0.7 nicht abgewiesen.
 
@@ -431,6 +431,163 @@ unabhängigen Weg bestätigt.
 
 `carol` trägt für alle drei Schlüssel `token`, `refresh_token` und `token_expires_at` wörtlich
 `The setting does not exist for user "carol".` Das ist Absicht und der Messweg von S2.
+
+#### S1: die OCS-Fläche antwortet unter reiner AppAPI-Impersonation
+
+**Behauptung:** `GET /api/v1/url` antwortet unter reiner AppAPI-Impersonation mit OCS-JSON und der
+OpenProject-Adresse.
+
+**Messweg.** Ein Aufruf durch Caddy gegen `http://127.0.0.1:8091`, mit `OCS-APIRequest: true`,
+`Accept: application/json`, `EX-APP-ID`, `EX-APP-VERSION` und `AUTHORIZATION-APP-API`, **ohne**
+App-Passwort im Prozess. Beurteilt wird nach der Antwortform aus dem vorab festgelegten Kriterium.
+
+```
+# GET /ocs/v2.php/apps/integration_openproject/api/v1/url, Impersonation von alice
+HTTP 200, Content-Type application/json; charset=utf-8, 103 Bytes
+{"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":"http://op.localtest.me:8082"}}
+```
+
+**Messwert und Urteil:** OCS-Umschlag als JSON, `ocs.data` ist die Instanzadresse, und sie ist
+dieselbe, die `occ config:app:get openproject_instance_url` nennt. Nach dem Kriterium: **erreicht.**
+Das Urteil hängt nicht an der 200, sondern an der Form: diesen Umschlag erzeugt nur App-Code hinter der
+CSRF- und Impersonationskette. Die Vorhersage aus K3 trifft zu, die Methode fährt keine Vorprüfung.
+
+**Gegenprobe im selben Lauf:** derselbe Aufruf, `APP_SECRET` durch 64 Null-Zeichen ersetzt.
+
+```
+HTTP 401, application/json, 106 Bytes
+{"ocs":{"meta":{"status":"failure","statuscode":997,"message":"Current user is not logged in"},"data":[]}}
+```
+
+Ohne diese Zeile könnte die 200 darüber von einer Instanz kommen, die jeden Aufruf durchlässt. Der Wert
+des Kopfes `AUTHORIZATION-APP-API` wird nicht protokolliert, weder der echte noch der aus Nullen, weil
+er Base64 von `<user>:<APP_SECRET>` ist (T-17-01).
+
+#### S2: die Berechtigung hängt am Nutzer, nicht an der App
+
+**Behauptung:** Dieselbe Fläche antwortet für ein Konto **ohne** verbundenes OpenProject mit 401 und
+für ein verbundenes mit Daten.
+
+**Warum diese Messung nicht auf `/api/v1/url` läuft.** `getOpenProjectUrl()` ruft
+`validatePreRequestConditions()` nicht auf und gibt einen App-Konfigwert zurück, unabhängig davon, ob
+der aufrufende Nutzer OpenProject verbunden hat (K3). Eine 200 dort belegt Erreichbarkeit und über
+Berechtigungen **nichts**. S2 läuft deshalb auf `/api/v1/configuration`: argumentfrei, lesend, und mit
+Vorprüfung. Gezählt in der installierten Fassung: `validatePreRequestConditions()` kommt in
+`lib/Controller/OpenProjectAPIController.php` 14 mal vor, das ist die Definition plus 13 Aufrufstellen,
+bei 15 Methoden mit `NoAdminRequired` und genau einer mit `NoCsrfRequired`.
+
+| Konto | Zustand | Aufruf | Messwert | Urteil |
+|-------|---------|--------|----------|--------|
+| `carol` | nie verbunden | `GET /ocs/v2.php/apps/integration_openproject/api/v1/configuration` | **HTTP 401**, `application/json`, 77 Bytes, `{"ocs":{"meta":{"status":"failure","statuscode":401,"message":""},"data":""}}` | erreicht, und abgewiesen: das ist `new DataResponse('', Http::STATUS_UNAUTHORIZED)` aus `validatePreRequestConditions()` |
+| `alice` | verbunden mit `opa` | derselbe Aufruf | **HTTP 200**, 1702 Bytes, `ocs.data._type = Configuration`, `hostName = op.localtest.me:8082`, dazu `maximumAttachmentFileSize 5242880`, `maximumAPIV3PageSize 1000`, `hoursPerDay 8` | Daten, und zwar echte Werte der OpenProject-Instanz |
+| `bob` | verbunden mit `opb` | derselbe Aufruf | **HTTP 200**, 1700 Bytes, dieselben Felder | Daten, zweites Konto unabhängig bestätigt |
+
+**Die Gegenprobe, ohne die die 401 nichts beweist,** ist die zweite Zeile: ohne einen Lauf, der Daten
+liefert, wäre die 401 von `carol` genauso mit einer kaputten Einrichtung erklärbar. Sie liegt hier
+doppelt vor, für `alice` und für `bob`.
+
+**Eine zweite Gegenprobe, die der Plan nicht verlangt und die den Befund härtet:** die zwei 401 dieses
+Abschnitts sind **unterscheidbar**, und deshalb ist die von `carol` nachweislich App-Code und nicht
+eine gescheiterte Impersonation. Die 401 der S1-Gegenprobe trägt `statuscode 997` und die Meldung
+`Current user is not logged in`, die kommt aus dem Kern von Nextcloud. Die 401 von `carol` trägt
+`statuscode 401` und eine **leere** Meldung, genau die Form, die die Vorprüfung der App erzeugt. Wer
+nur auf "401" schaut, hält beide für dasselbe und beweist mit S2 nichts.
+
+**Kontrolle zum Pfad.** Derselbe Pfad ohne OCS-Präfix,
+`http://127.0.0.1:8091/index.php/apps/integration_openproject/api/v1/configuration`, antwortet
+**HTTP 404** mit leerem Körper. Die Fläche von Weg 0 liegt also ausschließlich unter
+`/ocs/v2.php/apps/integration_openproject`, wie der Block `'ocs' => [` in `appinfo/routes.php` sagt,
+und ein Client, der den Anwendungs-Präfix nimmt, findet nichts.
+
+#### Die Egress-Kontrollmessung
+
+**Behauptung:** Der ExApp-Container erreicht OpenProject direkt, also bliebe Weg 1 als Rückfall offen.
+
+Der Aufruf nimmt den Compose-Dienstnamen und nicht `op.localtest.me`, weil der ExApp-Container den
+`extra_hosts`-Eintrag nicht hat: er wird vom Deploy-Daemon erzeugt und nicht von der Compose-Datei.
+
+| Aufruf aus dem laufenden ExApp-Container | Messwert |
+|------------------------------------------|----------|
+| `GET http://openproject/api/v3` | **HTTP 400**, `text/plain`, 31 Bytes, wörtlich `Invalid host_name configuration`, `remote_ip 172.29.43.133` |
+| derselbe Aufruf mit `Host: op.localtest.me:8082` | **HTTP 401**, `application/hal+json`, 153 Bytes, `urn:openproject-org:api:v3:errors:Unauthenticated`, `You need to be authenticated to access this resource.` |
+| `GET http://op.localtest.me:8082/api/v3` | **kein Ergebnis**, `Connection refused`, Code `000` |
+| `getent hosts` im ExApp-Container | `openproject` ist `172.29.43.133`, `op.localtest.me` ist `::1` |
+
+**Messwert: Egress ist vorhanden.** Die zweite Zeile ist der eigentliche Beleg, und sie ist stärker als
+eine 200 wäre: die Antwort trägt die Fehlerkennung der API v3 von OpenProject, also hat wirklich
+OpenProject geantwortet und nicht irgendein Dienst. Die erste Zeile ist die Host-Prüfung von Rails und
+schon selbst eine Antwort, also auch ein Erreichbarkeitsbeleg; nach dem Kriterium dieses Berichts wird
+sie nach der Form beurteilt und nicht nach der 400.
+
+Die dritte und vierte Zeile erklären zusammen, warum der Dienstname zu nehmen war: `op.localtest.me`
+löst im ExApp-Container nach `::1` auf, das ist der Container selbst, und dort hört nichts. Das ist
+dieselbe AAAA-Falle wie in 5.2 und 2.2, hier zum dritten Mal und in einem dritten Container gemessen.
+
+**Einordnung, ohne die diese Zeile falsch gelesen wird:** im lokalen Docker-Netz ist eine Antwort
+**erwartbar**, weil alle Container in einem Netz hängen und nichts sie trennt. Diese Messung beweist
+über eine Behördeninstallation **nichts**: dort entscheiden Netzrichtlinien, Egress-Filter und
+Proxy-Zwang, ob eine ExApp einen zweiten Host erreicht, und keine dieser Bedingungen ist hier
+nachgebildet. Ein Satz "Egress vorhanden" ohne diesen Absatz liest wie eine Aussage über openDesk und
+wäre Pitfall 3.
+
+**Was daraus für die Egress-Kontrolle festzuhalten ist:** die ExApp **müsste** für Weg 1 einen zweiten
+Host erreichen, für Weg 0 nicht. Weg 0 kommt mit einer einzigen Gegenstelle aus, und das ist die
+Nextcloud, die sie ohnehin braucht; jede Verbindung zu OpenProject baut Nextcloud auf. Das ist der
+Betriebsunterschied zwischen den zwei Wegen, der in einer abgeschotteten Umgebung zählt, und er ist
+hier gemessen und nicht hergeleitet.
+
+#### Die OCS-Fläche, aus der installierten Fassung gezählt
+
+17 Routen, gelesen im Block `'ocs' => [` von `appinfo/routes.php` der installierten Fassung 3.1.1.
+Präfix aller Zeilen: `/ocs/v2.php/apps/integration_openproject`.
+
+| Verb | Pfad | Controller-Methode | Vorprüfung? | Rolle in diesem Bericht |
+|------|------|--------------------|-------------|--------------------------|
+| GET | `/fileinfo/{fileId}` | `files#getFileInfo` | n/a | nicht Teil der API-v1-Fläche |
+| POST | `/filesinfo` | `files#getFilesInfo` | n/a | nicht Teil der API-v1-Fläche |
+| GET | `/api/v1/notifications` | `getNotifications` | ja | nicht gemessen, kein Bedarf für OD-02 |
+| DELETE | `/api/v1/work-packages/{id}/notifications` | `markNotificationAsRead` | ja | **schreibend, nicht ausgelöst** |
+| GET | `/api/v1/url` | `getOpenProjectUrl` | **nein** (K3) | **S1**, gemessen |
+| GET | `/api/v1/avatar` | `getOpenProjectAvatar` | nein | die einzige Methode mit `NoCsrfRequired`, nicht gemessen |
+| GET | `/api/v1/work-packages` | `getSearchedWorkPackages` | ja | **S3** und **S6**, Plan 17-06 |
+| POST | `/api/v1/work-packages` | `linkWorkPackageToFile` | ja | **schreibend, nicht ausgelöst** |
+| GET | `/api/v1/work-packages/{id}/file-links` | `getWorkPackageFileLinks` | ja | für OD-04 der Kern des Unterscheidungsmerkmals |
+| GET | `/api/v1/statuses/{id}` | `getOpenProjectWorkPackageStatus` | ja | nicht gemessen |
+| GET | `/api/v1/types/{id}` | `getOpenProjectWorkPackageType` | ja | nicht gemessen |
+| DELETE | `/api/v1/file-links/{id}` | `deleteFileLink` | ja | **destruktiv, nicht ausgelöst** |
+| GET | `/api/v1/projects` | `getAvailableOpenProjectProjects` | ja | nicht gemessen |
+| POST | `/api/v1/projects/{id}/work-packages/form` | `getOpenProjectWorkPackageForm` | ja | POST, fachlich lesend, **nicht ausgelöst**, um die Regel nicht aufzuweichen |
+| GET | `/api/v1/projects/{id}/available-assignees` | `getAvailableAssigneesOfAProject` | ja | nicht gemessen |
+| POST | `/api/v1/create/work-packages` | `createWorkPackage` | ja | **schreibend, nicht ausgelöst** |
+| GET | `/api/v1/configuration` | `getOpenProjectConfiguration` | ja | **S2**, gemessen |
+
+**Die vier nicht auszulösenden Routen sind namentlich** `POST /api/v1/work-packages`,
+`POST /api/v1/create/work-packages`, `DELETE /api/v1/file-links/{id}` und
+`DELETE /api/v1/work-packages/{id}/notifications`, dazu als fünfte, freiwillig ausgeschlossene
+`POST /api/v1/projects/{id}/work-packages/form`. Das Messprotokoll dieses Plans enthält keinen Aufruf
+auf eine davon: gefahren sind ausschließlich `GET /api/v1/url` und `GET /api/v1/configuration` sowie,
+außerhalb der Fläche, `/ocs/v2.php/cloud/capabilities`.
+
+**Die drei Lücken bleiben bestätigt:** es gibt **keine Route für ein einzelnes Arbeitspaket per Id**,
+**keine für Kommentare** und **keine für "meine Arbeit"**. Was es dafür gibt, und was
+`ARCHITECTURE.md` nicht führt, ist `GET /api/v1/work-packages/{id}/file-links`, also genau die Kette
+Arbeitspaket zu Datei, die `research/FEATURES.md` als Unterscheidungsmerkmal nennt.
+
+#### S0 bis S6, Stand nach diesem Plan
+
+| # | Behauptung | Stand |
+|---|-----------|-------|
+| **S0** | Diese ExApp installiert und antwortet auf 33.0.7 wie auf 34.0.3 | **gemessen, ja.** Abschnitt 1.3, mit Gegenprobe (64 Nullen, 401/997) |
+| **S1** | `GET /api/v1/url` antwortet unter reiner AppAPI-Impersonation mit OCS-JSON und der Adresse | **gemessen, ja.** 200, OCS-Umschlag, `data = http://op.localtest.me:8082`, als `alice`; Gegenprobe 64 Nullen 401 |
+| **S2** | Die Berechtigung hängt am Nutzer, nicht an der App | **gemessen, ja.** `carol` 401 mit leerer Meldung aus der Vorprüfung, `alice` und `bob` je 200 mit Daten; die zwei 401-Formen sind unterscheidbar |
+| **S3** | Konto A sieht in der Suche kein Arbeitspaket, das nur Konto B sehen darf | noch nicht gemessen, Plan 17-06 |
+| **S4** | Nach künstlichem Ablauf antwortet der nächste Aufruf wieder mit Daten, ohne Browsersitzung | noch nicht gemessen, Plan 17-06 |
+| **S5a/b/c** | Verhalten im Modus `oidc` nach Ablauf, drei Pfade | noch nicht gemessen, Plan 17-07 |
+| **S6** | Eine Antwort trägt die Felder für ein späteres Werkzeug in kompakter Form | noch nicht gemessen, Plan 17-06 |
+
+Der Ausgangszustand für S4 ist mit diesem Plan hergestellt und gelesen: `alice` und `bob` tragen je
+einen `refresh_token` und ein `token_expires_at` rund 7200 Sekunden in der Zukunft, und der Modus ist
+`oauth2`, also der Zweig, in dem die App nach `svc.php:1764-1765` serverseitig erneuert.
 
 ### 2.2 Weg 1: PKCE, `expires_in`, Erneuerung ohne Browsersitzung, Zwei-Konten-Negativbeweis
 
