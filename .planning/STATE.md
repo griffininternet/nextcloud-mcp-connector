@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Pflege und 0.1.10
-status: milestone_complete
-stopped_at: Milestone complete (Phase 15 was final phase)
-last_updated: 2026-08-28T05:58:34.350Z
-last_activity: 2026-08-28 -- Phase 15 abgeschlossen (Release 0.1.10 im Store, Verification 5/5, secure-phase 30/30); Milestone v1.4 bereit zum Abschluss
+status: Awaiting next milestone
+stopped_at: Plan 15-03 abgeschlossen (Tag v0.1.10 nach Owner-Freigabe, Workflow gruen, Asset am Release)
+last_updated: "2026-08-28T06:26:27.770Z"
+last_activity: 2026-08-28 — Milestone v1.4 completed and archived
 progress:
   total_phases: 2
   completed_phases: 2
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 
 ## Current Position
 
-Phase: 15
-Plan: Not started
-Status: Milestone complete
-Last activity: 2026-08-28
+Phase: Milestone v1.4 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-08-28 — Milestone v1.4 completed and archived
 
 ## Performance Metrics
 
@@ -633,4 +633,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Plan Phase 14 with /gsd:plan-phase 14
+- Start the next milestone with /gsd-new-milestone

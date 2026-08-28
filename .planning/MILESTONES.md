@@ -1,5 +1,20 @@
 # Milestones
 
+## v1.4 Pflege und 0.1.10 (Shipped: 2026-08-28)
+
+**Phases completed:** 2 phases, 6 plans, 12 tasks
+
+**Key accomplishments:**
+
+- Vier Wortstellen in den Store-Dateien korrigiert: zwei französische Reste, eine deutsche Kleinschreibung, eine hängende Changelog-Linkdefinition und ein Kommentar, der einen Ampersand behauptete, den keine der beiden Spendenadressen enthält.
+- Die Nachweistabelle von docs/store-submission.md läuft jetzt in der Uhrzeit vorwärts (vier Zeilenbewegungen, sortierter Vergleich: 0 verfälschte Zeilen), der Rückverweis der 18:30Z-Zeile deckt den getaggten Commit 685295d als nachgemessen eine Änderung hinter 22471c1, der Archivstand von Phase 13 trägt einen datierten Nachtrag statt einer Umschreibung, und die Reichweite des Vokabular-Gates gegenüber .planning ist entschieden, begründet und von einem Test gehalten.
+- Die Zeichenkette 0.1.10 steht an allen sechs Versionsstellen, und der Changelog-Block 0.1.10 vom 2026-08-28 nennt die Enterprise-Kürzung samt Kontaktwechsel zu admin@infranode.dev als nutzersichtbare Änderung und die Übersetzungs-Korrekturen als Doku-Korrektur, ohne dass ein Tag entstanden ist.
+- Alle sechs Gates laufen auf dem 0.1.10-Kandidaten grün, ohne dass ein Grenzwert angehoben wurde, das Store-Archiv trägt vor dem Tag die Statuszeile 0.1.10 und den Changelog-Block 0.1.10, und die eine Byteabweichung der Werkzeugoberfläche hat einen Namen: die Versionszeichenkette im tools/list-Envelope.
+- Die acht Commits der Phase lagen auf dem öffentlichen `main`, bevor der Tag `v0.1.10` existierte, der Tag entstand erst nach der wörtlichen Owner-Freigabe von 04:49Z, und der Lauf 33142956284 hat in 1m44s das Multi-Arch-Image nach ghcr.io gepusht und `mcp_connector-0.1.10.tar.gz` mit 46973 Bytes an das GitHub-Release gehängt.
+- Die Sortier-Falle.
+
+---
+
 ## v1.3 Pflege und 0.1.9 (Shipped: 2026-08-26)
 
 **Phases completed:** 2 phases, 10 plans, 26 tasks

@@ -183,11 +183,51 @@ Die vier v1.2-Schulden geschlossen (message_truncated je Ebene eine Bedeutung, I
 - Sessions: 2 Arbeitstage (25.08. Planung+Execution+Release, 26.08. D-07 + Action-Bumps + Abschluss); 1 Session-Limit-Abbruch des Planners, sauber per Resume fortgesetzt.
 - Notable: 1 Owner-Checkpoint (Tag-Freigabe mit Store-Weg-Abfrage), Store-Upload HTTP 201 beim ersten Versuch, Review 0C/3W alle gefixt.
 
+## Milestone: v1.4 — Pflege und 0.1.10
+
+**Shipped:** 2026-08-28
+**Phasen:** 2 | **Pläne:** 6
+
+### What Was Built
+
+Die Store-Beschreibung trägt einen kurzen Enterprise-Abschnitt mit dem Kontakt admin@infranode.dev, und die private Outlook-Adresse ist aus dem öffentlichen Manifest verschwunden. Dazu die Doku-Reste aus v1.3 (Übersetzungsfehler, hängende Changelog-Linkdefinition, Ampersand-Kommentar, chronologische Nachweistabelle), die Entscheidung zur Vokabular-Gate-Reichweite gegenüber .planning als begründete Ausnahme mit Halter-Test, und Release 0.1.10 im Store.
+
+### What Worked
+
+- Owner-Eingriffe mitten im Lauf (Enterprise-Text kürzen, Kontaktwechsel, Trifecta-Absatz entschlacken) ließen sich ohne Neuschnitt der Phasen einarbeiten; der Preis war eine Post-Tag-Drift, die aktenkundig gemacht wurde statt sie zu verstecken.
+- Der Owner-Checkpoint vor dem Tag hat wieder sauber gehalten: fünf Stunden Wartezeit, kein Tag-Kommando in der Zwischenzeit, Freigabe wörtlich protokolliert.
+- Die drei Prüfinstanzen haben unterschiedliche Dinge gefunden, keine war redundant: das Review die falschen Textaussagen, der Security-Auditor zwei ungenaue Beweiszeilen, der Integrationscheck zwei falsch gebuchte FIXED-Markierungen und eine strukturell unerfüllbare Roadmap-Formulierung.
+
+### What Was Inefficient
+
+- Zwei Review-Befunde wurden als FIXED gebucht, obwohl nur ihr halber Auftrag erledigt war (Adresse gewechselt, aber kein Runbook-Nachweis; Changelog korrigiert, aber kein Unreleased-Anker). Erst der Integrationscheck hat es aufgedeckt.
+- Drei eigene Beweiszeilen mussten nachkorrigiert werden, weil sie im Moment des Schreibens stimmten und Minuten später nicht mehr. Eine Zeile, die einen Zustand behauptet, braucht entweder eine Zeitgrenze oder einen Nachtrag.
+- Das Roadmap-Goal versprach, die Doku-Fixes fahren im Asset mit; zwei der vier betroffenen Dateien sind gar keine Archivmitglieder. Solche Versprechen gegen das Build-Skript prüfen, bevor sie in die Roadmap kommen.
+
+### Patterns Established
+
+- Post-Tag-Drift wird in der Nachweistabelle datiert vermerkt, nie im Asset nachgebessert; eine spätere Zeile darf eine frühere ausdrücklich aufheben.
+- Eine Zeitgrenze gehört in jede Zeile, die einen Repo-Zustand behauptet ("true for the state at HH:MMZ only").
+- Ausstehende Textänderungen bekommen sofort einen `[Unreleased]`-Abschnitt samt Linkdefinition, damit das Gedächtnis nicht nur in Planungsartefakten lebt.
+- Öffentliche Store-Felder brauchen einen Prüfschritt im Runbook: das `authors`-Feld ist zehn Releases lang unbemerkt geblieben.
+
+### Key Lessons
+
+- `0.1.10` sortiert als Zeichenkette vor `0.1.9`. Katalogprüfungen fragen nach Enthaltensein, nie nach Reihenfolge.
+- Die Store-Detailseite rendert die Beschreibung clientseitig; als Beleg taugt nur das `translations`-Feld des Katalogeintrags.
+- Ein als behoben gebuchter Review-Befund ohne nachgefahrenen Beleg ist schlimmer als ein offener: er verschwindet aus der Wiedervorlage.
+
+### Cost Observations
+
+- Modell-Mix: Executor/Planner/Auditor opus, Checker/Verifier sonnet; ein Fable-Limit-Abbruch mitten im Store-Upload, danach vom Orchestrator selbst beendet.
+- Sessions: 1 Arbeitstag (28.08.), Release-Freigabe nach fünf Stunden Checkpoint-Wartezeit.
+- Notable: drei Runden secure-phase für einen einzigen Threat (T-15-PT), weil jede Runde einen weiteren ungenauen Halbsatz in derselben Beweiszeile fand.
+
 ## Cross-Milestone Trends
 
-| Metrik | v1.0 | v1.1 | v1.2 | v1.3 |
-|--------|------|------|------|------|
-| Phasen / Pläne / Tasks | 5 / 50 / 111 | 1 / 11 / 20 | 4 / 28 / 67 | 2 / 10 / 26 |
-| Kalenderzeit | 7 Tage | 1 Tag | 5 Tage (21.-25.08.) | 2 Tage (25.-26.08.) |
-| Verifier-Gap-Runden | 1 (Phase 5) | 1 (Phase 6, CLIENT-04) | 0 (alle 4 Phasen passed im ersten Lauf) | 0 (beide Phasen passed im ersten Lauf) |
-| Live-Releases im Milestone | 3 (0.1.0, 0.1.1, 0.1.2) | 0 (0.1.3-Kandidat wartet auf Owner-Freigabe) | 5 (0.1.4 bis 0.1.8, drei davon vorgezogen) | 1 (0.1.9) |
+| Metrik | v1.0 | v1.1 | v1.2 | v1.3 | v1.4 |
+|--------|------|------|------|------|------|
+| Phasen / Pläne / Tasks | 5 / 50 / 111 | 1 / 11 / 20 | 4 / 28 / 67 | 2 / 10 / 26 | 2 / 6 / 12 |
+| Kalenderzeit | 7 Tage | 1 Tag | 5 Tage (21.-25.08.) | 2 Tage (25.-26.08.) | 1 Tag (28.08.) |
+| Verifier-Gap-Runden | 1 (Phase 5) | 1 (Phase 6, CLIENT-04) | 0 (alle 4 Phasen passed im ersten Lauf) | 0 (beide Phasen passed im ersten Lauf) | 0 (beide Phasen passed im ersten Lauf) |
+| Live-Releases im Milestone | 3 (0.1.0, 0.1.1, 0.1.2) | 0 (0.1.3-Kandidat wartet auf Owner-Freigabe) | 5 (0.1.4 bis 0.1.8, drei davon vorgezogen) | 1 (0.1.9) | 1 (0.1.10) |

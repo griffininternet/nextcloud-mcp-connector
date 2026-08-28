@@ -8,19 +8,13 @@ Ein schlankes MCP-only-ExApp für Nextcloud: Nutzer installieren es per Klick au
 
 Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
 
-## Current Milestone: v1.4 Pflege und 0.1.10
+## Current Milestone
 
-**Goal:** Den gekürzten Enterprise-Text (Kontakt admin@infranode.dev, Commit 55a5822) als Release 0.1.10 in den Store bringen und die dokumentarischen Reste aus v1.3 abräumen.
-
-**Target features:**
-- Release 0.1.10 im Store (Standard-Runbook mit Proof-Zeilen, Tag nur nach Owner-Freigabe); Changelog nennt den gekürzten Enterprise-Abschnitt und den Kontaktwechsel; der Changelog-Drift W-1 aus dem v1.3-Audit erledigt sich damit
-- Doku-Reste aus 13-REVIEW (Info-Findings): FR-Wortlaut, Proof-Zeilen-Präzisierungen, hängende [Unreleased]-Linkdefinition, veralteter Ampersand-Kommentar in info.xml
-- W-2 aus dem v1.3-Audit: veraltete Verifikations-Notiz zur entfernten Enterprise-Issue-Datei nachziehen
-- Vokabular-Gate-Reichweite entschieden: .planning ist öffentlich, trägt aber "archiv"-Substrings (I-2) — Reichweite erweitern oder Ausnahme begründen
-
-**Key context:** Bewusst kleiner Pflege-Milestone (1-2 Phasen), keine neuen Tools, Gates bleiben 18000/1400/21. Der große Schnitt (Breite 2: Mail-Entwürfe/Talk-Threads vs. v2.0 openDesk) fällt nach dem ISV-Call am 14.09., informiert durch Store-Feedback und die Enterprise-Signale (Auswertung ab Oktober).
+Kein aktiver Milestone. v1.4 "Pflege und 0.1.10" shipped 2026-08-28 (Audit passed 4/4). Drei Textänderungen warten im `[Unreleased]`-Block des Changelogs auf ein Release 0.1.11. Der größere Schnitt (Mail-Entwürfe, Talk-Threads, v2.0 openDesk) fällt nach dem ISV-Call am 14.09. und der Enterprise-Signal-Auswertung ab Oktober.
 
 ## Current State
+
+**v1.4 shipped 2026-08-28** (Audit passed 4/4, Release 0.1.10 live im Store): Die Store-Beschreibung trägt jetzt einen kurzen Enterprise-Abschnitt mit dem Kontakt admin@infranode.dev, und die private Outlook-Adresse ist aus dem öffentlichen Manifest verschwunden. Dazu die Doku-Reste aus v1.3: Übersetzungsfehler in README.fr/de, hängende Changelog-Linkdefinition, Ampersand-Kommentar, chronologische Nachweistabelle, und die Reichweite des Vokabular-Gates gegenüber .planning ist als begründete Ausnahme mit Halter-Test entschieden. Kein Code geändert: dieselben 21 Werkzeuge, Budget 15712/18000. Lehre des Milestones: Beweisdokumente brauchen dieselbe Faktenprüfung wie Code, und ein als behoben gebuchter Review-Befund ohne nachgefahrenen Beleg ist schlimmer als ein offener.
 
 **v1.3 shipped 2026-08-26** (Audit passed 6/6, Release 0.1.9 live im Store): Konsistenz- und Härtungs-Schulden aus v1.2 geschlossen (`message_truncated` je Ebene eine Bedeutung, Id-Codec einzige Quelle, AST-Gate gegen Privat-Durchgriffe, drei Security-Nachzieher als Regressionstests). CIMD nach den v1.1-Review-Fixes live NACHGEMESSEN statt behauptet (Messweg A, echter Client, POST /register = 0, Gegenprobe mit abgeschaltetem Schalter). Enterprise-Fake-Door (ISV-Vorhaben) in READMEs und Store-Beschreibungen EN/DE/FR, ohne Preis, Kontakt k.cherif@outlook.de; Owner-Entscheid D-07: kein Issue, keine Enterprise-Interna im Repo. GitHub-Actions auf Node-24-Majors (setup-uv exakt gepinnt), per CI-Lauf und release.yml-Dry-Run validiert. Codebasis: ~2812 Tests grün, Budget 15711/18000 über 21 Tools.
 
@@ -73,6 +67,8 @@ Kandidaten:
 - ✓ Security-Nachzieher als Regressionstests statt Prüfschritte, Vokabular-Gate in voller Reichweite — v1.3 (SEC-02)
 - ✓ CIMD live nachgemessen: echter Client verbindet ohne Registrierung, Gegenprobe mit Schalter aus, selbsttragende Proof-Zeile — v1.3 (EXAPP-08)
 - ✓ Release 0.1.9 im Store mit elf Proof-Zeilen, Owner-Tag-Gate und Signatur über das heruntergeladene Asset — v1.3 (EXAPP-09)
+- ✓ Doku-Reste aus v1.3 geschlossen und Vokabular-Gate-Reichweite entschieden — v1.4 (DOC-01, DOC-02, SEC-03)
+- ✓ Release 0.1.10 im Store mit dem gekürzten Enterprise-Abschnitt und dem Kontaktwechsel auf admin@infranode.dev — v1.4 (EXAPP-10)
 
 ### Active
 
@@ -151,4 +147,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-28 at v1.4 milestone start*
+*Last updated: 2026-08-28 after v1.4 milestone*
