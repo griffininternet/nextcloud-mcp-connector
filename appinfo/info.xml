@@ -65,7 +65,7 @@
 - **Mail is read only**: no way to send, to draft, to move, to flag or to delete a message
 - **One direct messaging channel**: sending a Talk message, and an administrator can switch it off
 
-Reading text written by strangers next to private data would be a chain if there were a way out. The one channel that puts a message directly in front of other people is a Talk message, and an administrator can close it for the whole instance; that is what the switch is for. The create-only writes (a file, a card, a row) address nobody, but they can land in a folder, board or table that is shared with other people, so an operator who needs every path closed also reviews what the account shares.
+An assistant also reads text that strangers wrote, right next to your data. The only direct way out is a Talk message, and an administrator can switch it off. New files, cards or rows send nothing to anyone, but they can land in a shared folder.
 
 ### Under your control
 
@@ -110,7 +110,7 @@ Audit log, group policies and SSO through your identity provider are planned as 
 - **Mail nur lesen**: kein Weg, eine Nachricht zu senden, als Entwurf anzulegen, zu verschieben, zu markieren oder zu löschen
 - **Nur ein direkter Nachrichtenkanal**: eine Talk-Nachricht senden, und die Administration kann das abschalten
 
-Von Fremden geschriebenen Text neben privaten Daten zu lesen wäre eine Kette, wenn es einen Weg nach außen gäbe. Der einzige Kanal, der eine Nachricht direkt vor andere Menschen bringt, ist eine Talk-Nachricht, und die Administration kann ihn für die ganze Instanz schließen; dafür ist der Schalter da. Die nur anlegenden Schreibwege (eine Datei, eine Karte, eine Zeile) adressieren niemanden, aber sie können in einem Ordner, einem Board oder einer Tabelle landen, die mit anderen geteilt sind; wer jeden Weg geschlossen braucht, prüft daher auch, was das Konto teilt.
+Eine Assistenz liest auch fremde Texte neben Ihren Daten. Der einzige direkte Weg nach außen ist die Talk-Nachricht, und die Administration kann ihn abschalten. Neu angelegte Dateien, Karten oder Zeilen verschicken nichts, können aber in einem geteilten Ordner landen.
 
 ### In Ihrer Hand
 
@@ -157,7 +157,7 @@ Die verlinkten Seiten sind auf Englisch.
 - **Mail en lecture seule** : aucun moyen d'envoyer, de rédiger un brouillon, de déplacer, de marquer ou de supprimer un message
 - **Un seul canal de message direct** : envoyer un message Talk, et un administrateur peut le désactiver
 
-Lire des textes écrits par des inconnus à côté de données privées formerait une chaîne s'il existait une sortie. Le seul canal qui place un message directement devant d'autres personnes est un message Talk, et un administrateur peut le fermer pour toute l'instance ; c'est à cela que sert l'interrupteur. Les écritures en création seule (un fichier, une carte, une ligne) ne s'adressent à personne, mais elles peuvent atterrir dans un dossier, un tableau ou une table partagés avec d'autres personnes ; un opérateur qui veut fermer chaque chemin vérifie donc aussi ce que le compte partage.
+Un assistant lit aussi des textes écrits par des inconnus, à côté de vos données. La seule sortie directe est le message Talk, et un administrateur peut la désactiver. Les fichiers, cartes ou lignes créés n'envoient rien à personne, mais ils peuvent atterrir dans un dossier partagé.
 
 ### Sous votre contrôle
 
