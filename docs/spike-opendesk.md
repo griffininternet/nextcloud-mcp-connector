@@ -588,6 +588,120 @@ zwischen den zwei Konten, und die 14 gleichen Treffer der `Demo`-Kontrolle zeige
 2.2. Kein Aufruf dieses Abschnitts ist schreibend: gefahren ist ausschließlich
 `GET /api/v1/work-packages`, Arbeitspaket 38 ist unverändert.
 
+#### S4: die Erneuerung ohne Browsersitzung, nach künstlichem Ablauf
+
+**Behauptung:** Nach einem künstlich in die Vergangenheit gesetzten Ablauf antwortet derselbe
+OCS-Aufruf im Modus `oauth2` wieder mit Daten, ohne Browsersitzung, und `token_expires_at` steht
+danach in der Zukunft. **Das ist die Messung, an der Weg 0 hängt.**
+
+**Der künstliche Ablauf ist ausdrücklich Methode und nicht Nebenwirkung.** Der Wert `0` ist dafür der
+sichere Wert, und zwar aus zwei Gründen, die beide im Quellcode der installierten Fassung stehen:
+`isAccessTokenExpired()` zieht 60 Sekunden Sicherheitsabstand ab, ein Wert kurz in der Vergangenheit
+wäre also unsicher, und `0` ist zugleich der Vorgabewert, mit dem die Methode selbst liest.
+
+```php
+// lib/Service/OpenProjectAPIService.php:1726-1733
+public function isAccessTokenExpired(string $userId): bool {
+    $expiresAt = $this->config->getUserValue($userId, Application::APP_ID, 'token_expires_at', 0);
+    // Consider token expired 60 seconds early
+    // to avoid race conditions caused by various factors
+    $tokenExpirySafetyMargin = 60;
+    $expiresAt = (int)$expiresAt - $tokenExpirySafetyMargin;
+    return time() > $expiresAt;
+}
+```
+
+**Messweg und die drei Zahlen, auf die es ankommt.** Alle drei sind mit
+`occ user:setting bob integration_openproject token_expires_at` gelesen beziehungsweise gesetzt, der
+Aufruf dazwischen ist derselbe wie in S3, als `bob`:
+
+| Schritt | Zeitpunkt (Unix) | `bob.token_expires_at` | Aufruf und Messwert |
+|---------|------------------|------------------------|---------------------|
+| Ausgangszustand, gelesen | 1787943289 | **1787949020**, also 5731 s in der Zukunft | kein Aufruf |
+| künstlich gesetzt, zurückgelesen | 1787943305 | **0** | kein Aufruf |
+| Hauptlauf | 1787943305 | (während des Aufrufs) | `GET /ocs/v2.php/apps/integration_openproject/api/v1/work-packages?searchQuery=SPIKE-OD-8471&isSmartPicker=true` als `bob`: **HTTP 200**, `application/json`, **4746 Bytes**, ein Treffer, `id 38`, `subject SPIKE-OD-8471 privat` |
+| Zustand danach, gelesen | 1787943305 | **1787950505**, also 7200 s in der Zukunft | kein Aufruf |
+
+**Die Differenz ist kein Zufallswert, sondern die Bestätigung eines schon gemessenen:**
+1787950505 minus 1787943305 ist genau **7200**, dasselbe `expires_in`, das 2.2 am Token-Endpunkt von
+OpenProject gemessen hat und das 17-05 nach der Einrichtung als Restlaufzeit gelesen hat. Damit nennen
+drei voneinander unabhängige Messwege denselben Wert.
+
+**Der zweite Beleg dafür, dass wirklich erneuert wurde, steht im Zustand selbst.** Nicht nur die
+Ablaufzeit ist neu, das Tokenpaar ist ausgetauscht:
+
+| Schlüssel | vor dem Hauptlauf | nach dem Hauptlauf |
+|-----------|-------------------|--------------------|
+| `token` | Länge 43, Präfix `dbHz` | Länge 43, Präfix `7Gvk` |
+| `refresh_token` | Länge 43, Präfix `bHRR` | Länge 43, Präfix `eXhd` |
+
+Beide Werte sind ersetzt, also hat OpenProject ein neues Paar ausgegeben, genau die Rotation aus
+`use_refresh_token`, die 2.2 auf Weg 1 direkt am Token-Endpunkt gemessen hat. Von den Werten stehen
+hier nur Länge und Vier-Zeichen-Präfix (T-17-01).
+
+**In diesem Aufruf war keine Browsersitzung im Spiel, und das ist der Punkt der ganzen Behauptung.**
+Der Aufruf lief unter reiner AppAPI-Impersonation über Caddy, mit `OCS-APIRequest: true`, `EX-APP-ID`,
+`EX-APP-VERSION` und `AUTHORIZATION-APP-API` und sonst nichts: **kein Cookie** (`curl` ohne `-b` und
+ohne `-c`), **kein App-Passwort im Prozess**, und der Nutzer `bob` hatte zu diesem Zeitpunkt keine
+Nextcloud-Sitzung offen. Die Erneuerung hat also der Server aus dem gespeicherten `refresh_token`
+gefahren, und niemand hat einen Browser dafür gebraucht.
+
+**Die Gegenprobe, ohne die der Hauptlauf nichts beweist.** Ohne sie wäre die 200 oben auch mit einem
+zwischengespeicherten Token erklärbar. Gefahren ist deshalb dieselbe Kette mit einem unbrauchbaren
+`refresh_token`, im selben Lauf und siebzehn Sekunden später:
+
+| Schritt | Messwert |
+|---------|----------|
+| `occ user:setting bob integration_openproject refresh_token <43 Nullen>` | gesetzt; `token` bleibt unverändert (Präfix `7Gvk`) |
+| `occ user:setting bob integration_openproject token_expires_at 0`, zurückgelesen | **0** |
+| derselbe OCS-Aufruf als `bob` | **HTTP 401**, `application/json`, **77 Bytes**, `{"ocs":{"meta":{"status":"failure","statuscode":401,"message":""},"data":""}}` |
+| Zustand danach | `token_expires_at` bleibt **0**, `token` unverändert `7Gvk`, `refresh_token` die 43 Nullen |
+
+**Der Weg dieser 401 durch den Code ist derselbe wie bei `carol` in S2, und das ist konsistent und
+kein Zufall:** `getAccessToken()` versucht die Erneuerung, `requestOAuthAccessToken()` scheitert, die
+Methode gibt eine leere Zeichenkette zurück, und `validatePreRequestConditions()` antwortet darauf mit
+`new DataResponse('', Http::STATUS_UNAUTHORIZED)`
+(`lib/Controller/OpenProjectAPIController.php:43-49`). Deshalb trägt sie `statuscode 401` und eine
+leere Meldung und nicht die `997` des Kerns.
+
+**Dass wirklich eine Erneuerung versucht wurde, steht zusätzlich im Protokoll**, und die Zeile ist
+gemessen und nicht hergeleitet:
+
+```
+# docker compose exec nextcloud, aus data/nextcloud.log, gekürzt
+level 3, 2026-08-28T18:55:23+00:00, user bob, app integration_openproject
+"Failed to refresh token: Client error: `POST http://op.localtest.me:8082/oauth/token`
+ resulted in a `400 Bad Request` response: {"error":"invalid_grant", ...}"
+```
+
+**Der Kontrast zum Hauptlauf ist selbst ein Messwert:** im Zeitfenster des Hauptlaufs (18:55:0x)
+enthält `nextcloud.log` **null** Zeilen, im Zeitfenster der Gegenprobe zwei (eine `level 2` mit
+`OpenProject OAuth error`, eine `level 3` mit der Zeile oben). Die geglückte Erneuerung ist also
+stumm, die gescheiterte laut. Wer S4 nur am Log prüfen wollte, hätte den Hauptlauf für einen
+Nichtlauf gehalten; deshalb sind die drei Zustandswerte die Messung und das Log der Zusatzbeleg.
+
+**Der Quellcodebeleg, der sagt, warum diese Messung überhaupt gelingen darf, und wo sie endet.** Die
+Erneuerung ohne Oberfläche ist kein Nebeneffekt, sie steht als Absicht im Kommentar der
+Upstream-Entwickler, in `lib/Service/OpenProjectAPIService.php:1764-1765`:
+
+```php
+// For OAuth2 setup, only try to refresh the expired token.        // Zeile 1764
+// Token exchange needs to be initiated from the UI.               // Zeile 1765
+```
+
+Wortwörtlich: im Modus `oauth2` erneuert die App serverseitig, im Modus `oidc` sagt sie selbst, dass
+der Austausch von der Oberfläche her angestoßen werden muss. **Genau diese Asymmetrie ist der
+Unterschied zwischen S4 und S5.** S4 belegt hier die erste Hälfte gemessen; die zweite Hälfte, das
+Verhalten im Modus `oidc` nach Ablauf, ist Plan 17-07. Ein Bericht, der aus S4 auf den OIDC-Betrieb
+schließt, überdehnt genau die Stelle, an der die Quelle selbst eine Grenze zieht.
+
+**Zwei Zustände, die dieser Abschnitt hinterlässt, und beide gehören ausgesprochen.** Die
+Weg-0-Verbindung von `bob` ist nach der Gegenprobe **absichtlich kaputt**: sein `refresh_token` ist
+der Nullwert und sein `token_expires_at` steht auf 0. Das ist gewollt und der Preis der Gegenprobe;
+der Zustand verschwindet mit dem Nextcloud-Band beim `down -v`. **`alice` ist unberührt**, gemessen
+nach der Gegenprobe: `occ user:setting alice integration_openproject token_expires_at` antwortet
+weiter `1787949009`. Plan 17-07 braucht ein verbundenes Konto, und das ist `alice`.
+
 #### Die Egress-Kontrollmessung
 
 **Behauptung:** Der ExApp-Container erreicht OpenProject direkt, also bliebe Weg 1 als Rückfall offen.
@@ -670,13 +784,16 @@ Arbeitspaket zu Datei, die `research/FEATURES.md` als Unterscheidungsmerkmal nen
 | **S1** | `GET /api/v1/url` antwortet unter reiner AppAPI-Impersonation mit OCS-JSON und der Adresse | **gemessen, ja.** 200, OCS-Umschlag, `data = http://op.localtest.me:8082`, als `alice`; Gegenprobe 64 Nullen 401 |
 | **S2** | Die Berechtigung hängt am Nutzer, nicht an der App | **gemessen, ja.** `carol` 401 mit leerer Meldung aus der Vorprüfung, `alice` und `bob` je 200 mit Daten; die zwei 401-Formen sind unterscheidbar |
 | **S3** | Konto A sieht in der Suche kein Arbeitspaket, das nur Konto B sehen darf | **gemessen, ja.** `alice` 200 mit 0 Treffern, `bob` 200 mit genau einem (`id 38`); Gegenproben: `Demo` liefert `alice` 14 Treffer ohne die 38, 64 Nullen 401/997, `carol` 401 mit leerer Meldung |
-| **S4** | Nach künstlichem Ablauf antwortet der nächste Aufruf wieder mit Daten, ohne Browsersitzung | noch nicht gemessen, Plan 17-06 |
+| **S4** | Nach künstlichem Ablauf antwortet der nächste Aufruf wieder mit Daten, ohne Browsersitzung | **gemessen, ja.** `token_expires_at` 1787949020, künstlich 0, danach 1787950505 (7200 s), Aufruf dazwischen 200 mit einem Treffer, Tokenpaar ausgetauscht, kein Cookie und kein App-Passwort; Gegenprobe mit unbrauchbarem `refresh_token`: **401** samt `invalid_grant` im Protokoll |
 | **S5a/b/c** | Verhalten im Modus `oidc` nach Ablauf, drei Pfade | noch nicht gemessen, Plan 17-07 |
 | **S6** | Eine Antwort trägt die Felder für ein späteres Werkzeug in kompakter Form | noch nicht gemessen, Plan 17-06 |
 
-Der Ausgangszustand für S4 ist mit diesem Plan hergestellt und gelesen: `alice` und `bob` tragen je
-einen `refresh_token` und ein `token_expires_at` rund 7200 Sekunden in der Zukunft, und der Modus ist
-`oauth2`, also der Zweig, in dem die App nach `svc.php:1764-1765` serverseitig erneuert.
+Der Ausgangszustand für S4 ist mit Plan 17-05 hergestellt und gelesen worden: `alice` und `bob` trugen
+je einen `refresh_token` und ein `token_expires_at` rund 7200 Sekunden in der Zukunft, und der Modus
+ist `oauth2`, also der Zweig, in dem die App nach
+`lib/Service/OpenProjectAPIService.php:1764-1765` serverseitig erneuert. Auf diesem Zustand ist S4
+gefahren, und `bob` trägt danach absichtlich eine kaputte Verbindung; `alice` ist unberührt und ist
+das verbundene Konto, mit dem Plan 17-07 arbeitet.
 
 ### 2.2 Weg 1: PKCE, `expires_in`, Erneuerung ohne Browsersitzung, Zwei-Konten-Negativbeweis
 
@@ -1243,7 +1360,9 @@ und Weg B, der Handweg über `occ config:app:set` plus den persönlichen Durchla
 ohne Eingriff. Welcher der beiden genommen wurde, steht in 2.1; die Entscheidung liegt beim Owner, weil
 sie die Übertragbarkeit der Weg-0-Messung auf openDesk verändert und nicht nur den Aufwand.
 
-### 5.5 Rohwerte der Suchmessung auf Weg 0 (S3)
+### 5.5 Rohwerte von S3, S4 und S6 auf Weg 0
+
+#### 5.5.1 Die Suchmessung (S3)
 
 Gemessen am 2026-08-28, alle Aufrufe durch Caddy gegen `http://127.0.0.1:8091`, alle unter reiner
 AppAPI-Impersonation und ohne App-Passwort im Prozess. Der Pfad ist in jeder Zeile
@@ -1278,6 +1397,35 @@ Keine registrierte Ablage, also greift der Filter `linkable_to_storage_url` für
 Zeile steht ausdrücklich in Abschnitt 5 und nicht in der Messwerttabelle von S3: sie erklärt die
 Vorgabe der Fläche und ist selbst kein Messwert über Berechtigungen, weil ein Administrator in
 OpenProject alles sieht.
+
+#### 5.5.2 Der künstliche Ablauf und die Erneuerung (S4)
+
+Gemessen am 2026-08-28, ausschließlich am Konto `bob`. Die Zustandswerte kommen aus
+`occ user:setting bob integration_openproject <schlüssel>`, ausgeführt als `www-data` im
+Nextcloud-Container. Tokenwerte stehen nach der Geheimnisregel nur mit Länge und
+Vier-Zeichen-Präfix.
+
+| # | Zeitpunkt (Unix) | Schritt | Rohwert |
+|---|------------------|---------|---------|
+| 1 | 1787943289 | `token_expires_at` gelesen | `1787949020` |
+| 2 | 1787943289 | `token` gelesen | Länge 43, Präfix `dbHz` |
+| 3 | 1787943289 | `refresh_token` gelesen | Länge 43, Präfix `bHRR` |
+| 4 | 1787943305 | `token_expires_at 0` gesetzt, zurückgelesen | `0` |
+| 5 | 1787943305 | OCS-Aufruf als `bob`, `?searchQuery=SPIKE-OD-8471&isSmartPicker=true` | **200**, `application/json; charset=utf-8`, 4746 Bytes, ein Treffer `id 38` |
+| 6 | 1787943305 | `token_expires_at` gelesen | `1787950505` (Differenz zu Zeile 5: **7200**) |
+| 7 | 1787943305 | `token` gelesen | Länge 43, Präfix `7Gvk` (verschieden von Zeile 2) |
+| 8 | 1787943305 | `refresh_token` gelesen | Länge 43, Präfix `eXhd` (verschieden von Zeile 3) |
+| 9 | 1787943322 | `refresh_token` auf 43 Nullen gesetzt, `token_expires_at 0`, zurückgelesen | `0` |
+| 10 | 1787943322 | derselbe OCS-Aufruf als `bob` | **401**, `application/json; charset=utf-8`, 77 Bytes, `statuscode 401`, Meldung leer |
+| 11 | 1787943323 | `token_expires_at`, `token`, `refresh_token` gelesen | `0`, Präfix `7Gvk` unverändert, Präfix `0000` |
+| 12 | nach Zeile 11 | `occ user:setting alice integration_openproject token_expires_at` | `1787949009`, unverändert gegenüber 17-05 |
+
+Die Protokollzeilen im Zeitfenster der beiden Läufe, mit `grep` über
+`/var/www/html/data/nextcloud.log` gezählt: **0** Zeilen zu `18:55:0x` (Hauptlauf, Zeile 5) und **2**
+Zeilen zu `18:55:23` (Gegenprobe, Zeile 10). Die zweite davon steht wörtlich in 2.1; ihr Fehlerfeld
+ist `invalid_grant`, dasselbe, das 2.2 auf Weg 1 für einen erfundenen `refresh_token` gemessen hat.
+Die Zeile ist vor der Übernahme in diesen Bericht gegen jeden Wert der Verbindungsdatei geprüft
+worden und trägt keinen davon.
 
 ## Was diese Messung nicht beweist
 
