@@ -128,7 +128,45 @@ Plans:
   4. Eine Fragenliste für den 14.09. liegt vor und enthält das ZenDiS-Aufnahmeverfahren, den Installationsweg in openDesk, die AGPL-Konsequenz für die Enterprise-Positionierung und die Folge der in openDesk abgeschalteten Apps Talk und Kontakte für zwei unserer bestehenden Werkzeugfamilien
   5. Der ausgelieferte Produktionsbaum ist nach der Phase unverändert: kein neues Werkzeug, kein neuer Client im Paket, Werkzeugoberfläche und Budget-Gate stehen still
 
-**Plans**: TBD
+**Plans**: 9 plans
+Plans:
+**Wave 1**
+
+- [ ] 17-01-PLAN.md , OD-01 aus Quellen ohne Docker, Bericht angelegt mit Kopf, vorab festgelegten Entscheidungskriterien und Abschnitt 1
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 17-02-PLAN.md , Stufe A Teil 1: Spike-Topologie mit Nextcloud 33.0.7 gepinnt und auf Loopback, S0 gemessen, SSRF-Grenze gegen internen Dienstnamen gemessen (D-06)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 17-03-PLAN.md , Stufe A Teil 2: OpenProject 17.7.2, die vier Oberflächenschritte per Owner-Gate, Grundzustand für den Zwei-Konten-Negativbeweis
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 17-04-PLAN.md , Weg 1 vollständig gemessen: PKCE mit Gegenprobe ohne code_challenge, expires_in, Refresh ohne Browsersitzung, Zwei-Konten-Negativbeweis
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 17-05-PLAN.md , Weg 0 eingerichtet (Zwei-Wege-OAuth2 per Owner-Gate), S1, S2, Capability-Befund und Egress-Kontrollmessung
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 17-06-PLAN.md , Weg 0 gemessen: S3 Zwei-Konten-Negativbeweis, S4 Erneuerung nach künstlichem Ablauf mit Gegenprobe, S6 Byte-Kosten und API-Form
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 17-07-PLAN.md , Stufe B mit Keycloak 26.7.0 und user_oidc 8.11.0, S5a bis S5c mit Log-Zeile als Messwert (ungemessen ausdrücklich zulässig), Entwurf zu user_oidc#925 nur bei geglückter Repro
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 17-08-PLAN.md , OD-03: Fragenliste für den 14.09. im Bericht und im Dossier, zwei unversendete Entwürfe der Rückkanäle, Owner-Gate
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [ ] 17-09-PLAN.md , Bericht abgeschlossen (welcher Weg trägt, was ungemessen blieb, Ränder, Reproduktion), Geheimnisgriff, Produktionsbaum-Nachweis und Abräumen der Messumgebung
+
+*Die Wellen sind seriell, weil alle Pläne dieselbe Berichtsdatei füllen und dieselbe eine Messumgebung benutzen; der Schnitt zwischen Welle 2 und 3 sowie vor Welle 7 folgt dem Stufenschnitt der Recherche (Stufe A vollständig protokolliert, bevor Keycloak dazukommt).*
 
 ### Phase 18: Audit-Log Kern
 
@@ -180,13 +218,13 @@ Plans:
 | 14. Doku-Reste und Gate-Entscheid | v1.4 | 2/2 | Complete | 2026-08-27 |
 | 15. Release 0.1.10 | v1.4 | 4/4 | Complete | 2026-08-28 |
 | 16. Release 0.1.11 | v1.5 | 4/4 | Complete | 2026-08-28 |
-| 17. openDesk-Spike | v1.5 | 0/? | Not started | - |
+| 17. openDesk-Spike | v1.5 | 0/9 | Planned | - |
 | 18. Audit-Log Kern | v1.5 | 0/? | Not started | - |
 | 19. Audit-Log Bedienung und Textnachzug | v1.5 | 0/? | Not started | - |
 
 ## Next
 
-`/gsd:plan-phase 16`: Phase 16 (Release 0.1.11) planen. Sie hängt an nichts und räumt den `[Unreleased]`-Block, bevor Phase 19 ihn wieder füllt. Phase 17 (Spike) und Phase 18 (Audit-Log Kern) können parallel dazu geplant und ausgeführt werden.
+`/gsd:execute-phase 17`: Phase 17 (openDesk-Spike) ausführen, neun Pläne in neun seriellen Wellen, drei davon mit Owner-Gate. Phase 18 (Audit-Log Kern) kann parallel dazu geplant werden.
 
 ---
-*Roadmap created: 2026-08-14 (granularity: coarse, mode: mvp); v1.0 abgeschlossen: 2026-08-20; v1.1 abgeschlossen: 2026-08-20 (Phase 7 deferred); v1.2 abgeschlossen: 2026-08-25 (Release 0.1.8 live); v1.3 abgeschlossen: 2026-08-26 (Release 0.1.9 live, CIMD nachgemessen, Enterprise-Fake-Door); v1.4 abgeschlossen: 2026-08-28 (Release 0.1.10 live); v1.5 aufgesetzt: 2026-08-28 (Phasen 16-19: Release 0.1.11, openDesk-Spike, Audit-Log in zwei Phasen)*
+*Roadmap created: 2026-08-14 (granularity: coarse, mode: mvp); v1.0 abgeschlossen: 2026-08-20; v1.1 abgeschlossen: 2026-08-20 (Phase 7 deferred); v1.2 abgeschlossen: 2026-08-25 (Release 0.1.8 live); v1.3 abgeschlossen: 2026-08-26 (Release 0.1.9 live, CIMD nachgemessen, Enterprise-Fake-Door); v1.4 abgeschlossen: 2026-08-28 (Release 0.1.10 live); v1.5 aufgesetzt: 2026-08-28 (Phasen 16-19: Release 0.1.11, openDesk-Spike, Audit-Log in zwei Phasen); Phase 17 geplant: 2026-08-28 (9 Pläne, 9 Wellen)*
