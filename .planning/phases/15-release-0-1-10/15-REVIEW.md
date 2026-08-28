@@ -115,7 +115,7 @@ which is not the registry check of step 8" ersetzen oder ganz streichen.
 
 ### WR-02: Die Adresse, die dieses Release entfernen sollte, wird vom Store weiter veröffentlicht
 
-**Status:** OWNER-ENTSCHEID OFFEN. Die `<author mail=...>`-Adresse ist die Store-Konto-Identität; ob sie ebenfalls auf admin@infranode.dev wechselt, entscheidet der Owner. Bis dahin bleibt sie unverändert.
+**Status:** FIXED. Owner-Entscheid 2026-08-28: die `<author mail=...>`-Adresse wechselt ebenfalls auf admin@infranode.dev; die private Outlook-Adresse steht damit nicht mehr im öffentlichen Manifest. Sichtbar im Store mit dem nächsten Release (0.1.11).
 
 **File:** `appinfo/info.xml:185`, Anspruch in `CHANGELOG.md:20-22`
 **Issue:** Der Changelog-Block sagt: "the contact address in it moved from k.cherif@outlook.de to
