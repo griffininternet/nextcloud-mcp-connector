@@ -10,7 +10,15 @@ __pycache__/
 # passwords. Both are generated on the staging host and never belong in this repository.
 .env.staging
 .env.staging.app
+# The connection file of the throwaway measurement topology of phase 17
+# (compose.spike-opendesk.yml). It carries the HaRP shared key, the registration secret, two
+# working app passwords and, from plan 17-03 on, the OAuth client secrets of the two access
+# ways to OpenProject. .env.spike-opendesk.example names the variables and carries no value.
+.env.spike-opendesk
 .harp-certs/
+# The FRP certificate material of the phase 17 topology. Its own directory, so the two HaRP
+# daemons of this repository cannot regenerate a shared CA under each other.
+.harp-certs-spike-od/
 *.egg-info/
 .pytest_cache/
 .ruff_cache/

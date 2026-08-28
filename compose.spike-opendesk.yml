@@ -1,0 +1,284 @@
+# Throwaway measurement topology of phase 17 (openDesk spike, OD-01 and OD-02).
+#
+#   export HP_SHARED_KEY="$(openssl rand -hex 32)"
+#   export SECRET_KEY_BASE="$(openssl rand -hex 32)"      # see the note below
+#   docker compose -f compose.spike-opendesk.yml up -d --wait      # stage A
+#   bash scripts/bootstrap_spike_opendesk.sh                       # AppAPI, daemon, ExApp
+#   docker compose -f compose.spike-opendesk.yml --profile op up -d --wait   # stage B, plan 17-03
+#   docker compose -f compose.spike-opendesk.yml --profile oidc up -d        # stage C, plan 17-07
+#   docker compose -f compose.spike-opendesk.yml down -v                     # throw it away
+#
+# This is a third and independent topology next to compose.exapp.yml and compose.test.yml,
+# not an extension of either. Own project name, own network, own subnet, own ports, own
+# volumes, so the instance from compose.exapp.yml keeps running untouched while this one is
+# created, measured and thrown away.
+#
+# Why it exists at all: every reachability claim of this project stands on Nextcloud 34.0.x,
+# and openDesk 1.18.0 pins Nextcloud to 33.0.7 (docs/spike-opendesk.md section 1.3). In a
+# project that reads its own evidence literally, a proof on the wrong major version is not a
+# proof, so the measurement environment of this phase runs 33.0.7 and nothing else (D-02).
+#
+# Both required exports above, and why there are two: compose interpolates the whole file
+# before it filters by profile. Measured on 2026-08-28 against Docker Compose of Docker
+# 29.5.2 with a probe file: a `${VAR:?...}` inside a service that carries `profiles:` fails
+# every command, `config --services` and `ps` included, with and without that profile
+# selected. So SECRET_KEY_BASE has to be in the environment even for a stage A run that
+# never starts OpenProject. That is the price of WR-11, and it is the right price: a default
+# value for a secret in a public repository is a secret nobody ever sees again.
+#
+# The credentials of the accounts below are throwaway values for an instance that only ever
+# listens on loopback. They are not a deployment secret; the shared key and the app secret of
+# the registration are generated at bootstrap time and land in .env.spike-opendesk, which is
+# git-ignored.
+name: nc-mcp-spike-od
+
+services:
+  caddy:
+    # AppAPI reaches an ExApp through the public Nextcloud URL, so a reverse proxy that
+    # knows /exapps/* is not decoration here: without it the registration fails at the
+    # heartbeat (02-RESEARCH.md, pitfall 7). Nextcloud AIO ships exactly this rule.
+    #
+    # It is also the front door of OpenProject in stage B, which is why it publishes two
+    # ports and OpenProject publishes none.
+    image: caddy:2
+    container_name: nc-mcp-spike-od-caddy
+    ports:
+      # Loopback only (WR-06): the admin password below is a throwaway value and the
+      # bruteforce guard is disabled at bootstrap, so a binding on all interfaces would
+      # expose a trivially ownable instance to the developer's LAN.
+      #
+      # 8091 and not 8081, so this topology can stand next to compose.exapp.yml.
+      - "127.0.0.1:${NC_SPIKE_OD_PORT:-8091}:80"
+      # OpenProject, and the same number inside and outside on purpose. Rails builds its
+      # own absolute URLs from OPENPROJECT_HOST__NAME, and the OAuth redirect of way 1
+      # travels through a browser on the host and through Nextcloud inside the network. Both
+      # have to arrive at the same string, so op.localtest.me:8082 is the one name and 8082
+      # the one port, on both sides of the boundary. A published 8083:8082 would make the
+      # browser see :8083 and Rails redirect to :8082, and the consent flow of D-04 would
+      # break in a way that looks like an OAuth error and is a port mapping.
+      - "127.0.0.1:8082:8082"
+    volumes:
+      - ./deploy/Caddyfile.spike-opendesk:/etc/caddy/Caddyfile:ro
+    networks:
+      default:
+        # A fixed address, because Nextcloud and HaRP have to trust exactly this one
+        # container and nothing else in the subnet (WR-08). The ExApp container is hung
+        # into the same network by the deploy daemon, and it is the component that
+        # processes untrusted input: it must never be able to rewrite a client address.
+        ipv4_address: 172.29.43.10
+    depends_on:
+      nextcloud:
+        condition: service_healthy
+    restart: unless-stopped
+
+  nextcloud:
+    # 33.0.7 and not 34.0.3, because openDesk 1.18.0 pins its Nextcloud image to exactly
+    # this patch version (helmfile/environments/default/images.yaml.gotmpl, line 351, quoted
+    # in docs/spike-opendesk.md section 1.3). D-02 asks for the openDesk state, not for the
+    # state this project has already proven. A patch version and never a floating tag: the
+    # version of record is `occ status`, never this line, but a floating tag makes every
+    # version claim about this instance unverifiable.
+    image: nextcloud:33.0.7-apache
+    container_name: nc-mcp-spike-od-nc
+    # No published port on purpose: this instance is reachable through Caddy only, because
+    # every request from AppAPI to the ExApp has to take the same way a browser takes.
+    extra_hosts:
+      # integration_openproject calls OpenProject from inside this container, under the
+      # value an administrator typed into openproject_instance_url. That value has to be the
+      # same string the browser uses, or the OAuth redirect of way 0 lands on a host the
+      # other side does not know. op.localtest.me resolves to 127.0.0.1 in the public DNS,
+      # which is right for the browser on the host and wrong in here, so this line points
+      # the name at Caddy instead.
+      #
+      # The ExApp container deliberately does not get this entry: it is created by the deploy
+      # daemon, not by this file, and there is no supported way to hand it extra_hosts. The
+      # egress control measurement of task 3 (D-06) therefore uses the compose service name
+      # `openproject` and never `op.localtest.me`: the service name resolves inside the
+      # network without any host entry, and it is what a neighbouring service is actually
+      # called from in there.
+      - "op.localtest.me:172.29.43.10"
+    environment:
+      SQLITE_DATABASE: nextcloud
+      NEXTCLOUD_ADMIN_USER: "${NC_SPIKE_OD_ADMIN_USER:-admin}"
+      NEXTCLOUD_ADMIN_PASSWORD: "${NC_SPIKE_OD_ADMIN_PASSWORD:-admin-spike-od-pw}"
+      # caddy is in the list because the deploy daemon calls Nextcloud under that name
+      # from inside the network, and Nextcloud rejects an unknown Host outright.
+      NEXTCLOUD_TRUSTED_DOMAINS: "localhost 127.0.0.1 caddy"
+      # AppAPI builds the ExApp URL from the public Nextcloud URL, so Nextcloud has to
+      # know what it is called from the outside (02-RESEARCH.md, pitfall 7). Without the
+      # overwrite it would generate http://caddy links and occ would print them, too.
+      OVERWRITEHOST: "127.0.0.1:${NC_SPIKE_OD_PORT:-8091}"
+      OVERWRITEPROTOCOL: http
+      OVERWRITECLIURL: "http://127.0.0.1:${NC_SPIKE_OD_PORT:-8091}"
+      # Only the proxy in front of it may rewrite the client address, and that is one
+      # container, not the subnet (WR-08). The whole /24 would also cover the ExApp
+      # container, which would let anything running in there forge client IPs towards
+      # Nextcloud: bruteforce counters, audit entries and IP based rules all read that
+      # value. The address is the fixed one assigned to caddy above.
+      TRUSTED_PROXIES: "172.29.43.10"
+    healthcheck:
+      # status.php answers as soon as the web server is up. That is not the same as
+      # "installed", so the bootstrap script polls `occ status` before it does any work.
+      test: ["CMD", "php", "-r", "exit(file_get_contents('http://localhost/status.php') ? 0 : 1);"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+    volumes:
+      - nextcloud-spike-od-data:/var/www/html
+    restart: unless-stopped
+
+  appapi-harp:
+    # The deploy daemon. It starts the ExApp container over the Docker socket and routes
+    # every /exapps/ request to it, past the PHP process. The tag is the floating `release`
+    # one of the existing topology on purpose: HaRP publishes no patch tags, so the version
+    # of record is the image digest, and the bootstrap reads it out of the running container
+    # for the report header instead of trusting this line.
+    image: ghcr.io/nextcloud/nextcloud-appapi-harp:release
+    container_name: nc-mcp-spike-od-harp
+    # No ports section: Caddy reaches 8780 inside this network, and publishing the port
+    # would weaken the WR-06 rule without buying anything.
+    environment:
+      # No default (WR-11). Whoever reaches the FRP port with this key can register as this
+      # ExApp, so `up` fails until the operator generates one:
+      #   export HP_SHARED_KEY="$(openssl rand -hex 32)"
+      # The bootstrap reads it back out of this container rather than guessing it, so the
+      # daemon registration can never drift away from the container that was started first.
+      HP_SHARED_KEY: "${HP_SHARED_KEY:?export HP_SHARED_KEY with 64 hex characters first, see .env.spike-opendesk.example}"
+      NC_INSTANCE_URL: "http://caddy"
+      # One proxy, not the subnet: see the TRUSTED_PROXIES comment above (WR-08).
+      HP_TRUSTED_PROXY_IPS: "172.29.43.10"
+      # The image defaults to "warning", which hides the one line that says where a request
+      # was routed. HP_LOG_LEVEL=info makes a failing registration debuggable without
+      # editing this file, and a failing registration is itself the OD-01 finding of S0.
+      HP_LOG_LEVEL: "${HP_LOG_LEVEL:-warning}"
+    volumes:
+      # T-02-31, accepted: the Docker socket is effectively root on the host. The deploy
+      # daemon cannot create the ExApp container without it. This topology listens on
+      # loopback only and is thrown away after the phase; docs/exapp-install.md carries the
+      # production note.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Its own directory and not the ./.harp-certs of compose.exapp.yml, which is the one
+      # place this file deliberately differs from its template beyond the topology
+      # constants. HaRP generates the FRP CA and both leaf certificates into /certs on first
+      # start and reuses what it finds. Two daemons with two different HP_SHARED_KEYs on the
+      # same directory would share one CA and could regenerate it under each other, and the
+      # topology that would break is compose.exapp.yml, which is in daily use in this
+      # repository. Separate material costs nothing and cannot reach across.
+      - ./.harp-certs-spike-od:/certs
+    depends_on:
+      nextcloud:
+        condition: service_healthy
+    restart: unless-stopped
+
+  registry:
+    # The deploy daemon can only pull what a registry serves, and the ExApp image of this
+    # phase is built locally. The Docker daemon of the host treats a 127.0.0.1 registry as
+    # an allowed insecure one without any extra configuration.
+    image: registry:2
+    container_name: nc-mcp-spike-od-registry
+    ports:
+      # Loopback only (WR-06): an unauthenticated, unencrypted registry reachable from the
+      # LAN is an open write target for everyone on it. 5001 and not 5000, so this topology
+      # can stand next to compose.exapp.yml.
+      - "127.0.0.1:5001:5000"
+    volumes:
+      - registry-spike-od-data:/var/lib/registry
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Stage B and stage C. They carry profiles so that the cut between the stages is visible
+  # in this file and not only in the plans: a plain `up` starts stage A and neither of the
+  # two below, which is what makes the cheap part of the phase measurable before the
+  # expensive part is even pulled (17-RESEARCH.md, pitfall 1).
+  # ---------------------------------------------------------------------------
+
+  openproject:
+    # Stage B, plan 17-03. Started with --profile op and never by a plain `up`.
+    #
+    # 17.7.2, because openDesk 1.18.0 pins exactly that (images.yaml.gotmpl line 725). The
+    # openDesk image is a mirror of openproject/open_desk, the upstream of which is public;
+    # this topology runs the community image of the same version, which is the closest
+    # publicly pullable equivalent and is pinned to the patch level (D-02).
+    profiles: ["op"]
+    image: openproject/openproject:17.7.2
+    container_name: nc-mcp-spike-od-op
+    # No published port: Caddy is the front door, for the same reason Nextcloud has none.
+    # The name and port a browser uses have to be the name and port Rails builds its own
+    # URLs from, and that is what the 8082 mapping on Caddy is for.
+    environment:
+      # No default (WR-11), same pattern as HP_SHARED_KEY above. Rails derives every session
+      # cookie and every signed message from this value, so a published default would be a
+      # forgeable session on every copy of this repository:
+      #   export SECRET_KEY_BASE="$(openssl rand -hex 32)"
+      SECRET_KEY_BASE: "${SECRET_KEY_BASE:?export SECRET_KEY_BASE with 64 hex characters first, see .env.spike-opendesk.example}"
+      # The one name this instance knows itself under, port included. It is the same string
+      # in the browser on the host, in the Caddy route and in openproject_instance_url
+      # inside Nextcloud (see extra_hosts above).
+      OPENPROJECT_HOST__NAME: "op.localtest.me:8082"
+      OPENPROJECT_HTTPS: "false"
+      # The measurement reads field names and menu entries out of this instance, and the
+      # documented names of OpenProject are the English ones.
+      OPENPROJECT_DEFAULT__LANGUAGE: "en"
+    volumes:
+      # The all-in-one image runs its own PostgreSQL when no DATABASE_URL is given. Both
+      # paths are named volumes and not bind mounts: the seeding of a fresh OpenProject
+      # takes minutes, and a restart between two measurements must not repeat it.
+      - openproject-spike-od-pgdata:/var/openproject/pgdata
+      - openproject-spike-od-assets:/var/openproject/assets
+    restart: unless-stopped
+
+  keycloak:
+    # Stage C, plan 17-07 (S5, the OIDC breaking point of D-07). Started with
+    # --profile oidc and never by a plain `up`.
+    #
+    # 26.7.0, because openDesk 1.18.0 pins its Keycloak mirror to that version
+    # (images.yaml.gotmpl line 413).
+    profiles: ["oidc"]
+    image: quay.io/keycloak/keycloak:26.7.0
+    container_name: nc-mcp-spike-od-kc
+    # No published port: Nextcloud and user_oidc reach it inside the network, and the
+    # browser part of the OIDC flow travels through Caddy.
+    #
+    # start-dev, because this is a throwaway instance: it runs on the in-memory dev database
+    # and needs no hostname, no TLS material and no production checks.
+    command: ["start-dev"]
+    environment:
+      # No secret with a default value in this file (WR-11), and deliberately no secret at
+      # all: a `${...:?}` here would make every command of this topology demand a third
+      # export, `ps` on stage A included, because compose interpolates the whole file
+      # regardless of profiles (measured, see the header). Plan 17-07 hands the bootstrap
+      # admin credentials in through the environment; .env.spike-opendesk.example names the
+      # variables, and `kc.sh bootstrap-admin user` inside the container is the fallback.
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      # A named volume and not the dev default, so that the realm survives a restart of the
+      # container. It has to be thrown away between two runs on purpose, though:
+      # `--import-realm` skips a realm that already exists instead of updating it, so a
+      # changed realm file on a kept volume silently measures the old realm. The command for
+      # that is `docker compose -f compose.spike-opendesk.yml down -v` for the whole
+      # topology, or `docker volume rm nc-mcp-spike-od_keycloak-spike-od-data` for this one.
+      - keycloak-spike-od-data:/opt/keycloak/data
+    restart: unless-stopped
+
+networks:
+  default:
+    # Named explicitly because `occ app_api:daemon:register --net` needs the name, and a
+    # fixed subnet because both the Nextcloud proxy list and HaRP have to trust exactly this
+    # range and nothing wider. 172.29.43.0/24 and not .42, so this topology can stand next
+    # to compose.exapp.yml without either of them stealing the other's addresses.
+    name: nc-mcp-spike-od-net
+    ipam:
+      config:
+        - subnet: 172.29.43.0/24
+          # Dynamic assignment never enters the static half (IN-03): without the range,
+          # Docker could hand the fixed proxy address 172.29.43.10 to any other container
+          # once caddy is down, including the ExApp container the daemon creates, which
+          # would make the component that processes untrusted input a trusted proxy.
+          ip_range: 172.29.43.128/25
+
+volumes:
+  nextcloud-spike-od-data:
+  registry-spike-od-data:
+  openproject-spike-od-pgdata:
+  openproject-spike-od-assets:
+  keycloak-spike-od-data:

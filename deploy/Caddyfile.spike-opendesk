@@ -1,0 +1,76 @@
+# Reverse proxy for the throwaway measurement topology of phase 17
+# (compose.spike-opendesk.yml). A copy of deploy/Caddyfile with one addition: the second
+# listener for OpenProject.
+#
+# The :80 block rebuilds what Nextcloud AIO does out of the box: the Caddy it ships routes
+# /exapps/* to HaRP and everything else to the Nextcloud container. AppAPI reaches an ExApp
+# through the public Nextcloud URL, never through the container name, so without the
+# /exapps/ rule the registration already fails at the heartbeat with "heartbeat check
+# failed. Make sure that Nextcloud instance and ExApp can reach it other."
+# (02-RESEARCH.md, pitfall 7).
+:80 {
+	# The two canonical discovery paths of RFC 9728 and RFC 8414, mapped back onto the
+	# ExApp. Both sit on the domain root and belong to Nextcloud: RFC 9728 pushes the
+	# well-known segment between host and resource path, RFC 8414 does the same for the
+	# issuer, and Nextcloud's WellKnownController matches a single path segment only, so
+	# both answer 404 (measured, spike-discovery.md). HaRP routes /exapps/* alone, so the
+	# ExApp never sees these paths without a rule like this one.
+	#
+	# Both matchers are exact paths, not prefixes (T-03-07): they rewrite these two strings
+	# and nothing else, and no Nextcloud path outside them changes behaviour. Order matters,
+	# the first matching route wins, so they stand before the /exapps/* block.
+	route /.well-known/oauth-protected-resource/exapps/mcp_connector/mcp {
+		rewrite * /exapps/mcp_connector/.well-known/oauth-protected-resource/mcp
+		reverse_proxy appapi-harp:8780
+	}
+
+	route /.well-known/oauth-authorization-server/exapps/mcp_connector {
+		rewrite * /exapps/mcp_connector/.well-known/oauth-authorization-server
+		reverse_proxy appapi-harp:8780
+	}
+
+	route /exapps/* {
+		reverse_proxy appapi-harp:8780 {
+			# Streamable HTTP holds a response open for the lifetime of an MCP session.
+			# The default read timeout would cut such a stream, and the client would see
+			# a truncated body instead of an error.
+			transport http {
+				read_timeout 1800s
+			}
+		}
+	}
+
+	route {
+		reverse_proxy nextcloud:80
+	}
+}
+
+# OpenProject, stage B of the phase (profile op in compose.spike-opendesk.yml). Nothing of
+# this block does anything while that profile is down: Caddy answers 502 on 8082 until the
+# service exists, and no other route is affected.
+#
+# The port number is 8082 inside this container and 8082 on the host, and that is not a
+# coincidence to be tidied up later. Rails builds absolute URLs from OPENPROJECT_HOST__NAME,
+# which is `op.localtest.me:8082`, and three parties have to agree on that one string: the
+# browser on the host during the consent step of way 1 (D-04), Nextcloud inside the network
+# when integration_openproject calls openproject_instance_url (way 0), and OpenProject
+# itself when it writes a redirect. A published mapping like 8083:8082 would make the
+# browser ask for :8083 and Rails answer with a redirect to :8082, and the failure would
+# look like a broken OAuth flow while it is a port mapping. Same number on both sides is the
+# resolution, and the name trap behind it is why this comment is longer than the block.
+:8082 {
+	reverse_proxy openproject:80 {
+		# The Host header is deliberately not rewritten. Caddy passes the incoming one
+		# through by default, and that is exactly what Rails needs: it compares the Host it
+		# sees against OPENPROJECT_HOST__NAME, so `op.localtest.me:8082` has to arrive
+		# unchanged. A `header_up Host {upstream_hostport}` here would hand it
+		# `openproject:80` and OpenProject would answer every request with a host
+		# authorization error.
+		#
+		# X-Forwarded-Proto, on the other hand, has to be written, and with the literal
+		# http and not the {scheme} placeholder. Rails decides http against https from this
+		# header alone; this topology serves no TLS (OPENPROJECT_HTTPS=false), and a wrong
+		# value produces a redirect loop to an https port that does not exist.
+		header_up X-Forwarded-Proto http
+	}
+}
