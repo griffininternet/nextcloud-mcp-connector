@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
-status: verifying
-stopped_at: Phase 17 context gathered
-last_updated: "2026-08-28T14:27:03.088Z"
-last_activity: 2026-08-28, Plan 16-03 ausgeführt (Tag v0.1.11 nach Owner-Freigabe, Release-Workflow grün, Multi-Arch-Image bei ghcr, Proof-Zeile der Runbook-Schritte 4 und 5)
+status: executing
+stopped_at: Phase 17 geplant, 9 Pläne, bereit zur Ausführung
+last_updated: "2026-08-28T15:49:24.369Z"
+last_activity: 2026-08-28, Phase 17 (openDesk-Spike) geplant: Kontext mit 12 Entscheidungen, Recherche mit sechs Korrekturbefunden, 9 Pläne in 9 Wellen, Plan-Checker im zweiten Lauf bestanden, Decision-Coverage 12 von 12. Davor: Phase 16 komplett, Release 0.1.11 live im Store
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 4
+  total_plans: 13
   completed_plans: 4
   percent: 25
 ---
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 
 ## Current Position
 
-Phase: 16 (Release 0.1.11), 3 von 4 Plänen abgeschlossen
-Plan: 16-03 abgeschlossen; als nächstes 16-04 (Runbook-Schritte 6 bis 8: Signatur über das heruntergeladene Asset, Store-Upload über die angemeldete Sitzung, Verifikation)
-Status: in Ausführung; 0.1.11 ist veröffentlicht, der Tag v0.1.11 steht auf 504de6c und das Asset hängt am Release; offen sind Signatur, Store-Upload und Verifikation
-Last activity: 2026-08-28, Plan 16-03 ausgeführt (Tag v0.1.11 nach Owner-Freigabe, Release-Workflow grün, Multi-Arch-Image bei ghcr, Proof-Zeile der Runbook-Schritte 4 und 5)
+Phase: 17 (openDesk-Spike), geplant und bereit zur Ausführung; Phase 16 (Release 0.1.11) ist komplett, 4 von 4 Plänen, Verification bestanden
+Plan: als nächstes 17-01 (OD-01 rein aus Quellen, ohne Docker), danach 17-02 bis 17-09 seriell in den Wellen 2 bis 9
+Status: Ready to execute. 9 Pläne, 27 Aufgaben, Plan-Checker beim zweiten Lauf bestanden (ein Blocker zur Fallback-Reichweite behoben), Decision-Coverage 12 von 12. Drei blockierende Owner-Gates in 17-03, 17-05 und 17-08. Leitplanken: kein Produktionscode, src/ unberührt, keine gemietete Infrastruktur, gepinnte Bildmarken, "ungemessen" ist ein zulässiges Ergebnis
+Last activity: 2026-08-28, Phase 17 geplant (Kontext mit 12 Entscheidungen, Recherche mit den Korrekturbefunden K1 bis K6, 9 Pläne). Davor: Phase 16 abgeschlossen, Release 0.1.11 live im Store (Store-POST 201 um 09:46:55Z)
 
 ## Performance Metrics
 
