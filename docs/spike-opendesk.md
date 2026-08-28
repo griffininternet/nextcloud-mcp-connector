@@ -5,7 +5,7 @@
 **Nextcloud:** 33.0.7 (Build 33.0.7.1), gelesen mit `occ status` am 2026-08-28 aus der Messumgebung dieser Phase
 **AppAPI:** `app_api` 33.0.0, gelesen mit `occ app:list` derselben Instanz (mitgelieferte Serverapp, nicht aus dem App Store)
 **Diese ExApp:** 0.1.11, gelesen mit `occ app_api:app:list`, gleich der Fassung in `appinfo/info.xml`
-**`integration_openproject`:** in dieser Instanz nicht installiert, noch nicht gemessen (Plan 17-05)
+**`integration_openproject`:** 3.1.1, gelesen mit `occ app:list` derselben Instanz nach `occ app:install integration_openproject` am 2026-08-28. Das ist genau die Fassung, für die alle Zeilennummern und Quellenzitate dieses Berichts zu Weg 0 gelesen wurden (Plattformspanne `>=33.0.0 <35.0.0`); die Fassung nennt sich auch selbst so, im Capability-Abschnitt `integration_openproject.app_version` (siehe 2.1)
 **`user_oidc`:** noch nicht gemessen (Plan 17-07)
 **OpenProject:** 17.7.2 (Community-Bildmarke `openproject/openproject:17.7.2`, Digest `sha256:19a828d6`, Image erstellt am 2026-08-13, gelesen mit `docker image inspect`). Die Instanz nennt dieselbe Fassung selbst: `MAJOR = 17`, `MINOR = 7`, `PATCH = 2` in `/app/lib/open_project/version.rb` des laufenden Containers. Die `coreVersion` aus `GET /api/v3` ist nachgetragen und lautet `17.7.2`, gelesen mit dem API-Schlüssel des Kontos `admin` am 2026-08-28; unauthentifiziert antwortet derselbe Aufruf mit 401, `instanceName` ist `OpenProject`. Damit nennen drei voneinander unabhängige Stellen dieselbe Fassung: der Digest der Bildmarke, die Quelldatei im Container und die API der laufenden Instanz
 **Keycloak:** noch nicht gemessen (Plan 17-07)
@@ -217,7 +217,72 @@ Die Trennung, die dieser Bericht durchhält: alles in Abschnitt 1 ist aus openDe
 
 ### 2.1 Weg 0: Behauptungen S1 bis S6, je Behauptung Messweg, Messwert, Gegenprobe
 
-noch nicht gemessen, Plan 17-05 und 17-06
+**Teilweise gemessen am 2026-08-28.** Dieser Abschnitt füllt sich über drei Plänen: die Installation
+der App und der Capability-Befund sowie S1, S2 und die Egress-Kontrolle stehen hier (17-05), S3 und S6
+folgen in 17-06, S5 in 17-07. Jede Zeile, die noch keinen Wert trägt, sagt das mit `noch nicht
+gemessen` und nennt den Plan; keine Zeile trägt einen Wert aus der Recherche.
+
+#### Die installierte Fassung, und warum sie hier zuerst steht
+
+`occ app:install integration_openproject` in der laufenden Nextcloud 33.0.7 endete mit den zwei Zeilen
+`integration_openproject 3.1.1 installed` und `integration_openproject enabled`, und `occ app:list`
+nennt danach `integration_openproject: 3.1.1` neben `app_api: 33.0.0`. Damit ist die Fassung, für die
+die Zeilennummern dieses Berichts und der Recherche gelesen wurden, dieselbe, die hier antwortet.
+
+Das ist keine Formalie: alle Belegstellen zu Weg 0 in diesem Bericht (die Routentabelle unten, die
+Vorprüfung `validatePreRequestConditions()`, `Capabilities.php`, die per-Nutzer-Schlüssel) stammen aus
+dem Tag `v3.1.1`. Wäre eine andere Fassung installiert worden, müssten sie neu geholt werden, bevor ein
+Satz dieses Abschnitts stehen bleibt. Sie sind nicht neu geholt worden, weil sie nicht neu geholt werden
+mussten.
+
+Der Store-Zugriff im Container hat getragen, der Rückfall über ein von Hand geladenes App-Archiv war
+nicht nötig, und die Plattformspanne `>=33.0.0 <35.0.0` aus der Versionsmatrix stimmt mit der Instanz
+zusammen: die Installation wurde von Nextcloud 33.0.7 nicht abgewiesen.
+
+#### Der Capability-Befund: die Frage ist geschlossen, nicht mehr offen
+
+`ARCHITECTURE.md` führte als offen, ob `integration_openproject` eine Capability veröffentlicht oder ob
+es den Navigations-Umweg braucht, den `src/mcp_connector/nextcloud/capabilities.py` für Nextcloud Mail
+gehen muss. **Gemessen, und die Antwort ist: eine echte Capability, sogar unauthentifiziert.**
+
+```
+# GET /ocs/v2.php/cloud/capabilities, ohne jede Anmeldung, nur OCS-APIRequest: true
+HTTP 200, Content-Type application/json; charset=utf-8, 6440 Bytes
+ocs.meta.status = ok, ocs.meta.statuscode = 200
+Abschnitte (5): app_api, bruteforce, integration_openproject, spreed, theming
+capabilities.integration_openproject = {
+  "app_version": "3.1.1", "groupfolder_version": "0", "groupfolders_enabled": false }
+```
+
+Die drei gemessenen Schlüssel sind `app_version`, `groupfolder_version` und `groupfolders_enabled`, und
+`app_version` trägt genau die Fassung, die `occ app:list` nennt. Damit hätte eine spätere
+Fähigkeitsprüfung nicht nur die Antwort auf "ist die App da", sondern auch die auf "in welcher Fassung",
+und das aus einem Aufruf, der ohnehin schon läuft.
+
+**Der Navigations-Umweg ist hier nicht nötig, weil `Capabilities` das Interface `IPublicCapability`
+implementiert.** Genau das ist an dem Messwert oben ablesbar und nicht nur aus dem Quelltext
+hergeleitet: der Abschnitt steht in einer Antwort, die ohne ein einziges Zugangsdatum entstanden ist.
+Nextcloud Mail veröffentlicht überhaupt keinen Abschnitt, weshalb `capabilities.py` dort auf
+`/core/navigation/apps` ausweichen muss; für `integration_openproject` fällt dieser zweite Aufruf weg.
+
+Gegenprobe im selben Lauf, damit der Wert nicht nur für den unauthentifizierten Sonderfall gilt:
+derselbe Aufruf unter reiner AppAPI-Impersonation von `alice` antwortet ebenfalls 200, mit 11739 Bytes
+und 23 Abschnitten statt 5, und `integration_openproject` trägt darin dieselben drei Schlüssel mit
+denselben Werten. Der Unterschied 5 gegen 23 ist selbst der Beleg dafür, dass die unauthentifizierte
+Antwort wirklich die öffentliche Teilmenge ist und nicht eine zufällig gleich aussehende.
+
+#### Das dritte Konto, das absichtlich nichts verbindet
+
+Für S2 braucht dieser Bericht ein Nextcloud-Konto, das OpenProject **nie** verbunden hat, denn ohne ein
+solches Konto ist "die Berechtigung hängt am Nutzer" nicht messbar, sondern nur behauptbar.
+`occ user:add --password-from-env carol` hat es angelegt, `occ user:list` nennt danach `admin`, `alice`,
+`bob` und `carol`. Das Passwort steht in der git-ignorierten Verbindungsdatei und in keiner verfolgten
+Datei.
+
+`occ user:setting carol integration_openproject token` antwortet an dieser Stelle wörtlich
+`The setting does not exist for user "carol".` mit Exit-Code 1. Dieser Grundzustand ist ein Messwert und
+kein Nebensatz: er ist vor der Einrichtung von Weg 0 aufgenommen, damit die 401 aus S2 später nicht mit
+"die Einrichtung war noch nicht fertig" verwechselt werden kann.
 
 ### 2.2 Weg 1: PKCE, `expires_in`, Erneuerung ohne Browsersitzung, Zwei-Konten-Negativbeweis
 
