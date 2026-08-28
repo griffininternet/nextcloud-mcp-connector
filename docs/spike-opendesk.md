@@ -319,6 +319,104 @@ mit leerem Körper `{}`. Wer `enforce_content_type` übersieht, liest diese 415 
 Flusses; sie ist eine Abweisung der Verpackung. Die Zeile steht hier, damit ein Wiederholungslauf den
 Unterschied kennt, bevor er ihn falsch deutet.
 
+#### Die Gegenprobe, ohne die der Hauptlauf nichts beweist: derselbe Client ohne PKCE
+
+Dieselbe Sitzung, dasselbe Konto `opb`, derselbe öffentliche Client, dieselben Parameter, nur **ohne
+code_challenge** und ohne `code_challenge_method`:
+
+```
+GET /oauth/authorize?client_id=<Client>&response_type=code
+   &redirect_uri=http://127.0.0.1:8099/callback&scope=api_v3&state=<zufällig>
+   -> HTTP 400
+   Text der Seite, vollständig: "An authorization error has occurred. Code challenge is required."
+```
+
+**Die Abweisung sitzt an `/oauth/authorize` und nicht erst an `/oauth/token`.** Der Lauf sieht die
+Zustimmungsseite nie, es entsteht kein Autorisierungscode, und der `Location`-Kopf fehlt. Damit ist
+belegt, dass der Hauptlauf oben nicht auch ohne PKCE funktioniert hätte: derselbe Aufruf mit
+`code_challenge` in derselben Sitzung antwortete 200 und lieferte einen Code, ohne
+`code_challenge` antwortet er 400 und liefert keinen. Die Antwort ist eine gerenderte HTML-Fehlerseite
+mit dem Text oben und kein JSON, ein `error`-Feld gibt es an dieser Stelle also nicht; der Fehlertext
+ist der Befund.
+
+Das ist die Zeile, die die Metadatenlücke von oben teuer macht: das Dokument bewirbt PKCE nicht, der
+Server verlangt es unbedingt. Ein Client, der sich nach dem Dokument richtet, sieht die 400 und keinen
+Hinweis darauf, was ihm fehlt, es sei denn er liest den Text der Seite.
+
+#### Die Erneuerung ohne Browsersitzung, und was dabei wirklich passiert
+
+**Kein Cookie im Spiel.** Der Aufruf lief mit `curl -d` und ausdrücklich **ohne** `-b` und ohne `-c`,
+also ohne jeden Cookie-Speicher, in einem Prozess, der keine Sitzung dieser Instanz kennt und nie eine
+gekannt hat. Ohne diese Angabe würde der Lauf nichts über "ohne Browsersitzung" beweisen, weil ein
+mitgeschickter Sitzungs-Cookie das Ergebnis alleine erklären könnte.
+
+```
+POST /oauth/token   (Content-Type: application/x-www-form-urlencoded)
+   grant_type=refresh_token
+   refresh_token=<Wert aus dem Hauptlauf>
+   client_id=<Client>
+   -> HTTP 200
+   token_type Bearer | expires_in 7200 | scope api_v3
+   access_token   Länge 43, Präfix IwAN   (verschieden vom vorherigen)
+   refresh_token  Länge 43, Präfix E7kb   (verschieden vom vorherigen)
+```
+
+Ein neues `access_token` **und** ein neues `refresh_token`, wie `use_refresh_token`
+(`doorkeeper.rb:115`) es erwarten lässt. Dass das erneuerte Token dieselbe Person trägt, ist nicht
+angenommen, sondern gemessen: `GET /api/v3/users/me` mit dem neuen Token und ohne Cookie antwortet 200
+und nennt `login opb`, `id 6`. Und das alte `access_token` ist sofort tot: derselbe Aufruf mit dem
+Token aus dem Hauptlauf antwortet nach der Erneuerung **401**.
+
+**Die zweite Gegenprobe fiel anders aus als erwartet, und das ist der interessanteste Befund dieses
+Abschnitts.** Erwartet war, dass der verbrauchte `refresh_token` fehlschlägt. Gemessen hat er beim
+ersten Wiedergebrauch **200** geliefert, mit einem zweiten, vollständig gültigen Tokenpaar. Ein
+Bericht, der das als "Gegenprobe bestanden" abgehakt hätte, hätte die Instanz falsch beschrieben, und
+zwar in einer Richtung, die für einen künftigen Client wichtig ist. Also ist der Mechanismus
+nachgemessen worden, mit zwei Ketten, die sich in genau einem Schritt unterscheiden, unmittelbar
+hintereinander im selben Lauf, damit verstrichene Zeit als Erklärung ausfällt:
+
+| Kette | Erneuerung | Wird das **neue** `access_token` einmal benutzt | Alter `refresh_token` danach erneut |
+|-------|-----------|------------------------------------------------|-------------------------------------|
+| A | 200, neues Paar | ja, `GET /api/v3/users/me` -> 200 | **400** `invalid_grant` |
+| B | 200, neues Paar | nein, gar nicht | **200**, ein weiteres vollständiges Paar |
+
+**Der Auslöser der Entwertung ist damit gemessen: nicht die Erneuerung selbst und nicht die Zeit,
+sondern der erste Gebrauch des neu ausgegebenen `access_token`.** Der Beleg aus der Instanz, der dazu
+passt, steht in der laufenden Datenbank: `/app/db/structure.sql:4383` führt die Spalte
+`previous_refresh_token` auf `oauth_access_tokens`. Diese Spalte ist die Bedingung, unter der
+Doorkeeper die Entwertung des vorherigen `refresh_token` aufschiebt statt sie sofort auszuführen.
+Wortwörtlich behauptet dieser Bericht über den fremden Code nur, dass die Spalte existiert; die
+Verknüpfung mit dem Verhalten ist die Messung oben und keine Lesart des Quelltexts.
+
+**Praktische Folge, und sie gehört zu OD-04 und nicht in diese Phase:** ein Client, der erneuert und
+das neue Token wegwirft, ohne es zu benutzen, kann mit demselben `refresh_token` beliebig viele Paare
+ziehen. Wer den Fluss so baut, dass nach der Erneuerung sofort ein Aufruf mit dem neuen Token folgt,
+schließt das von selbst.
+
+**Die Gegenprobe mit einem erfundenen Wert und mit einem wirklich entwerteten Wert, beide mit Status
+und Fehlerfeld:**
+
+| Aufruf | Status | `error` | Bedeutung |
+|--------|--------|---------|-----------|
+| `grant_type=refresh_token` mit einem Wert aus 43 Nullen | **400** | `invalid_grant` | ein erfundener Wert wird abgewiesen, der 200 des Hauptlaufs kommt also nicht davon, dass der Endpunkt alles annimmt |
+| derselbe Aufruf mit dem entwerteten `refresh_token` der Kette A | **400** | `invalid_grant` | der verbrauchte Wert ist nach dem ersten Gebrauch des Nachfolgetokens endgültig tot, dreimal nachgefahren, dreimal 400 |
+
+Der `error_description`-Text ist beide Male der Doorkeeper-Sammeltext, wortwörtlich "The provided
+authorization grant is invalid, expired, revoked, does not match the redirection URI used in the
+authorization request, or was issued to another client." Er unterscheidet die Ursachen nicht. Ein
+Nebenbefund dazu, den dieser Bericht nur festhält und nicht erklärt: derselbe Fehler kam in einem Lauf
+auf Deutsch und in einem anderen auf Englisch zurück, bei identischem Aufruf ohne Kopf
+`Accept-Language`. Warum die Sprache wechselt, ist **ungemessen**.
+
+#### Die vier Messwerte, die D-04 wörtlich verlangt, in einer Tabelle
+
+| Messwert | Wie gemessen | Erwartung aus der Quelle | Gemessener Wert | Gegenprobe |
+|----------|--------------|--------------------------|-----------------|------------|
+| Nimmt `/oauth/authorize` PKCE an | Schritte 1 bis 4 oben, Konto `opb`, `code_challenge_method=S256`, Code eingelöst | 200 und ein Token, aus `force_pkce` (`doorkeeper.rb:90`) | **ja**: 200 auf der Zustimmungsseite, 302 mit `code` (43 Zeichen), 200 am Token-Endpunkt | derselbe Client **ohne code_challenge**, dieselbe Sitzung: **400** an `/oauth/authorize`, "Code challenge is required.", kein Code |
+| `expires_in` | Feld der Antwort von `POST /oauth/token` | `7200`, aus `access_token_expires_in 2.hours` (`doorkeeper.rb:61-64`) | **7200 Sekunden** | Code, Admin-Dokumentation und Messwert nennen denselben Wert; `custom_access_token_expires_in` ist in dieser Instanz nicht gesetzt |
+| Trägt die Erneuerung ohne Browsersitzung | `grant_type=refresh_token` an `/oauth/token`, **kein Cookie-Speicher**, kein `-b`, kein `-c` | neues Paar, aus `use_refresh_token` (`doorkeeper.rb:115`) | **ja**: 200, neues `access_token` und neues `refresh_token`, `expires_in` wieder 7200, `login opb` aus dem neuen Token | erfundener Wert: 400 `invalid_grant`. Entwerteter Wert: 400 `invalid_grant`. Der Zeitpunkt der Entwertung ist mit zwei Ketten gemessen (Tabelle oben) |
+| Zwei-Konten-Negativbeweis (D-05) | siehe die Tabelle im nächsten Unterabschnitt | 404 mit `urn:openproject-org:api:v3:errors:NotFound`, nicht 403 | siehe nächster Unterabschnitt | siehe nächster Unterabschnitt |
+
 ### 2.3 Die SSRF-Grenze und was sie wirklich abdeckt
 
 **Gemessen (D-06), im laufenden ExApp-Container, mit demselben Resolver, den die Produktion benutzt, und ohne eine Zeile Produktionscode zu ändern.** Der Container ist `nc_app_mcp_connector`, Zustand `running`, Bildmarke `127.0.0.1:5001/mcp_connector:0.1.11`, Netz `nc-mcp-spike-od-net`. Die Messung importiert `mcp_connector.oauth.cimd` und ruft es auf; sie legt keine Test-Datei an, ändert keinen Import und schreibt nichts in `src/`.
