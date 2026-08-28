@@ -57,6 +57,17 @@ dieses Plans nach Owner-Wunsch entstanden) liegt bewusst NACH dem Tag `v0.1.10` 
 deshalb nicht Teil dieses Releases; sie fährt mit dem nächsten mit und braucht dort einen
 eigenen Changelog-Eintrag.
 
+## Abweichung vom Plan
+
+Plan 15-04 Task 3 sah vier getrennte Proof-Zeilen fuer die vier Nachweise des
+Runbook-Schritts 8 vor. Geschrieben wurde eine zusammengefasste Zeile, die alle
+vier Nachweise plus den Beschreibungs-Beleg traegt. Grund: die vier Messungen
+entstanden in derselben Minute und aus demselben Katalog-Abruf, und eine
+gemeinsame Zeile haelt die Sortier-Falle an genau der Stelle fest, an der sie
+jemanden treffen wuerde. Inhaltlich fehlt kein Nachweis; die Zeile nennt jeden
+einzeln mit eigenem Befehl und eigenem Ergebnis. Nachgetragen am 2026-08-28
+nach dem Verifikationsbefund.
+
 ## Self-Check: PASSED
 
 - Signatur über das heruntergeladene Asset, nicht über `dist/`: belegt durch die zwei
