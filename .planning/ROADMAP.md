@@ -140,7 +140,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 17-03-PLAN.md , Stufe A Teil 2: OpenProject 17.7.2, die vier Oberflächenschritte per Owner-Gate, Grundzustand für den Zwei-Konten-Negativbeweis
+- [x] 17-03-PLAN.md , Stufe A Teil 2: OpenProject 17.7.2, die vier Oberflächenschritte per Owner-Gate, Grundzustand für den Zwei-Konten-Negativbeweis
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -218,7 +218,7 @@ Plans:
 | 14. Doku-Reste und Gate-Entscheid | v1.4 | 2/2 | Complete | 2026-08-27 |
 | 15. Release 0.1.10 | v1.4 | 4/4 | Complete | 2026-08-28 |
 | 16. Release 0.1.11 | v1.5 | 4/4 | Complete | 2026-08-28 |
-| 17. openDesk-Spike | v1.5 | 2/9 | In Progress|  |
+| 17. openDesk-Spike | v1.5 | 3/9 | In Progress|  |
 | 18. Audit-Log Kern | v1.5 | 0/? | Not started | - |
 | 19. Audit-Log Bedienung und Textnachzug | v1.5 | 0/? | Not started | - |
 

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
 status: executing
-stopped_at: Completed 17-02-PLAN.md
-last_updated: "2026-08-28T16:37:02.957Z"
+stopped_at: Completed 17-03-PLAN.md
+last_updated: "2026-08-28T17:30:47.918Z"
 last_activity: 2026-08-28
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 13
-  completed_plans: 6
+  completed_plans: 7
   percent: 25
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 17 (openDesk-Spike) — EXECUTING
-Plan: 3 of 9
+Plan: 4 of 9
 Status: Ready to execute
 Last activity: 2026-08-28
 
@@ -169,6 +169,7 @@ Last activity: 2026-08-28
 | Phase 16-release-0-1-11 P03 | 9 min | 3 tasks | 1 files |
 | Phase 17-opendesk-spike P01 | 18 min | 3 tasks tasks | 1 file files |
 | Phase 17 P02 | 74 min | 3 tasks | 6 files |
+| Phase 17 P03 | 48 | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -621,6 +622,13 @@ Recent decisions affecting current work:
 - [Phase ?]: 17-02: der Deploy-Daemon benennt den ExApp-Container global nc_app_<appid>; nur eine Topologie dieses Repositories kann die ExApp betreiben, die ExApp-Topologie ist fuer die Phase mit stop angehalten
 - [Phase ?]: 17-02: S0 gemessen, die Ein-Klick-Kette haelt auf Nextcloud 33.0.7; der geerbte Nachweis auf 34.0.x ist ersetzt
 - [Phase ?]: 17-02: Annahme A5 bestaetigt, app_api 33.0.0 in der laufenden 33.0.7; die Kubernetes-Aussage aus 1.2 steht unveraendert
+- [Phase ?]: 17-03: OpenProject 17.7.2 läuft; erster Start gemessen mit 95 Sekunden und 1,964 GiB statt der erwarteten 30 bis 90 Minuten und mindestens 4 GB, das Speicherrisiko aus 17-02 ist nicht eingetreten und keine `.wslconfig` war nötig
+- [Phase ?]: 17-03: Fassung dreifach belegt (Digest, `/app/lib/open_project/version.rb` im Container, `coreVersion` der API); die Fußleiste der Anmeldeseite trägt in 17.7.2 keine Fassung, deshalb ist die Quelldatei im Container die dritte Belegstelle
+- [Phase ?]: 17-03: Namensfalle in beide Richtungen gemessen; `localtest.me` hat einen AAAA-Eintrag auf `::1` und der `extra_hosts`-Eintrag ist IPv4, PHP-curl im Nextcloud-Container nimmt `172.29.43.10` und antwortet 200 (erste Fehlerquelle für 17-05)
+- [Phase ?]: 17-03: Grundzustand des Zwei-Konten-Negativbeweises steht (opa, opb, privates Projekt `spike-privat-b`, Arbeitspaket 38, Mitglied nur opb), ist aber als Aufbau und ausdrücklich nicht als Messung gekennzeichnet; der Beweis selbst läuft in 17-04 und 17-06 unter den Konten
+- [Phase ?]: 17-03: OAuth-Anwendung als nicht vertraulicher Client mit leerem Feld `Client Credentials User ID`, damit `force_pkce` aus `doorkeeper.rb:90` greift und der Berechtigungsdurchgriff nicht unauffällig bricht (Pitfall 2, T-17-03)
+- [Phase ?]: 17-03: das Seed-Passwort `admin` wurde von der Instanz abgelehnt (`failed_login_count` 6, `force_password_change` true, Konto nicht gesperrt); per `rails runner` gesetzt, **Ursache nicht untersucht**. Passwortregel dieser Fassung: alle vier Zeichenklassen
+- [Phase ?]: 17-03: OpenProject 17.7.2 bringt einen eigenen MCP-Server unter `/mcp` mit (`routes.rb:48`); in dieser Phase ungemessen und als DI-17-01 in `deferred-items.md` zurückgestellt, mit Behandlungsvorschlag für 17-08 und 17-09
 
 ### Pending Todos
 
@@ -660,7 +668,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-28T16:37:02.940Z
+Last session: 2026-08-28T17:30:24.740Z
 Stopped at: Completed 17-02-PLAN.md
 Naechster Schritt: 16-02 (sechs Gates lokal grün, Archiv-Probelauf, Proof-Zeilen der Runbook-Schritte 1 bis 3); der Tag v0.1.11 entsteht erst in 16-03 nach ausdrücklicher Owner-Freigabe
 Resume file: None
