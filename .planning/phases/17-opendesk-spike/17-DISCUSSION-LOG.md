@@ -1,7 +1,7 @@
 # Phase 17: openDesk-Spike - Discussion Log
 
 > **Audit trail only.** Do not use as input to planning, research, or execution agents.
-> Decisions are captured in CONTEXT.md — this log preserves the alternatives considered.
+> Decisions are captured in CONTEXT.md: this log preserves the alternatives considered.
 
 **Date:** 2026-08-28
 **Phase:** 17-opendesk-spike
@@ -12,7 +12,7 @@
 
 ## Messumgebung und Kosten
 
-### Frage 1: OD-01 (Installierbarkeit) — wie soll der Befund entstehen?
+### Frage 1: OD-01 (Installierbarkeit): wie soll der Befund entstehen?
 
 | Option | Description | Selected |
 |--------|-------------|----------|
@@ -23,7 +23,7 @@
 **User's choice:** Nur Quellen, kein Cluster
 **Notes:** openDesk läuft lokal ohnehin nicht vollständig; der Aufwand hätte den Befund nicht verbessert.
 
-### Frage 2: OD-02 — welche Messumgebung darf entstehen?
+### Frage 2: OD-02: welche Messumgebung darf entstehen?
 
 | Option | Description | Selected |
 |--------|-------------|----------|
@@ -152,7 +152,7 @@
 |--------|-------------|----------|
 | Nur berichten, kein Code | Bericht plus Fragenliste; Weg-0-Client ist OD-04 in v2.0 | ✓ |
 | Bericht + Wegwerf-Prototyp | Zusätzliches Skript außerhalb des Paketbaums | |
-| Noch einen Bereich besprechen | — | |
+| Noch einen Bereich besprechen | (nicht gewählt) | |
 
 **User's choice:** Nur berichten, kein Code
 **Notes:** Hält Erfolgskriterium 5 wörtlich.

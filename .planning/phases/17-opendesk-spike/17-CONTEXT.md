@@ -81,33 +81,33 @@ sind Dateien in `docs/` und `.planning/`, weil `docs/` nicht Teil des Store-Asse
 **Downstream agents MUST read these before planning or implementing.**
 
 ### Anforderungen und Milestone-Entscheide
-- `.planning/REQUIREMENTS.md` — OD-01/02/03 im Wortlaut, die vier Owner-Entscheide D-v1.5-01..04,
+- `.planning/REQUIREMENTS.md`: OD-01/02/03 im Wortlaut, die vier Owner-Entscheide D-v1.5-01..04,
   Out-of-Scope-Tabelle (kein Dienstkonto, kein eigener Keycloak-Client für OpenProject, kein
   Weiterreichen des MCP-Tokens)
-- `.planning/ROADMAP.md` §Phase 17 — die fünf Erfolgskriterien, insbesondere Kriterium 5
+- `.planning/ROADMAP.md` §Phase 17: die fünf Erfolgskriterien, insbesondere Kriterium 5
   (Produktionsbaum unverändert) und Kriterium 3 ("ungemessen" statt "verworfen")
 
 ### Der zu messende Widerspruch
-- `.planning/research/SUMMARY.md` §"Der zentrale Widerspruch" — Weg-0-gegen-Weg-1-Tabelle,
+- `.planning/research/SUMMARY.md` §"Der zentrale Widerspruch": Weg-0-gegen-Weg-1-Tabelle,
   Behauptungen S1-S6, Bewertung
-- `.planning/research/SUMMARY.md` §"Die Gating-Frage" — die drei Installierbarkeits-Befunde
-- `.planning/research/ARCHITECTURE.md` — Weg 0 samt den 15 OCS-Routen von
+- `.planning/research/SUMMARY.md` §"Die Gating-Frage": die drei Installierbarkeits-Befunde
+- `.planning/research/ARCHITECTURE.md`: Weg 0 samt den 15 OCS-Routen von
   `integration_openproject` (keine Route für ein einzelnes Arbeitspaket, keine für Kommentare,
   keine für "meine Arbeit")
-- `.planning/research/STACK.md` §A.8 — die vier Fragen zu Weg 1, PKCE trotz fehlender Ankündigung
-- `.planning/research/PITFALLS.md` — Pitfall 1 (Dienstkonto bricht das Versprechen unauffällig)
+- `.planning/research/STACK.md` §A.8: die vier Fragen zu Weg 1, PKCE trotz fehlender Ankündigung
+- `.planning/research/PITFALLS.md`: Pitfall 1 (Dienstkonto bricht das Versprechen unauffällig)
 
 ### Bestehende Muster im Repo
-- `docs/spike-mail.md` — Formvorbild für den Bericht: Behauptung, Messweg, Messwert, Gegenprobe
-- `docs/spike-dav.md`, `docs/spike-discovery.md` — dieselbe Reihe
-- `docs/oauth-setup.md` — wie OAuth-Messungen hier bisher belegt wurden (CIMD-Messweg A,
+- `docs/spike-mail.md`: Formvorbild für den Bericht: Behauptung, Messweg, Messwert, Gegenprobe
+- `docs/spike-dav.md`, `docs/spike-discovery.md`: dieselbe Reihe
+- `docs/oauth-setup.md`: wie OAuth-Messungen hier bisher belegt wurden (CIMD-Messweg A,
   Loopback-Portregel, Gegenproben)
-- `docs/privacy.md`, `docs/uninstall.md` — Aussagen, die diese Phase **nicht** anfasst (das ist
+- `docs/privacy.md`, `docs/uninstall.md`: Aussagen, die diese Phase **nicht** anfasst (das ist
   Phase 19)
 
 ### Termin und Verhandlung
-- `Desktop/ISV-Call-Dossier-2026-09-14.md` — Ziel der Fragenliste aus OD-03
-- `Desktop/openDesk-Anfragen-2026-08-28.md` — die vier Anfragetexte samt Belegtabelle und
+- `Desktop/ISV-Call-Dossier-2026-09-14.md`: Ziel der Fragenliste aus OD-03
+- `Desktop/openDesk-Anfragen-2026-08-28.md`: die vier Anfragetexte samt Belegtabelle und
   Versandstatus (app_api-Issue #1013 raus, ZenDiS-Mail gesendet, Forumsbeitrag raus,
   user_oidc#925 zurückgehalten)
 
