@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
 status: executing
-stopped_at: Completed 17-01-PLAN.md
-last_updated: "2026-08-28T16:02:27.002Z"
+stopped_at: Completed 17-02-PLAN.md
+last_updated: "2026-08-28T16:37:02.957Z"
 last_activity: 2026-08-28
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 13
-  completed_plans: 5
+  completed_plans: 6
   percent: 25
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 17 (openDesk-Spike) — EXECUTING
-Plan: 2 of 9
+Plan: 3 of 9
 Status: Ready to execute
 Last activity: 2026-08-28
 
@@ -168,6 +168,7 @@ Last activity: 2026-08-28
 | Phase 16-release-0-1-11 P02 | 11 min | 2 tasks | 1 files |
 | Phase 16-release-0-1-11 P03 | 9 min | 3 tasks | 1 files |
 | Phase 17-opendesk-spike P01 | 18 min | 3 tasks tasks | 1 file files |
+| Phase 17 P02 | 74 min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -615,6 +616,11 @@ Recent decisions affecting current work:
 - [Phase 17]: die Kubernetes-Aussage von OD-01 wird in der korrigierten Fassung geführt: nicht 'AppAPI kann kein Kubernetes', sondern auf app_api 33 existiert kubernetes-install nicht (KubernetesActions.php HTTP 404) und auf app_api 34 existiert es (HTTP 200, DEPLOY_ID Zeile 37, über HaRP); damit ist OD-01 eine Terminfrage an ZenDiS und keine Absage
 - [Phase 17]: Versionspin und Kubernetes-Hürde sind dieselbe Hürde und fallen mit demselben Schritt (openDesk auf Nextcloud 34 oder höher); die Zielumgebung 33.0.7 gilt als ungetestet, nicht als unzulässig, weil appinfo/info.xml Zeile 235 min-version 32 bis max-version 34 erlaubt, alle Nachweise dieses Projekts aber auf 34.0.x stehen
 - [Phase 17]: die Betriebsart von integration_openproject in openDesk bleibt unbehauptet (der Bootstrap-Job ist Indiz, nicht Beleg) und geht als Frage 7 an den ISV-Call; die Formulierung 'manual-install ist ausdrücklich für Entwicklung' wird nicht geführt, weil sie auf der heutigen Nextcloud-Doku-Seite nicht mehr auffindbar ist
+- [Phase ?]: 17-02: Stufenschnitt der Messumgebung als compose-Profile (op, oidc); ein blankes up startet nur Stufe A
+- [Phase ?]: 17-02: gemessen, dass compose die ganze Datei vor der Profilauswahl interpoliert; HP_SHARED_KEY und SECRET_KEY_BASE muessen vor jedem Kommando exportiert sein, WR-11 bleibt
+- [Phase ?]: 17-02: der Deploy-Daemon benennt den ExApp-Container global nc_app_<appid>; nur eine Topologie dieses Repositories kann die ExApp betreiben, die ExApp-Topologie ist fuer die Phase mit stop angehalten
+- [Phase ?]: 17-02: S0 gemessen, die Ein-Klick-Kette haelt auf Nextcloud 33.0.7; der geerbte Nachweis auf 34.0.x ist ersetzt
+- [Phase ?]: 17-02: Annahme A5 bestaetigt, app_api 33.0.0 in der laufenden 33.0.7; die Kubernetes-Aussage aus 1.2 steht unveraendert
 
 ### Pending Todos
 
@@ -654,8 +660,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-28T16:02:26.983Z
-Stopped at: Completed 17-01-PLAN.md
+Last session: 2026-08-28T16:37:02.940Z
+Stopped at: Completed 17-02-PLAN.md
 Naechster Schritt: 16-02 (sechs Gates lokal grün, Archiv-Probelauf, Proof-Zeilen der Runbook-Schritte 1 bis 3); der Tag v0.1.11 entsteht erst in 16-03 nach ausdrücklicher Owner-Freigabe
 Resume file: None
 
