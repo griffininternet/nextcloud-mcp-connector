@@ -218,9 +218,9 @@ Die Trennung, die dieser Bericht durchhält: alles in Abschnitt 1 ist aus openDe
 ### 2.1 Weg 0: Behauptungen S1 bis S6, je Behauptung Messweg, Messwert, Gegenprobe
 
 **Teilweise gemessen am 2026-08-28.** Dieser Abschnitt füllt sich über drei Plänen: die Installation
-der App und der Capability-Befund sowie S1, S2 und die Egress-Kontrolle stehen hier (17-05), S3 und S6
-folgen in 17-06, S5 in 17-07. Jede Zeile, die noch keinen Wert trägt, sagt das mit `noch nicht
-gemessen` und nennt den Plan; keine Zeile trägt einen Wert aus der Recherche.
+der App und der Capability-Befund sowie S1, S2 und die Egress-Kontrolle stehen hier (17-05), S3, S4
+und S6 sind dazugekommen (17-06), S5 folgt in 17-07. Jede Zeile, die noch keinen Wert trägt, sagt das
+mit `noch nicht gemessen` und nennt den Plan; keine Zeile trägt einen Wert aus der Recherche.
 
 #### Die installierte Fassung, und warum sie hier zuerst steht
 
@@ -499,6 +499,95 @@ nur auf "401" schaut, hält beide für dasselbe und beweist mit S2 nichts.
 `/ocs/v2.php/apps/integration_openproject`, wie der Block `'ocs' => [` in `appinfo/routes.php` sagt,
 und ein Client, der den Anwendungs-Präfix nimmt, findet nichts.
 
+#### S3: der Zwei-Konten-Negativbeweis auf Weg 0 (D-05)
+
+**Behauptung:** `alice` findet über die Suchfläche von Weg 0 das Arbeitspaket aus dem privaten Projekt
+von `bob` nicht, und `bob` findet es.
+
+**Die Kette, die dieser Weg wirklich hat, besteht aus zwei Gliedern, und beide gehören in den Satz.**
+Auf Weg 0 entscheidet zuerst **Nextcloud**, wer der Nutzer ist: die AppAPI-Impersonation setzt den
+Namen, und die App liest ihn als `$this->userId`. Erst danach entscheidet **OpenProject**, was dieser
+Nutzer sehen darf, denn die App stellt die Suche unter dem persönlichen `token` genau dieses Nutzers.
+Ein Satz, der nur das zweite Glied nennt, liest wie eine Aussage über OpenProject allein und wäre für
+diesen Bericht zu wenig. Beide Glieder sind unten mit je einem eigenen Messwert belegt.
+
+**Messweg.** Ein Aufruf durch Caddy gegen `http://127.0.0.1:8091` unter reiner
+AppAPI-Impersonation, mit `OCS-APIRequest: true`, `Accept: application/json`, `EX-APP-ID`,
+`EX-APP-VERSION` und `AUTHORIZATION-APP-API`, **ohne** App-Passwort im Prozess und ohne Cookie. Das
+Suchwort ist `SPIKE-OD-8471` aus 5.3, das an keiner anderen Stelle dieser Instanz vorkommt.
+
+| Konto | Zustand in OpenProject | Aufruf | Messwert | Treffer |
+|-------|------------------------|--------|----------|---------|
+| `alice` | `opa`, **kein** Mitglied von `spike-privat-b` | `GET /ocs/v2.php/apps/integration_openproject/api/v1/work-packages?searchQuery=SPIKE-OD-8471&isSmartPicker=true` | **HTTP 200**, `application/json`, 74 Bytes, OCS-Umschlag mit `ocs.data = []` | **0** |
+| `bob` | `opb`, Mitglied | derselbe Aufruf | **HTTP 200**, `application/json`, 4746 Bytes, OCS-Umschlag mit einem Objekt in `ocs.data` | **1**: `id 38`, `subject SPIKE-OD-8471 privat` |
+
+**Die Zeile von `bob` ist die erste Gegenprobe**, und ohne sie wäre die leere Antwort von `alice` auch
+ein Tippfehler im Suchwort. Sie liegt hier nicht als Behauptung vor, sondern als Treffer mit Id und
+Betreff, und die Id `38` ist dieselbe, die 5.3 beim Anlegen vergeben bekam.
+
+**Die zweite Gegenprobe, ohne die die Null von `alice` auch eine kaputte Verbindung wäre.** Derselbe
+Aufruf, dieselbe Fläche, dieselben Kopfzeilen, nur mit dem Suchwort `Demo` aus den Seed-Daten:
+
+| Konto | Messwert | Treffer | Ist `38` darunter |
+|-------|----------|---------|-------------------|
+| `alice` | **HTTP 200**, 35239 Bytes | **14** | **nein** |
+| `bob` | **HTTP 200**, 36308 Bytes | **14** | **nein** |
+
+`alice` bekommt also über genau diese Fläche 14 Arbeitspakete geliefert, ihr Zugang trägt und ihre
+Suche findet Daten. Nur das eine Arbeitspaket, das ihr nicht gehört, ist nicht darunter. Die Null in
+der Tabelle oben ist damit ein Berechtigungsbefund und kein Verbindungsfehler.
+
+**Die dritte und vierte Gegenprobe belegen die zwei Glieder der Kette, jede an ihrem eigenen Glied,
+und zwar auf derselben Route:**
+
+| Gegenprobe | Messwert | Welches Glied sie belegt |
+|------------|----------|--------------------------|
+| derselbe Aufruf als `bob`, `APP_SECRET` durch 64 Null-Zeichen ersetzt | **HTTP 401**, 106 Bytes, `statuscode 997`, `Current user is not logged in` | **Nextcloud entscheidet die Identität**: ohne gültige Impersonation gibt es keinen Nutzer, und die Suche läuft nie |
+| derselbe Aufruf als `carol` (nie verbunden) | **HTTP 401**, 77 Bytes, `statuscode 401`, **leere** Meldung | **die App prüft am Nutzer**: das ist `validatePreRequestConditions()`, dieselbe Form wie in S2 |
+
+Damit ist die Suche unter drei verschiedenen Identitäten gefahren und liefert drei verschiedene
+Ergebnisse: Daten, keine Daten, keine Antwort. Die Fläche ist an keiner Stelle nutzerunabhängig.
+
+**Der Parameter `isSmartPicker`, und warum er kein Beiwerk ist.** Ohne ihn antworten **beide** Konten
+mit 200, `application/json`, 74 Bytes und **null** Treffern, auch `bob`. Nach dem
+Ungemessen-Fallback wäre S3 in dieser Form leer gewesen. Die Ursache ist nicht geraten, sondern
+gemessen und im Quellcode der installierten Fassung 3.1.1 belegt:
+
+```php
+// lib/Service/OpenProjectAPIService.php:311-316 (searchRequest)
+if ($onlyLinkableWorkPackages) {
+    $filters[] = [
+        'linkable_to_storage_url' =>
+            ['operator' => '=', 'values' => [urlencode($this->getNCBaseUrl())]]
+    ];
+}
+```
+
+Der Controller füllt genau diesen Schalter, und zwar mit dem umgekehrten Wert des Anfrageparameters:
+`!$isSmartPicker` in `lib/Controller/OpenProjectAPIController.php:148`, bei
+`bool $isSmartPicker = false` als Vorgabe (Zeile 137). Die Vorgabe der Fläche verlangt also, dass das
+Arbeitspaket zu einer in OpenProject **registrierten** Nextcloud-Ablage verlinkbar ist. In dieser
+Instanz gibt es keine solche Ablage: `GET /api/v3/storages` antwortet **200** mit `total 0` und
+`count 0` (131 Bytes, Aufbauzugang `Basic apikey:<OP_API_TOKEN>` des Kontos `admin`, ausdrücklich
+kein Messweg von S3). Der Filter trifft damit für jedes Konto gleich nichts.
+
+**Der Zusammenhang mit 5.4 ist der eigentliche Befund dieser Zeile:** die Ablage entsteht auf Weg A,
+dem Assistentenweg, und Weg A ist in dieser Topologie gemessen nicht gangbar. Die Vorgabe-Suche von
+Weg 0 hängt also an genau dem Einrichtungsschritt, der hier fehlt und den der openDesk-Bootstrap-Job
+geht. Für OD-04 ist das eine Zeile, die man nicht raten will: `isSmartPicker=true` ist der Modus ohne
+Ablagenbindung, die Vorgabe der Modus mit ihr, und wer die Vorgabe nimmt, bekommt in einer Umgebung
+ohne registrierte Ablage eine leere Liste ohne Fehlermeldung.
+
+**Was der Parameter nicht verschiebt, und deshalb bleibt S3 gültig:** er entscheidet, welche
+Arbeitspakete überhaupt in Frage kommen, nicht wessen Berechtigungen gelten. Beide Läufe von S3
+tragen ihn gleich, der Unterschied zwischen 0 und 1 Treffer ist ausschließlich der Unterschied
+zwischen den zwei Konten, und die 14 gleichen Treffer der `Demo`-Kontrolle zeigen, dass er auch für
+`alice` Daten durchlässt.
+
+**Urteil:** erreicht, und die Berechtigungsgrenze hält auf Weg 0 wortwörtlich so wie auf Weg 1 in
+2.2. Kein Aufruf dieses Abschnitts ist schreibend: gefahren ist ausschließlich
+`GET /api/v1/work-packages`, Arbeitspaket 38 ist unverändert.
+
 #### Die Egress-Kontrollmessung
 
 **Behauptung:** Der ExApp-Container erreicht OpenProject direkt, also bliebe Weg 1 als Rückfall offen.
@@ -580,7 +669,7 @@ Arbeitspaket zu Datei, die `research/FEATURES.md` als Unterscheidungsmerkmal nen
 | **S0** | Diese ExApp installiert und antwortet auf 33.0.7 wie auf 34.0.3 | **gemessen, ja.** Abschnitt 1.3, mit Gegenprobe (64 Nullen, 401/997) |
 | **S1** | `GET /api/v1/url` antwortet unter reiner AppAPI-Impersonation mit OCS-JSON und der Adresse | **gemessen, ja.** 200, OCS-Umschlag, `data = http://op.localtest.me:8082`, als `alice`; Gegenprobe 64 Nullen 401 |
 | **S2** | Die Berechtigung hängt am Nutzer, nicht an der App | **gemessen, ja.** `carol` 401 mit leerer Meldung aus der Vorprüfung, `alice` und `bob` je 200 mit Daten; die zwei 401-Formen sind unterscheidbar |
-| **S3** | Konto A sieht in der Suche kein Arbeitspaket, das nur Konto B sehen darf | noch nicht gemessen, Plan 17-06 |
+| **S3** | Konto A sieht in der Suche kein Arbeitspaket, das nur Konto B sehen darf | **gemessen, ja.** `alice` 200 mit 0 Treffern, `bob` 200 mit genau einem (`id 38`); Gegenproben: `Demo` liefert `alice` 14 Treffer ohne die 38, 64 Nullen 401/997, `carol` 401 mit leerer Meldung |
 | **S4** | Nach künstlichem Ablauf antwortet der nächste Aufruf wieder mit Daten, ohne Browsersitzung | noch nicht gemessen, Plan 17-06 |
 | **S5a/b/c** | Verhalten im Modus `oidc` nach Ablauf, drei Pfade | noch nicht gemessen, Plan 17-07 |
 | **S6** | Eine Antwort trägt die Felder für ein späteres Werkzeug in kompakter Form | noch nicht gemessen, Plan 17-06 |
@@ -1153,6 +1242,42 @@ Kennzeichnung wie eine Aussage über eine Behördeninstallation liest (Pitfall 3
 und Weg B, der Handweg über `occ config:app:set` plus den persönlichen Durchlauf je Konto, ist der Weg
 ohne Eingriff. Welcher der beiden genommen wurde, steht in 2.1; die Entscheidung liegt beim Owner, weil
 sie die Übertragbarkeit der Weg-0-Messung auf openDesk verändert und nicht nur den Aufwand.
+
+### 5.5 Rohwerte der Suchmessung auf Weg 0 (S3)
+
+Gemessen am 2026-08-28, alle Aufrufe durch Caddy gegen `http://127.0.0.1:8091`, alle unter reiner
+AppAPI-Impersonation und ohne App-Passwort im Prozess. Der Pfad ist in jeder Zeile
+`/ocs/v2.php/apps/integration_openproject/api/v1/work-packages`, die Werte in der Spalte Aufruf sind
+die Abfrageparameter. Gekürzt wird nach der Geheimnisregel oben: der Wert des Kopfes
+`AUTHORIZATION-APP-API` steht in keiner Zeile.
+
+| # | Konto | Aufruf | Status | Content-Type | Bytes | `ocs.data` |
+|---|-------|--------|--------|--------------|-------|------------|
+| 1 | `alice` | `?searchQuery=SPIKE-OD-8471` | 200 | `application/json; charset=utf-8` | 74 | `[]`, 0 Treffer |
+| 2 | `bob` | `?searchQuery=SPIKE-OD-8471` | 200 | `application/json; charset=utf-8` | 74 | `[]`, 0 Treffer |
+| 3 | `alice` | `?searchQuery=SPIKE-OD-8471&isSmartPicker=true` | 200 | `application/json; charset=utf-8` | 74 | `[]`, 0 Treffer |
+| 4 | `bob` | `?searchQuery=SPIKE-OD-8471&isSmartPicker=true` | 200 | `application/json; charset=utf-8` | **4746** | ein Objekt: `id 38`, `displayId "38"`, `subject "SPIKE-OD-8471 privat"`, `_type WorkPackage` |
+| 5 | `alice` | `?searchQuery=Demo&isSmartPicker=true` | 200 | `application/json; charset=utf-8` | 35239 | 14 Objekte, `id 38` **nicht** darunter |
+| 6 | `bob` | `?searchQuery=Demo&isSmartPicker=true` | 200 | `application/json; charset=utf-8` | 36308 | 14 Objekte, `id 38` **nicht** darunter |
+| 7 | `bob`, `APP_SECRET` aus 64 Nullen | `?searchQuery=SPIKE-OD-8471&isSmartPicker=true` | 401 | `application/json; charset=utf-8` | 106 | `statuscode 997`, `Current user is not logged in` |
+| 8 | `carol` | `?searchQuery=SPIKE-OD-8471&isSmartPicker=true` | 401 | `application/json; charset=utf-8` | 77 | `statuscode 401`, Meldung leer |
+
+Die Zeilen 1 und 2 sind der Lauf nach dem Wortlaut des Auftrags, die Zeilen 3 und 4 derselbe Lauf mit
+`isSmartPicker=true`. Der Unterschied zwischen Zeile 2 und Zeile 4 ist der Grund, warum der Parameter
+in 2.1 einen eigenen Absatz hat: dasselbe Konto, dasselbe Suchwort, einmal 0 und einmal 1 Treffer.
+
+Die zugehörige Zustandsmessung an der Ursache, **nicht** unter einem der Messkonten, sondern mit dem
+Aufbauzugang `Basic apikey:<OP_API_TOKEN>` des Kontos `admin`:
+
+```
+GET http://op.localtest.me:8082/api/v3/storages
+-> HTTP 200, 131 Bytes, total 0, count 0, _embedded.elements leer
+```
+
+Keine registrierte Ablage, also greift der Filter `linkable_to_storage_url` für kein Arbeitspaket. Die
+Zeile steht ausdrücklich in Abschnitt 5 und nicht in der Messwerttabelle von S3: sie erklärt die
+Vorgabe der Fläche und ist selbst kein Messwert über Berechtigungen, weil ein Administrator in
+OpenProject alles sieht.
 
 ## Was diese Messung nicht beweist
 
