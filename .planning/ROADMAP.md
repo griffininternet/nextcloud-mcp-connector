@@ -105,11 +105,11 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 16-02-PLAN.md , sechs Gates lokal grün ohne Anhebung, Archiv-Probelauf mit Nutzlast-Zählung, Proof-Zeilen der Runbook-Schritte 1 bis 3
+- [x] 16-02-PLAN.md , sechs Gates lokal grün ohne Anhebung, Archiv-Probelauf mit Nutzlast-Zählung, Proof-Zeilen der Runbook-Schritte 1 bis 3
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 16-03-PLAN.md , Branch-Push vor dem Tag, blockierende Owner-Freigabe, Tag v0.1.11 und grüner Release-Workflow, Proof-Zeile der Schritte 4 und 5
+- [x] 16-03-PLAN.md , Branch-Push vor dem Tag, blockierende Owner-Freigabe, Tag v0.1.11 und grüner Release-Workflow, Proof-Zeile der Schritte 4 und 5
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -179,7 +179,7 @@ Plans:
 | 13. CIMD-Nachmessung und Release 0.1.9 | v1.3 | 6/6 | Complete | 2026-08-25 |
 | 14. Doku-Reste und Gate-Entscheid | v1.4 | 2/2 | Complete | 2026-08-27 |
 | 15. Release 0.1.10 | v1.4 | 4/4 | Complete | 2026-08-28 |
-| 16. Release 0.1.11 | v1.5 | 2/4 | In Progress|  |
+| 16. Release 0.1.11 | v1.5 | 3/4 | In Progress|  |
 | 17. openDesk-Spike | v1.5 | 0/? | Not started | - |
 | 18. Audit-Log Kern | v1.5 | 0/? | Not started | - |
 | 19. Audit-Log Bedienung und Textnachzug | v1.5 | 0/? | Not started | - |

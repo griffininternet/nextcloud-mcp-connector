@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
-status: executing
-stopped_at: Completed 16-02-PLAN.md (sechs Gates lokal grün, Werkzeugoberfläche 15712 über 21 gegen 18000, Paket-Probelauf, drei Proof-Zeilen, kein Tag)
-last_updated: "2026-08-28T08:50:00.000Z"
-last_activity: 2026-08-28, Plan 16-02 ausgeführt (sechs Gates grün ohne Anhebung, Store-Paket geprüft, Proof-Zeilen der Runbook-Schritte 1 bis 3)
+status: in Ausführung; 0.1.11 ist veröffentlicht, der Tag v0.1.11 steht auf 504de6c und das Asset hängt am Release; offen sind Signatur, Store-Upload und Verifikation
+stopped_at: Completed 16-03-PLAN.md (Tag v0.1.11, Lauf 33160063188 grün, Asset mcp_connector-0.1.11.tar.gz mit 47046 Bytes)
+last_updated: "2026-08-28T09:45:00.000Z"
+last_activity: 2026-08-28, Plan 16-03 ausgeführt (Tag v0.1.11 nach Owner-Freigabe, Release-Workflow grün, Multi-Arch-Image bei ghcr, Proof-Zeile der Runbook-Schritte 4 und 5)
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_plans: 3
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 
 ## Current Position
 
-Phase: 16 (Release 0.1.11), 2 von 4 Plänen abgeschlossen
-Plan: 16-02 abgeschlossen; als nächstes 16-03 (Branch-Push und Tag, beides nur nach ausdrücklicher Owner-Freigabe)
-Status: in Ausführung; der Kandidat 0.1.11 ist geprüft, kein Tag existiert, nichts ist gepusht
-Last activity: 2026-08-28, Plan 16-02 ausgeführt (sechs Gates grün ohne Anhebung, Store-Paket geprüft, Proof-Zeilen der Runbook-Schritte 1 bis 3)
+Phase: 16 (Release 0.1.11), 3 von 4 Plänen abgeschlossen
+Plan: 16-03 abgeschlossen; als nächstes 16-04 (Runbook-Schritte 6 bis 8: Signatur über das heruntergeladene Asset, Store-Upload über die angemeldete Sitzung, Verifikation)
+Status: in Ausführung; 0.1.11 ist veröffentlicht, der Tag v0.1.11 steht auf 504de6c und das Asset hängt am Release; offen sind Signatur, Store-Upload und Verifikation
+Last activity: 2026-08-28, Plan 16-03 ausgeführt (Tag v0.1.11 nach Owner-Freigabe, Release-Workflow grün, Multi-Arch-Image bei ghcr, Proof-Zeile der Runbook-Schritte 4 und 5)
 
 ## Performance Metrics
 
@@ -166,6 +166,7 @@ Last activity: 2026-08-28, Plan 16-02 ausgeführt (sechs Gates grün ohne Anhebu
 | Phase 15 P03 | 12 min | 3 tasks | 1 files |
 | Phase 16-release-0-1-11 P01 | 7 min | 2 tasks | 8 files |
 | Phase 16-release-0-1-11 P02 | 11 min | 2 tasks | 1 files |
+| Phase 16-release-0-1-11 P03 | 9 min | 3 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -184,6 +185,9 @@ Recent decisions affecting current work:
 - Roadmap v1.5: EXAPP-12 (Auslieferung des Audit-Logs als 0.1.12) ist per Owner-Entscheid Future Requirement und in keiner Phase abgebildet; die AUDIT-06-Texte warten im `[Unreleased]`-Block, ohne Tag und ohne Store-Upload
 - Roadmap v1.5: kein Feature dieses Meilensteins fasst die Werkzeugoberfläche an; 15712 von 18000 Bytes über 21 Werkzeuge bleiben stehen, kein Gate-Grenzwert wird angehoben
 - [Phase 16]: die Werkzeugoberfläche misst weiter 15712 Bytes über 21 Werkzeuge gegen ein Budget von 18000, byte-gleich zum 0.1.10-Lauf, weil `0.1.10` und `0.1.11` beide sechs Zeichen lang sind; kein Grenzwert wurde angehoben, das lokal gebaute Store-Paket hat 47349 Bytes und wird nicht signiert
+- [Phase 16]: der Tag v0.1.11 steht auf 504de6c und ist irreversibel; ab hier kein `git tag -f`, kein Force-Push und kein Löschen eines Release-Assets, weil AppAPI von der Asset-URL installiert und nicht aus dem Store
+- [Phase 16]: das veröffentlichte Asset misst 47046 Bytes bei sha256 `e4b570c0…`, das lokal gebaute 47349 bei `df5a9ca9…`; die Differenz ist erwartet, weil `tar.gz` nicht bytereproduzierbar ist, und Plan 16-04 signiert ausschließlich das Heruntergeladene
+- [Phase 16]: die Owner-Freigabe für den Tag lag vor 09:36:25Z, ist aber nicht auf die Minute festgehalten, weil sie als Weitergabe im Planauftrag ankam statt als wörtliches Zitat; für das nächste Release wird sie im Moment der Freigabe mit UTC-Stempel notiert
 - Roadmap v1.5: für EXAPP-11 gelten die Release-Regeln unverändert (Versionszeichenkette an sechs Stellen, Changelog-Block samt Linkdefinition, Branch-Push vor dem Tag, Tag nur nach wörtlicher Owner-Freigabe, Signatur über das heruntergeladene Asset, datierte Proof-Zeilen in docs/store-submission.md)
 
 - Roadmap v1.4: Phasennummerierung setzt bei 14 fort (v1.3 verbrauchte 12 und 13); zwei Phasen bei Granularität coarse, weil das Release die Doku-Fixes im Asset mitnehmen muss und deshalb zwingend nach ihnen liegt
@@ -646,7 +650,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-28T08:38:53.602Z
+Last session: 2026-08-28T09:42:24.749Z
 Stopped at: Completed 16-01-PLAN.md (Version 0.1.11 an sechs Stellen, Changelog-Block 0.1.11 statt [Unreleased], kein Tag)
 Naechster Schritt: 16-02 (sechs Gates lokal grün, Archiv-Probelauf, Proof-Zeilen der Runbook-Schritte 1 bis 3); der Tag v0.1.11 entsteht erst in 16-03 nach ausdrücklicher Owner-Freigabe
 Resume file: None
