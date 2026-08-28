@@ -70,3 +70,38 @@ diese Doorkeeper-Einstellung mitbringt oder abweicht. Beides ist **ungemessen** 
 
 **Vorgeschlagene Behandlung:** ein Satz in Plan 17-09 unter Abschnitt 3 (API-Form, Vorarbeit für
 OD-04). Keine Frage für den ISV-Call, weil sie nicht ZenDiS betrifft, sondern OpenProject.
+
+## DI-17-03: Weg A wäre messbar, kostet aber zwei Eingriffe in die Messumgebung
+
+**Gefunden:** 2026-08-28, Plan 17-05, Task 2, vor dem ersten Klick und deshalb rechtzeitig.
+
+**Gemessen und im Bericht in 5.4 belegt:** der Ablagen-Assistent von OpenProject scheitert in dieser
+Topologie am Namenscheck von `NextcloudCompatibleHostValidator`, nicht an der Erreichbarkeit. Alle
+vier Namen, unter denen Nextcloud hier zu erreichen wäre, liefern `safe_ip? = nil`, die Erlaubnisliste
+ist leer, und die zwei Netzaufrufe, die danach kämen, gelingen beide (200 und 200).
+
+**Was eine Messung von Weg A kosten würde, so genau wie es ohne Versuch geht:**
+
+1. `OPENPROJECT_SSRF__PROTECTION__IP__ALLOWLIST` in `compose.spike-opendesk.yml` setzen, mindestens
+   `127.0.0.0/8` und `172.16.0.0/12`. Der Schlüssel trägt `writable: false`, ist also nicht in der
+   Oberfläche setzbar; der OpenProject-Container muss dafür neu erzeugt werden.
+2. Ein Name, der aus dem Browser des Entwicklers **und** serverseitig aus dem OpenProject-Container an
+   dieselbe Nextcloud führt. Den gibt die Topologie heute nicht her: `caddy` löst nur innen auf,
+   `127.0.0.1:8091` nur außen. Nötig wären ein Caddy-Site-Block auf `:8091`, ein `extra_hosts`-Eintrag
+   und eine Trusted-Domain.
+
+**Der unsichere Teil, ausdrücklich ungemessen:** `OpenProject.httpx` trägt den Filter mit
+`safe_private_ranges` (`/app/lib/open_project.rb:68`), und `SsrfProtection` löst Namen über
+`Resolv::DNS` auf, also **ohne** `/etc/hosts`. Ob ein Name mit öffentlichem A-Eintrag auf `127.0.0.1`
+nach der Erlaubnisliste dann zur Adresse aus `extra_hosts` verbindet oder zur öffentlich aufgelösten,
+ist nicht gemessen. Der Ausgang von Schritt 2 ist damit offen, und deshalb steht hier eine Kostenschätzung
+und keine Anleitung.
+
+**Warum es nicht in diesem Plan behandelt wurde:** D-03 verbietet Eingriffe, die über die Messung
+hinausgehen, das Neuerzeugen des OpenProject-Containers würde den in 5.3 aufgebauten Grundzustand
+riskieren, den 17-06 braucht, und der Owner hat am 28.08. ausdrücklich Variante B gewählt. Weg A steht
+deshalb als `ungemessen` mit Grund und nicht als `verworfen`.
+
+**Vorgeschlagene Behandlung:** ein Absatz in Plan 17-09 unter 2.5 (dort schon vorgemerkt) und, falls
+der ISV-Call einen Bootstrap-Weg nennt, eine Frage in 17-08 danach, ob openDesk eine
+SSRF-Erlaubnisliste setzt. Eine eigene Messung nur, wenn der Owner den Eingriff ausdrücklich freigibt.

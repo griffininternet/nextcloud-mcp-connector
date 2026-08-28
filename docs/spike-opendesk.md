@@ -940,6 +940,15 @@ noch nicht gemessen, Plan 17-09
 
 noch nicht gemessen, Plan 17-09
 
+**Vorgemerkt aus Abschnitt 2.1, damit der Punkt nicht zwischen den Plänen verloren geht.** Der
+dokumentierte Einrichtungsweg von Weg 0, der Ablagen-Assistent von OpenProject (Weg A, derselbe Weg,
+den der openDesk-Bootstrap-Job geht), bleibt in dieser Phase **ungemessen**. Der Grund ist gemessen und
+steht in 5.4: der SSRF-Schutz von OpenProject weist jeden Namen ab, unter dem Nextcloud in dieser
+Loopback-Topologie zu erreichen wäre, und die dafür nötige Erlaubnisliste ist nur über die Umgebung des
+Containers setzbar. Gelaufen ist Weg B. Damit ist gemessen, dass die App im Modus `oauth2` gegen eine
+lokale Instanz arbeitet, und **nicht**, dass der openDesk-Bootstrap-Weg durchläuft. Die Ausformulierung
+dieses Abschnitts bleibt 17-09 überlassen.
+
 ## 3. API-Form (Vorarbeit für OD-04, kein Requirement dieser Phase)
 
 noch nicht gemessen, Plan 17-09
