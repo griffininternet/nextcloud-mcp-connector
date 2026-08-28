@@ -1,241 +1,211 @@
-# Project Research Summary
+# Projekt-Recherche-Zusammenfassung
 
-**Project:** MCP Connector fuer Nextcloud -- Milestone v1.2 "Kuratierte Breite"
-**Domain:** Erweiterung einer ausgelieferten MCP-only-ExApp (Groupware-Anbindung: Chat, Tabellen, E-Mail) fuer KI-Assistenten
-**Researched:** 2026-08-21
-**Confidence:** HIGH insgesamt, mit zwei benannten MEDIUM-Flecken (Mail-Mindestversion, Mail-App-Erkennung live)
-
-> Diese Datei ersetzt die v1.0-SUMMARY vom 2026-08-14 vollstaendig. Sie fasst ausschliesslich
-> die vier v1.2-Recherchedateien zusammen (STACK.md, FEATURES.md, ARCHITECTURE.md,
-> PITFALLS.md, alle datiert 2026-08-21). Die v1.0-Gesamtrecherche bleibt in der Git-Historie
-> erreichbar (Commit `29c5940`).
+**Projekt:** MCP Connector für Nextcloud (Arbeitstitel), Repository `nextcloud-mcp-connector`
+**Meilenstein:** v1.5 "Vorlauf openDesk"
+**Domain:** MCP-only-ExApp für Nextcloud; zwei neue Bausteine: ein zweiter, fremder Host (OpenProject in openDesk) und ein Audit-Log über jeden Werkzeugaufruf
+**Recherchiert:** 2026-08-28
+**Konfidenz:** MEDIUM in der Gesamtschau. Die Einzelbefunde sind überwiegend HIGH (Quellcode und live gemessen), aber die vier Berichte widersprechen sich in der wichtigsten Architekturfrage des Meilensteins, und diese Frage ist ungelöst. Eine Synthese, die das glattbügelt, wäre falsch.
 
 ## Executive Summary
 
-v1.2 fuegt einer bereits im Store ausgelieferten, bewusst schlanken Nextcloud-MCP-ExApp drei
-neue App-Familien hinzu: Talk (Chat), Tables (Tabellen) und Mail. Alle vier Recherchen kommen
-unabhaengig zum selben Bild: **das ist keine neue Architektur, sondern eine dritte
-Wiederholung eines etablierten Musters** (Client-Modul, Tool-Modul mit `level`-Enum,
-`reg_*`-Registrierung, Capability-Gate) -- mit drei Ausnahmen, die die Roadmap explizit
-adressieren muss. Erstens schreibt ein naiver Talk-"Lese"-Aufruf tatsaechlich in den
-Nutzerzustand (Leseeintrag, Benachrichtigungs-Quittierung, Online-Status), unwiderruflich,
-weil `DELETE` per Gate verboten ist. Zweitens hat Tables seine Zeilen-Lese-API nur in der
-aelteren, nicht-OCS-Generation (v1), waehrend das Zeile-Anlegen in der neueren OCS-Generation
-(v2) liegt -- ein gemischter Client ist zwingend. Drittens veroeffentlicht Mail keine
-Capability, hat kein `openapi.json`, und sein einziges dokumentiert zugesagtes API-Stueck sind
-vier OCS-Routen (lesen, senden, roh, Anhang); alles andere ist interne, ungetypte
-Frontend-Route, die laut CSRF-Ausweg (`OCS-APIRequest`-Header) trotzdem erreichbar ist, aber
-nicht zugesagt.
+Dieser Meilenstein hat zwei fast unabhängige Hälften. Die eine ist der Audit-Log: alle sechs Bauteile dafür existieren bereits im Repository (SQLite-Muster aus `oauth/store.py`, die `MCPServer(middleware=...)`-Naht im SDK, die Registry-Annotationen `READ_ONLY`/`CREATE_ONLY`, die `/connections`-Seite, der occ-Weg über `exapp/purge.py`), und alle vier Recherchen sind sich einig, dass dieser Baustein ohne openDesk trägt und zuerst fertig werden sollte. Die andere Hälfte ist der OpenProject-Zugriff, und hier widersprechen sich die Berichte an der einzigen Stelle, die wirklich zählt: wie der Connector im Namen des angemeldeten Nutzers auf OpenProject zugreift. ARCHITECTURE.md hat einen Weg gefunden, der drei der vier Berichte offenbar nicht bekannt war, nämlich die bereits existierende Nextcloud-App `integration_openproject` mit fünfzehn OCS-Routen, die mit dem Token des angemeldeten Nutzers spricht. STACK.md, FEATURES.md und PITFALLS.md bauen ihre gesamte Analyse dagegen auf einem eigenen OAuth-Autorisierungscode-Fluss direkt gegen OpenProject auf, ohne diesen Proxy-Weg überhaupt zu erwägen. Das ist kein Nuancenunterschied, sondern zwei verschiedene Architekturen mit verschiedenen Sicherheitseigenschaften, verschiedenen Spike-Kosten und verschiedenen Bruchstellen. Diese Zusammenfassung entscheidet die Frage nicht, sie legt sie offen: Sie gehört in den Spike, nicht in ein Meeting.
 
-Der empfohlene Ansatz ist radikal minimal: **keine neue Python-Abhaengigkeit**, fuenf bis
-sechs neue Tools statt der 24+ Tools, die beide direkten Wettbewerber pro Familien-Trio
-anbieten, strikt lesendes Mail (keine Sende-, Verschiebe- oder Markier-Operation), Talk nur
-mit einem risikoarmen Senden-Write, Tables nur mit einem risikoarmen Zeile-Anlegen-Write.
-Kein Update, kein Delete, keine Schema-Aenderung irgendwo. Das haelt den Meilenstein nah an
-der bestehenden Positionierung ("kuratiert schlank" gegen 100+ Tools bei der Konkurrenz) und
-laesst das AST-Grep-Schreibgate im Kern unangetastet erweitern.
+Darüber liegt eine noch wichtigere Frage, die drei der vier Berichte fast beiläufig behandeln, obwohl sie logisch vor jeder Auth-Frage steht: ob eine ExApp in openDesk überhaupt installierbar ist. openDesk ist eine Kubernetes-Distribution ohne Nextcloud App Store (`appstore: enabled: false`) und ohne AppAPI im produktionsfähigen Sinn (die unterstützten Deploy-Daemons sind Docker-basiert, openDesk ist Helm auf Kubernetes). Die gesamte Ein-Klick-Erzählung, der Kern der Positionierung dieses Produkts, existiert in einer openDesk-Installation schlicht nicht. Dazu kommt: openDesk 1.18.0 fährt Nextcloud 33.0.7, während sämtliche Ein-Klick- und Erreichbarkeitsnachweise dieses Projekts auf Nextcloud 34.0.3 stehen, openDesk schaltet Talk (`spreed`) und Kontakte ab, was zwei der neun bestehenden Werkzeugfamilien in dieser Umgebung dunkel schaltet, und openDesk Community Edition hat weder den OpenProject-eigenen MCP-Server noch den OIDC-SSO-Speichermodus, beide sind dort Enterprise-Add-ons.
 
-Das groesste, projektuebergreifende Risiko ist nicht technisch, sondern eine Sicherheits- und
-Produktentscheidung: **Mail-Lesen plus Talk-Senden schliesst im selben Server zum ersten Mal
-die "lethal trifecta"** (private Daten, ungefilterter fremder Inhalt, Ausgangskanal) -- die
-exakte Form des EchoLeak-Vorfalls (CVE-2025-32711, CVSS 9.3) in Microsoft 365 Copilot. Alle
-vier Recherchedateien flaggen das unabhaengig; PITFALLS.md und STACK.md empfehlen
-uebereinstimmend, `talk_send_message` entweder auf v1.3 zu verschieben oder hinter einen
-default-aus Admin-Schalter zu legen, und diese Entscheidung muss **vor** der ersten
-Familienphase fallen, nicht am Ende nachgezogen werden -- sie praegt Tool-Schnitt, Store-Text
-und Budget.
+Der Audit-Log-Baustein ist technisch der leichtere, aber er ist an fünf bis sechs Stellen eine Falle, die alle mit derselben Bewegung zu vermeiden sind: Metadaten statt Inhalte speichern, eine Obergrenze setzen, die Purge-Frage bewusst entscheiden, den Schalter per Default aus lassen (Mitbestimmung), und das Wort "Audit-Log" nicht mehr versprechen, als eine Hash-Kette plus zwei Senken tatsächlich halten. Mehrere Entscheidungen sind ausdrücklich als Owner-Entscheidung markiert, und keine Recherche kann sie stellvertretend treffen; sie gehören gesammelt in die Anforderungsdefinition.
+
+## Der zentrale Widerspruch: Wie erreicht der Connector OpenProject im Namen des Nutzers?
+
+**ARCHITECTURE.md** hat im Quellcode der Nextcloud-App `integration_openproject` einen Weg gefunden ("Weg 0"), der schon existiert: Diese App spricht mit OpenProject im Zwei-Wege-OAuth2-Modus mit dem Token des angemeldeten Nutzers, erneuert dieses Token serverseitig ohne Browser-Sitzung, und ist in openDesk bereits vorkonfiguriert. Der Connector müsste dafür nur ein neues Client-Modul bauen, das die bestehenden OCS-Routen dieser App über `NC_MCP_URL` anspricht, mit demselben App-Passwort-Mechanismus, den er heute schon für Nextcloud selbst benutzt. Kein neues Geheimnis im Container, keine zweite Basis-URL, kein Egress.
+
+**STACK.md** (und mit ihm FEATURES.md und PITFALLS.md) erklärt dagegen den OIDC-Weg für strukturell unerreichbar (`user_oidc` kann Token-Exchange nur als PHP-Ereignis mit Browser-Session, das eine ExApp nicht auslösen kann) und empfiehlt als Konsequenz einen **eigenen OAuth-Autorisierungscode-Fluss je Nutzer direkt gegen OpenProject** ("Weg 1"), mit persönlichem API-Token als dokumentiertem Rückfall. Diese drei Dokumente erwähnen `integration_openproject` als Auth-Proxy an keiner Stelle. FEATURES.md kennt die App nur als Datenquelle für `file_links` (Dateiverknüpfungen), nicht als Zugriffsweg.
+
+Das ist der Kern des Widerspruchs: **drei von vier Berichten haben den Weg, den der vierte für die einzig versprechenstreue Lösung hält, nicht in Betracht gezogen.**
+
+| | Weg 0 (ARCHITECTURE): Proxy über `integration_openproject` | Weg 1 (STACK/FEATURES/PITFALLS): eigener OAuth-Client gegen OpenProject |
+|---|---|---|
+| **Wo liegt das Geheimnis** | in Nextcloud (`oc_preferences`, App-eigene Verwaltung) | im ExApp-Container, SQLite, AES-GCM, Datenschlüssel aus Nextcloud |
+| **Übersteht "Assistent sieht nie mehr als der Nutzer"** | ja, unverändert, weil Nextcloud weiterhin entscheidet | ja, aber über eine zweite, eigene Einwilligung pro Nutzer |
+| **Was fällt bei kompromittiertem Container** | nichts Neues gegenüber heute (dieselben App-Passwörter) | zusätzlich alle OpenProject-Refresh-Token aller verbundenen Nutzer |
+| **Bricht die feste Zieladresse (heute: nur `NC_MCP_URL`)** | nein | ja, zweite Basis-URL nötig, Egress zu einem zweiten Host |
+| **Was der Spike messen muss** | ob die OCS-Route auch ohne Browser-Sitzung antwortet (App-Passwort/AppAPI-Impersonation), und vor allem: übersteht die serverseitige Token-Erneuerung den Wechsel in openDesks OIDC-Modus, oder bricht sie nach Ablauf des zwischengespeicherten Tokens? | ob `/oauth/authorize` PKCE annimmt, obwohl die Metadaten es nicht bewerben; Token-Lebensdauer und Refresh-Verhalten; ob der bestehende SSRF-Schutz eine Nachbarkomponente im selben Cluster fälschlich aussperrt |
+| **Spike-Kosten** | niedrig, zwei Container (Docker-Nextcloud + OpenProject-Community-Instanz), kein Keycloak nötig | mittel, zusätzlicher Browser-Consent-Flow zum Messen |
+| **Funktionsumfang** | schmal, nur was die Integration proxyt (Arbeitspakete suchen/anlegen, Projekte, Zuweisbare, Status, Typen, Benachrichtigungen, Dateiverknüpfungen) | volle API v3 |
+| **Bricht in openDesks OIDC-Modus** | möglicherweise ja: `getOIDCToken()` holt das Ausgangstoken aus der PHP-Session, die bei einem MCP-Aufruf ohne Browser-Login nicht existiert | nein, unabhängig vom Nextcloud-internen SSO-Modus |
+
+**Bewertung:** Der von ARCHITECTURE.md gefundene Weg 0 ist die stärkere Architektur, wenn er trägt, weil er das Sicherheitsversprechen mit exakt derselben Mechanik hält wie heute und keinen neuen Vertrauensanker im Container schafft. Aber sein Tragen hängt an einer einzigen, ungemessenen Tatsache: ob die serverseitige Token-Erneuerung auch in openDesks OIDC-gebundenem Betrieb greift, oder ob sie nach Ablauf des zwischengespeicherten Tokens (typischerweise wenige Minuten nach der letzten Browsertätigkeit des Nutzers) auf 401 fällt. Genau das ist im Quellcode von `user_oidc` als Bruchstelle belegt (`TokenService::getExchangedToken()` liest aus der PHP-Session), aber nicht live gemessen.
+
+**Diese Entscheidung ist OPEN und wird durch die Spike-Messung entschieden, nicht durch Argumentation.** Der Spike muss beide Wege im Bericht führen: Weg 0 zuerst und mit den Behauptungen S1-S6 aus ARCHITECTURE.md (insbesondere S4: Token-Erneuerung ohne Browser-Sitzung, und S5: Verhalten im OIDC-Modus nach Tokenablauf), Weg 1 als Rückfall mit den vier Fragen aus STACK.md A.8 (insbesondere PKCE-Unterstützung trotz fehlender Metadaten-Ankündigung). Falls Weg 0 im OIDC-Modus nachweislich bricht und der ISV-Call keine bessere Antwort liefert, ist Weg 1 der einzig vertretbare Rückfallweg, kein Ausweichen.
+
+## Die Gating-Frage: Ist eine ExApp in openDesk überhaupt installierbar?
+
+Diese Frage steht **über** jeder API-Frage, und alle vier Berichte, die sie berühren, stimmen darin überein. openDesk ist laut eigener Architekturdokumentation eine Kubernetes-Distribution, orchestriert per Helmfile. Drei Befunde entscheiden vor jedem Toolcode:
+
+1. **Kein Nextcloud App Store.** `appstore: enabled: false` in den openDesk-Nextcloud-Werten. Die gesamte Ein-Klick-Erzählung dieses Produkts, der Kern der Store-Beschreibung und der Positionierung, existiert in einer openDesk-Installation nicht. Installation dort ist eine Betreiber-Aufgabe im Helmfile.
+2. **AppAPI ist für Kubernetes nicht gebaut.** Die produktionsfähigen Deploy-Daemons (Docker Socket Proxy, HaRP) sind Docker-Mechanik; openDesk ist Helm auf Kubernetes. Der einzige theoretisch passende Daemon-Typ ist `manual_install`, der laut Nextcloud-Dokumentation ausdrücklich für Entwicklung oder Spezialfälle gedacht ist, nicht für den produktiven Regelbetrieb.
+3. **Nextcloud in openDesk 1.18.0 steht auf 33.0.7, nicht auf 34.0.3.** Sämtliche Ein-Klick- und AppAPI-Erreichbarkeitsnachweise dieses Projekts sind auf 34.0.3 gemessen. Die Zielumgebung ist damit nicht neuer, sondern älter als getestet, und ein Nachweis auf der falschen Hauptversion ist in einem Projekt, das seine Nachweise wörtlich nimmt, kein Nachweis.
+
+Zusätzlich, weil es dieselbe Kategorie ist und in den Requirements ankommen muss: **openDesk schaltet `spreed` (Talk) und `contacts` ab.** Von den 21 heute ausgelieferten Werkzeugen über neun Familien bleiben in einer openDesk-Installation weniger übrig, als die Store-Beschreibung verspricht, unabhängig vom Ausgang des OpenProject-Spikes. Und: **openDesk Community Edition liefert weder den OpenProject-eigenen MCP-Server (Enterprise-Add-on seit OpenProject 17.2) noch den OIDC-SSO-Speichermodus (ebenfalls Enterprise) aus.** Beides existiert nur in openDesk Enterprise Edition, und das ist die Trennlinie, die den Mehrwert dieses Bausteins in der Zielumgebung überhaupt erst bestimmt.
+
+**Konsequenz für die Roadmap:** Der Spike muss in dieser Reihenfolge berichten: zuerst die Installierbarkeitsfrage (Ja/Nein/offen, mit Quelle oder ISV-Call-Vermerk), dann erst die Auth-Frage (siehe oben), dann erst die API-Form. Eine Roadmap-Phase "OpenProject-Werkzeuge" ohne vorausgehende Phase "Installierbarkeit" hätte die teure Frage nicht angefasst.
 
 ## Key Findings
 
-### Recommended Stack
+### Empfohlener Stack
 
-Der Stack aendert sich nicht: `pyproject.toml` bleibt komplett unveraendert, kein `uv add`,
-kein Lock-Update. Alle drei Familien sind durchgaengig JSON ueber HTTP, laufen unter der
-bestehenden AppAPI-Impersonation ohne neuen Auth-Pfad, ohne Scope-Deklaration (API-Scopes
-wurden in AppAPI 3.2.0 komplett entfernt) und ohne `info.xml`-Aenderung an Routen oder
-Environment-Variablen.
+Kein neuer Runtime-Zukauf. OpenProject ist HAL+JSON über HTTP und wird mit dem vorhandenen `httpx` gesprochen (jeder PyPI-Client für OpenProject ist tot, `requests`-basiert oder pinnt ein inkompatibles `httpx`). Das Audit-Log braucht `sqlite3` (stdlib, gleiches Muster wie `oauth/store.py`), `hashlib` (stdlib, für die Hash-Kette) und `logging` mit einem eigenen JSON-Formatter. `pyproject.toml` bleibt unverändert.
 
-**Kerntechnologien (alle bereits im Projekt):**
-- `httpx` (bestehend) -- einziger HTTP-Client fuer alle neun neuen Endpunkte; kein XML, kein DAV, kein IMAP direkt
-- `lxml.html.fromstring(...).text_content()` (bestehend, neuer Verwendungszweck) -- HTML-Mail-Bodies zu Text reduzieren, ohne neue Abhaengigkeit (`lxml.html.clean` bewusst vermeiden, seit lxml 5.2 ausgelagert)
-- `mcp[cli]` (bestehend) -- Tool-Registrierung folgt dem Deck/Notes-Muster 1:1
-- neu nur in der Client-Schicht: `ocs_post` neben dem vorhandenen `ocs_get` (Talk-Senden und Tables-Create sind die ersten OCS-Schreibaufrufe des Projekts)
-- Integrationstest-Ebene: GreenMail als zweiter Compose-Service fuer einen echten IMAP-Server (kein Python-Paket, nur Testinfrastruktur)
+**Kerntechnologien:**
+- `httpx` (bereits vorhanden): einziger HTTP-Client, jetzt auch für OpenProject API v3. Kein PyPI-Client ist installierbar oder gepflegt genug, um ihn zu ersetzen
+- `sqlite3` (stdlib): Primärsenke des Audit-Logs, append-only, hash-verkettet, zweite Datei neben `oauth.sqlite3`. Kein neuer Mechanismus, dieselbe Wette wie seit v1.0
+- `hashlib` (stdlib): Hash-Kette (`prev_hash`/`entry_hash`), rund 30 Zeilen. Macht aus einer Tabelle einen prüfbaren Nachweis
+- `mcp[cli]` `MCPServer(middleware=[...])` (bereits vorhanden): die einzig richtige Naht für "jeder Werkzeugaufruf", als "Provisional" markiert, deshalb hinter einem dünnen Adapter
 
-**Explizit abgelehnt:** `html2text`/`beautifulsoup4`/`markdownify` (lxml reicht), `imapclient`/`imaplib` (wuerde die Mail-App und ihre Berechtigungen umgehen), `nc_py_api` (unnoetig, neun HTTP-Aufrufe reichen), Talk-Bot-API (eigene Identitaet statt Nutzer-Impersonation, bricht das Kernversprechen).
+Bewusst **nicht** gezogen: jeder PyPI-OpenProject-Client (tot oder inkompatibel), `structlog`/`python-json-logger`/`loguru` (40 Zeilen Eigenbau reichen), `aiosqlite` (bereits gegen begründet), `opentelemetry-sdk` (Traces werden gesampelt, ein Audit-Log darf nicht sampeln).
 
-### Expected Features
+### Erwartete Features
 
-**Must have (Table Stakes):** Talk-Konversationen und -Nachrichten lesen mit garantiert
-nebenwirkungsfreien Parametern (`setReadMarker=0`, `markNotificationsAsRead=0`,
-`noStatusUpdate=1`, `lookIntoFuture=0`), Talk-Nachricht senden mit Vorpruefung von
-`readOnly`/Permission-Bit; Tables-Tabellen, -Spalten und -Zeilen lesen (Zeilen nur ueber die
-v1-App-Route, v2 hat keine Leseroute), Zeile anlegen mit Spaltentiteln statt roher
-Spalten-Ids; Mail-Konten/Postfaecher/Nachrichtenliste lesen sowie eine Nachricht im Volltext
-lesen (letzteres ueber die einzige offizielle OCS-Route); App-Erkennung mit Graceful
-Degradation fuer alle drei Familien nach dem Notes/Deck-Muster (Mail braucht dafuer einen
-zweiten Kanal, siehe Architektur).
+**Must have (v1.5, wenn der Spike den OpenProject-Zugang trägt):**
+- Ein Auth-Weg live bewiesen: Nutzer verbindet, ein Werkzeug antwortet mit echten Daten, Trennen nimmt den Zugang mit
+- `openproject_browse` mit `my_work` (Filter `assignee=me`, `status=o`) und `inbox` (ungelesene Benachrichtigungen mit `reason`)
+- `openproject_browse` mit `projects`, `work_packages` (inkl. Volltext), `comments`
+- `fetch("wp:<id>")`, inklusive bis zu 10 `file_links` als auflösbare `file:<id>`: der einzige Punkt, an dem dieses Produkt etwas kann, das kein Wettbewerber kann
+- Drei unterscheidbare Fehlersätze, instanzweiter Aus-Schalter, kein Schreibpfad (AST-Gate)
 
-**Should have (Differenzierung):** Mail strikt lesend (positioniert das Projekt naeher an
-Googles offiziellem Gmail-MCP als an beiden Nextcloud-Wettbewerbern, die beide senden koennen);
-Vertrauens-Signale (`isSenderTrusted`, `dkimValid`, `phishingDetails`) als Datenfelder statt
-gefiltert durchreichen; Read-ohne-Nebenwirkung als getestete, dokumentierte Eigenschaft;
-Zeile-Anlegen ueber Spaltentitel statt Ids (Nextcloud-Issue #2237 zeigt, dass sogar Menschen
-das Ids-Format falsch verwenden); ein Browse-Tool mit `level`-Enum pro Familie statt
-CRUD-Spiegelung (5-6 neue Tools gegen 24+ bei beiden Wettbewerbern fuer dieselben drei Apps);
-Talk-Digest in `prepare_context` praktisch kostenlos, weil die Konversationsliste
-`unreadMessages`/`unreadMention` schon mitliefert.
+**Must have (Audit-Log, trägt den Meilenstein auch ohne OpenProject):**
+- Ein Aufrufpunkt für jeden Werkzeugaufruf (Middleware, nicht Dekorator)
+- Metadatenschema ohne Argumentwerte im Default, abgelehnte Aufrufe mit Grund, Verbindungs-/Admin-Ereignisse im selben Protokoll
+- Aufbewahrungsfrist als Admin-Wert (Default 90 Tage), automatische Löschung, Hash-Kette plus Prüfbefehl
+- `occ mcp_connector:audit` für CSV/JSONL-Export, JSON-Zeilen nach stdout, Nutzeransicht auf `/connections`
+- Store-Text und READMEs EN/DE/FR im **selben** Release nachgezogen
 
-**Defer / explizit nicht bauen (v2+ oder nie):** Mail senden, Mail-Entwurf anlegen (v1.2),
-Mail-Flags/Tags/Verschieben/Loeschen, Mail-Anhaenge herunterladen, Talk-Nachricht
-loeschen/bearbeiten, Talk-Konversation anlegen, Talk-Reaktionen/Umfragen/Teilnehmerlisten,
-`lookIntoFuture=1` (Long-Polling), eigene Suchtools pro Familie (unified_search deckt das
-schon ab), Tabellen-Schema aendern/Import/Shares, Zeile aktualisieren/loeschen,
-ungekappte Volltext-Dumps, credential-abhaengige `tools/list`.
+**Differenzierer:** Ein Endpunkt für Nextcloud und OpenProject statt zwei Server mit zwei Zustimmungen; die Kette Arbeitspaket zu Datei über `file_links`; Verfügbarkeit auf der Community Edition, wo der Hersteller-MCP-Server (Enterprise-Add-on) fehlt; Nutzeransicht "was hat der Assistent in meinem Namen getan" auf der bestehenden `/connections`-Seite (kein Wettbewerber hat das).
 
-### Architecture Approach
+**Anti-Features, ausdrücklich nicht bauen:** volle CRUD-Abdeckung wie Community-MCP-Server (132 Werkzeuge), PATCH auf Arbeitspakete, Benachrichtigungen als gelesen markieren, den offiziellen OpenProject-MCP durchreichen, Argumente/Ergebnisse vollständig im Audit-Log speichern, Nutzungsstatistiken/Dashboards, ein `audit_search`-Werkzeug, "revisionssicher"/WORM/Blockchain-Wortwahl.
 
-Talk und Tables passen ohne neue Mechanik in die bestehende Architektur -- je ein
-Client-Modul, ein Tool-Modul, eine `reg_*`-Datei, zwei Zeilen in `capabilities.py`. Mail ist
-die einzige Familie, die echte Architekturentscheidungen erzwingt: keine Capability
-vorhanden, Listing laeuft ueber eine interne, nicht als API zugesagte Route. `prepare_context`
-waechst am billigsten **nicht** als neues Fan-out-Bein, sondern als zwei neue Provider-Kinds in
-`provider_map.PROVIDER_KINDS` plus zwei neue Buckets in `KIND_BUCKETS` -- die Suche fragt
-schon heute ohne Provider-Einschraenkung und Talk-/Mail-Treffer kommen bereits an (heute als
-`url`, `resolvable: false`).
+### Architekturansatz
 
-**Major components:**
-1. `nextcloud/clients/{talk,tables,mail}.py` (neu) -- Endpunktwissen, Pfad-Waechter, Parser-Wahl (`parse_ocs` vs. `parse_app_json`)
-2. `nextcloud/capabilities.py` (geaendert) -- App-Erkennung ueber zwei Kanaele: `cloud/capabilities` fuer Talk/Tables, `core/navigation/apps` als zweiter Kanal fuer Mail
-3. `tools/{talk,tables,mail}.py` (neu) -- Fachlogik, Envelope, Kappung, Degradations-Wortlaut, `require_app` als erste Zeile jeder Funktion
-4. `ids.py` / `provider_map.py` / `tools/chatgpt.py::fetch` (geaendert) -- drei neue Kinds (`message`, `row`, `mail`), Fragment-Auswertung fuer Talk und Tables, Talk-Nachricht und Mail ueber `fetch` statt eigenes Tool
-5. `scripts/check_tool_budget.py` (geaendert, kritisch) -- CI-Gate mit neuer Messzeile pro Anhebung, plus empfohlene Ergaenzung: Pro-Tool-Deckel (kein Tool ueber 1400 Bytes)
+Die Architektur bindet beide Bausteine an sieben bestehende Randbedingungen (Dispatch ohne Zwischenschicht, Anmeldedaten synchron im Tool-Aufruf, feste Zieladresse aus `NC_MCP_URL`, Identität an der ASGI-Grenze aufgelöst, persistenter Datenträger, kein PHP-Prozess, undeklarierte occ-Route als Verwaltungsmuster). Für OpenProject ist die architektonische Kernfrage nicht "welches OAuth", sondern welcher Weg diese Randbedingungen intakt lässt (siehe Widerspruch oben). Für das Audit-Log ist die Naht eindeutig: `MCPServer(middleware=[...])` am Serverobjekt, nicht ein Dekorator je Werkzeug, weil "jeder Werkzeugaufruf" eine Eigenschaft der Bauart sein muss und keine Sammlung von 21 (bald 22) Einzelzusagen.
 
-**Build Order laut Architekturforschung:** Phase 0 (Erreichbarkeits-Spike, blockierend, prueft ob Mail unter reiner AppAPI-Impersonation erreichbar ist) -> Tables (risikoaermste Familie, etabliert die mechanische Checkliste) -> Talk (querschneidende Aenderungen: nicht-numerische IDs, neue Kinds, erster `provider_map`-Fragment-Fall) -> Mail (profitiert von den in Talk geweiteten Naehten, sensibelste Familie, zweiter Erkennungskanal) -> `prepare_context`-Erweiterung und Budget-Endstand.
+**Wichtigste Komponenten:**
+1. **OpenProject-Client** (Ort und Form abhängig vom Spike-Ergebnis): entweder `nextcloud/clients/integration_openproject.py` (Weg 0, kein neuer Credential-Modus) oder ein zweites Client-Modul mit eigener Basis-URL und eigenem Credential-Speicher (Weg 1)
+2. **`audit/middleware.py`**: `ServerMiddleware`, zustandslos, liest ihre Senke aus `request.state`, sieht beide Fehlerformen (`CallToolResult(is_error=True)` und geworfene `MCPError`)
+3. **`audit/store.py`**: zweite SQLite-Datei, eigene Datei statt zweite Tabelle in `oauth.sqlite3`, damit Purge und Aufbewahrung getrennt bleiben
+4. **`audit/redaction.py`**: Erlaubnisliste je Werkzeug, Kennungen ja, Freitext nein, durchgesetzt per Contract-Test (Kanarientest)
+5. **`exapp/audit_read.py`**: undeklarierte occ-Route nach dem `purge`-Muster, kein Web-Endpunkt
 
-### Critical Pitfalls
+Der Meilenstein fügt in v1.5 **kein einziges neues Werkzeug** hinzu, weder der Spike noch das Audit-Log rühren das Schema-Budget an. Das ist ein handfester Vorteil (kein Nacharbeiten in drei READMEs, `info.xml`, Contract-Tests) und gehört als Rahmenbedingung in die Roadmap.
 
-1. **Talk-"Lesen" schreibt in den Nutzerzustand, unwiderruflich** -- `setReadMarker`, `markNotificationsAsRead` (Default je 1) und `noStatusUpdate` (Default 0) muessen auf jedem Talk-Request explizit auf die sichere Seite gesetzt werden, im Client, nicht im Tool, mit einem positiv behauptenden Contract-Test (ein Denylist-Gate sieht das nicht, weil es ein GET auf einen Lese-Endpunkt ist). Der Leseeintrag ist zudem fuer Dritte sichtbar (`X-Chat-Last-Common-Read`); es gibt keinen Reparaturweg, weil `DELETE` per Gate verboten ist.
-2. **Mail-Lesen plus Talk-Senden schliesst die "lethal trifecta"** -- private Daten, ungefilterter fremder Inhalt (jede beliebige Mail von aussen), Ausgangskanal (Talk-Senden, potenziell an Gaeste oder foederierte Server). Empfehlung: Senden auf v1.3 verschieben, oder hinter einen default-aus Admin-Schalter, oder strukturell auf lokale, nicht-oeffentliche Konversationen beschraenken. Muss vor der ersten Familienphase entschieden werden.
-3. **Mail auf die interne API bauen** -- Mails Listing-Controller tragen `#[OpenAPI(scope: OpenAPI::SCOPE_IGNORE)]`, es gibt kein `openapi.json`; die einzige zugesagte Flaeche sind vier OCS-Routen. Empfehlung: Discovery ueber den bereits genutzten Unified-Search-Provider `mail`, Inhalt ueber `GET /ocs/v2.php/apps/mail/message/{id}` -- dann ist die interne Route optional und ersetzbar statt Rueckgrat.
-4. **Tables-Zeilen ohne `limit` lesen alle Zeilen** -- `limit`/`offset` sind `nullable`, ein Weglassen liefert die ganze Tabelle. Immer explizites `limit` im Client erzwingen, nicht im Tool.
-5. **Budget-Gate wird einmal angehoben und schuetzt dann nichts mehr** -- drei Familien sind realistisch sechs bis neun neue Tools; ohne gemessene Neu-Verankerung (Messung plus 5-15%, aufgerundet, plus Pro-Tool-Deckel) wird das Gate wieder zur Dekoration wie am Ende von Phase 1.
+### Kritische Pitfalls
+
+1. **Client Credentials / Impersonationsnutzer gegen OpenProject**: funktioniert im Spike sofort, bricht aber das Kernversprechen unauffällig, weil jeder Anfragende die Sicht eines einzigen Kontos sieht. Muss explizit ausgeschlossen und die Begründung in PROJECT.md unter Key Decisions festgehalten werden, bevor jemand in Versuchung gerät, damit eine Demo zu bauen.
+2. **Ein Audit-Log wird zur zweiten Kopie genau der Daten, die es schützen soll**: sobald Argumente oder Ergebnisse mitgeschrieben werden, widerspricht die Anwendung `docs/privacy.md` wörtlich ("Nichts davon wird in die Datenbank geschrieben"). Durchsetzung nur per Contract-/Kanarientest, nicht per Disziplin.
+3. **Unbegrenztes Wachstum reißt den OAuth-Store mit**: Audit-Log und Autorisierungen liegen auf demselben Volume ohne Quote; ein volles Volume macht SQLite im WAL-Modus schreibunfähig, jede Token-Rotation und jede neue Verbindung scheitert. Obergrenze und Aufbewahrungsfrist sind Pflicht, nicht Kür.
+4. **Ein Log, das der Administrator nie zu Gesicht bekommt**: Nextclouds Default-Loglevel (2, Warning) unterdrückt Info-Meldungen; derselbe Mechanismus, der `admin_audit` heute schon unsichtbar macht. Ohne einen dokumentierten Leseweg (occ) und ohne Bewusstsein für den Default-Loglevel ist das Feature Dekoration.
+5. **"Audit-Log" nennen, was ein Anwendungslog ist**: der Administrator hat Shell-Zugriff auf die SQLite-Datei und könnte sie ändern oder löschen; ein Prüfer erwartet unter dem Wort "Audit-Log" genau die Eigenschaft, die in dieser Architektur am schwersten zu halten ist. Grenzbeschreibung ("was es nicht leistet") ist Pflichtbestandteil des Textes.
+
+## Owner-Entscheidungen
+
+Diese Punkte sind in den Recherchen ausdrücklich als **Owner-Entscheidung**, nicht als Rechercheergebnis markiert. Sie gehören gesammelt in die Anforderungsdefinition, nicht verteilt über vier Dokumente:
+
+1. **Überlebt das Audit-Log `occ mcp_connector:purge` / die Deinstallation?** Kollidiert direkt mit dem v1.0-Erfolgskriterium "eine Deinstallation entfernt alle Daten" und mit der heutigen Aussage in `docs/privacy.md`. Empfehlung aus der Recherche (STACK/FEATURES/ARCHITECTURE übereinstimmend): das Audit-Log überlebt Purge, `docs/privacy.md` und `docs/uninstall.md` sagen das ausdrücklich, der Aufbewahrungs-Job ist der einzige automatische Löscher. Das ist trotzdem eine Entscheidung, die der Meilenstein bewusst treffen muss, kein Fehler, der später auffällt.
+2. **Purge vs. Aufbewahrung im Detail:** Was passiert mit Audit-Einträgen bei (a) Nutzer trennt Verbindung, (b) Nutzer pausiert, (c) Aufbewahrungsfrist läuft ab, (d) Nutzer wird in Nextcloud gelöscht, (e) Administrator ruft Purge / App wird deinstalliert? FEATURES.md legt eine Entscheidungsvorlage vor (bleiben / bleiben / löschen / löschen / alles löschen), aber es ist ausdrücklich eine Owner-Entscheidung.
+3. **Ships Release 0.1.11 sofort, oder gebündelt mit dem Audit-Log-Text?** Der `[Unreleased]`-Block enthält bereits Textänderungen (gekürzter Trifecta-Absatz, Autorenkontakt). Beide Wege sind vertretbar (ARCHITECTURE.md empfiehlt Bündelung, wenn der Audit-Log-Export sicher vor dem 14.09. fertig ist, sonst sofortiges Ausliefern), aber es ist eine Terminentscheidung des Owners, keine Bauentscheidung.
+4. **Default-Stellung des Audit-Log-Schalters:** an oder aus. Die Recherche empfiehlt einstimmig **aus** (anders als `talk_send`, das eine zugesagte Fähigkeit schützt, erzeugt dieser Schalter eine neue Datenerhebung mit Mitbestimmungsrelevanz), aber der endgültige Wert ist eine Produktentscheidung.
+5. **Bleibt das Wort "Audit-Log" in der Enterprise-Zeile stehen, oder wird es präzisiert/umbenannt?** Hängt an der Frage, ob eine Hash-Kette gebaut wird (macht den Anspruch teilweise haltbar) und an der Frage, ob "geplant" im Store-Text neben einem existierenden Audit-Modul stehen darf (darf es nicht, siehe Pitfall 10). Vier Teilfragen aus PITFALLS.md Pitfall 10 sind vor dem Fundament schriftlich zu beantworten.
+6. **AGPL-Konsequenz für die Enterprise-Positionierung:** Ein Audit-Log, das in dieses (AGPL-lizenzierte) Repository kommt, kann kein exklusives kommerzielles Unterscheidungsmerkmal mehr sein. Das ist eine Positionsfrage für den ISV-Call am 14.09., die vorher geklärt sein sollte, nicht dort entdeckt werden sollte.
+7. **Inhaltsstufe des Audit-Logs als Admin-Opt-in** (`arguments: none|keys|full`): Default `keys` empfohlen, aber ob `full` überhaupt angeboten wird, ist eine Abwägung zwischen Nachfrage und Datenschutzrisiko.
+8. **Ob und wie der ISV-Call-Ausgang die OpenProject-Architekturentscheidung (Weg 0 vs. Weg 1) präjudiziert**, insbesondere ob openDesk-Betreiber bereit wären, für Weg 2 (Keycloak-Client) einen eigenen Client einzurichten: das ist keine Recherchefrage mehr, sondern eine Verhandlungsfrage.
 
 ## Implications for Roadmap
 
-Alle vier Recherchedateien konvergieren unabhaengig auf dieselbe Phasenreihenfolge
-(ARCHITECTURE.md schlaegt sie explizit vor, PITFALLS.md ordnet ihre zwoelf Pitfalls exakt
-diesen Phasen zu). Das ist ein starkes Signal -- die folgende Struktur sollte weitgehend
-direkt uebernommen werden.
+Basierend auf der kombinierten Recherche ist die Reihenfolge **entlang der Entscheidungen und zweier fast unabhängiger Stränge** zu schneiden, nicht entlang der Module. PITFALLS.md nennt das ausdrücklich: die Fremdintegration hat Querschnittscharakter über Persistenz, Purge, Admin-Einstellungen, Latenz, drei Sprachen und den Store-Text, und jede der zugehörigen Einzelentscheidungen kostet eine Stunde einzeln und eine Woche, wenn sie erst während der Implementierung auffällt.
 
-### Phase 0: Milestone-Design-Entscheidung + Erreichbarkeits-Spike
-**Rationale:** Zwei Fragen entscheiden die gesamte weitere Planung, und beide sind billig
-vorab zu klaeren, teuer nachtraeglich zu korrigieren: (a) wird `talk_send_message` in v1.2
-geschickt, verschoben oder geschaltet? (b) ist Mail unter reiner AppAPI-Impersonation
-ueberhaupt erreichbar (Mail ist die erste Familie, deren Listing auf dem Pfad "nur der
-`OCS-APIRequest`-Header hebt CSRF auf" laeuft, ungemessen in dieser Topologie)?
-**Delivers:** Eine schriftliche Entscheidung zur lethal-trifecta-Frage (in PROJECT.md Key
-Decisions) plus ein Integrationstest, der Talk/Tables/Mail-Erreichbarkeit unter Impersonation
-misst.
-**Avoids:** Pitfall 2 (lethal trifecta) und die Situation, dass Mail erst in der letzten
-Phase als nicht erreichbar auffaellt.
+### Phase 1: Meilenstein-Entscheidungen (vor jedem Code)
+**Rationale:** Name, Umfang und Grenze des Audit-Logs, Default-Stellung des Schalters, Purge-vs-Aufbewahrung-Regel und die Store-Text-Strategie bestimmen Schema und Aufwand aller folgenden Phasen. Dieselbe Phase entscheidet auch, ob 0.1.11 sofort oder gebündelt ausgeliefert wird.
+**Liefert:** eine schriftlich festgehaltene Antwort auf jede der acht Owner-Entscheidungen oben.
+**Vermeidet:** Pitfall 9, 10, 14 (Wortanspruch, Store-Text-Kollision, falsche Reihenfolge).
 
-### Phase 1: Tables
-**Rationale:** Die risikoaermste, mechanisch einfachste Familie (numerische IDs, beide Parser
-schon vorhanden, kein Eingriff in `ids.py`/`provider_map`/`fetch`/`context.py` noetig).
-Etabliert die komplette Checkliste (Capability-Feld, `EXPECTED_TOOLS`, `CREATE_TOOLS`, README
-in drei Sprachen, `info.xml`, Budget-Messzeile) einmal an der Familie ohne Zusatzrisiko.
-**Delivers:** `tables_browse` (Level tables/columns/rows), `tables_create_row` mit
-Spaltentiteln statt Ids.
-**Addresses:** Table-Stakes-Features Tables aus FEATURES.md.
-**Avoids:** Pitfall 7b (ungekappte Zeilen), Pitfall 12b (Duplikate durch Retry).
+### Phase 2 (Strang S, parallel ab Tag 1): openDesk-Spike Teil 1: Installierbarkeit
+**Rationale:** Muss vor jeder API-Frage stehen, weil sie die gesamte Reihenfolge von v2.0 bestimmt.
+**Liefert:** drei Ja/Nein-Antworten (Deploy-Daemon-Typ in openDesk vorhanden? App-Allowlist? Wäre ein eigenständiges Deployment neben der Suite akzeptiert?), jede mit Quelle oder als offene ISV-Call-Frage markiert.
+**Vermeidet:** Pitfall 2.
 
-### Phase 2: Talk
-**Rationale:** Hier sitzen die querschneidenden Aenderungen (nicht-numerische Pfad-IDs, drei
-neue `ids.py`-Kinds, erster `provider_map`-Fragment-Fall, erster neuer `fetch`-Case). Nach
-dieser Phase sind alle Naehte geweitet, die Mail dann nur noch benutzt.
-**Delivers:** `talk_browse` (Level conversations/messages) garantiert nebenwirkungsfrei,
-`talk_send_message` (falls Phase 0 es freigibt) mit Permission-Vorpruefung.
-**Uses:** `ocs_post`-Erweiterung aus STACK.md.
-**Avoids:** Pitfall 1 (Lesen schreibt Zustand), Pitfall 6 (Rich Object Strings/Platzhalter), Pitfall 7a (Pagination im Header).
+### Phase 3 (Strang S, Fortsetzung): openDesk-Spike Teil 2: Nutzeridentität gegen OpenProject
+**Rationale:** Das ist der zentrale Widerspruch dieser Zusammenfassung. Diese Phase misst beide Wege gegeneinander, nicht nur einen.
+**Liefert:** Weg 0 gegen ein Docker-Nextcloud plus `integration_openproject` im OAuth2-Modus gemessen (Behauptungen S1-S6 aus ARCHITECTURE.md, mit S4/S5 als entscheidende Messungen), Weg 1 als dokumentierter Rückfall mit PKCE-Test. Zwei Nutzerkonten Pflicht (Negativbeweis). Auf die openDesk-Version gepinnt (17.7.x), nicht `latest`.
+**Vermeidet:** Pitfall 1, 3, 4, 13.
 
-### Phase 3: Mail
-**Rationale:** Sensibelste Familie inhaltlich, einzige ohne Capability, einzige mit
-`/message/send` im eigenen OCS-Bestand (muss aktiv ausgeschlossen werden), profitiert am
-meisten von den in Phase 2 geweiteten Naehten, Erreichbarkeit erst durch Phase 0 geklaert.
-**Delivers:** `mail_browse` (Level accounts/mailboxes/messages), `fetch`-Erweiterung um
-`mail:<databaseId>` statt eigenem Lesetool.
-**Implements:** Zweiter Capability-Kanal (`core/navigation/apps`) aus ARCHITECTURE.md.
-**Avoids:** Pitfall 3 (interne API als Rueckgrat), Pitfall 10 (Brute-Force durch ID-Raten), Pitfall 11 (Marker-Filter zu schwach fuer Mail-HTML/Unicode-Smuggling).
+### Phase 4 (Strang A, parallel zu Phase 2/3): Audit-Log Fundament
+**Rationale:** Unabhängig vom Spike-Ausgang, trägt den Meilenstein allein, wenn der Spike enttäuscht.
+**Liefert:** `audit/middleware.py`, `audit/redaction.py`, Satzschema (Metadaten, keine Inhalte), stderr-JSON-Zeilen, Kanarientest.
+**Vermeidet:** Pitfall 5, 7, 12.
 
-### Phase 4: prepare_context-Erweiterung, Budget-Endstand, Aussenwirkung
-**Rationale:** `KIND_BUCKETS` und `EXCERPT_KINDS` sind erst sinnvoll zu entscheiden, wenn
-beide neuen Kinds existieren und `fetch` sie aufloesen kann. Hier auch die
-Budget-Neuverankerung und alle mechanischen Nachzieharbeiten (README x3, `info.xml`, `docs/`).
-**Delivers:** Talk-Digest in `prepare_context`, finale Budget-Zahl mit Messzeile,
-aktualisierte Store-Texte und Dokumentation in allen drei Sprachen.
-**Avoids:** Pitfall 4 (unbudgetierte Fan-out-Latenz), Pitfall 5 (Budget-Gate ohne Schutzwirkung).
+### Phase 5 (Strang A): Audit-Log Dauerhaftigkeit
+**Rationale:** Baut auf dem feststehenden Satzschema auf.
+**Liefert:** `audit/store.py` (eigene Datei), Obergrenze, Aufbewahrungsfrist, Hash-Kette plus Prüfbefehl, Purge-Ausnahme mit Test.
+**Vermeidet:** Pitfall 6, 9.
 
-### Phase Ordering Rationale
+### Phase 6 (Strang A): Audit-Log Ausgabe
+**Rationale:** Braucht einen feststehenden Speicher, um etwas zu lesen.
+**Liefert:** `occ mcp_connector:audit` (CSV/JSONL), Admin-Schalter (Default aus), Nutzeransicht auf `/connections`.
+**Vermeidet:** Pitfall 8, 11.
 
-- Reihenfolge folgt Risiko: Erreichbarkeit und die Sicherheitsentscheidung zuerst gemessen,
-  dann die risikoaermste Familie, dann die querschneidende, dann die sensibelste.
-- Tables vor Talk, obwohl Talk die "attraktivere" Familie ist: die mechanische Checkliste
-  (fuenf eingefrorene Testliteralen, drei READMEs, `info.xml`) einmal an einer risikolosen
-  Familie zu lernen macht die beiden schwierigen Phasen kuerzer.
-- `prepare_context` bewusst als eigene, letzte Phase statt Anhaengsel an jede Familienphase,
-  weil die Bucket-Entscheidung (welche Kinds bekommen einen Auszug) beide neuen Kinds
-  gleichzeitig sehen muss, um konsistent zu sein.
+### Phase 7 (Konvergenzpunkt beider Stränge): Release- und Store-Text
+**Rationale:** Fasst dieselben Textstellen an wie 0.1.11 und der Audit-Enterprise-Absatz; die einzige echte Serialisierung des Meilensteins.
+**Liefert:** dreisprachige READMEs und `info.xml` konsistent mit dem tatsächlichen Funktionsstand, ISV-Fragenliste aus Phase 2/3, Spike-Bericht.
+**Vermeidet:** Pitfall 10.
 
 ### Research Flags
 
-Braucht tiefere Recherche waehrend der Planung (`--research-phase`):
-- **Phase 0 (Spike):** Mail-Erreichbarkeit unter AppAPI-Impersonation ist MEDIUM-Konfidenz, nur aus Quellcode gelesen, nie in dieser Topologie gemessen.
-- **Phase 3 (Mail):** Mail-Mindestversion fuer die OCS-`messageApi`-Routen ist nicht sauber datierbar (kein Capability-Eintrag, kein Changelog-Treffer); die Zellwert-Formate je `column_types` bei Tables-Create sind ebenfalls unklar (wahrscheinlichste Quelle fuer einen 400).
-
-Standardmuster, wahrscheinlich ohne Extra-Recherche planbar:
-- **Phase 1 (Tables):** Endpunkte, Parameter und Parser sind HIGH-Konfidenz, direkt aus Quellcode und `openapi.json` verifiziert.
-- **Phase 2 (Talk):** API-Version, Parameter-Defaults und Capability-Struktur sind HIGH-Konfidenz aus offizieller Doku plus Quellcode.
+- **Phase 3 (Identitätsspike)** braucht während der Umsetzung weitere gezielte Recherche/Messung, keine reine Planung: PKCE-Verhalten, Token-Lebensdauer, SSRF-Verhalten gegenüber einer Nachbarkomponente sind alle ausdrücklich als "ungemessen" markiert.
+- **Phase 4/5/6 (Audit-Log)** folgen einem im Repository bereits etablierten Muster (`oauth/store.py`, `exapp/purge.py`, `exapp/occ.py`): Standardmuster, `--research-phase` kann hier entfallen.
+- **Phase 2 (Installierbarkeit)** ist überwiegend Dokumentenrecherche (openDesk-Deployment-Repo) plus eine schriftlich vorbereitete Fragenliste für den ISV-Call; kein Code-Risiko, aber die Antwort bestimmt, ob Phase 3 überhaupt lohnt.
+- **Phase 7** ist Standardarbeit (Text, Gate-Test wie beim Vokabular-Gate), aber zeitkritisch wegen des Owner-Tag-Gates und der Signaturprüfung über das heruntergeladene Asset.
 
 ## Confidence Assessment
 
-| Area | Confidence | Notes |
-|------|------------|-------|
-| Stack | HIGH | Endpunkte, Parameter und Auth-Mechanismus gegen den Quelltext von spreed/tables/mail/server (stable32-34) gelesen; MEDIUM nur fuer Mail-Mindestversion |
-| Features | HIGH fuer API-Lage und Wettbewerb (Quellcode und Tool-Listen direkt gelesen), MEDIUM fuer Nutzererwartung (Vendor-MCPs als Proxy, keine eigenen Store-Rueckmeldungen) |
-| Architecture | HIGH fuer Talk/Tables und Codebasis-Integrationspunkte (live gemessen, z. B. Budget), MEDIUM fuer Mail (Erreichbarkeit unter Impersonation nicht live belegt) |
-| Pitfalls | HIGH fuer API-Fakten und Code-Interaktionen mit diesem Repo, HIGH fuer die Injection-Klasse (oeffentlicher Vorfall), MEDIUM fuer die konkrete Mitigations-Rangfolge (Urteil, keine Messung) |
+| Bereich | Konfidenz | Anmerkung |
+|---------|-----------|-----------|
+| Stack | HIGH für Einzelbefunde (live gemessen, PyPI-JSON-API, Quellcode), aber die Empfehlung "eigener OAuth-Client" ignoriert den von ARCHITECTURE.md gefundenen Proxy-Weg. Als Gesamtempfehlung daher MEDIUM |
+| Features | HIGH für API-Lage und Wettbewerbslage (offizielle Doku, drei Community-Server gelesen), MEDIUM für regulatorische Erwartungen (keine echte Behörden-Rückmeldung), LOW für Nutzerpriorisierung innerhalb OpenProject |
+| Architektur | HIGH für Codebasis-Nähte und Token-Mechanik (Datei und Zeile belegt), MEDIUM für Verhalten unter AppAPI-Impersonation in dieser Topologie (genau das misst der Spike), MEDIUM für openDesk-Betriebsdetails |
+| Pitfalls | HIGH für OpenProject-API-Form und Nextcloud-Logging-Defaults, HIGH für die openDesk-Versionsmatrix, MEDIUM für Workspaces-Abkündigung/pageSize-Obergrenze und für alles, was den ZenDiS-Aufnahmeprozess betrifft (öffentlich nicht dokumentiert, das ist selbst der Befund) |
 
-**Overall confidence:** HIGH
+**Gesamtkonfidenz: MEDIUM.** Nicht wegen schwacher Einzelrecherche, sondern weil die vier Berichte in der wichtigsten Frage nicht konvergieren und diese Frage nur eine Messung, kein weiteres Lesen, klären kann.
 
 ### Gaps to Address
 
-- **Mail-Erreichbarkeit unter reiner AppAPI-Impersonation** ist der einzige echte Blocker-Kandidat: ungemessen in dieser Topologie. Muss in Phase 0 als Spike geklaert werden, bevor Mail verplant wird.
-- **Lethal-Trifecta-Entscheidung fuer `talk_send_message`** ist keine Recherchelluecke, sondern eine offene Produktentscheidung, die vor Phase 1 im PROJECT.md festgehalten werden muss (Optionen: verschieben auf v1.3, default-aus Admin-Schalter, strukturelle Empfaenger-Einschraenkung).
-- **Mail-Mindestversion** fuer die OCS-`messageApi`-Routen laesst sich nicht sauber datieren; Empfehlung ist, nicht auf eine Version zu gaten, sondern bei 404/HTML degradiert zu antworten.
-- **Tables-Zellwert-Formate je `column_types`** beim Zeile-Anlegen sind nicht vollstaendig dokumentiert; das ist der wahrscheinlichste Ort fuer einen 400 in der Tables-Phase und verdient eine kurze Recherche innerhalb der Phase.
-- **`/core/navigation/apps` als Mail-Erkennungsweg** ist im Quellcode verifiziert, aber die Antwortform nie gegen eine laufende Instanz geprueft; Gegenprobe ueber die Unified-Search-Provider-Liste ist der billige Ausweg, falls eine Instanz Mails Navigationseintrag ausblendet.
+- **Der zentrale Widerspruch (Weg 0 vs. Weg 1)** ist der wichtigste Gap und wird durch Phase 3 der Roadmap geschlossen, nicht durch weitere Dokumentenrecherche.
+- **PKCE gegen OpenProject** ist ungemessen (Metadaten bewerben es nicht, die API-Doku setzt es voraus): erste Messung des Spikes, nicht die letzte.
+- **Token-Lebensdauer und Refresh-Verhalten gegen OpenProject** ungemessen.
+- **Ob openDesk EE tatsächlich einen OpenProject-Enterprise-Token ausliefert**: nur die Helm-Bedingung ist belegt, nicht die Praxis. Frage 1 für den ISV-Call.
+- **`manual_install`-Deploy-Daemon auf Kubernetes** ungemessen, insbesondere ob `APP_PERSISTENT_STORAGE` und der Heartbeat-Pfad dort tragen.
+- **ZenDiS-Aufnahmeprozess für neue Komponenten** öffentlich nicht dokumentiert: Frage für den ISV-Call, kein Rechercheversäumnis.
+- **BSI-Mindeststandard-Version und die Paragrafenangabe (Paragraf 8 BSIG)** sind MEDIUM-Konfidenz und sollten vor kundenseitiger Verwendung nicht ungeprüft übernommen werden.
 
 ## Sources
 
-### Primary (HIGH confidence)
-- nextcloud/server, stable32/33/34/master -- `Request::passesCSRFCheck()`, `SecurityMiddleware`, `NavigationController` (der `OCS-APIRequest`-CSRF-Ausweg, in vier Zweigen identisch)
-- nextcloud-talk.readthedocs.io -- Conversation v4, Chat v1, Parameter-Defaults, Statuscodes
-- nextcloud/spreed, nextcloud/tables, nextcloud/mail (main-Zweige) -- Controller, Capabilities, Search-Provider, Routen direkt gelesen
-- nextcloud/tables `openapi.json` -- vollstaendige Routenliste, Abwesenheit einer v2-Zeilen-Leseroute
-- nextcloud/app_api `CHANGELOG.md` -- Entfernung der API-Scopes (3.2.0)
-- Eigener Code, live gemessen: `scripts/check_tool_budget.py` (11268/12500 Bytes, 16 Tools), `tests/contract/test_tool_surface.py`, `tests/integration/test_exapp_dav_matrix.py`
-- EchoLeak / CVE-2025-32711 (CVSS 9.3) -- Beleg fuer die lethal-trifecta-Gefahrenklasse
+### Primär (HIGH)
+- `community.openproject.org`: live gemessen 2026-08-28: `.well-known/oauth-authorization-server`, `.well-known/oauth-protected-resource`, `/mcp`-401, `/api/v3/work_packages` HAL-Größen vor/nach `select`
+- `opf/openproject` Quellcode und Doku (Context7 `/websites/openproject`): API-Flächen, Filter-Syntax, Berechtigungskonzept, OAuth-Anwendungen, Release Notes 16.0.0/17.2.0/17.8.0
+- `nextcloud/integration_openproject` Quellcode (`appinfo/routes.php`, `OpenProjectAPIController.php`, `OpenProjectAPIService.php`): der Proxy-Weg, serverseitige Token-Erneuerung
+- `nextcloud/user_oidc` Quellcode (`TokenService.php`): Beleg für die Bruchstelle im OIDC-Modus
+- `bmi/opendesk/deployment/opendesk` auf gitlab.opencode.de, Tag v1.18.0: Komponentenstände, Helm-Werte, Enterprise-Bedingung
+- Eigene Codebasis: `server/__init__.py`, `deps.py`, `oauth/store.py`, `exapp/purge.py`, `exapp/occ.py`, `config.py`, `docs/privacy.md`, `PROJECT.md`
+- MCP-SDK 2.x installiertes Paket (`mcp/server/context.py`, `mcpserver/server.py`): Middleware-Naht, "Provisional"-Hinweis
+- PyPI-JSON-API 2026-08-28: Abhängigkeitslage aller OpenProject-Python-Clients
 
-### Secondary (MEDIUM confidence)
-- github.com/cbcoutinho/nextcloud-mcp-server (332 Sterne) -- unabhaengige Bestaetigung des Mail-CSRF-Mechanismus gegen eine laufende Instanz, gemessene Warnungen zu v2-Scheme-Route und OCS-Anhangsroute, Field-Evidence zu Versions-Drift-Bruechen (#728, #730)
-- nextcloud/context_agent (offiziell) -- Tool-Umfang und Adressierungsmuster als Negativbeispiel
-- developers.google.com Gmail-MCP, docs.slack.dev Slack-MCP -- Referenzpunkte fuer Scope-Disziplin bei Vendor-MCPs
-- nextcloud/tables Issue #2237 -- Row-Create-Format-Verwirrung auch bei Menschen
+### Sekundär (MEDIUM)
+- BSI IT-Grundschutz OPS.1.1.5 und BSI-Mindeststandard Protokollierung: Anforderungsebene, Versionsstand nicht abschließend bestätigt
+- DSK-Orientierungshilfe "Protokollierung": Zweckbindung, Mitbestimmung
+- `docs.opendesk.eu/operations/architecture`, `releases.opendesk.eu`: Betriebsdetails ohne eigene Instanz
+- Microsoft Purview / Anthropic Compliance API als Vergleichsmaßstab für Audit-Log-Feldsätze
 
-### Tertiary (LOW confidence)
-- keine -- alle als LOW eingestuften Einzelpunkte wurden in den vier Recherchedateien bereits als MEDIUM mit expliziter Pruefempfehlung markiert, nicht als LOW belassen
+### Tertiär (LOW, zu validieren)
+- Nutzerpriorisierung innerhalb OpenProject (Ableitung aus Wettbewerbs-Toolschnitten, keine eigenen Store-Rückmeldungen)
+- ZenDiS-Aufnahmeverfahren (öffentlich nicht auffindbar)
 
 ---
-*Research completed: 2026-08-21*
-*Ready for roadmap: yes*
+*Recherche abgeschlossen: 2026-08-28*
+*Bereit für Roadmap: ja, mit der ausdrücklichen Maßgabe, dass Phase 1 der Roadmap eine reine Entscheidungsphase ist und dass die OpenProject-Architekturfrage (Weg 0 vs. Weg 1) im Spike gemessen, nicht vorab festgelegt wird.*
