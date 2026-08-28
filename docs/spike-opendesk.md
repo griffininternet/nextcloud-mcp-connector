@@ -225,7 +225,59 @@ noch nicht gemessen, Plan 17-04
 
 ### 2.3 Die SSRF-Grenze und was sie wirklich abdeckt
 
-noch nicht gemessen, Plan 17-02
+**Gemessen (D-06), im laufenden ExApp-Container, mit demselben Resolver, den die Produktion benutzt, und ohne eine Zeile Produktionscode zu ändern.** Der Container ist `nc_app_mcp_connector`, Zustand `running`, Bildmarke `127.0.0.1:5001/mcp_connector:0.1.11`, Netz `nc-mcp-spike-od-net`. Die Messung importiert `mcp_connector.oauth.cimd` und ruft es auf; sie legt keine Test-Datei an, ändert keinen Import und schreibt nichts in `src/`.
+
+**Erste Zeile, die Auflösung der Nachbardienste.** `cimd._system_addresses(<name>, 80)`:
+
+```
+_system_addresses('nextcloud', 80)   -> ['172.29.43.129']
+_system_addresses('caddy', 80)       -> ['172.29.43.10']
+_system_addresses('appapi-harp', 80) -> ['172.29.43.131']
+_system_addresses('openproject', 80) -> raised gaierror
+```
+
+Die drei laufenden Nachbardienste stehen unter ihrem Compose-Dienstnamen für private Adressen aus `172.29.43.0/24`, genau wie erwartet. Der Name `openproject` löst nicht auf, und das ist kein Fehlschlag der Messung, sondern der Zustand der Stufe: das Profil `op` ist in diesem Plan nicht gestartet, und Docker gibt einem Dienst ohne laufenden Container keinen DNS-Eintrag. Diese Zeile ist ausdrücklich mitgemessen und mitgeschrieben, weil sie sonst in der dritten Zeile als scheinbare Sperrung wiederkehrt.
+
+**Zweite Zeile, dieselben Adressliterale durch `cimd.target_allowed()`.** Erwartung `False`, gemessen `False`, samt der beiden Flags, an denen es liegt:
+
+```
+target_allowed(172.29.43.129) -> False   [nextcloud,    is_private=True, is_global=False]
+target_allowed(172.29.43.10)  -> False   [caddy,        is_private=True, is_global=False]
+target_allowed(172.29.43.131) -> False   [appapi-harp,  is_private=True, is_global=False]
+target_allowed(172.29.43.10)  -> False   [Literal desselben /24]
+target_allowed(172.29.43.128) -> False   [Literal desselben /24]
+target_allowed(172.29.43.254) -> False   [Literal desselben /24]
+```
+
+Die drei Literale am Ende sind der Ersatz für den Namen, der heute nicht auflöst: die Adresse, die `openproject` bekommen wird, liegt in demselben `/24`, und für dieses `/24` ist die Antwort an beiden Rändern und in der Mitte gemessen. Damit steht der Befund für OpenProject fest, ohne dass dieser Plan Stufe B hochfahren muss.
+
+Der Negativkatalog dazu ist der bestehende aus `tests/unit/test_oauth_cimd.py` (Zeilen 179 bis 202) und kein neu erfundener. Im selben Container gefahren: 12 von 12 Adressen des Katalogs abgelehnt, 3 von 3 Adressen der Positivliste zugelassen, keine unerwartete Abweichung. Der Katalog trägt die drei gemessenen Lücken, an denen ein einzelnes Flag nicht reicht (`100.64.0.1`, `64:ff9b::7f00:1`, `224.0.0.1`); die Prüfung ist deshalb eine Konjunktion aus sieben Fragen und nicht ein Flag.
+
+**Dritte Zeile, `cimd.resolve_addresses()`, also die ganze Grenze.** Erwartung `None`, gemessen `None`, und die Logzeile sagt, welche der beiden Ursachen zutrifft:
+
+```
+resolve_addresses('nextcloud', 80)   -> None    LOG: a document target was refused: an address of it is not public
+resolve_addresses('caddy', 80)       -> None    LOG: a document target was refused: an address of it is not public
+resolve_addresses('appapi-harp', 80) -> None    LOG: a document target was refused: an address of it is not public
+resolve_addresses('openproject', 80) -> None    LOG: a document target did not resolve: gaierror
+```
+
+Die vierte Zeile ist der Grund, warum die Unterscheidung im Protokoll steht: derselbe Rückgabewert `None`, aber eine andere Ursache. Drei Namen wurden von der Regel abgelehnt, einer war überhaupt nicht auflösbar. Ein Bericht, der nur `None` notiert, hätte einen Resolver-Fehlschlag als Sperrung gelesen.
+
+Dazu die Regel, die den Befund über die Einzeladresse hinaus trägt: `resolve_addresses` verwirft den **ganzen Namen**, sobald **eine** seiner Adressen abgelehnt wird (`cimd.py`, Docstring: "Not 'take the good one'"). Ein Name, der auf eine öffentliche und eine private Adresse zeigt, ist damit vollständig gesperrt und nicht teilweise erlaubt.
+
+**Gegenprobe, ohne die der Messwert nichts beweist.** Im selben Lauf, im selben Container, mit demselben Resolver, zwei öffentliche Namen:
+
+```
+resolve_addresses('one.one.one.one', 443) -> ['1.0.0.1', '1.1.1.1', '2606:4700:4700::1111', '2606:4700:4700::1001']
+resolve_addresses('example.com', 443)     -> ['172.66.147.243', '104.20.23.154', '2606:4700:10::ac42:93f3', '2606:4700:10::6814:179a']
+```
+
+Beide liefern eine Adressliste. Damit ist das dreifache `None` oben nicht mit einem kaputten Resolver im Container erklärbar, und die Sperrung ist die Regel und nicht die Umgebung.
+
+**Die Einordnung, und sie ist der eigentliche Wert dieser Messung.** Die Grenze sitzt nicht auf dem Weg zu einem fremden Host, sondern auf dem Weg zum Client-Id-Metadatendokument eines fremden OAuth-Clients. `cimd.py` sagt das im eigenen Modul-Docstring: es ist die erste und bislang einzige Stelle dieses Projekts, an der eine Anfrage das Ziel einer ausgehenden Anfrage von uns wählt; jeder andere Aufruf geht an die konfigurierte Nextcloud, weil die Basis-URL aus `NC_MCP_URL` kommt und nie aus einer Anfrage. Der in dieser Phase gemessene Zugriffsweg auf OpenProject berührt diese Grenze überhaupt nicht, weil es keine zweite Basis-URL gibt: Weg 0 läuft über Nextcloud, und Nextcloud ist die konfigurierte Basis. Wer aus dem Messwert oben liest, dieser Connector könne OpenProject im Cluster nicht erreichen, liest eine Aussage über einen Weg, den es heute nicht gibt.
+
+**Der Entwurfsbefund für OD-04.** Er verlangt keine Codeänderung in dieser Phase und ist die Entscheidung, die v2.0 zu treffen hat. Wer `target_allowed` für eine zweite Basis-URL wiederverwendet, sperrt jede Cluster-Installation aus: die Messung oben ist genau der Fall, und sie fällt in einer openDesk-Installation nicht anders aus als hier, weil ein Dienst im selben Cluster immer eine private Adresse trägt. Wer sie nicht wiederverwendet, braucht eine eigene, ausdrücklich begründete Prüfung für eine URL, die aus den Admin-Einstellungen und niemals aus einer Anfrage kommt: die Begründung ist der Unterschied zwischen einer Adresse, die ein Angreifer wählt, und einer, die ein Administrator einträgt. Beide Wege sind vertretbar, ein stilles Wiederverwenden ist es nicht.
 
 ### 2.4 Welcher Weg trägt, als Folge dieser Messungen
 
