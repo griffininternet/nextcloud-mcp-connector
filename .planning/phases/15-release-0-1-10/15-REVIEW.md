@@ -348,3 +348,12 @@ das Problem nicht.
 _Reviewed: 2026-08-28T05:35:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+
+**Korrektur der Buchung 2026-08-28 (nach dem v1.4-Integrationscheck):** Zwei Statuszeilen dieses
+Berichts waren zu großzügig gesetzt. WR-02 galt als FIXED, obwohl nur die Adresse gewechselt
+war und der geforderte fünfte Nachweis in Runbook-Schritt 8 fehlte; WR-04 galt als FIXED in
+901b294, obwohl dieser Commit ausschließlich die WR-05-Korrektur trug und kein
+`[Unreleased]`-Anker entstand. Beides ist jetzt tatsächlich umgesetzt: Runbook-Schritt 8 hat
+einen fünften Nachweis für das `authors`-Feld, `CHANGELOG.md` hat einen `[Unreleased]`-Abschnitt
+samt Linkdefinition mit den drei ausstehenden Textänderungen, und `pyproject.toml` trägt
+dieselbe Adresse wie das Manifest.

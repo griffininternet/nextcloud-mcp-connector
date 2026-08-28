@@ -143,3 +143,11 @@ bleiben unverändert.
 Geschrieben in Phase 14 des Milestones v1.4 unter der Anforderung DOC-02. Auslöser ist
 Tech-Debt-Punkt W-2 aus `.planning/milestones/v1.3-MILESTONE-AUDIT.md`, der genau diese
 Abweichung zwischen Bericht und heutigem Repository-Stand festgehalten hat.
+
+Nachtrag 2026-08-28, zweiter Teil: Der Satz oben, dass der grep `compare/v0.1.9` seit dem
+Entfernen der `[Unreleased]`-Linkdefinition ins Leere greift, gilt nur für den Stand vom
+2026-08-28 vormittags. Mit dem Release 0.1.10 hat `9829f1e` die Definition
+`[0.1.10]: .../compare/v0.1.9...v0.1.10` eingefügt: der grep trifft seither wieder, nur eine
+andere Definition. Die 18:14Z-Proof-Zeile in `docs/store-submission.md` ist damit inhaltlich
+wieder belegbar, ihr Beleg zeigt aber auf einen anderen Eintrag als 2026-08-25. Der
+Verifikationsbefund selbst bleibt unangetastet, hier steht nur, was sich seither geändert hat.

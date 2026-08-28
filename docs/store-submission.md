@@ -286,7 +286,7 @@ on, and step 4 is irreversible in public.
    Steps 1 to 6 leave nothing to redo: the signature is a pure function of the published
    asset and the key, so it is recomputed with the two commands of step 6 whenever it is
    needed, and it never has to be written down or passed along.
-8. **Run the four proofs, and write each one into the table above with its date.**
+8. **Run the five proofs, and write each one into the table above with its date.**
    ```
    curl -sS https://apps.nextcloud.com/api/v1/appapi_apps.json           # release line <version>, same platform span
    curl -I  https://github.com/street1983nk/nextcloud-mcp-connector/releases/download/v<version>/mcp_connector-<version>.tar.gz
@@ -296,7 +296,14 @@ on, and step 4 is irreversible in public.
      https://ghcr.io/v2/street1983nk/mcp_connector/manifests/<version>   # OCI index, amd64 and arm64
    curl -sS -H "Authorization: Bearer $TOKEN" \
      https://ghcr.io/v2/street1983nk/mcp_connector/tags/list             # every released tag
+   curl -sS https://apps.nextcloud.com/api/v1/appapi_apps.json           # authors[0].mail of mcp_connector
    ```
+
+   The fifth proof exists because the `authors` field of the manifest is public store surface
+   that no gate holds: it carried the same address through ten releases without anyone checking
+   it, and only the v1.4 review found it. Read the `mail` of `authors[0]` for `mcp_connector` in
+   the catalogue and compare it against `<author mail>` in `appinfo/info.xml` at the tag. They
+   must be the same string, and the row records which one it is.
 
 ### Two production dependencies, both permanent
 

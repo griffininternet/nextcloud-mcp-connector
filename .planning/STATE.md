@@ -5,13 +5,13 @@ milestone_name: Pflege und 0.1.10
 status: milestone_complete
 stopped_at: Milestone complete (Phase 15 was final phase)
 last_updated: 2026-08-28T05:58:34.350Z
-last_activity: 2026-08-28 -- Plan 15-03 abgeschlossen (Tag v0.1.10 nach ausdruecklicher Owner-Freigabe, Workflow gruen, Asset mcp_connector-0.1.10.tar.gz mit 46973 Bytes am Release), Phase 15 weiter mit Plan 15-04
+last_activity: 2026-08-28 -- Phase 15 abgeschlossen (Release 0.1.10 im Store, Verification 5/5, secure-phase 30/30); Milestone v1.4 bereit zum Abschluss
 progress:
   total_phases: 2
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 6
   completed_plans: 6
-  percent: 50
+  percent: 100
 ---
 
 # Project State
