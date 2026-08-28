@@ -1620,7 +1620,7 @@ nicht. Der Sicherheitsanteil liegt vollständig in der Messumgebung und im Beric
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED via Plan-Routing)
 
 1. **Welcher Nextcloud-Stand macht die Kubernetes-Frage praktisch lösbar?**
    Was wir wissen: `app_api` 34 bringt `kubernetes-install` über HaRP mit vier Freigabearten und
@@ -1629,12 +1629,15 @@ nicht. Der Sicherheitsanteil liegt vollständig in der Messumgebung und im Beric
    Admin-Oberfläche) und wann openDesk nachzieht.
    Empfehlung: als Quellenbefund in den Bericht, als Frage 5 auf die ISV-Liste, kein Messversuch in
    dieser Phase (D-01 schließt einen Cluster aus).
+   RESOLVED: geroutet an Plan 17-01 (Quellenbefund in Abschnitt 1.2 des Berichts) und an Plan 17-08
+   als ISV-Frage 5. Kein Messversuch in dieser Phase.
 
 2. **Antwortet die OCS-Fläche von `integration_openproject` unter reiner AppAPI-Impersonation?**
    Was wir wissen: der CSRF-Weg über `OCS-APIRequest: true` ist in v1.2 für Nextcloud Mail bewiesen,
    und `OCS_HEADERS` setzt den Header auf jeder Anfrage. Die Controller-Attribute passen.
    Was unklar ist: das Verhalten dieser App in dieser Topologie.
    Empfehlung: S1, erste Messung von Stufe A, mit dem Antwortform-Kriterium aus `spike-mail.md`.
+   RESOLVED: geroutet an Plan 17-05 als Messung S1 in Abschnitt 2.1, samt Gegenprobe mit 64 Nullen.
 
 3. **Sind die OCS-Routen eine öffentliche Schnittstelle für andere Apps?**
    Was wir wissen: `christianlupus` hat am 28.08. im Nextcloud-Forum geantwortet, ohne die Frage zu
@@ -1643,6 +1646,9 @@ nicht. Der Sicherheitsanteil liegt vollständig in der Messumgebung und im Beric
    Empfehlung: zwei Entwürfe (D-11), Owner sendet. Der Rückkanal läuft nach dieser Phase weiter. Für
    den Bericht heißt das: Weg 0 kann als tragend gemessen werden und trotzdem eine offene
    Stabilitätsfrage haben. Beides muss dastehen.
+   RESOLVED: geroutet an Plan 17-08 (zwei Entwürfe unter `docs/contrib/`, Statuszeile
+   `nicht gesendet`, Owner sendet) und an Plan 17-09, das die offene Stabilitätsfrage neben dem
+   Messergebnis von Weg 0 im Bericht stehen lässt.
 
 4. **Lässt sich der Zwei-Wege-OAuth2-Weg lokal ohne die OpenProject-Oberfläche einrichten?**
    Was wir wissen: die Routen `POST /nc-oauth` und `POST /setup` existieren, und der openDesk-Bootstrap
@@ -1651,6 +1657,9 @@ nicht. Der Sicherheitsanteil liegt vollständig in der Messumgebung und im Beric
    `ConfigController` wurde für diese Recherche **nicht** gelesen.
    Empfehlung: erst den dokumentierten UI-Weg fahren. Wenn der hängt, `ConfigController` lesen, bevor
    geraten wird.
+   RESOLVED: geroutet an Plan 17-03 (dokumentierter UI-Weg als Owner-Checkpoint, mit dem Rückfall
+   "erst `ConfigController` lesen") und an Plan 17-08 als ISV-Frage 7 für die Betriebsart, die der
+   openDesk-Bootstrap wirklich fährt.
 
 5. **Was bedeutet ein tragender Weg 0 für die Werkzeugbreite von OD-04?**
    Was wir wissen: keine Route für ein einzelnes Arbeitspaket per Id, keine für Kommentare, keine für
@@ -1658,6 +1667,8 @@ nicht. Der Sicherheitsanteil liegt vollständig in der Messumgebung und im Beric
    Datei, die `research/FEATURES.md` als Unterscheidungsmerkmal führt.
    Empfehlung: als Abschnitt 3 des Berichts (API-Form) festhalten, ohne Entscheidung. Die Entscheidung
    ist OD-04.
+   RESOLVED: geroutet an Plan 17-06 Task 3, der Abschnitt 3 des Berichts ohne Entscheidung schreibt;
+   die Entscheidung selbst bleibt OD-04 in v2.0.
 
 ---
 
