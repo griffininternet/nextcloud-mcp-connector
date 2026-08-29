@@ -156,7 +156,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 17-07-PLAN.md , Stufe B mit Keycloak 26.7.0 und user_oidc 8.11.0, S5a bis S5c mit Log-Zeile als Messwert (ungemessen ausdrücklich zulässig), Entwurf zu user_oidc#925 nur bei geglückter Repro
+- [x] 17-07-PLAN.md , Stufe B mit Keycloak 26.7.0 und user_oidc 8.11.0, S5a bis S5c mit Log-Zeile als Messwert (ungemessen ausdrücklich zulässig), Entwurf zu user_oidc#925 nur bei geglückter Repro
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
@@ -218,7 +218,7 @@ Plans:
 | 14. Doku-Reste und Gate-Entscheid | v1.4 | 2/2 | Complete | 2026-08-27 |
 | 15. Release 0.1.10 | v1.4 | 4/4 | Complete | 2026-08-28 |
 | 16. Release 0.1.11 | v1.5 | 4/4 | Complete | 2026-08-28 |
-| 17. openDesk-Spike | v1.5 | 6/9 | In Progress|  |
+| 17. openDesk-Spike | v1.5 | 7/9 | In Progress|  |
 | 18. Audit-Log Kern | v1.5 | 0/? | Not started | - |
 | 19. Audit-Log Bedienung und Textnachzug | v1.5 | 0/? | Not started | - |
 

@@ -144,3 +144,40 @@ unter "Was diese Messung nicht beweist"; in 17-08 eine Frage, ob der openDesk-Bo
 Nextcloud-Ablage in OpenProject fertig eingerichtet ausliefert, weil davon abhängt, ob diese Route
 dort überhaupt je leer ist. Eine eigene Messung erst mit einer registrierten Ablage, also frühestens
 zusammen mit DI-17-03.
+
+## DI-17-05: Der einzige OIDC-Pfad ohne Sitzungsfrage ist angelaufen und nicht zu Ende gemessen
+
+**Gefunden:** Plan 17-07, Task 2, Lauf 5 von S5.
+
+**Der Fund.** Von den drei Ereignispfaden aus K5 ist genau einer nicht sitzungsgebunden:
+`sso_provider_type=nextcloud_hub` löst `InternalTokenRequestedEvent` aus, und
+`InternalTokenRequestedListener` reicht eine Nutzer-Id an
+`TokenService::getTokenFromOidcProviderApp()` weiter statt eine Sitzung zu lesen. Genau dieser Pfad
+ist der einzige, der unter AppAPI-Impersonation überhaupt eine Aussicht hätte.
+
+**Was gemessen ist.** Der Listener läuft: `[InternalTokenRequestedListener] received request for
+audience: openproject` steht wörtlich im Protokoll, und danach kommt **keine** Zeile über eine
+Sitzung. Der Pfad stellt die Sitzungsfrage also nachweislich nicht.
+
+**Was ungemessen bleibt, und warum.** Ob er ein Token liefern würde, ist offen. Er bricht hier an
+`[TokenService] Failed to get token from Oidc provider app, oidc app is not installed`: der Pfad
+verlangt, dass Nextcloud selbst der Anbieter ist, also die Server-App `oidc` (Nextcloud Hub als
+Identitätsanbieter), und die ist in dieser Messumgebung nicht installiert. Damit hängt der Fund an
+derselben Out-of-Scope-Grenze wie die Gegenprobe von S5: ein eigener Keycloak-Client für OpenProject
+als Dienstkonto ist in `REQUIREMENTS.md` ausgeschlossen, und ein Nextcloud-Hub-Anbieter wäre der
+zweite Aufbau derselben Art.
+
+**Kostenschätzung für eine Messung.** Die Server-App `oidc` installieren, in ihr einen Client
+`openproject` anlegen, `sso_provider_type=nextcloud_hub` und `targeted_audience_client_id` darauf
+zeigen lassen, und OpenProject an diesen Anbieter binden. Der letzte Schritt ist der teure und
+zugleich der, den die Phase ausgeschlossen hat.
+
+**Warum das nicht nebenbei behoben wurde.** Es hätte den Umfang der Phase erweitert, ohne die Frage
+zu beantworten, die S5 stellt. S5 fragt nach dem Verhalten des Weges, den `integration_openproject`
+in einem OIDC-gebundenen Betrieb geht, und welchen openDesk geht, steht als Frage 7 offen.
+
+**Vorgeschlagene Behandlung.** In 17-08 als Zusatz zu Frage 7: falls openDesk im Modus `oidc` läuft,
+mit welchem `sso_provider_type`. Die Antwort entscheidet, ob dieser Pfad für OD-04 überhaupt
+interessant ist. In 17-09 ein Satz unter 2.4 und einer unter "Was diese Messung nicht beweist": der
+einzige sitzungsfreie Pfad ist nicht widerlegt, sondern ungemessen, und wer Weg 0 im OIDC-Betrieb
+verwirft, verwirft ihn ohne diesen Messwert.

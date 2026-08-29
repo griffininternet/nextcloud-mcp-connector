@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
 status: executing
-stopped_at: Completed 17-06-PLAN.md
-last_updated: "2026-08-29T02:13:23.295Z"
+stopped_at: Completed 17-07-PLAN.md
+last_updated: "2026-08-29T02:54:06.198Z"
 last_activity: 2026-08-29
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 13
-  completed_plans: 10
+  completed_plans: 11
   percent: 25
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 17 (openDesk-Spike) — EXECUTING
-Plan: 7 of 9
+Plan: 8 of 9
 Status: Ready to execute
 Last activity: 2026-08-29
 
@@ -173,6 +173,7 @@ Last activity: 2026-08-29
 | Phase 17 P04 | 41 min | 3 tasks | 2 files |
 | Phase 17 P05 | 78 | 3 tasks | 2 files |
 | Phase 17 P06 | 52 | 3 tasks | 2 files |
+| Phase 17 P07 | 64 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -644,6 +645,9 @@ Recent decisions affecting current work:
 - [Phase 17]: die Byte-Kosten einer Weg-0-Antwort sind keine Budgetgröße, sondern eine Zahl mit zwei Abhängigkeiten (Berechtigung des Nutzers, Modulsatz des Projekts): dieselbe Fläche liefert 4746 Bytes als bob und 2542 als alice, davon 87 Prozent HAL-Relationen
 - [Phase 17]: Abschnitt 3 des Berichts trifft ausdrücklich keine Entscheidung über den Werkzeugschnitt; die Wahl gehört 17-09 und OD-04, und die Diät macht der Server über `select` (15831 gegen 88 Bytes) und nicht eine Projektion in unserem Code
 - [Phase 17]: OD-02 bleibt Pending, weil von Weg 0 noch S5 fehlt; abgehakt wird es von 17-09. Fortsetzung der Entscheidung aus 17-01 bis 17-05
+- [Phase ?]: 17-07: S5 gemessen, Weg 0 traegt im Modus oidc nur so lange wie der zwischengespeicherte Token
+- [Phase ?]: 17-07: isLoggedIn() liefert unter AppAPI-Impersonation true; der Bruch liegt an der Sitzungsfrage und nicht davor, damit ist die Diagnose aus research/SUMMARY.md bestaetigt statt ersetzt (S5c)
+- [Phase ?]: 17-07: Der Pfad nextcloud_hub ist angelaufen und ungemessen, nicht widerlegt (DI-17-05); der Entwurf zu user_oidc#925 liegt nach geglueckter Live-Repro unversendet in docs/contrib/, gesendet wird ausschliesslich vom Owner (D-08); OD-02 bleibt Pending bis 17-09
 
 ### Pending Todos
 
@@ -683,8 +687,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-29T02:13:03.458Z
-Stopped at: Completed 17-05-PLAN.md
+Last session: 2026-08-29T02:54:06.179Z
+Stopped at: Completed 17-07-PLAN.md
 Naechster Schritt: 16-02 (sechs Gates lokal grün, Archiv-Probelauf, Proof-Zeilen der Runbook-Schritte 1 bis 3); der Tag v0.1.11 entsteht erst in 16-03 nach ausdrücklicher Owner-Freigabe
 Resume file: None
 
