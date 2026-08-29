@@ -115,6 +115,15 @@ jobs:
         run: |
           set -a && . ./.env.exapp && set +a
           uv run pytest tests/integration/test_oauth_flow_exapp.py -m integration
+      - name: The account list behind D-12 (AUDIT-03, assumption A1)
+        # The measurement of the most dangerous assumption of phase 18: a missing identifier
+        # in this list removes a whole audit chain, so the four statements about it are
+        # checked against a running instance rather than believed. A red case here means D-12
+        # does not take effect, never that a chain was deleted by mistake: the reader in
+        # audit/accounts.py answers None on every doubt, and None removes nothing.
+        run: |
+          set -a && . ./.env.exapp && set +a
+          uv run pytest tests/integration/test_appapi_users_list.py -m integration
       - name: Topology and ExApp logs on failure
         if: failure()
         run: |
