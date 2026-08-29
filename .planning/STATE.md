@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
 status: executing
-stopped_at: Completed 18-05-PLAN.md
-last_updated: "2026-08-29T09:17:28.474Z"
-last_activity: 2026-08-29 -- Plan 18-05 ausgeführt (Auskunft über den Aufrufer, Client-Name im Anspruch, Rekorder-Ablage)
+stopped_at: Completed 18-06-PLAN.md
+last_updated: "2026-08-29T09:35:32.030Z"
+last_activity: 2026-08-29 -- Plan 18-06 ausgeführt (Erfassungspunkt in graceful, Rekorder, Dekorator-Nachweis über alle 21 Werkzeuge)
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 23
-  completed_plans: 18
+  completed_plans: 19
   percent: 50
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 18 (audit-log-kern) — EXECUTING
-Plan: 6 of 10
+Plan: 7 of 10
 Status: Ready to execute
-Last activity: 2026-08-29 -- Plan 18-05 ausgeführt (Auskunft über den Aufrufer, Client-Name im Anspruch, Rekorder-Ablage)
+Last activity: 2026-08-29 -- Plan 18-06 ausgeführt (Erfassungspunkt in graceful, Rekorder, Dekorator-Nachweis über alle 21 Werkzeuge)
 
 ## Performance Metrics
 
@@ -181,6 +181,7 @@ Last activity: 2026-08-29 -- Plan 18-05 ausgeführt (Auskunft über den Aufrufer
 | Phase 18-audit-log-kern P03 | 25 min | 3 tasks | 10 files |
 | Phase 18-audit-log-kern PP04 | 20 min | 3 tasks tasks | 4 files files |
 | Phase 18-audit-log-kern P05 | 12 min | 3 tasks | 5 files |
+| Phase 18 P06 | 28min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -669,6 +670,9 @@ Recent decisions affecting current work:
 - [Phase 18]: Die Löschanweisungen des Aufräumlaufs heissen _DROP_*, weil der Vertragstest zwei exakte SQL-Formen ausnimmt und nicht die Datei; eine Ausweitung hätte auch ein künftiges HTTP-DELETE in audit/store.py verdeckt
 - [Phase 18]: 18-05: Der Client-Name reist im claims-Feld des Tokens mit, gefuellt aus dem Client, den verify_token fuer die Sperrpruefung ohnehin laedt; ein spaeter aufgeloester Name waere nach occ mcp_connector:purge weg
 - [Phase 18]: 18-05: Der Erfassungspfad nimmt resolve_caller und nie resolve_credentials; Caller traegt vier Felder ohne Geheimnis und antwortet None statt zu werfen (D-13), und params-_meta bleibt ungelesen
+- [Phase 18]: 18-06: Der Erfassungspunkt ist der finally-Zweig von graceful mit einem awaiteten record.note; note faengt Exception selbst, weil ein await im finally sonst die laufende Ausnahme ersetzt (D-13, T-18-17)
+- [Phase 18]: 18-06: Die gesetzten Parameternamen kommen aus params-arguments-keys() geschnitten mit PARAM_ALLOWLIST; kwargs taugt nicht, weil das SDK Vorgabewerte materialisiert
+- [Phase 18]: 18-06: __mcp_audited__ als ausdruecklicher Marker statt einer Pruefung auf fn.__code__.co_name; der Vertragstest misst ihn ueber alle 21 Werkzeuge
 
 ### Pending Todos
 
@@ -708,9 +712,9 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-29T09:16:29.667Z
-Stopped at: Completed 18-05-PLAN.md
-Nächster Schritt: Plan 18-06 ausführen; danach offen: Phase 17 verifizieren (/gsd:verify-phase 17) und 16-04 (Store-Einreichung 0.1.11)
+Last session: 2026-08-29T09:35:32.012Z
+Stopped at: Completed 18-06-PLAN.md
+Nächster Schritt: Plan 18-07 ausführen (Schalter aus D-14, Recorder verdrahten); danach offen: Phase 17 verifizieren (/gsd:verify-phase 17) und 16-04 (Store-Einreichung 0.1.11)
 Resume file: None
 
 ## Operator Next Steps

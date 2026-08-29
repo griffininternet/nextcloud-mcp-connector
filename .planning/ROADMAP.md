@@ -196,7 +196,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 18-06-PLAN.md , Rekorder und Dekorator: Marker plus finally-Zweig in graceful, gesetzte Parameternamen, fail-open, Dekorator-Nachweis im Gate
+- [x] 18-06-PLAN.md , Rekorder und Dekorator: Marker plus finally-Zweig in graceful, gesetzte Parameternamen, fail-open, Dekorator-Nachweis im Gate
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -247,7 +247,7 @@ Plans:
 | 15. Release 0.1.10 | v1.4 | 4/4 | Complete | 2026-08-28 |
 | 16. Release 0.1.11 | v1.5 | 4/4 | Complete | 2026-08-28 |
 | 17. openDesk-Spike | v1.5 | 9/9 | Complete   | 2026-08-29 |
-| 18. Audit-Log Kern | v1.5 | 5/10 | In Progress | - |
+| 18. Audit-Log Kern | v1.5 | 6/10 | In Progress|  |
 | 19. Audit-Log Bedienung und Textnachzug | v1.5 | 0/? | Not started | - |
 
 ## Next
