@@ -4,13 +4,13 @@ milestone: v1.5
 milestone_name: Vorlauf openDesk
 status: executing
 stopped_at: Completed 17-07-PLAN.md
-last_updated: "2026-08-29T02:54:06.198Z"
+last_updated: "2026-08-29T05:12:05.738Z"
 last_activity: 2026-08-29
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 13
-  completed_plans: 11
+  completed_plans: 12
   percent: 25
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 17 (openDesk-Spike) — EXECUTING
-Plan: 8 of 9
+Plan: 9 of 9
 Status: Ready to execute
 Last activity: 2026-08-29
 
@@ -174,6 +174,7 @@ Last activity: 2026-08-29
 | Phase 17 P05 | 78 | 3 tasks | 2 files |
 | Phase 17 P06 | 52 | 3 tasks | 2 files |
 | Phase 17 P07 | 64 min | 3 tasks | 5 files |
+| Phase 17 P08 | 20 | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -648,6 +649,9 @@ Recent decisions affecting current work:
 - [Phase ?]: 17-07: S5 gemessen, Weg 0 traegt im Modus oidc nur so lange wie der zwischengespeicherte Token
 - [Phase ?]: 17-07: isLoggedIn() liefert unter AppAPI-Impersonation true; der Bruch liegt an der Sitzungsfrage und nicht davor, damit ist die Diagnose aus research/SUMMARY.md bestaetigt statt ersetzt (S5c)
 - [Phase ?]: 17-07: Der Pfad nextcloud_hub ist angelaufen und ungemessen, nicht widerlegt (DI-17-05); der Entwurf zu user_oidc#925 liegt nach geglueckter Live-Repro unversendet in docs/contrib/, gesendet wird ausschliesslich vom Owner (D-08); OD-02 bleibt Pending bis 17-09
+- [Phase ?]: 17-08: Die Reihenfolge der neun ISV-Fragen ist an bestehende Berichtsverweise gebunden (1.2, 1.3, 1.4, 2.2, 2.5 zeigen auf 1, 5, 6, 7, 9) und nicht nach Wichtigkeit sortiert
+- [Phase ?]: 17-08: Vier zurueckgestellte Funde (DI-17-01, DI-17-03, DI-17-04, DI-17-05) sind als Nachfragen an die Fragen 6 und 7 gehaengt statt als eigene Fragen, damit die Liste bei neun bleibt
+- [Phase ?]: 17-08: Drei von dieser Phase beantwortete Fragen sind aus der Liste entfernt und mit Beleg in einer Streichtabelle gefuehrt; Freigabe des Owners am 2026-08-29 ohne inhaltliche Aenderung, drei Entwuerfe bleiben unversendet
 
 ### Pending Todos
 
@@ -687,7 +691,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-29T02:54:06.179Z
+Last session: 2026-08-29T05:11:40.740Z
 Stopped at: Completed 17-07-PLAN.md
 Naechster Schritt: 16-02 (sechs Gates lokal grün, Archiv-Probelauf, Proof-Zeilen der Runbook-Schritte 1 bis 3); der Tag v0.1.11 entsteht erst in 16-03 nach ausdrücklicher Owner-Freigabe
 Resume file: None

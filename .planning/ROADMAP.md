@@ -160,7 +160,7 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 17-08-PLAN.md , OD-03: Fragenliste für den 14.09. im Bericht und im Dossier, zwei unversendete Entwürfe der Rückkanäle, Owner-Gate
+- [x] 17-08-PLAN.md , OD-03: Fragenliste für den 14.09. im Bericht und im Dossier, zwei unversendete Entwürfe der Rückkanäle, Owner-Gate
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
@@ -218,7 +218,7 @@ Plans:
 | 14. Doku-Reste und Gate-Entscheid | v1.4 | 2/2 | Complete | 2026-08-27 |
 | 15. Release 0.1.10 | v1.4 | 4/4 | Complete | 2026-08-28 |
 | 16. Release 0.1.11 | v1.5 | 4/4 | Complete | 2026-08-28 |
-| 17. openDesk-Spike | v1.5 | 7/9 | In Progress|  |
+| 17. openDesk-Spike | v1.5 | 8/9 | In Progress|  |
 | 18. Audit-Log Kern | v1.5 | 0/? | Not started | - |
 | 19. Audit-Log Bedienung und Textnachzug | v1.5 | 0/? | Not started | - |
 
