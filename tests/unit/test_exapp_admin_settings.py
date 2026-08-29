@@ -111,7 +111,7 @@ async def test_the_admin_form_sits_in_the_admin_section() -> None:
 
 @pytest.mark.anyio
 @respx.mock
-async def test_the_six_fields_are_the_six_config_keys_in_order() -> None:
+async def test_the_seven_fields_are_the_seven_config_keys_in_order() -> None:
     """The field id IS the configuration key, so form and read path cannot drift apart.
 
     Five since the audit of the v1.0 milestone: ``NC_MCP_OAUTH_CIMD`` existed as a deploy
@@ -119,9 +119,10 @@ async def test_the_six_fields_are_the_six_config_keys_in_order() -> None:
     chain. An installation from the app store never gets a deploy variable, so that switch
     was one no store installation could reach at all (finding B-1).
 
-    Six since phase 9: ``talk_send`` is the same case for the switch of TALK-04, and it sits
-    last because the four OAuth values belong together and a Talk switch between them would
-    tear that grouping apart.
+    Six since phase 9: ``talk_send`` is the same case for the switch of TALK-04, and it came
+    after the four OAuth values because those belong together and a Talk switch between them
+    would tear that grouping apart. Seven since phase 18: ``audit_log`` is the switch of D-14
+    and sits last, because it is about this app watching itself and not about who reaches it.
     """
     route = respx.post(SETTINGS_URL).mock(return_value=httpx.Response(200, json={}))
 
@@ -135,6 +136,7 @@ async def test_the_six_fields_are_the_six_config_keys_in_order() -> None:
         "oauth_allowlist_only",
         "oauth_allowed_clients",
         "talk_send",
+        "audit_log",
     ]
     assert tuple(field["id"] for field in fields) == config_values.CONFIG_KEYS
     assert [field["type"] for field in fields] == [
@@ -143,6 +145,7 @@ async def test_the_six_fields_are_the_six_config_keys_in_order() -> None:
         "checkbox",
         "checkbox",
         "text",
+        "checkbox",
         "checkbox",
     ]
 
@@ -246,7 +249,9 @@ async def test_the_talk_send_field_is_a_checkbox_that_ships_on() -> None:
     await admin_settings.register_admin_form(env=ENV)
 
     fields = json.loads(route.calls.last.request.content)["formScheme"]["fields"]
-    talk_send = fields[-1]
+    # Looked up by id and no longer taken as the last field: since phase 18 the last one is
+    # the audit switch, and a position is not what this check is about anyway.
+    talk_send = next(field for field in fields if field["id"] == "talk_send")
     assert talk_send["id"] == "talk_send"
     assert talk_send["type"] == "checkbox"
     assert talk_send["default"] is True
@@ -274,6 +279,61 @@ async def test_the_talk_send_description_names_the_reading_side_and_the_cycle() 
     lowered = description.lower()
     assert "reading is not affected" in lowered
     assert "disable and enable this app again" in lowered
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_the_audit_log_field_is_a_checkbox_that_ships_off() -> None:
+    """D-14, the one field of this form whose shipped state is off, and why it has to be.
+
+    ``config.audit_log_enabled`` answers False for an unset variable, so a box shown ticked
+    would tell an administrator that her installation is recording when it is not. The
+    direction matters more here than at any other field of this form: what this switch starts
+    is a record about named people, and the promise of D-14 is that no installation ever
+    keeps one nobody asked for.
+
+    And no spelling of ``sensitive``: AppAPI would encrypt the value with the server secret
+    and this app would read back a blob it cannot open (T-05-05, T-18-19), which for this
+    switch means it could never be read as off either.
+    """
+    route = respx.post(SETTINGS_URL).mock(return_value=httpx.Response(200, json={}))
+
+    await admin_settings.register_admin_form(env=ENV)
+
+    fields = json.loads(route.calls.last.request.content)["formScheme"]["fields"]
+    audit_log = fields[-1]
+    assert audit_log["id"] == "audit_log"
+    assert audit_log["type"] == "checkbox"
+    assert audit_log["default"] is False
+    assert audit_log["title"] == strings.ADMIN_FIELD_AUDIT_LOG_LABEL
+    assert audit_log["description"] == strings.ADMIN_FIELD_AUDIT_LOG_DESCRIPTION
+    assert "sensitive" not in json.dumps(audit_log).lower()
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_the_audit_log_description_says_what_is_kept_and_what_is_not() -> None:
+    """The three things this short version owes an administrator, and the one it must not say.
+
+    What a row contains, what it never contains, and the activation cycle. The long wording,
+    the works council sentence and the description of what such a record can and cannot prove
+    are AUDIT-05 and belong to phase 19, together with the page that reads the record; half
+    of that copy here would leave two places saying different amounts about one switch.
+    """
+    route = respx.post(SETTINGS_URL).mock(return_value=httpx.Response(200, json={}))
+
+    await admin_settings.register_admin_form(env=ENV)
+
+    fields = json.loads(route.calls.last.request.content)["formScheme"]["fields"]
+    description = next(field for field in fields if field["id"] == "audit_log")["description"]
+    lowered = description.lower()
+    assert "no parameter value" in lowered
+    assert "no part of a result" in lowered
+    assert "disable and enable this app again" in lowered
+    # The four words AUDIT-06 keeps out of every public text of this project, checked at the
+    # place a new public sentence enters it.
+    for forbidden in ("revisionssicher", "ai-act", "dsgvo", "siem"):
+        assert forbidden not in lowered
 
 
 @pytest.mark.anyio

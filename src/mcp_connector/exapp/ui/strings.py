@@ -38,6 +38,8 @@ __all__ = [
     "ADMIN_FIELD_ALLOWED_CLIENTS_LABEL",
     "ADMIN_FIELD_ALLOWLIST_DESCRIPTION",
     "ADMIN_FIELD_ALLOWLIST_LABEL",
+    "ADMIN_FIELD_AUDIT_LOG_DESCRIPTION",
+    "ADMIN_FIELD_AUDIT_LOG_LABEL",
     "ADMIN_FIELD_CIMD_DESCRIPTION",
     "ADMIN_FIELD_CIMD_LABEL",
     "ADMIN_FIELD_DCR_DESCRIPTION",
@@ -633,6 +635,22 @@ ADMIN_FIELD_TALK_SEND_DESCRIPTION = (
     "With this off, no assistant can send a Talk message through this connector, whatever an "
     "account is allowed to do in Talk itself. Reading is not affected: conversations and their "
     "history stay readable. A change takes effect after you disable and enable this app again."
+)
+
+ADMIN_FIELD_AUDIT_LOG_LABEL = "Keep a record of tool calls"
+
+#: The form half of ``NC_MCP_AUDIT_LOG`` (D-14), and deliberately the short version. It says
+#: three things: what a recorded call contains, what it never contains, and the activation
+#: cycle this file already spells for every other value. The full wording an administrator
+#: needs before switching this on, the works council sentence and the description of what the
+#: record can and cannot prove, is AUDIT-05 and belongs to phase 19, which owns that copy
+#: together with the page that reads the record. Writing half of it here would leave two
+#: places saying different amounts about the same switch.
+ADMIN_FIELD_AUDIT_LOG_DESCRIPTION = (
+    "With this on, every tool call is written down: the account it ran for, the name of the "
+    "tool, the time, the app that called and whether the call succeeded. No parameter value "
+    "and no part of a result is stored. This is off unless you switch it on, and a change "
+    "takes effect after you disable and enable this app again."
 )
 
 # --- The setup state a missing public address produces (consumed by plan 05-04) -----------

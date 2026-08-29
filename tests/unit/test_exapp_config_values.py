@@ -1,4 +1,4 @@
-"""The six admin values of BL-06 and TALK-04, read out of the ExApp configuration (EXAPP-04).
+"""The seven admin values of BL-06, TALK-04 and D-14, read out of the ExApp configuration.
 
 Nothing here opens a socket: the one outgoing OCS call is answered by respx, exactly as in
 ``test_oauth_crypto.py``, whose read path this module reuses.
@@ -70,18 +70,19 @@ def answer(values: dict[str, Any], *, camel: bool = False) -> respx.Route:
     )
 
 
-# --- the contract of the six keys --------------------------------------------------
+# --- the contract of the seven keys --------------------------------------------------
 
 
-def test_the_six_keys_are_the_field_ids_of_the_admin_form() -> None:
+def test_the_seven_keys_are_the_field_ids_of_the_admin_form() -> None:
     """Pattern 1 of the research: the config key IS the field id, without a prefix.
 
     Five since finding B-1 of the v1.0 milestone audit: ``NC_MCP_OAUTH_CIMD`` was a deploy
     variable and a manifest declaration and nothing in this chain, so on the one kind of
     installation this chain exists for, the one from the app store, that switch could not be
-    set at all. Six since phase 9, where ``talk_send`` was the same case, and it is last
-    because the four OAuth values belong together (``registry.client_policy`` reads two of
-    them as one answer).
+    set at all. Six since phase 9, where ``talk_send`` was the same case, and it came after
+    the four OAuth values because those belong together (``registry.client_policy`` reads two
+    of them as one answer). Seven since phase 18: ``audit_log`` is the switch of D-14, and it
+    is last because it is about this app watching itself and not about who may reach it.
     """
     assert config_values.CONFIG_KEYS == (
         "public_url",
@@ -90,6 +91,7 @@ def test_the_six_keys_are_the_field_ids_of_the_admin_form() -> None:
         "oauth_allowlist_only",
         "oauth_allowed_clients",
         "talk_send",
+        "audit_log",
     )
 
 
@@ -102,6 +104,7 @@ def test_every_key_maps_to_the_variable_the_existing_code_already_reads() -> Non
         "oauth_allowlist_only": registry.ENV_ALLOWLIST_ONLY,
         "oauth_allowed_clients": registry.ENV_ALLOWED_CLIENTS,
         "talk_send": config.ENV_TALK_SEND,
+        "audit_log": config.ENV_AUDIT_LOG,
     }
     assert set(config_values.KEY_TO_ENV) == set(config_values.CONFIG_KEYS)
 
@@ -109,6 +112,13 @@ def test_every_key_maps_to_the_variable_the_existing_code_already_reads() -> Non
 def test_the_talk_switch_is_validated_like_every_other_checkbox() -> None:
     """No new validation code: ``_usable_value`` already branches on this set."""
     assert "talk_send" in config_values.SWITCH_KEYS
+
+
+def test_the_audit_switch_is_validated_like_every_other_checkbox() -> None:
+    """D-14 needs no validation of its own either: a refused value leaves the key out of the
+    overlay, so the deploy variable and then ``config.audit_log_enabled`` decide, and that
+    last one says off."""
+    assert "audit_log" in config_values.SWITCH_KEYS
 
 
 def test_the_switch_spellings_are_the_ones_the_registry_understands() -> None:
@@ -129,8 +139,8 @@ def test_only_one_place_in_this_module_reaches_the_network() -> None:
 
 @pytest.mark.anyio
 @respx.mock
-async def test_one_request_asks_for_all_six_keys() -> None:
-    """Six values, one round trip: the read takes a list and there is nothing to loop."""
+async def test_one_request_asks_for_all_seven_keys() -> None:
+    """Seven values, one round trip: the read takes a list and there is nothing to loop."""
     route = answer({"public_url": ADMIN_URL})
 
     values = await config_values.read_values(env=ENV)
@@ -146,6 +156,7 @@ async def test_one_request_asks_for_all_six_keys() -> None:
             "oauth_allowlist_only",
             "oauth_allowed_clients",
             "talk_send",
+            "audit_log",
         ]
     }
     assert values == {"public_url": ADMIN_URL}
@@ -697,7 +708,7 @@ async def test_the_client_list_passes_through_unchanged() -> None:
 
 @pytest.mark.anyio
 @respx.mock
-async def test_all_six_values_travel_together() -> None:
+async def test_all_seven_values_travel_together() -> None:
     """The whole overlay of a fully configured instance, in the spelling of the env."""
     answer(
         {
@@ -707,6 +718,7 @@ async def test_all_six_values_travel_together() -> None:
             "oauth_allowlist_only": "true",
             "oauth_allowed_clients": "claude-desktop",
             "talk_send": "false",
+            "audit_log": "true",
         }
     )
 
@@ -717,6 +729,7 @@ async def test_all_six_values_travel_together() -> None:
         registry.ENV_ALLOWLIST_ONLY: "on",
         registry.ENV_ALLOWED_CLIENTS: "claude-desktop",
         config.ENV_TALK_SEND: "off",
+        config.ENV_AUDIT_LOG: "on",
     }
 
 

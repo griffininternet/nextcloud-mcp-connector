@@ -1,4 +1,4 @@
-"""The six admin values of BL-06 and TALK-04, read out of the ExApp configuration of Nextcloud.
+"""The seven admin values of BL-06, TALK-04 and D-14, read out of the ExApp configuration.
 
 The fifth one joined in phase 6 with ``NC_MCP_OAUTH_CIMD``: a switch that exists as a deploy
 variable and as a documented sentence, but not in this chain, is a switch an installation
@@ -6,6 +6,10 @@ from the app store cannot reach at all, because such an installation never gets 
 variable (the whole reason this module exists). The sixth joined in phase 9 with
 ``NC_MCP_TALK_SEND``, the switch that closes the outgoing Talk channel of this app, and it is
 here for exactly that reason: a countermeasure a store installation cannot reach is not one.
+The seventh joined in phase 18 with ``NC_MCP_AUDIT_LOG``, the switch that decides whether
+tool calls are recorded at all (D-14), and it is the one of the seven that ships off: a
+record about named people that an administrator never asked for is the failure that switch
+exists to prevent, so the end of this chain, the default in code, says no.
 
 Three facts carry this module, and each of them is measured rather than assumed:
 
@@ -18,7 +22,7 @@ Three facts carry this module, and each of them is measured rather than assumed:
 * **The config key IS the field id of the Declarative Settings form.** AppAPI's
   ``SetValueListener`` stores an admin value with
   ``ExAppConfigService::setAppConfigValue($app, $fieldId, $value)``, without a prefix, so
-  the six ids of ``exapp/admin_settings.py`` are exactly :data:`CONFIG_KEYS`
+  the seven ids of ``exapp/admin_settings.py`` are exactly :data:`CONFIG_KEYS`
   (nextcloud/app_api v34.0.3, ``lib/Listener/DeclarativeSettings/SetValueListener.php``).
 * **AppAPI 34 answers in lower case.** The entries carry ``configkey`` and ``configvalue``,
   the column names of ``ex_apps_config`` serialised straight out of the entity. The camel
@@ -100,13 +104,15 @@ LOOPBACK_HOSTS: frozenset[str] = frozenset({"127.0.0.1", "::1", "localhost"})
 #: is looking at, and a second spelling there would be a string that drifts silently.
 PUBLIC_URL_KEY = "public_url"
 
-#: The six keys, in the order the form declares its fields. They are the field ids of the
+#: The seven keys, in the order the form declares its fields. They are the field ids of the
 #: admin form and the configuration keys at the same time (see the module docstring).
 #: ``oauth_cimd`` stands next to ``oauth_dcr`` because the code reads the two as one answer
 #: (``registry.client_policy``: this switch AND the DCR switch), and two coupled switches
 #: that sit apart in a form are two switches an administrator reads as independent.
-#: ``talk_send`` is last for the same reason read the other way round: it is independent of
-#: all four OAuth values, and putting it between them would tear that grouping apart.
+#: ``talk_send`` comes after them for the same reason read the other way round: it is
+#: independent of all four OAuth values, and putting it between them would tear that grouping
+#: apart. ``audit_log`` is last and joined in phase 18; it is about none of the six above,
+#: because it is about this app watching itself rather than about who may reach it.
 CONFIG_KEYS: tuple[str, ...] = (
     PUBLIC_URL_KEY,
     "oauth_dcr",
@@ -114,6 +120,7 @@ CONFIG_KEYS: tuple[str, ...] = (
     "oauth_allowlist_only",
     "oauth_allowed_clients",
     "talk_send",
+    "audit_log",
 )
 
 #: The variable each key stands for. The overlay speaks the language of the deploy
@@ -125,13 +132,16 @@ KEY_TO_ENV: Mapping[str, str] = {
     "oauth_allowlist_only": registry.ENV_ALLOWLIST_ONLY,
     "oauth_allowed_clients": registry.ENV_ALLOWED_CLIENTS,
     "talk_send": config.ENV_TALK_SEND,
+    "audit_log": config.ENV_AUDIT_LOG,
 }
 
 #: The keys that carry a checkbox, named once so the validation cannot drift from the form.
 #: Every one of them goes through :func:`_switch`, which refuses a value that is neither on
-#: nor off instead of guessing a default.
+#: nor off instead of guessing a default. Five since phase 18: a refused ``audit_log`` leaves
+#: the key out of the overlay, so the deploy variable and then the default in code decide,
+#: and that default is off (``config.audit_log_enabled``).
 SWITCH_KEYS: frozenset[str] = frozenset(
-    {"oauth_dcr", "oauth_cimd", "oauth_allowlist_only", "talk_send"}
+    {"oauth_dcr", "oauth_cimd", "oauth_allowlist_only", "talk_send", "audit_log"}
 )
 
 #: The spellings a switch may arrive in. Aligned with the two sets of ``oauth/registry.py``
@@ -439,7 +449,7 @@ def _headers(settings: config.ExAppSettings) -> dict[str, str]:
 
 
 def _config_values(payload: Any) -> dict[str, str] | None:
-    """Pull our six values out of the OCS envelope, or refuse to guess.
+    """Pull our seven values out of the OCS envelope, or refuse to guess.
 
     ``None`` means the answer could not be read and is therefore not an empty one. The three
     accepted shapes are the ones ``crypto._config_value`` accepts: a list of entries with

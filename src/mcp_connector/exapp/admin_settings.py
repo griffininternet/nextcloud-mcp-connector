@@ -1,4 +1,4 @@
-"""The administration form of BL-06 and TALK-04: six values a store installation needs.
+"""The administration form of BL-06, TALK-04 and D-14: seven values a store installation needs.
 
 Built like :mod:`mcp_connector.exapp.settings_form`, which is the one to one model for the
 transport, the app context and the error model. Four things differ, and they are the whole
@@ -18,7 +18,9 @@ that equality: a form whose ids drift from the read path is a form whose values 
 * ``sensitive: true`` at a field makes the ``SetValueListener`` encrypt the value with
   ``ICrypto`` before storing it, using the server secret. The ExApp then reads back a blob it
   cannot open, so a value it needs at runtime would be lost behind a flag that looks like
-  hardening (T-05-05). None of the six fields carries it, in any spelling.
+  hardening (T-05-05). None of the seven fields carries it, in any spelling, and for the
+  audit switch of D-14 the consequence would be the worst of the seven: a switch that cannot
+  be read back as off either (T-18-19).
 * Declarative Settings have no button type. The complete list is ``text``, ``password``,
   ``email``, ``tel``, ``url``, ``number``, ``checkbox``, ``multi-checkbox``, ``radio``,
   ``select`` and ``multi-select`` (nextcloud/server stable34,
@@ -60,8 +62,9 @@ ADMIN_FORM_ID = "mcp_connector_admin"
 ADMIN_SECTION_TYPE = "admin"
 
 #: Where the entry sits. ``security`` is where an administrator already manages the sign in
-#: and the app passwords of the instance, which is the same subject as these six values: the
-#: sixth one decides whether this app may write into a conversation on behalf of an account.
+#: and the app passwords of the instance, which is the same subject as these seven values:
+#: the sixth decides whether this app may write into a conversation on behalf of an account,
+#: and the seventh whether it keeps a record of what assistants did (D-14).
 ADMIN_SECTION_ID = "security"
 
 ADMIN_FORM_PRIORITY = 10
@@ -83,9 +86,9 @@ def form_scheme(env: Mapping[str, str] | None = None) -> dict[str, Any]:
     documentation address in it comes from the public URL of this deployment, which is
     configuration and not a compile time fact.
 
-    The six fields are built from :data:`CONFIG_KEYS`, in that order, so the form and the
+    The seven fields are built from :data:`CONFIG_KEYS`, in that order, so the form and the
     read path cannot drift apart. Every field carries a ``default``, which is what the shape
-    documented for Declarative Settings looks like; the four switches show the state this app
+    documented for Declarative Settings looks like; the five switches show the state this app
     ships with, so an administrator sees what is in force before touching anything.
     """
     configured = config.public_url(env)
@@ -105,6 +108,7 @@ def form_scheme(env: Mapping[str, str] | None = None) -> dict[str, Any]:
         allowlist_field,
         allowed_field,
         talk_send_field,
+        audit_log_field,
     ) = CONFIG_KEYS
     return {
         "id": ADMIN_FORM_ID,
@@ -169,6 +173,19 @@ def form_scheme(env: Mapping[str, str] | None = None) -> dict[str, Any]:
                 # promised capability away from every installation that never reads this
                 # form, and ``config.talk_send_enabled`` answers True for the same reason.
                 "default": True,
+            },
+            {
+                "id": audit_log_field,
+                "title": strings.ADMIN_FIELD_AUDIT_LOG_LABEL,
+                "description": strings.ADMIN_FIELD_AUDIT_LOG_DESCRIPTION,
+                "type": "checkbox",
+                # The one field of this form that ships off, and the only sensible state for
+                # it (D-14): what this switch starts is a record about named people doing
+                # named things, and a record nobody asked for is exactly the thing an
+                # administrator has to be able to decide about. So the box is unticked, which
+                # is what ``config.audit_log_enabled`` answers for an unset value, and an
+                # installation that never opens this form records nothing at all.
+                "default": False,
             },
         ],
     }

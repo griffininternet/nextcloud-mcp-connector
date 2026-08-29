@@ -133,7 +133,7 @@ itself is not in 0.1.2 either, so nothing was reachable and unswitchable in a re
 version.
 
 The config key of a field is the id of the field itself, without a prefix: AppAPI stores a
-declarative settings value under that id, and the app reads the same six keys back over the
+declarative settings value under that id, and the app reads the same keys back over the
 ExApp configuration channel.
 
 **Precedence: the value stored in Nextcloud wins, then the `NC_MCP_*` variable of the deploy
