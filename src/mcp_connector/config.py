@@ -46,6 +46,13 @@ ENV_DISABLE_DNS_REBINDING = "NC_MCP_DISABLE_DNS_REBINDING_PROTECTION"
 ENV_PUBLIC_URL = "NC_MCP_PUBLIC_URL"
 ENV_TALK_SEND = "NC_MCP_TALK_SEND"
 
+# The audit log of phase 18. The first one is the switch the whole feature hangs on (D-14),
+# the other two move the two limits of the store (D-09). All three read by the three
+# functions at the end of this module.
+ENV_AUDIT_LOG = "NC_MCP_AUDIT_LOG"
+ENV_AUDIT_RETENTION_DAYS = "NC_MCP_AUDIT_RETENTION_DAYS"
+ENV_AUDIT_MAX_BYTES = "NC_MCP_AUDIT_MAX_BYTES"
+
 # The AppAPI deploy environment. The names come from AppAPI, see the module docstring.
 ENV_APP_ID = "APP_ID"
 ENV_APP_SECRET = "APP_SECRET"  # noqa: S105 - the env var name, not a secret
@@ -76,6 +83,32 @@ LOCALHOST_NAMES = ("127.0.0.1", "localhost", "[::1]")
 #: and a shared constant in the other direction would be a circular import.
 _TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 _FALSE_VALUES = frozenset({"0", "false", "no", "off"})
+
+#: The two limits of the audit store, repeated here instead of imported, and the direction
+#: was measured before it was written down rather than assumed. ``audit/store.py`` itself
+#: imports nothing but the standard library and never this module, but a submodule cannot be
+#: imported without its package, and ``audit/__init__.py`` does import this one. A
+#: ``from .audit import store`` here would therefore close a ring that survives today only
+#: because ``audit/__init__`` reads ``config`` at call time and because the import system
+#: falls back to ``sys.modules`` for a partially initialised submodule. That is a property of
+#: two files that nobody would think to keep, so the direction stays clean and the two
+#: numbers stand twice. The place they are justified in is ``audit/store.py`` (D-09: 180 days
+#: sits exactly on the floor AUDIT-03 asks for, 100 MB generously above it so the window and
+#: not the size is what usually bites), and ``tests/unit/test_config.py`` holds both pairs
+#: equal so the copy cannot drift away from the original.
+AUDIT_RETENTION_DAYS = 180
+AUDIT_SIZE_LIMIT_BYTES = 100_000_000
+
+#: The floor under the retention window. AUDIT-03 asks that the window can *reach* 180 days,
+#: so a smaller value is not a preference but a configuration that breaks the requirement,
+#: and it is refused instead of applied. Larger is allowed: keeping longer than asked is the
+#: administrator's decision and no requirement of ours stands against it.
+AUDIT_RETENTION_FLOOR = 180
+
+#: The floor under the upper bound. A mistyped size that lands at a few bytes would sweep
+#: every row away again the moment it was written, which looks exactly like a log that does
+#: not work, so anything below one megabyte keeps the default instead.
+AUDIT_SIZE_LIMIT_FLOOR = 1_000_000
 
 #: Where the OAuth store goes when this process was not started by the AppAPI deploy
 #: daemon, which is the ``--manual`` development mode and nothing else. Relative to the
@@ -346,6 +379,101 @@ def talk_send_enabled(env: Mapping[str, str] | None = None) -> bool:
     source = os.environ if env is None else env
     value = (source.get(ENV_TALK_SEND) or "").strip().lower()
     return value not in _FALSE_VALUES
+
+
+def audit_log_enabled(env: Mapping[str, str] | None = None) -> bool:
+    """Whether this installation records tool calls at all (D-14). Off unless switched on.
+
+    This is the *positive* direction, and it is the one function here that must not be copied
+    from :func:`talk_send_enabled`. That one returns ``value not in _FALSE_VALUES``, because
+    the shipped state of the Talk switch is on and a typo must not take a promised capability
+    away. Here the shipped state is off, and for the opposite reason: a log about named people
+    that starts itself because somebody mistyped a variable is the failure this switch exists
+    to prevent (D-14). So an unset value, a blank one and a value nobody understands all
+    answer False, and copying the membership test of the other function would turn a typo into
+    a recording nobody asked for.
+
+    The chain above this line falls the same way: an administrator's value wins over the
+    deploy variable, the deploy variable wins over this default, and the 401 every first start
+    after an installation gets from AppAPI leaves an empty overlay behind
+    (``exapp/config_values.py``), so what is in force on that start is exactly this "off".
+
+    A value that is neither on nor off keeps the default and says so, naming the field and
+    never the value: an admin value travels here over HTTP (T-05-03, T-05-21).
+    """
+    source = os.environ if env is None else env
+    value = (source.get(ENV_AUDIT_LOG) or "").strip().lower()
+    if not value:
+        return False
+    if value in _TRUE_VALUES:
+        return True
+    if value in _FALSE_VALUES:
+        return False
+    logger.warning(
+        "%s is neither on nor off, so the audit log stays off (understood are %s and %s).",
+        ENV_AUDIT_LOG,
+        ", ".join(sorted(_TRUE_VALUES)),
+        ", ".join(sorted(_FALSE_VALUES)),
+    )
+    return False
+
+
+def audit_retention_days(env: Mapping[str, str] | None = None) -> int:
+    """How long a recorded call is kept, at least :data:`AUDIT_RETENTION_FLOOR` days (D-09)."""
+    return _bounded_number(
+        env, ENV_AUDIT_RETENTION_DAYS, AUDIT_RETENTION_DAYS, AUDIT_RETENTION_FLOOR
+    )
+
+
+def audit_size_limit(env: Mapping[str, str] | None = None) -> int:
+    """How large the audit file may grow, at least :data:`AUDIT_SIZE_LIMIT_FLOOR` bytes."""
+    return _bounded_number(env, ENV_AUDIT_MAX_BYTES, AUDIT_SIZE_LIMIT_BYTES, AUDIT_SIZE_LIMIT_FLOOR)
+
+
+def _bounded_number(env: Mapping[str, str] | None, name: str, default: int, floor: int) -> int:
+    """One of the two audit numbers out of the environment, or the default plus a warning.
+
+    Only a plain run of ASCII digits is taken. ``str.isdigit`` alone would accept ``"²"`` and
+    the Arabic-Indic digits, of which the first makes :func:`int` raise, and a run of more
+    than 4300 digits makes it raise as well since the integer conversion limit of Python 3.11.
+    Both are caught rather than argued about: this function is read at startup and a refused
+    value must never be able to stop a container from serving.
+
+    No minus sign is accepted either, which is why the floor is a second check and not the
+    only one: without the digit test a negative retention would move the retention window
+    into the future and sweep every row on the first write.
+
+    The warnings name the field and the bound and never the value, the rule every reader of an
+    admin value in this project follows (T-05-03).
+    """
+    source = os.environ if env is None else env
+    raw = (source.get(name) or "").strip()
+    if not raw:
+        return default
+    if not (raw.isascii() and raw.isdigit()):
+        logger.warning(
+            "%s is not a plain number, so the default of %s stays in force.", name, default
+        )
+        return default
+    try:
+        number = int(raw)
+    except ValueError:
+        logger.warning(
+            "%s is not a number this server can read, so the default of %s stays in force.",
+            name,
+            default,
+        )
+        return default
+    if number < floor:
+        logger.warning(
+            "%s is below the lowest value this server accepts (%s), so the default of %s "
+            "stays in force.",
+            name,
+            floor,
+            default,
+        )
+        return default
+    return number
 
 
 def _has_port(name: str) -> bool:

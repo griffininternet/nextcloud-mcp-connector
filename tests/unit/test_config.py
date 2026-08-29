@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from mcp_connector import config
+from mcp_connector.audit import store as audit_store
 from mcp_connector.errors import ToolError
 from mcp_connector.exapp import config_values
 from mcp_connector.oauth import registry
@@ -344,3 +345,146 @@ def test_the_switch_spellings_are_the_ones_the_form_and_the_registry_understand(
     assert config._FALSE_VALUES == config_values.FALSE_VALUES
     assert config._TRUE_VALUES == registry._TRUE_VALUES
     assert config._FALSE_VALUES == registry._FALSE_VALUES
+
+
+# --- the three variables of the audit log (D-09, D-14, AUDIT-03) ------------------
+
+
+def test_the_three_audit_variables_carry_the_names_the_rest_of_the_chain_expects() -> None:
+    """The spelling is pinned because two other places name it: ``KEY_TO_ENV`` maps the admin
+    field onto it, and ``docs`` will quote it. Unlike ``NC_MCP_TALK_SEND`` these three carry
+    no ``<environment-variables>`` entry in ``appinfo/info.xml`` yet, so the way an
+    administrator reaches the switch is the admin form of ``exapp/admin_settings.py`` and not
+    a deploy variable of a store installation.
+    """
+    assert config.ENV_AUDIT_LOG == "NC_MCP_AUDIT_LOG"
+    assert config.ENV_AUDIT_RETENTION_DAYS == "NC_MCP_AUDIT_RETENTION_DAYS"
+    assert config.ENV_AUDIT_MAX_BYTES == "NC_MCP_AUDIT_MAX_BYTES"
+
+
+def test_the_two_repeated_numbers_are_the_ones_the_store_ships_with() -> None:
+    """The test the comment above the two constants promises.
+
+    They stand twice because a ``from .audit import store`` in ``config.py`` would close an
+    import ring: ``store.py`` imports nothing but the standard library, but its package does
+    import this module. A test can import both sides without any of that, so the copy is held
+    equal here instead of being made unnecessary there.
+    """
+    assert config.AUDIT_RETENTION_DAYS == audit_store.RETENTION_DAYS
+    assert config.AUDIT_SIZE_LIMIT_BYTES == audit_store.SIZE_LIMIT_BYTES
+
+
+def test_without_the_variable_the_audit_log_is_off() -> None:
+    """D-14, the sentence the whole phase hangs on: nothing is recorded unless asked for.
+
+    This is also what the first start after an installation gets: AppAPI answers the admin
+    value read with 401 while the app is not enabled yet, the overlay is empty, and an empty
+    overlay lands exactly here.
+    """
+    assert config.audit_log_enabled({}) is False
+
+
+@pytest.mark.parametrize("raw", sorted(config._TRUE_VALUES))
+def test_every_understood_on_spelling_switches_the_audit_log_on(raw: str) -> None:
+    assert config.audit_log_enabled({config.ENV_AUDIT_LOG: raw}) is True
+
+
+@pytest.mark.parametrize("raw", sorted(config._FALSE_VALUES))
+def test_every_understood_off_spelling_leaves_the_audit_log_off(raw: str) -> None:
+    assert config.audit_log_enabled({config.ENV_AUDIT_LOG: raw}) is False
+
+
+@pytest.mark.parametrize("raw", ["ON", "True", "  on  ", "\tYES\n"])
+def test_an_on_spelling_is_read_without_regard_to_case_or_padding(raw: str) -> None:
+    assert config.audit_log_enabled({config.ENV_AUDIT_LOG: raw}) is True
+
+
+@pytest.mark.parametrize("blank", ["", "   ", "\t\n"])
+def test_a_blank_audit_value_counts_as_unset(blank: str) -> None:
+    assert config.audit_log_enabled({config.ENV_AUDIT_LOG: blank}) is False
+
+
+@pytest.mark.parametrize("raw", ["vielleicht", "maybe", "enabled", "2", "-1", "onoff"])
+def test_a_typo_never_switches_the_audit_log_on(raw: str, caplog: pytest.LogCaptureFixture) -> None:
+    """The opposite direction of ``talk_send_enabled``, and the reason it is the opposite.
+
+    There a typo must not take a promised capability away, so an unreadable value stays on.
+    Here a typo must not start a record about named people, so an unreadable value stays off.
+    The warning names the field and never the value: it may have arrived over HTTP.
+    """
+    with caplog.at_level(logging.WARNING, logger="mcp_connector.config"):
+        assert config.audit_log_enabled({config.ENV_AUDIT_LOG: raw}) is False
+
+    logged = " ".join(record.getMessage() for record in caplog.records)
+    assert config.ENV_AUDIT_LOG in logged
+    assert raw not in logged
+
+
+def test_the_audit_switch_reads_the_process_environment_when_no_mapping_is_given(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The same shape every other reader of this module has, so no caller is a special case."""
+    monkeypatch.setenv(config.ENV_AUDIT_LOG, config_values.SWITCH_ON)
+    assert config.audit_log_enabled() is True
+
+    monkeypatch.delenv(config.ENV_AUDIT_LOG)
+    assert config.audit_log_enabled() is False
+
+
+def test_the_retention_window_defaults_to_the_number_the_store_ships_with() -> None:
+    assert config.audit_retention_days({}) == 180
+
+
+@pytest.mark.parametrize(("raw", "expected"), [("180", 180), ("365", 365), ("3650", 3650)])
+def test_a_retention_window_at_or_above_the_floor_is_taken(raw: str, expected: int) -> None:
+    """Longer than asked for is the administrator's decision and nothing here argues."""
+    assert config.audit_retention_days({config.ENV_AUDIT_RETENTION_DAYS: raw}) == expected
+
+
+@pytest.mark.parametrize("raw", ["0", "1", "10", "179"])
+def test_a_retention_window_below_the_floor_is_refused(
+    raw: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    """AUDIT-03 asks that the window can reach 180 days, so a smaller one breaks it."""
+    with caplog.at_level(logging.WARNING, logger="mcp_connector.config"):
+        assert config.audit_retention_days({config.ENV_AUDIT_RETENTION_DAYS: raw}) == 180
+
+    logged = " ".join(record.getMessage() for record in caplog.records)
+    assert config.ENV_AUDIT_RETENTION_DAYS in logged
+
+
+def test_the_size_limit_defaults_to_the_number_the_store_ships_with() -> None:
+    assert config.audit_size_limit({}) == 100_000_000
+
+
+def test_a_size_limit_above_the_floor_is_taken() -> None:
+    assert config.audit_size_limit({config.ENV_AUDIT_MAX_BYTES: "250000000"}) == 250_000_000
+
+
+@pytest.mark.parametrize("raw", ["0", "1", "999999"])
+def test_a_size_limit_below_the_floor_is_refused(raw: str) -> None:
+    """A mistyped few bytes would sweep every row away the moment it was written."""
+    assert config.audit_size_limit({config.ENV_AUDIT_MAX_BYTES: raw}) == 100_000_000
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["", "   ", "abc", "-5", "12.5", "1_000", "180 days", "²", "١٢٣", "9" * 5000],
+)
+def test_no_audit_number_ever_raises_on_a_string(raw: str) -> None:
+    """Read at startup, so a refused value must never keep a container from serving.
+
+    The last three are the ones ``str.isdigit`` alone would let through: a superscript, the
+    Arabic-Indic digits and a run longer than the integer conversion limit of Python 3.11.
+    """
+    assert config.audit_retention_days({config.ENV_AUDIT_RETENTION_DAYS: raw}) == 180
+    assert config.audit_size_limit({config.ENV_AUDIT_MAX_BYTES: raw}) == 100_000_000
+
+
+def test_the_audit_numbers_read_the_process_environment_when_no_mapping_is_given(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(config.ENV_AUDIT_RETENTION_DAYS, "400")
+    monkeypatch.setenv(config.ENV_AUDIT_MAX_BYTES, "200000000")
+    assert config.audit_retention_days() == 400
+    assert config.audit_size_limit() == 200_000_000
