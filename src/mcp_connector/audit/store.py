@@ -51,6 +51,8 @@ __all__ = [
     "CANONICAL_FIELDS",
     "CHAIN_INSTANCE",
     "CLIENT_NAME_LIMIT",
+    "FINDING_MISSING",
+    "FINDING_MODIFIED",
     "GENESIS",
     "KIND_CALL",
     "KIND_SWITCH",
@@ -65,6 +67,7 @@ __all__ = [
     "SWEEP_USER_CHECK_EVERY",
     "USER_SILENCE_DAYS",
     "AuditStore",
+    "ChainFinding",
     "Entry",
     "used_bytes",
     "user_chain",
@@ -162,6 +165,17 @@ OUTCOME_OK = "ok"
 OUTCOME_REJECTED = "rejected"
 OUTCOME_FAILED = "failed"
 
+# --- what a check can find ----------------------------------------------------------------
+# Two kinds, deliberately told apart: "somebody edited this row" and "something is gone or was
+# pushed in between these two rows" are different events with different answers, and a check
+# that only shouts "broken" leaves the administrator with the whole file to look at.
+
+#: The row does not match its own hash: it was changed after it was written.
+FINDING_MODIFIED = "modified"
+
+#: The row does not point at its predecessor: a row between the two is gone or was inserted.
+FINDING_MISSING = "missing"
+
 #: The schema of 18-RESEARCH.md §4, plus the three columns that are here from the first
 #: version rather than through a later migration: ``actor`` (D-16) and the two a marker for
 #: a gap needs (``gap_chain``, ``gap_hash``). ``CREATE TABLE IF NOT EXISTS`` is the whole
@@ -246,6 +260,12 @@ _LAST_ROW_OF_CHAIN = f"SELECT {_COLUMNS} FROM entries WHERE chain = ? ORDER BY s
 _LAST_ROW_OF_KIND = (
     f"SELECT {_COLUMNS} FROM entries WHERE chain = ? AND kind = ? ORDER BY seq DESC LIMIT 1"  # noqa: S608 - same column names, same placeholders
 )
+_CHAINS = "SELECT DISTINCT chain FROM entries ORDER BY chain"
+_ROWS_OF_CHAIN = f"SELECT {_COLUMNS}, prev_hash, hash FROM entries WHERE chain = ? ORDER BY seq"  # noqa: S608 - same column names, no value in the statement
+_EXPLAINED_GAPS = (
+    "SELECT gap_chain, gap_hash FROM entries "
+    "WHERE chain = ? AND kind = ? AND gap_chain IS NOT NULL AND gap_hash IS NOT NULL"
+)
 
 
 def _now() -> int:
@@ -278,6 +298,28 @@ class Entry:
     removed: int | None = None
     gap_chain: str | None = None
     gap_hash: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ChainFinding:
+    """One broken place in one chain, as data and never as a finished sentence.
+
+    The wording an administrator reads is built by the check command (plan 18-08), so the
+    same finding can also be handed out machine readable. What stands here is only what was
+    measured: which chain, which of the two kinds, and the number or the pair of numbers the
+    place is between.
+
+    ``kind`` is :data:`FINDING_MODIFIED` for a row whose content no longer matches its own
+    hash; ``seq`` is that row. It is :data:`FINDING_MISSING` for a row that does not point at
+    its predecessor; ``seq`` is the row before the gap and ``next_seq`` the row after it.
+    ``next_seq`` stays ``None`` when the gap is at the head of the chain, because there is no
+    row before it to name.
+    """
+
+    chain: str
+    kind: str
+    seq: int
+    next_seq: int | None = None
 
 
 def _canonical(fields: tuple[Any, ...]) -> bytes:
@@ -386,6 +428,59 @@ def _next_seq(conn: sqlite3.Connection) -> int:
     return (row[0] if row is not None else 0) + 1
 
 
+def _explained_gaps(conn: sqlite3.Connection) -> dict[str, set[str]]:
+    """Every gap the instance chain explains, from chain identifier to the ends it names.
+
+    Read **once** per check and not once per chain: a marker for a gap stands in the instance
+    chain (D-10, D-12), so every chain would otherwise ask the same question again, and at the
+    upper bound of this store there are chains enough for that to be the whole cost.
+    """
+    gaps: dict[str, set[str]] = {}
+    for gap_chain, gap_hash in conn.execute(_EXPLAINED_GAPS, (CHAIN_INSTANCE, KIND_TOMBSTONE)):
+        gaps.setdefault(gap_chain, set()).add(gap_hash)
+    return gaps
+
+
+def _first_finding(
+    conn: sqlite3.Connection, chain: str, explained: set[str]
+) -> ChainFinding | None:
+    """The first broken place of one chain, or ``None`` when the chain is whole.
+
+    The rows are walked in batches of :data:`SWEEP_BATCH_ROWS` and not read in one go: at the
+    upper bound this table holds in the order of half a million rows, and the memory of the
+    container is not a number to guess at. The walk stops at the first finding of this chain,
+    because everything after a break is a consequence of it and not a second event.
+    """
+    cursor = conn.execute(_ROWS_OF_CHAIN, (chain,))
+    expected: bytes | None = None
+    previous_seq = 0
+    while True:
+        batch = cursor.fetchmany(SWEEP_BATCH_ROWS)
+        if not batch:
+            return None
+        for row in batch:
+            seq: int = row[0]
+            previous_hash: bytes = row[-2]
+            stored: bytes = row[-1]
+            # First the content of the row: it carries its own hash over its own fields, so
+            # this half needs no neighbour and says "this row was changed after the fact".
+            recomputed = hashlib.sha256(_canonical(row[: len(CANONICAL_FIELDS)]) + previous_hash)
+            if recomputed.digest() != stored:
+                return ChainFinding(chain, FINDING_MODIFIED, seq=seq)
+            if expected is None:
+                # The head of the chain, and the one place where a marker for a gap is the
+                # difference between an explained and an unexplained hole: the first row may
+                # point at the genesis value, or at the end of a block that gave way and that
+                # the instance chain names.
+                if previous_hash != GENESIS and previous_hash.hex() not in explained:
+                    return ChainFinding(chain, FINDING_MISSING, seq=seq)
+            elif previous_hash != expected:
+                # Then the link: between these two numbers something was removed or pushed in.
+                return ChainFinding(chain, FINDING_MISSING, seq=previous_seq, next_seq=seq)
+            expected = stored
+            previous_seq = seq
+
+
 class AuditStore:
     """The audit log, bound to one file.
 
@@ -441,6 +536,33 @@ class AuditStore:
             parameters: tuple[Any, ...] = (chain,) if kind is None else (chain, kind)
             row = conn.execute(statement, parameters).fetchone()
             return None if row is None else _entry_of_row(row)
+
+        return await self._read(work)
+
+    async def verify_chains(self) -> list[ChainFinding]:
+        """Walk every chain and name the first broken place of each one.
+
+        An untouched store answers with an empty list. Every chain is walked for itself, in
+        batches, and every chain contributes at most one finding: the first, because the rows
+        behind a break are its consequence.
+
+        **What this does not do.** A whole user chain that vanished does not catch its eye:
+        every chain stands for itself (D-02), so a table without ``u:alice`` looks exactly
+        like a table in which ``alice`` never called a tool. The only trace of such a chain is
+        a marker in the instance chain, and that trace is worth what the file it lives in is
+        worth: whoever can write this file can write a marker too, and a forged one is
+        indistinguishable from a real one (D-v1.5-02). This check finds the unnoticed change,
+        not the attacker who recomputes the chain.
+        """
+
+        def work(conn: sqlite3.Connection) -> list[ChainFinding]:
+            explained = _explained_gaps(conn)
+            findings: list[ChainFinding] = []
+            for (chain,) in conn.execute(_CHAINS).fetchall():
+                finding = _first_finding(conn, chain, explained.get(chain, set()))
+                if finding is not None:
+                    findings.append(finding)
+            return findings
 
         return await self._read(work)
 
