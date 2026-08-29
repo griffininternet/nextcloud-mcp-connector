@@ -6,9 +6,9 @@
 **AppAPI:** `app_api` 33.0.0, gelesen mit `occ app:list` derselben Instanz (mitgelieferte Serverapp, nicht aus dem App Store)
 **Diese ExApp:** 0.1.11, gelesen mit `occ app_api:app:list`, gleich der Fassung in `appinfo/info.xml`
 **`integration_openproject`:** 3.1.1, gelesen mit `occ app:list` derselben Instanz nach `occ app:install integration_openproject` am 2026-08-28. Das ist genau die Fassung, für die alle Zeilennummern und Quellenzitate dieses Berichts zu Weg 0 gelesen wurden (Plattformspanne `>=33.0.0 <35.0.0`); die Fassung nennt sich auch selbst so, im Capability-Abschnitt `integration_openproject.app_version` (siehe 2.1)
-**`user_oidc`:** noch nicht gemessen (Plan 17-07)
+**`user_oidc`:** 8.11.0, gelesen mit `occ app:list` derselben Instanz nach `occ app:install user_oidc` am 2026-08-29. Das ist genau die Fassung, für die die Zeilennummern zu `TokenService.php` und zu den drei Listenern gelesen wurden. `integration_openproject` 3.1.1 verlangt mindestens 7.2.0 (`Application.php:70`, `MIN_SUPPORTED_USER_OIDC_APP_VERSION`); die Installation wurde von Nextcloud 33.0.7 nicht abgewiesen
 **OpenProject:** 17.7.2 (Community-Bildmarke `openproject/openproject:17.7.2`, Digest `sha256:19a828d6`, Image erstellt am 2026-08-13, gelesen mit `docker image inspect`). Die Instanz nennt dieselbe Fassung selbst: `MAJOR = 17`, `MINOR = 7`, `PATCH = 2` in `/app/lib/open_project/version.rb` des laufenden Containers. Die `coreVersion` aus `GET /api/v3` ist nachgetragen und lautet `17.7.2`, gelesen mit dem API-Schlüssel des Kontos `admin` am 2026-08-28; unauthentifiziert antwortet derselbe Aufruf mit 401, `instanceName` ist `OpenProject`. Damit nennen drei voneinander unabhängige Stellen dieselbe Fassung: der Digest der Bildmarke, die Quelldatei im Container und die API der laufenden Instanz
-**Keycloak:** noch nicht gemessen (Plan 17-07)
+**Keycloak:** 26.7.0 (Bildmarke `quay.io/keycloak/keycloak:26.7.0`, Digest `sha256:0f198be2`, Image erstellt am 2026-07-23, gelesen mit `docker image inspect`). Die Instanz nennt dieselbe Fassung selbst, an zwei Stellen: `kc.sh --version` im laufenden Container antwortet `Keycloak 26.7.0`, und die Startzeile des Protokolls lautet `Keycloak 26.7.0 on JVM (powered by Quarkus 3.33.2.1)`. Gefahren als `start-dev` auf der Datenbank im Arbeitsspeicher, ausschließlich für die Messung von S5
 **Deploy-Daemon:** HaRP, gemessen als `harp_proxy_docker` mit Deploy-ID `docker-install` und `NC Url http://caddy`. Die Bildmarke `ghcr.io/nextcloud/nextcloud-appapi-harp:release` ist gleitend, deshalb steht hier die gelaufene Fassung als Digest und nicht als Tag: `sha256:3b335650`, Image erstellt am 2026-08-14, gelesen mit `docker image inspect`
 **Scope:** gemessen wird zweierlei: erstens die Installierbarkeit dieser App in einer openDesk-Umgebung, ausschließlich aus öffentlich ladbaren Quellen an festen Tags, zweitens die beiden Zugriffswege auf die Nutzeridentität gegen OpenProject, lokal in Docker mit gepinnten Fassungen. Ausdrücklich nicht gemessen wird: kein Kubernetes-Cluster wird beschafft, keine openDesk-Installation wird versucht, und es entsteht kein Produktionscode. Die Werkzeugoberfläche und das Budget-Gate der ausgelieferten App stehen in dieser Phase still.
 
@@ -217,10 +217,11 @@ Die Trennung, die dieser Bericht durchhält: alles in Abschnitt 1 ist aus openDe
 
 ### 2.1 Weg 0: Behauptungen S1 bis S6, je Behauptung Messweg, Messwert, Gegenprobe
 
-**Teilweise gemessen am 2026-08-28.** Dieser Abschnitt füllt sich über drei Plänen: die Installation
-der App und der Capability-Befund sowie S1, S2 und die Egress-Kontrolle stehen hier (17-05), S3, S4
-und S6 sind dazugekommen (17-06), S5 folgt in 17-07. Jede Zeile, die noch keinen Wert trägt, sagt das
-mit `noch nicht gemessen` und nennt den Plan; keine Zeile trägt einen Wert aus der Recherche.
+**Vollständig gemessen, zuletzt am 2026-08-29.** Dieser Abschnitt ist über drei Pläne entstanden: die
+Installation der App und der Capability-Befund sowie S1, S2 und die Egress-Kontrolle stehen hier
+(17-05), S3, S4 und S6 sind dazugekommen (17-06), S5a bis S5c mit Stufe C der Messumgebung (17-07).
+Damit trägt jede Behauptung von S0 bis S6 einen Messwert; keine Zeile trägt einen Wert aus der
+Recherche.
 
 #### Die installierte Fassung, und warum sie hier zuerst steht
 
@@ -731,6 +732,153 @@ unverändert gilt, ist die Aussage dahinter: die Verbindung von `alice` ist unve
 nach diesem Nachtrag sogar belegter als vorher, weil sie gerade eben eine Erneuerung durchlaufen hat.
 Plan 17-07 findet ein verbundenes und frisch erneuertes Konto vor.
 
+#### S5a, S5b und S5c: das Verhalten im Modus `oidc` nach Ablauf, und welcher der drei Pfade bricht
+
+**Behauptung:** Die serverseitige Token-Erneuerung, die S4 im Modus `oauth2` belegt, hält im
+OIDC-gebundenen Betrieb nicht, und der Aufruf fällt nach Ablauf des zwischengespeicherten Tokens auf
+401. Offen sind drei Fragen: welcher der drei Ereignispfade aus K5 dabei bricht (S5a, S5b), und ob
+`IUserSession::isLoggedIn()` unter AppAPI-Impersonation überhaupt `true` liefert oder der Bruch schon
+davor liegt (S5c).
+
+**Gemessen am 2026-08-29, ja, alle drei.** Der Loglevel stand vor dem ersten Lauf auf `Debug (0)`
+(`occ log:manage --level 0`), weil die Zeilen, die die Pfade unterscheiden, `logger->debug` sind und
+der Vorgabewert `Warning (2)` sie verschluckt. Ohne diesen Schritt wäre jeder der sechs Läufe unten als
+nackte 401 ohne Ursache im Bericht gelandet.
+
+**Die zwei Konten dieses Abschnitts, weil kein Messwert ohne seinen Nutzernamen gilt.** `alice` ist das
+Nextcloud-Konto aus 17-05 mit dem gespeicherten `oauth2`-Tokenpaar. Daneben steht das Konto, das
+`user_oidc` bei der ersten Anmeldung über Keycloak selbst anlegt, und seine Id ist nicht `alice`,
+sondern der Streuwert `3855a8f7d81aae5de814f2a6d77bd149591983992337ec676fb84ebda333cfe3` mit dem
+Anzeigenamen `Alice Spike`; die Tabellen kürzen ihn zu `3855a8f7...`. Diese Unterscheidung ist kein
+Detail: wer S5 unter `alice` misst und das Ergebnis dem OIDC-Konto zuschreibt, misst zwei verschiedene
+Kontenzustände und hält sie für einen.
+
+**Die sechs Läufe.** Jeder Lauf ist derselbe OCS-Aufruf wie in S3 und S4
+(`GET /ocs/v2.php/apps/integration_openproject/api/v1/work-packages?searchQuery=SPIKE-OD-8471&isSmartPicker=true`),
+unter reiner AppAPI-Impersonation, ohne Cookie und ohne App-Passwort, jeweils nach
+`occ user:setting <konto> integration_openproject token_expires_at 0`. `authorization_method` steht in
+allen sechs auf `oidc`.
+
+| # | `sso_provider_type` | `token_exchange` | `store_login_token` | Konto | HTTP, Bytes | wörtliche Log-Zeile (Messwert) | Zustand danach | Urteil |
+|---|---|---|---|---|---|---|---|---|
+| 1 (S5a) | `external` | `0` | `1` | `3855a8f7...` | **401**, 77 | `[ExternalTokenRequestedListener] received request`, dann `[TokenService] Get token from the session`, dann `[TokenService] getToken: no session data`, dann `Token event has not been caught by 'user_oidc'` | kein `token`, `token_expires_at` bleibt `0` | der Sitzungspfad bricht, und zwar am fehlenden Sitzungstoken |
+| 2 (S5a) | `external` | `0` | `0` | `3855a8f7...` | **401**, 77 | `[ExternalTokenRequestedListener] received request`, dann `Failed to get token: Failed to get external token, login token is not stored` | unverändert | derselbe Pfad, andere Bruchstelle: die Vorbedingung greift vor der Sitzungsfrage |
+| 3 (S5b) | `external` | `1` | `0` | `3855a8f7...` | **401**, 77 | `[ExchangedTokenRequestedListener] received request for audience: openproject`, dann `Failed to get token: Failed to exchange token, storing the login token is disabled. It can be enabled in config.php` | unverändert | `TokenService.php:318`, live reproduziert |
+| 4 (S5b) | `external` | `1` | `1` | `3855a8f7...` | **401**, 77 | `[TokenService] Starting token exchange`, `[TokenService] Get token from the session`, `[TokenService] getToken: no session data`, `[TokenService] Failed to exchange token, no login token found in the session` | unverändert | `TokenService.php:328`, live reproduziert, und das ist die in `research/SUMMARY.md` vermutete Bruchstelle |
+| 5 (Kontrolle) | `nextcloud_hub` | `0` | `1` | `3855a8f7...` | **401**, 77 | `[InternalTokenRequestedListener] received request for audience: openproject`, dann `[TokenService] Failed to get token from Oidc provider app, oidc app is not installed` | unverändert | der Pfad stellt die Sitzungsfrage nicht und bricht an einer ganz anderen Stelle, siehe unten |
+| 6 (Kontrolle) | `external` | `0` | `1` | `alice` | **401**, 77 | `Token has expired.`, `Refreshing access token.`, dann `[ExternalTokenRequestedListener] received request`, `[TokenService] getToken: no session data`, `Token event has not been caught by 'user_oidc'` | `token` unverändert (Länge 43, Präfix `Jm2D`), `token_expires_at` bleibt `0` | derselbe Aufruf, dasselbe Konto und derselbe künstliche Ablauf wie in S4, nur der Modus ist anders |
+
+Der Körper der 401 ist in allen sechs Zeilen derselbe und 77 Bytes lang:
+`{"ocs":{"meta":{"status":"failure","statuscode":401,"message":""},"data":""}}`. Das ist genau die
+Antwortform aus `validatePreRequestConditions()`, die 17-05 für `carol` und 17-06 für die
+S4-Gegenprobe gemessen hat; nach dem Kriterium aus dem Kopf dieses Berichts ist sie antwortender
+App-Code und kein Erreichbarkeitsproblem.
+
+**Zeile 6 ist die Zeile, an der Weg 0 kippt, und sie steht neben der S4-Zeile derselben Kette.**
+Dasselbe Konto, derselbe Aufruf, derselbe gestellte Ablauf, nur `authorization_method` unterscheidet
+sich:
+
+| | Modus `oauth2` (S4, 17-06) | Modus `oidc` (S5, dieser Plan) |
+|---|---|---|
+| Aufruf | **200**, ein Treffer, 4746 Bytes | **401**, 77 Bytes, `statuscode 401`, leere Meldung |
+| `token_expires_at` danach | `1787950505`, also **+7200 s** | bleibt **`0`** |
+| `token` danach | neues Paar, anderes Präfix | **unverändert** |
+| Protokollspur | `Failed to refresh token` nur in der Gegenprobe, der geglückte Lauf ist stumm | vier Zeilen, die die Ursache benennen |
+
+Damit ist der Kommentar der Upstream-Entwickler in
+`lib/Service/OpenProjectAPIService.php:1764-1765` nicht mehr nur zitiert, sondern beidseitig gemessen:
+im Modus `oauth2` erneuert die App serverseitig, im Modus `oidc` verlangt sie eine Sitzung, die eine
+ExApp unter Impersonation nicht hat.
+
+##### S5c: die Vorbedingung, die vor allen drei Pfaden steht, ist erfüllt
+
+Die entscheidende Beobachtung ist die, die man leicht übersieht, weil sie eine Anwesenheit statt einer
+Abwesenheit ist: **in jedem der sechs Läufe erscheint eine Listener-Zeile.** Die Prüfung
+`if (!$this->userSession->isLoggedIn()) { return; }`, die in allen drei Listenern vor der ersten
+Log-Zeile steht, hat also `true` geliefert. `OC::tryAppAPILogin` löst unter AppAPI-Impersonation eine
+Nutzersitzung auf, die `IUserSession::isLoggedIn()` als angemeldet zählt.
+
+**S5c ist damit beantwortet, und die Antwort ist der eine der beiden Ausgänge aus Annahme A9, der die
+Diagnose der Ausgangsrecherche bestätigt statt sie zu ersetzen:** der Bruch liegt **nicht** vor der
+Sitzungsfrage, sondern genau an ihr. Der Sitzungsspeicher trägt unter Impersonation kein Token
+(`SESSION_TOKEN_KEY` leer), und das protokolliert `user_oidc` wörtlich als
+`[TokenService] getToken: no session data`.
+
+**Eine Zeile aus demselben Protokoll, die man nicht mit S5c verwechseln darf.** In den Läufen erscheint
+außerdem, aus einem anderen Aufrufweg desselben Zeitfensters,
+`[TokenService] checkLoginToken: user not logged in`. Sie stammt nicht aus einem der drei Listener und
+sagt über `isLoggedIn()` im Ereignispfad nichts: die Listener-Zeile im selben Lauf beweist das
+Gegenteil für den Pfad, um den es geht. Wer nur nach der Zeichenkette `not logged in` greift, liest
+S5c genau falsch herum.
+
+##### Die drei Ereignispfade aus K5, vollständig, mit dem getroffenen Pfad markiert
+
+| Pfad | `sso_provider_type` | `token_exchange` | Ereignis und Listener | Braucht eine Sitzung? | In dieser Messung |
+|---|---|---|---|---|---|
+| 1 | `nextcloud_hub` | (nicht gelesen) | `InternalTokenRequestedEvent`, `InternalTokenRequestedListener` ruft `TokenService::getTokenFromOidcProviderApp($userId, ...)` mit einer Nutzer-Id | **nein**, dieser Pfad bricht an der Sitzungsfrage nicht | Lauf 5: der Listener läuft und stellt die Sitzungsfrage nicht, bricht aber hier an `oidc app is not installed`. **Ungemessen bleibt, ob er ein Token liefern würde**, weil die Server-App `oidc` (Nextcloud Hub als Anbieter) in dieser Umgebung nicht installiert ist |
+| 2 | `external` | falsch | `ExternalTokenRequestedEvent`, `ExternalTokenRequestedListener`: ohne `store_login_token` `GetExternalTokenFailedException`, sonst `TokenService::getToken()` aus `SESSION_TOKEN_KEY` | **ja** | **getroffen**, Läufe 1, 2 und 6 |
+| 3 | `external` | wahr | `ExchangedTokenRequestedEvent`, `TokenService::getExchangedToken()`: verlangt `store_login_token` (`TokenService.php:316-322`), danach `getToken()` aus der Sitzung (`TokenService.php:325-333`) | **ja** | **getroffen**, Läufe 3 und 4 |
+
+Beide sitzungsgebundenen Pfade sind also getroffen und beide brechen, jeder mit seiner eigenen,
+wörtlich unterscheidbaren Meldung. Der sitzungsfreie Pfad ist angelaufen, aber seine eigentliche Frage
+bleibt hier offen; er steht in dieser Tabelle vollständig, damit der Bericht ihn nicht verschweigt und
+auch nicht mehr behauptet, als gemessen ist.
+
+**Eine Diskrepanz, die beim Nachfahren Zeit kostet und deshalb hier steht.** Die Meldung aus Lauf 3
+sagt wörtlich `It can be enabled in config.php`. Der Quellcode liest den Wert aber als App-Konfigwert
+(`TokenService.php:316`, `appConfig->getValueString(..., 'store_login_token', '0', lazy: true)`), und
+gesetzt wurde er hier mit `occ config:app:set user_oidc store_login_token --value=1`. Der Weg über
+`config.php` ist nicht der einzige und für ein Skript nicht der richtige.
+
+##### Die Gegenprobe: derselbe Aufruf mit einer echten Sitzung aus der Keycloak-Anmeldung
+
+Ohne diese Gegenprobe wäre jede 401 oben auch mit einer kaputten Keycloak-Kopplung erklärbar. Gefahren
+ist deshalb derselbe Aufruf mit dem Sitzungscookie aus einer echten Anmeldung des Kontos `3855a8f7...`
+über Keycloak, bei sonst identischer Konfiguration (`external`, `token_exchange 0`,
+`store_login_token 1`):
+
+| Beobachtung | Messwert |
+|---|---|
+| HTTP, Bytes | **401**, **341** Bytes, also ein **anderer** Körper als die 77 oben |
+| Körper | `ocs.data.error` mit `"errorIdentifier":"urn:openproject-org:api:v3:errors:Unauthenticated"` |
+| Sitzungsfrage | `[TokenService] getToken: token is still valid, it expires in 300 and refresh expires in 1800`, also **Sitzungsdaten vorhanden** |
+| Erneuerung in `user_oidc` | `[TokenService] Refreshing the token: http://kc.localtest.me:8083/realms/spike/protocol/openid-connect/token`, dann `[TokenService] ---- Refresh token success`, dann `[TokenService] Store token in the session` |
+| Übernahme in `integration_openproject` | `New token expires at 2026/08/29 02:38:56`, und danach steht am Konto ein `token` der Länge **1387** in JWT-Form mit `token_expires_at 1787971136` |
+| Wo es endet | `OpenProject error : Client error: GET http://op.localtest.me:8082/api/v3/users/me resulted in a 401 Unauthorized response` |
+
+**Die Gegenprobe gelingt an der Stelle, um die es geht, und sie liefert keine Daten, und beides gehört
+in denselben Satz.** Sie gelingt an der Sitzungsfrage: dieselbe Konfiguration, dasselbe Konto,
+derselbe Aufruf, und `getToken()` findet Daten statt `no session data`. Damit ist die einzige
+Variable zwischen Hauptlauf und Gegenprobe das Sitzungscookie, und die Ursache der 401 in den Läufen 1
+bis 6 ist gemessen und nicht erschlossen. Sie liefert keine Daten, weil OpenProject in dieser
+Umgebung an dieselbe Keycloak-Instanz **nicht** gebunden ist: ein eigener Keycloak-Client für
+OpenProject als Dienstkonto ist in `REQUIREMENTS.md` ausdrücklich Out of Scope, der Client
+`openproject` in der Realm ist ausschließlich Zielgruppe des Austauschs. Deshalb weist OpenProject das
+sonst gültige Token mit `urn:openproject-org:api:v3:errors:Unauthenticated` ab.
+
+**Der Hauptlauf trägt damit den Vermerk: gegengeprobt auf die Sitzungsfrage, nicht gegengeprobt auf die
+Datenlieferung.** Was S5 behauptet, ist die Sitzungsfrage, und die ist gegengeprobt. Was S5 nicht
+behauptet und hier auch nicht belegt ist: dass ein OIDC-gebundenes Weg 0 mit einer Sitzung Daten
+liefert.
+
+##### Der Befund, der die Behauptung von S5 am schärfsten fasst
+
+Zwei Läufe desselben Kontos, ohne Cookie, mit derselben Konfiguration, unterschieden nur dadurch, ob
+der zwischengespeicherte Token noch gilt:
+
+| Lauf, beide unter reiner Impersonation als `3855a8f7...` | `token_expires_at` beim Aufruf | HTTP, Bytes | `user_oidc` im Protokoll |
+|---|---|---|---|
+| Zwischenspeicher **gültig** (`1787971136`, Aufruf um `1787970877`) | 259 s in der Zukunft | **401**, **341** | **keine Zeile**, kein Ereignis, kein Listener |
+| Zwischenspeicher **abgelaufen** (auf `0` gestellt) | abgelaufen | **401**, **77** | vier Zeilen, endend in `no session data` |
+
+Der Grund steht in `getAccessToken()` an `v3.1.1`, Zeile 1748: liegt ein Token vor und ist es nicht
+abgelaufen, gibt die Methode es zurück, ohne `user_oidc` überhaupt zu fragen. **Weg 0 trägt im Modus
+`oidc` also genau so lange, wie der zwischengespeicherte Token gilt, und fällt danach auf 401.** Das
+ist die Behauptung S5 in ihrer schärfsten Form, und sie ist mit einem Paar von Läufen belegt, das sich
+in einer einzigen Zahl unterscheidet. Die 341 Bytes der ersten Zeile sind dabei kein Erfolg, sondern
+die Abweisung durch OpenProject aus der Gegenprobe oben; die Aussage dieser Tabelle ist allein, dass
+`user_oidc` im ersten Fall gar nicht befragt wird.
+
 #### S6: die Byte-Kosten und der Feldsatz einer Antwort
 
 **Behauptung:** Eine Antwort der Suchfläche trägt in kompakter Form die Felder, aus denen ein späteres
@@ -832,7 +980,9 @@ Arbeitspaket zu Datei, die `research/FEATURES.md` als Unterscheidungsmerkmal nen
 | **S2** | Die Berechtigung hängt am Nutzer, nicht an der App | **gemessen, ja.** `carol` 401 mit leerer Meldung aus der Vorprüfung, `alice` und `bob` je 200 mit Daten; die zwei 401-Formen sind unterscheidbar |
 | **S3** | Konto A sieht in der Suche kein Arbeitspaket, das nur Konto B sehen darf | **gemessen, ja.** `alice` 200 mit 0 Treffern, `bob` 200 mit genau einem (`id 38`); Gegenproben: `Demo` liefert `alice` 14 Treffer ohne die 38, 64 Nullen 401/997, `carol` 401 mit leerer Meldung |
 | **S4** | Nach künstlichem Ablauf antwortet der nächste Aufruf wieder mit Daten, ohne Browsersitzung | **gemessen, ja, und zweimal.** Gestellt an `bob`: `token_expires_at` 1787949020, künstlich 0, danach 1787950505 (7200 s), Aufruf dazwischen 200 mit einem Treffer, Tokenpaar ausgetauscht, kein Cookie und kein App-Passwort; Gegenprobe mit unbrauchbarem `refresh_token`: **401** samt `invalid_grant` im Protokoll. **Natürlich verstrichen an `alice`** (Nachtrag 29.08., kein `occ`-Eingriff): Ablauf 19623 s alt, Aufruf **200** mit einem Treffer, danach 1787975808 (7176 s). Der gestellte und der echte Ablauf sind gemessen deckungsgleich |
-| **S5a/b/c** | Verhalten im Modus `oidc` nach Ablauf, drei Pfade | noch nicht gemessen, Plan 17-07 |
+| **S5a** | Im Modus `oidc`, Pfad `external` ohne Austausch, fällt der Aufruf nach Ablauf auf 401 | **gemessen, ja.** 401 mit 77 Bytes und leerer Meldung, `token_expires_at` bleibt `0`, Token unverändert. Mit `store_login_token 1`: `[ExternalTokenRequestedListener] received request` und `[TokenService] getToken: no session data`; mit `0`: `Failed to get external token, login token is not stored` |
+| **S5b** | Derselbe Bruch auf dem Pfad `external` **mit** Austausch, mit zwei unterscheidbaren Meldungen | **gemessen, ja, beide wörtlich.** `Failed to exchange token, storing the login token is disabled. It can be enabled in config.php` (`TokenService.php:318`) und `Failed to exchange token, no login token found in the session` (`TokenService.php:328`) |
+| **S5c** | Liefert `isLoggedIn()` unter AppAPI-Impersonation `true`, oder bricht es schon davor? | **gemessen: `true`.** In jedem der sechs Läufe erscheint eine Listener-Zeile, also hat `if (!$this->userSession->isLoggedIn()) { return; }` nicht gegriffen. Der Bruch liegt an der Sitzungsfrage und nicht davor; die Diagnose aus `research/SUMMARY.md` ist damit bestätigt und nicht ersetzt. Gegenprobe mit echter Keycloak-Sitzung: derselbe Aufruf findet Sitzungsdaten (`token is still valid, it expires in 300`), gegengeprobt ist damit die Sitzungsfrage und nicht die Datenlieferung |
 | **S6** | Eine Antwort trägt die Felder für ein späteres Werkzeug in kompakter Form | **gemessen.** 4746 Bytes als `bob`, ohne Leerraum, davon 3895 in 49 Relationen und 585 in 24 Feldern; Bezugsgröße API v3 roh 15831 gegen 88 Bytes mit `select`; Gegenprobe `alice` 2542 Bytes mit 27 Relationen. Vollständig in Abschnitt 3 |
 
 Der Ausgangszustand für S4 ist mit Plan 17-05 hergestellt und gelesen worden: `alice` und `bob` trugen
@@ -1201,6 +1351,28 @@ Loopback-Topologie zu erreichen wäre, und die dafür nötige Erlaubnisliste ist
 Containers setzbar. Gelaufen ist Weg B. Damit ist gemessen, dass die App im Modus `oauth2` gegen eine
 lokale Instanz arbeitet, und **nicht**, dass der openDesk-Bootstrap-Weg durchläuft. Die Ausformulierung
 dieses Abschnitts bleibt 17-09 überlassen.
+
+**Vorgemerkt aus Abschnitt 2.1, was von S5 auch bei gelungenen Läufen ungemessen bleibt.** Die sechs
+Läufe von S5 sind gemessen, und trotzdem bleibt an derselben Stelle drei Dinge offen, die ein Leser
+sonst aus ihnen herausliest:
+
+1. **Die Betriebsart, die openDesk wirklich fährt, ist unbekannt.** Der lokale Aufbau baut den
+   Anmeldezwang über Keycloak nur nach: eine eigene Realm, eine eigene Client-Kombination und ein
+   `sso_provider_type`, den dieser Bericht selbst gesetzt hat. Ob `integration_openproject` in
+   openDesk im Modus `oauth2` oder `oidc` läuft und, wenn `oidc`, auf welchem der drei Pfade, steht
+   als **Frage 7** in Abschnitt 4 und ist aus Quellen nicht entscheidbar (1.4). Ein Satz, der aus S5
+   auf openDesk schließt, überspringt genau diese Frage.
+2. **Der Pfad `nextcloud_hub` ist angelaufen, aber nicht zu Ende gemessen.** Er stellt die
+   Sitzungsfrage nachweislich nicht, bricht hier aber an `oidc app is not installed`, weil die
+   Server-App, die Nextcloud selbst zum Anbieter macht, in dieser Umgebung fehlt. Ob er ein Token
+   liefern würde, ist **ungemessen**; dass er an der Sitzung nicht scheitert, ist gemessen.
+3. **Die Datenlieferung mit einer Sitzung ist nicht gegengeprobt.** Die Gegenprobe belegt die
+   Sitzungsfrage und endet danach an OpenProject, das an dieselbe Keycloak-Instanz nicht gebunden ist.
+   Diese Bindung ist in `REQUIREMENTS.md` Out of Scope, und der Bericht behauptet deshalb nicht, dass
+   ein OIDC-gebundenes Weg 0 mit Sitzung Daten liefert.
+
+Die Ausformulierung dieses Abschnitts bleibt 17-09 überlassen; diese drei Punkte dürfen dabei nicht
+verloren gehen.
 
 ## 3. API-Form (Vorarbeit für OD-04, kein Requirement dieser Phase)
 
@@ -1667,6 +1839,214 @@ bleibt für ihren Zeitpunkt richtig; wer den Wert heute liest, findet den aus Ze
 Zeile 3 ist dieselbe, deren Byte- und Feldzahlen 5.5.3 unter `alice` führt: es ist **ein** Aufruf, der
 zwei Fragen beantwortet, und kein zweiter dafür gefahren worden.
 
+### 5.6 Stufe C: Keycloak, `user_oidc` und die Rohwerte von S5
+
+Gemessen am 2026-08-29. Alle Aufrufe gingen durch Caddy an `http://127.0.0.1:8091` oder an
+`http://kc.localtest.me:8083` (löst öffentlich auf `127.0.0.1` auf, im Nextcloud-Container über
+`extra_hosts` auf `172.29.43.10`). Es gilt die Geheimnisregel vom Kopf dieses Abschnitts: kein Token,
+kein Client-Secret, kein Cookie und kein Wert des Kopfes `AUTHORIZATION-APP-API` steht in einer Zeile.
+
+#### 5.6.1 Aufbau, nicht Messung
+
+Wie in 5.3 gilt auch hier: der folgende Aufbau ist **kein** Messwert. Er steht hier, damit ein
+Wiederholungslauf ihn ohne Raten nachfährt.
+
+| Schritt | Kommando oder Wert | Ergebnis |
+|---|---|---|
+| Keycloak gestartet | `docker compose -f compose.spike-opendesk.yml --profile op --profile oidc up -d` | `Keycloak 26.7.0 on JVM (powered by Quarkus 3.33.2.1) started in 15.852s` |
+| Realm und Clients | `kcadm.sh` im Container, nicht `--import-realm` | Realm `spike` aktiv; Clients `nextcloud` (vertraulich, Rückadresse `http://127.0.0.1:8091/*`) und `openproject` (nur Zielgruppe) |
+| Konten in der Realm | `kcadm.sh create users` plus `set-password` | `alice` und `bob`, beide aktiv, Passwörter in `.env.spike-opendesk` |
+| Client-Secret | `kcadm.sh get clients/<id>/client-secret` | **86 Zeichen**; nach `.env.spike-opendesk` als `KC_CLIENT_SECRET` geschrieben und mit dem laufenden Wert verglichen |
+| `user_oidc` installiert | `occ app:install user_oidc` | `user_oidc 8.11.0 installed`, `user_oidc enabled` |
+| Anbieter eingerichtet | `occ user_oidc:provider spike --clientid=nextcloud --clientsecret=... --discoveryuri=http://kc.localtest.me:8083/realms/spike/.well-known/openid-configuration --scope="openid email profile"` | `occ user_oidc:providers`: `identifier spike`, `clientId nextcloud`, Scope `openid email profile`, `clientSecret` vom Werkzeug selbst als `********` ausgegeben |
+| Sitzungstoken speichern | `occ config:app:set user_oidc store_login_token --value=1` | `1` |
+| Loglevel **vor** dem ersten Lauf | `occ log:manage --level 0` | `Log level: Debug (0)` |
+| Modus geschaltet | `occ config:app:set integration_openproject authorization_method --value=oidc`, dazu `sso_provider_type external`, `oidc_provider spike`, `targeted_audience_client_id openproject`, `token_exchange 0` | alle fünf zurückgelesen |
+
+**Zwei Erreichbarkeitswerte, die den Namen und nicht nur die Adresse prüfen** (dieselbe Regel wie in
+5.2):
+
+```
+GET http://kc.localtest.me:8083/realms/spike/.well-known/openid-configuration
+  vom Host:                        HTTP 200
+  aus dem Nextcloud-Container:     HTTP 200
+issuer im Dokument:                http://kc.localtest.me:8083/realms/spike
+```
+
+Der `issuer` trägt denselben Namen und denselben Port wie beide Aufrufe. Genau das ist der Punkt der
+Portabbildung 8083 innen wie außen.
+
+#### 5.6.2 Zwei Aufbaufehler, die keine S5-Befunde sind
+
+Beide sind hier protokolliert, weil sie beim Nachfahren je einen Anlauf kosten und beide wie ein
+Fehler des Produkts aussehen, ohne einer zu sein.
+
+| Fehlschlag | Wörtliche Meldung | Ursache und Auflösung |
+|---|---|---|
+| Keycloak startete nicht, Neustartschleife | `ERROR: Failed to start server in (development) mode` / `Provided hostname is neither a plain hostname nor a valid URL` | `KC_HOSTNAME` war als `kc.localtest.me:8083` gesetzt. 26.7.0 nimmt entweder einen Namen ohne Port oder eine vollständige URL. Aufgelöst mit `http://kc.localtest.me:8083` |
+| `GET /apps/user_oidc/login/1` antwortete **404** mit einer Fehlerseite | `You must access Nextcloud with HTTPS to use OpenID Connect.` | `LoginController::isSecure()` (`LoginController.php:121-126`) verlangt https, den Debug-Modus **oder** den App-Konfigwert `allow_insecure_http`. Aufgelöst mit `occ config:app:set user_oidc allow_insecure_http --value=1 --lazy`; danach antwortet derselbe Aufruf **303** auf den Autorisierungsendpunkt der Realm |
+
+Die zweite Zeile ist zugleich ein Befund über die Messumgebung und keiner über openDesk: dort trägt
+Nextcloud https, und die Bedingung fällt gar nicht an.
+
+#### 5.6.3 Die Nutzer-Id, unter der `user_oidc` das Konto führt
+
+Nach einer Anmeldung des Keycloak-Kontos `alice` durch den Autorisierungscode-Fluss (Start
+`GET /apps/user_oidc/login/1`, Anmeldeformular der Realm, Rückweg auf
+`http://127.0.0.1:8091/apps/user_oidc/code`) endete der Rückweg mit **303** auf
+`/apps/dashboard/`, und `GET /ocs/v2.php/cloud/user` mit demselben Cookie antwortete **200** mit
+`"backend":"user_oidc"`.
+
+```
+occ user:list
+  - admin: admin
+  - alice: alice
+  - 3855a8f7d81aae5de814f2a6d77bd149591983992337ec676fb84ebda333cfe3: Alice Spike
+  - bob: bob
+  - carol: carol
+```
+
+**Die Id weicht ab, und das ist der Grund, warum jede S5-Zeile ihren Nutzernamen nennt.** Das
+Keycloak-Konto `alice` und das Nextcloud-Konto `alice` sind zwei verschiedene Konten; `user_oidc`
+führt das erste unter dem Streuwert `3855a8f7d81aae5de814f2a6d77bd149591983992337ec676fb84ebda333cfe3`
+mit dem Anzeigenamen `Alice Spike`.
+
+#### 5.6.4 Die sechs Läufe von S5, Rohwerte
+
+Jeder Lauf: `occ user:setting <konto> integration_openproject token_expires_at 0`, danach
+`GET /ocs/v2.php/apps/integration_openproject/api/v1/work-packages?searchQuery=SPIKE-OD-8471&isSmartPicker=true`
+unter reiner AppAPI-Impersonation, danach die Zustandswerte erneut gelesen und das Protokoll ab der
+Zeilenzahl vor dem Aufruf frisch gelesen.
+
+| # | Unix-Zeit | `sso_provider_type` / `token_exchange` / `store_login_token` | Konto | Antwort | `token` danach | `token_expires_at` danach |
+|---|---|---|---|---|---|---|
+| 1 | 1787970751 | `external` / `0` / `1` | `3855a8f7...` | **401**, `application/json; charset=utf-8`, **77 Bytes** | nicht vorhanden | `0` |
+| 2 | 1787970764 | `external` / `0` / `0` | `3855a8f7...` | **401**, **77 Bytes** | nicht vorhanden | `0` |
+| 3 | 1787970773 | `external` / `1` / `0` | `3855a8f7...` | **401**, **77 Bytes** | nicht vorhanden | `0` |
+| 4 | 1787970781 | `external` / `1` / `1` | `3855a8f7...` | **401**, **77 Bytes** | nicht vorhanden | `0` |
+| 5 | 1787970800 | `nextcloud_hub` / `0` / `1` | `3855a8f7...` | **401**, **77 Bytes** | nicht vorhanden | `0` |
+| 6 | 1787970817 | `external` / `0` / `1` | `alice` | **401**, **77 Bytes** | Länge 43, Präfix `Jm2D`, unverändert | `0` |
+
+Der Körper ist in allen sechs Zeilen identisch:
+`{"ocs":{"meta":{"status":"failure","statuscode":401,"message":""},"data":""}}`.
+
+**Die Protokollzeilen dieser sechs Läufe, wörtlich und mit Stufe, Zeit und Konto.** Übernommen sind
+ausschließlich die Meldungen der Apps `user_oidc` und `integration_openproject`; die Kontextfelder mit
+Kopfzeilen sind nicht übernommen (T-17-01), und jede Zeile ist vor der Übernahme gegen jeden Wert aus
+`.env.spike-opendesk` geprüft worden.
+
+```
+# Lauf 1, external / token_exchange 0 / store_login_token 1, Konto 3855a8f7...
+level 0, 2026-08-29T02:32:32+00:00, user_oidc  "[ExternalTokenRequestedListener] received request"
+level 0, 2026-08-29T02:32:32+00:00, user_oidc  "[TokenService] Get token from the session"
+level 0, 2026-08-29T02:32:32+00:00, user_oidc  "[TokenService] getToken: no session data"
+level 3, 2026-08-29T02:32:32+00:00, integration_openproject
+                                               "Token event has not been caught by 'user_oidc'"
+
+# Lauf 2, external / 0 / 0
+level 0, 2026-08-29T02:32:44+00:00, user_oidc  "[ExternalTokenRequestedListener] received request"
+level 3, 2026-08-29T02:32:44+00:00, integration_openproject
+   "Failed to get token: Failed to get external token, login token is not stored"
+
+# Lauf 3, external / 1 / 0
+level 0, 2026-08-29T02:32:53+00:00, user_oidc
+   "[ExchangedTokenRequestedListener] received request for audience: openproject"
+level 3, 2026-08-29T02:32:53+00:00, integration_openproject
+   "Failed to get token: Failed to exchange token, storing the login token is disabled.
+    It can be enabled in config.php"
+
+# Lauf 4, external / 1 / 1
+level 0, 2026-08-29T02:33:01+00:00, user_oidc
+   "[ExchangedTokenRequestedListener] received request for audience: openproject"
+level 0, 2026-08-29T02:33:01+00:00, user_oidc  "[TokenService] Starting token exchange"
+level 0, 2026-08-29T02:33:01+00:00, user_oidc  "[TokenService] Get token from the session"
+level 0, 2026-08-29T02:33:01+00:00, user_oidc  "[TokenService] getToken: no session data"
+level 0, 2026-08-29T02:33:01+00:00, user_oidc
+   "[TokenService] Failed to exchange token, no login token found in the session"
+level 3, 2026-08-29T02:33:01+00:00, integration_openproject
+   "Failed to get token: Failed to exchange token, no login token found in the session"
+
+# Lauf 5, nextcloud_hub / 0 / 1
+level 0, 2026-08-29T02:33:20+00:00, user_oidc
+   "[InternalTokenRequestedListener] received request for audience: openproject"
+level 2, 2026-08-29T02:33:20+00:00, user_oidc
+   "[TokenService] Failed to get token from Oidc provider app, oidc app is not installed"
+level 3, 2026-08-29T02:33:20+00:00, integration_openproject
+                                               "Token event has not been caught by 'user_oidc'"
+
+# Lauf 6, external / 0 / 1, Konto alice
+level 0, 2026-08-29T02:33:37+00:00, integration_openproject  "Token has expired."
+level 0, 2026-08-29T02:33:37+00:00, integration_openproject  "Refreshing access token."
+level 0, 2026-08-29T02:33:37+00:00, user_oidc  "[ExternalTokenRequestedListener] received request"
+level 0, 2026-08-29T02:33:37+00:00, user_oidc  "[TokenService] Get token from the session"
+level 0, 2026-08-29T02:33:37+00:00, user_oidc  "[TokenService] getToken: no session data"
+level 3, 2026-08-29T02:33:37+00:00, integration_openproject
+                                               "Token event has not been caught by 'user_oidc'"
+```
+
+#### 5.6.5 Die Gegenprobe mit echter Sitzung und der Lauf gegen den gültigen Zwischenspeicher
+
+```
+# 1787970835, derselbe Aufruf, aber mit dem Sitzungscookie aus der Keycloak-Anmeldung,
+# Konto 3855a8f7..., Konfiguration external / 0 / 1
+HTTP 401, application/json; charset=utf-8, 341 Bytes
+ocs.meta.statuscode 401, Meldung leer
+ocs.data.error trägt "errorIdentifier":"urn:openproject-org:api:v3:errors:Unauthenticated"
+
+level 0, user_oidc  "[TokenService] Get token from the session"
+level 0, user_oidc  "[TokenService] getToken: token is expiring, proactively refreshing to keep
+                     IdP session alive, expires in 80"
+level 0, user_oidc  "[TokenService] Refreshing the token:
+                     http://kc.localtest.me:8083/realms/spike/protocol/openid-connect/token"
+level 0, user_oidc  "[TokenService] ---- Refresh token success"
+level 0, user_oidc  "[TokenService] Store token in the session"
+level 0, user_oidc  "[TokenService] checkLoginToken: all good"
+level 0, user_oidc  "[ExternalTokenRequestedListener] received request"
+level 0, user_oidc  "[TokenService] getToken: token is still valid, it expires in 300 and
+                     refresh expires in 1800"
+level 0, integration_openproject  "New token expires at 2026/08/29 02:38:56"
+level 3, integration_openproject  "OpenProject error : Client error:
+                     `GET http://op.localtest.me:8082/api/v3/users/me` resulted in a
+                     `401 Unauthorized` response"
+```
+
+Zustand am Konto `3855a8f7...` unmittelbar danach: `token` mit **Länge 1387** in der Form eines JWT
+(drei durch Punkte getrennte Base64url-Abschnitte, der Wert selbst steht hier nicht),
+`token_expires_at` `1787971136`; `user_id` und `user_name` existieren **nicht**, weil `initUserInfo()`
+an der Abweisung durch OpenProject scheitert.
+
+```
+# 1787970877, wieder ohne Cookie, reine Impersonation, Konto 3855a8f7...,
+# token_expires_at 1787971136 und damit 259 s in der Zukunft
+HTTP 401, application/json; charset=utf-8, 341 Bytes
+ocs.data.error trägt "errorIdentifier":"urn:openproject-org:api:v3:errors:Unauthenticated"
+
+Zeilen der App user_oidc in diesem Zeitfenster: KEINE
+level 3, integration_openproject  "OpenProject error : Client error:
+                     `GET http://op.localtest.me:8082/api/v3/users/me` resulted in a
+                     `401 Unauthorized` response"
+```
+
+**Der Unterschied zwischen diesem Lauf und den sechs aus 5.6.4 ist eine einzige Zahl**, der Ablauf des
+zwischengespeicherten Tokens, und er entscheidet, ob `user_oidc` überhaupt gefragt wird
+(`getAccessToken()`, Zeile 1748). Die 341 gegen 77 Bytes sind der maschinell prüfbare Ausdruck
+desselben Unterschieds.
+
 ## Was diese Messung nicht beweist
 
 noch nicht gemessen, Plan 17-09
+
+**Vorgemerkt aus Abschnitt 2.1, weil es eine Aussage über die Messumgebung und nicht über ein
+Ergebnis ist.** Für S5 ist der Nextcloud-Loglevel auf `Debug (0)` gesenkt worden
+(`occ log:manage --level 0`), und zwar vor dem ersten Lauf: die drei Meldungen, die die Ereignispfade
+unterscheiden, sind `logger->debug`, und der Vorgabewert `Warning (2)` verschluckt sie. Ebenso ist
+`occ config:app:set user_oidc allow_insecure_http --value=1` gesetzt worden, weil `user_oidc` die
+Anmeldung sonst mit `You must access Nextcloud with HTTPS to use OpenID Connect.` abbricht
+(`LoginController.php:121-126`).
+
+**Beides betrifft eine Wegwerf-Instanz auf 127.0.0.1 und ist ausdrücklich keine Empfehlung für
+Produktion.** Ein auf `debug` gesenkter Nextcloud-Log kann Nutzerdaten und Tokenbruchstücke in eine
+Datei schreiben, die für dieses Niveau nicht gedacht ist, und OpenID Connect über plain http gibt das
+Sitzungstoken auf der Leitung preis. Beide Zustände verschwinden mit dem Nextcloud-Band beim
+`down -v`, und die ausgelieferte ExApp ist von keinem der beiden berührt. Sie stehen hier, damit ein
+Nachbau sie als Eingriff erkennt und nicht als Vorgabe übernimmt.
