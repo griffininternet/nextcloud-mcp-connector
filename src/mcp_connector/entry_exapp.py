@@ -32,6 +32,7 @@ from .audit import record as audit_record
 from .audit.store import AUDIT_FILENAME
 from .errors import IssuerRefused, ToolError
 from .exapp import config_values
+from .exapp.audit_verify import audit_verify_routes
 from .exapp.lifecycle import lifecycle_routes
 from .exapp.middleware import RequireAppApi
 from .exapp.purge import purge_routes
@@ -189,6 +190,17 @@ def build_exapp_app(env: Mapping[str, str] | None = None) -> Starlette:
     # proxy, which attaches valid AppAPI headers itself (T-02-20, T-05-26). It gets the one
     # store of this application, because it empties exactly that file.
     #
+    # The check of plan 18-08 hangs here for the same rule a fifth time, and its reason is
+    # the fourth one over again with a different loss: /audit-verify is the handler of the
+    # occ command mcp_connector:audit:verify, and its answer names the chains of this
+    # instance, which are named after the accounts that have them. A declared route would
+    # hand that list to anyone who can reach the PHP proxy, because that proxy attaches valid
+    # AppAPI headers itself (T-02-20, T-18-07). So the path is absent from appinfo/info.xml,
+    # named there only in the comment, and the handler carries the same double check as the
+    # four paths above it. It gets the audit store of this application and not the OAuth one,
+    # because it checks exactly that file, and it gets it whether the switch of D-14 is on or
+    # off: a log that was switched off is the one that most needs to stay checkable.
+    #
     # The policy read above is what the two places that answer to it read as well: the
     # discovery document stops advertising a registration endpoint when the switch is off,
     # and the routes stop containing one (AUTH-07, D-35). One store opener serves the
@@ -214,6 +226,7 @@ def build_exapp_app(env: Mapping[str, str] | None = None) -> Starlette:
         *auth_routes(env, provider=provider, throttle=counters),
         *consent_routes(env, provider=provider, throttle=counters),
         *purge_routes(env, store_provider=store),
+        *audit_verify_routes(env, store_provider=audit_store),
     ):
         app.router.routes.append(route)
     return app

@@ -104,10 +104,19 @@ def lifecycle_routes(env: Mapping[str, str] | None = None) -> list[Route]:
                 await occ.register_occ_commands(env=env)
             except Exception:
                 # The third independent registration, in its own try for the same reason the
-                # second one has one. The tolerance is pitfall 11 again: without the command
+                # second one has one. The tolerance is pitfall 11 again: without the commands
                 # an administrator has to fall back to the runbook, while an app AppAPI
-                # disabled again cannot be purged at all.
-                logger.error("the occ command registration failed, the purge command is missing")
+                # disabled again cannot be purged or checked at all.
+                #
+                # This block covers both commands since plan 18-08, and only as their common
+                # last resort: register_occ_commands has a try per command inside it, so a
+                # single refused registration never reaches here and never costs the other
+                # command. What lands here is a failure of the whole call, which is why the
+                # line says both are missing.
+                logger.error(
+                    "the occ command registration failed, the purge and the audit log check "
+                    "are missing"
+                )
         # enabled=0 registers nothing, unregisters nothing and above all destroys nothing.
         # AppAPI hands out the forms of enabled apps only, so a disabled app disappears from
         # the settings page by itself, and an uninstall is cleaned up on AppAPI's side

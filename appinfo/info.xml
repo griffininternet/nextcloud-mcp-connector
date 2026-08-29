@@ -281,6 +281,18 @@ Les pages liées sont en anglais.
 		  - lifecycle paths plus a mandatory force option, and a test asserts that this
 		  - path appears in no <url> below.
 		  -
+		  - The fifth deliberately absent path is /audit-verify, added in plan 18-08, and
+		  - for it the rule is the control itself as well. It is the handler of the occ
+		  - command mcp_connector:audit:verify, which walks the chain of the audit log and
+		  - answers either that no break was found or where the first one is. That answer
+		  - names chains, and a chain of a person is named after her account, so a declared
+		  - route would hand the list of everybody who used this app to anyone who can reach
+		  - the PHP proxy, for exactly the reason stated above: that proxy attaches valid
+		  - AppAPI headers itself (T-18-07). AppAPI calls this path over PublicFunctions
+		  - like the four above, so it needs no declaration to work, and the handler carries
+		  - the same double check. It has no mandatory option, because it changes nothing.
+		  - A test asserts that this path is declared in no route below either.
+		  -
 		  - Order matters: the first route that matches path and verb wins, and its access
 		  - level decides alone.
 		  -

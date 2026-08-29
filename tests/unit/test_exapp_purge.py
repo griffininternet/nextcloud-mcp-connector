@@ -930,12 +930,12 @@ def test_the_command_and_the_route_cannot_drift_apart() -> None:
     """One derivation, so a rename of the path renames the handler of the command."""
     assert purge.PURGE_PATH.removeprefix("/") == occ.OCC_HANDLER
     assert f"/{occ.OCC_HANDLER}" == purge.PURGE_PATH
-    assert occ.command_scheme()["execute_handler"] == occ.OCC_HANDLER
+    assert occ.command_schemes()[0]["execute_handler"] == occ.OCC_HANDLER
     assert occ.OCC_HANDLER, "an empty handler would register a command AppAPI cannot call"
 
 
 def test_the_command_is_the_one_the_runbook_calls() -> None:
-    scheme = occ.command_scheme()
+    scheme = occ.command_schemes()[0]
 
     assert occ.OCC_COMMAND_NAME == "mcp_connector:purge"
     assert scheme["name"] == occ.OCC_COMMAND_NAME
@@ -951,13 +951,16 @@ def test_the_command_is_the_one_the_runbook_calls() -> None:
 @pytest.mark.anyio
 @respx.mock
 async def test_the_registration_is_one_post_in_the_app_context() -> None:
+    """One POST per command since plan 18-08: AppAPI registers exactly one at a time."""
     route = respx.post(OCC_URL).mock(return_value=httpx.Response(200, json={}))
 
     await occ.register_occ_commands(env=ENV)
 
-    assert route.call_count == 1
-    sent = route.calls.last.request
-    assert json.loads(sent.content) == occ.command_scheme()
+    assert route.call_count == len(occ.command_schemes())
+    bodies = [json.loads(call.request.content) for call in route.calls]
+    assert bodies == occ.command_schemes()
+    sent = route.calls[0].request
+    assert json.loads(sent.content) == occ.command_schemes()[0]
     assert sent.headers["OCS-APIRequest"] == "true"
     assert sent.headers["EX-APP-ID"] == APP_ID
     assert (
