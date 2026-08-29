@@ -158,11 +158,26 @@ ACTOR_UNKNOWN = "unknown"
 #: are gone (a marker for a removed chain has nobody left to attach to in that chain).
 CHAIN_INSTANCE = "i:instance"
 
+#: The prefix of a user chain, named because two functions below have to agree on it: one
+#: builds an identifier out of an account and the other reads the account back out of it.
+USER_CHAIN_PREFIX = "u:"
+
 
 def user_chain(nc_user: str) -> str:
     """The chain identifier of one account. Prefixed, so it can never collide with
     :data:`CHAIN_INSTANCE` however an account is named."""
-    return f"u:{nc_user}"
+    return f"{USER_CHAIN_PREFIX}{nc_user}"
+
+
+def _account_of(chain: str) -> str:
+    """The account behind a chain identifier, the exact inverse of :func:`user_chain`.
+
+    Read off the identifier and not out of the ``nc_user`` column, because the column is
+    ``NULL`` for a row of the instance chain and the identifier is what a chain is grouped by
+    anyway. The round trip is exact: a name that goes through :func:`user_chain` comes back
+    out of here unchanged, whatever characters are in it.
+    """
+    return chain.removeprefix(USER_CHAIN_PREFIX)
 
 
 # --- kinds of a row ----------------------------------------------------------------------
@@ -310,6 +325,19 @@ _EXPIRED_ROWS = (
 _OLDEST_ROWS = "SELECT seq, chain, hash FROM entries WHERE chain <> ? ORDER BY seq LIMIT ?"
 _DROP_EXPIRED = "DELETE FROM entries WHERE chain <> ? AND at <= ? AND seq <= ?"
 _DROP_OLDEST = "DELETE FROM entries WHERE chain <> ? AND seq <= ?"
+
+# The three statements of the account check (D-12). ``chain <> ?`` spares the instance chain
+# here for a second reason on top of the one above: it has no account behind it, so it can
+# never be silent and must never be offered as one.
+#
+# The grouping is by chain and not by ``nc_user``, because the chain is what is dropped and
+# what a marker for a gap names, and a row of a chain whose ``nc_user`` column were ever
+# ``NULL`` would otherwise fall out of the question entirely.
+_SILENT_CHAINS = (
+    "SELECT chain FROM entries WHERE chain <> ? GROUP BY chain HAVING MAX(at) <= ? ORDER BY chain"
+)
+_COUNT_OF_CHAIN = "SELECT COUNT(*) FROM entries WHERE chain = ?"
+_DROP_CHAIN = "DELETE FROM entries WHERE chain = ?"
 
 
 def _now() -> int:
@@ -781,6 +809,85 @@ class AuditStore:
                 tombstones=tombstones,
                 used_bytes_after=used_bytes(conn),
             )
+
+        return await self._transaction(work)
+
+    async def silent_users(
+        self, *, moment: int, silence_days: int = USER_SILENCE_DAYS
+    ) -> list[str]:
+        """The accounts whose youngest entry is at or past the threshold of D-12.
+
+        This is the whole reason the account check stays rare and cheap: an account whose last
+        entry is younger than :data:`USER_SILENCE_DAYS` is not even asked about, so the
+        question is put to a handful of chains and never to all of them. Thirty days is longer
+        than a holiday and far short of the retention window, which is what makes the check
+        bite long before the entries would have expired anyway.
+
+        The instance chain is never named: it has no account behind it, and an answer that
+        offered it would offer the one chain that explains every gap of every other one.
+
+        The edge is inclusive, the same way the retention window of :meth:`sweep` is: an entry
+        exactly ``silence_days`` old is past the threshold, one second younger is not.
+        """
+
+        def work(conn: sqlite3.Connection) -> list[str]:
+            cutoff = moment - silence_days * _DAY_SECONDS
+            return [
+                _account_of(chain)
+                for (chain,) in conn.execute(_SILENT_CHAINS, (CHAIN_INSTANCE, cutoff))
+            ]
+
+        return await self._read(work)
+
+    async def drop_user_chain(self, nc_user: str, *, moment: int) -> int:
+        """Remove every row of one account and leave one marker for the gap. D-12.
+
+        Called only after :func:`~mcp_connector.audit.accounts.existing_users` answered with a
+        list that was read, that is not empty, and that does not contain this account. What
+        this method itself guarantees is the other half: whatever it removes leaves a trace.
+
+        The marker stands in the instance chain and not in the chain it explains, for the
+        reason :func:`_write_tombstones` gives at length: the chain it would attach to is
+        exactly what just went. It carries the count and the end of what it replaces, never a
+        tool, never a parameter name.
+
+        The instance chain cannot be dropped here however an account is named, because
+        :func:`user_chain` prefixes every identifier this method builds and
+        :data:`CHAIN_INSTANCE` carries a different prefix.
+
+        Returns how many rows went. Zero means there was nothing of this account, and then
+        there is no gap either, so no marker is written: a marker for a chain that never
+        existed would be a hole in the record where there is none.
+        """
+        chain = user_chain(nc_user)
+
+        def work(conn: sqlite3.Connection) -> int:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(_LAST_OF_CHAIN, (chain,)).fetchone()
+            if row is None:
+                conn.execute("COMMIT")
+                return 0
+            removed = conn.execute(_COUNT_OF_CHAIN, (chain,)).fetchone()[0]
+            end: bytes = row[0]
+            conn.execute(_DROP_CHAIN, (chain,))
+            _append_row(
+                conn,
+                Entry(
+                    chain=CHAIN_INSTANCE,
+                    kind=KIND_TOMBSTONE,
+                    at=moment,
+                    actor=ACTOR_UNKNOWN,
+                    removed=removed,
+                    gap_chain=chain,
+                    gap_hash=end.hex(),
+                ),
+            )
+            conn.execute("COMMIT")
+            # After the commit and never inside it: no incremental vacuum runs while a
+            # transaction is open. A whole chain is the largest thing this store ever gives
+            # up at once, and the step is the same one the sweep ends with.
+            _give_the_space_back(conn)
+            return removed
 
         return await self._transaction(work)
 

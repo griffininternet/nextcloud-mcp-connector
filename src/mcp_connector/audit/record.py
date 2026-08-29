@@ -32,7 +32,7 @@ from typing import Any
 
 from .. import deps
 from ..errors import REASON_UNSPECIFIED, REASONS
-from . import AUDIT_STATE_ATTR, store
+from . import AUDIT_STATE_ATTR, accounts, store
 from .allowlist import PARAM_ALLOWLIST
 from .store import (
     ACTOR_UNKNOWN,
@@ -170,6 +170,35 @@ def _known_reason(reason: str | None) -> str | None:
     return reason if reason in REASONS else REASON_UNSPECIFIED
 
 
+async def _drop_chains_without_an_account(
+    audit_store: AuditStore, recorder: Recorder, *, moment: int
+) -> None:
+    """The account check of D-12, and it deletes only where all three conditions hold.
+
+    One call to Nextcloud per run and never one per account: every silent chain is held
+    against one list that was fetched once (18-RESEARCH.md §7, the cost paragraph).
+
+    ``None`` means the list could not be read, and then nothing happens at all, not even for a
+    chain that has been silent for a year. That is the fail-safe of this plan written out: the
+    assumption behind the list is unmeasured (A1), and a chain that is kept costs storage
+    while a chain that falls costs the record of everything that account ever did.
+
+    No line here names an account. The store holds that name in a column, and a log line
+    outside it would carry it into the Nextcloud log, which has neither the retention window
+    of D-09 nor the switch of D-14 over it.
+    """
+    known = await accounts.existing_users(recorder.env)
+    if known is None:
+        logger.info(
+            "the account check of this sweep was skipped: the account list could not be read, "
+            "and a list that was not read never removes a chain"
+        )
+        return
+    for nc_user in await audit_store.silent_users(moment=moment):
+        if nc_user not in known:
+            await audit_store.drop_user_chain(nc_user, moment=moment)
+
+
 async def note(
     ctx: Any,
     tool_fallback: str,
@@ -217,11 +246,18 @@ async def note(
             )
         )
         if store.should_sweep(seq):
+            # One moment for both halves of this run, so the retention window, every marker
+            # and the threshold of the account check agree about the time.
+            moment = int(time.time())
             await audit_store.sweep(
-                moment=int(time.time()),
+                moment=moment,
                 retention_days=recorder.retention_days,
                 size_limit=recorder.size_limit,
             )
+            if store.should_check_accounts(seq):
+                # A magnitude rarer than the sweep around it, because this is its only step
+                # that costs a call to Nextcloud (D-11, D-12, T-18-16).
+                await _drop_chains_without_an_account(audit_store, recorder, moment=moment)
     except Exception as exc:
         # The type only, never the message: a store error can carry a path (D-13).
         logger.error("the audit log did not record a call: %s", type(exc).__name__)
