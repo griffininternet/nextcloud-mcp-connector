@@ -105,6 +105,34 @@ def drop_oldest(tmp_path: Path, count: int) -> None:
         conn.close()
 
 
+def past_the_store(tmp_path: Path, statement: str, parameters: tuple[Any, ...]) -> None:
+    """Change the file with a connection of its own, the way an attacker would.
+
+    Never through a method of the module: a manipulation that went through the store would
+    recompute the chain and prove nothing about the check.
+    """
+    conn = sqlite3.connect(tmp_path / store.AUDIT_FILENAME, isolation_level=None)
+    try:
+        conn.execute(statement, parameters)
+    finally:
+        conn.close()
+
+
+async def write_calls(subject: store.AuditStore, chain: str, moments: list[int]) -> None:
+    """One ordinary row per moment, through the public interface, so the chain is real."""
+    for at in moments:
+        await subject.append(
+            store.Entry(
+                chain=chain,
+                tool="files_search",
+                nc_user=chain.removeprefix("u:"),
+                outcome=store.OUTCOME_OK,
+                params=["query"],
+                at=at,
+            )
+        )
+
+
 def digest_of(row: tuple[Any, ...]) -> bytes:
     """Recompute the hash of a row from the row itself, as a check will have to."""
     canonical = row[: len(store.CANONICAL_FIELDS)]
@@ -302,3 +330,149 @@ async def test_params_are_a_sorted_list_of_names_and_no_column_holds_a_value(
     assert row[13] == '["format","max_bytes","path"]'
     assert json.loads(row[13]) == ["format", "max_bytes", "path"]
     assert A_VALUE not in " ".join(str(column) for column in row)
+
+
+# --- what the check finds, and what it does not ---------------------------------------
+# Three answers, not one: changed, missing, and explained. A check that only shouts "broken"
+# fails success criterion 3 of the roadmap even when it is technically right.
+
+
+async def test_a_row_changed_after_the_fact_is_named_with_its_own_number(tmp_path: Path) -> None:
+    subject = open_store(tmp_path)
+    await write_calls(subject, ALICE, [1000, 1001, 1002, 1003])
+
+    past_the_store(tmp_path, "UPDATE entries SET tool = ? WHERE seq = ?", ("files_read", 3))
+
+    (finding,) = await subject.verify_chains()
+    assert finding.chain == ALICE
+    assert finding.kind == store.FINDING_MODIFIED
+    assert finding.seq == 3, "the changed row itself, not the one after it"
+    assert finding.next_seq is None
+
+
+async def test_a_removed_row_is_named_as_the_pair_of_numbers_it_was_between(
+    tmp_path: Path,
+) -> None:
+    subject = open_store(tmp_path)
+    await write_calls(subject, ALICE, [1000, 1001, 1002, 1003])
+
+    past_the_store(tmp_path, "DELETE FROM entries WHERE seq = ?", (3,))
+
+    (finding,) = await subject.verify_chains()
+    assert finding.chain == ALICE
+    assert finding.kind == store.FINDING_MISSING
+    assert (finding.seq, finding.next_seq) == (2, 4)
+
+
+async def test_a_real_tombstone_explains_the_gap_and_leaves_no_finding(tmp_path: Path) -> None:
+    """The difference between an explained and an unexplained hole, in one case.
+
+    Both halves together are the proof: no finding **and** a marker that says which chain lost
+    how many rows. Without the second half the case would also pass if the check were blind.
+    """
+    subject = open_store(tmp_path)
+    old = 1_000_000_000
+    young = old + 400 * 86400
+    await write_calls(subject, ALICE, [old, old + 1, old + 2, old + 3])
+    await write_calls(subject, ALICE, [young, young + 1])
+
+    report = await subject.sweep(moment=young + 2)
+
+    assert report.expired == 4
+    assert report.tombstones == 1
+    assert await subject.verify_chains() == []
+
+    marker = [row for row in rows(tmp_path) if row[2] == store.KIND_TOMBSTONE]
+    assert len(marker) == 1
+    assert marker[0][1] == store.CHAIN_INSTANCE, "a marker hangs where the gap is not"
+    assert marker[0][14] == 4
+    assert marker[0][15] == ALICE
+    assert marker[0][16] is not None
+    assert marker[0][5] is None, "a marker carries no account and no value"
+
+
+async def test_two_chains_and_the_finding_names_only_the_broken_one(tmp_path: Path) -> None:
+    subject = open_store(tmp_path)
+    await write_calls(subject, ALICE, [1000, 1001, 1002])
+    await write_calls(subject, BOB, [1003, 1004, 1005])
+
+    past_the_store(tmp_path, "UPDATE entries SET tool = ? WHERE seq = ?", ("notes_read", 5))
+
+    findings = await subject.verify_chains()
+    assert [(finding.chain, finding.kind, finding.seq) for finding in findings] == [
+        (BOB, store.FINDING_MODIFIED, 5)
+    ]
+
+
+# --- the sweep ------------------------------------------------------------------------
+
+
+async def test_the_retention_window_takes_the_old_rows_and_leaves_the_young_ones(
+    tmp_path: Path,
+) -> None:
+    """180 days is the default of D-09 and is reachable without an argument."""
+    assert store.RETENTION_DAYS == 180
+
+    subject = open_store(tmp_path)
+    moment = 1_000_000_000 + 400 * 86400
+    just_over = moment - store.RETENTION_DAYS * 86400 - 1
+    just_under = moment - store.RETENTION_DAYS * 86400 + 1
+    await write_calls(subject, ALICE, [just_over - 10, just_over])
+    await write_calls(subject, ALICE, [just_under, moment])
+
+    report = await subject.sweep(moment=moment)
+
+    assert report.expired == 2
+    left = [row[3] for row in rows(tmp_path) if row[2] == store.KIND_CALL]
+    assert left == [just_under, moment], "nothing younger than the window may go"
+
+    shorter = await subject.sweep(moment=moment, retention_days=0)
+    assert shorter.expired == 2, "the window is a parameter, not a law of nature"
+
+
+async def test_the_upper_bound_stops_before_the_table_is_empty(tmp_path: Path) -> None:
+    """The case falle 2 of the research asks for: a bound that sweeps to zero is broken."""
+    subject = open_store(tmp_path)
+    await subject.size()
+    fill(tmp_path, 15000)
+
+    before = await subject.size()
+    limit = before // 2
+    moment = 1_700_000_000  # older than every row, so the window takes nothing here
+
+    report = await subject.sweep(moment=moment, size_limit=limit)
+
+    assert report.expired == 0
+    assert report.trimmed > 0
+    calls = [row for row in rows(tmp_path) if row[2] == store.KIND_CALL]
+    assert calls, "the bound may not sweep until the table is empty"
+    assert report.used_bytes_after <= limit
+    assert await subject.size() <= limit
+
+    again = await subject.sweep(moment=moment, size_limit=limit)
+    assert again.trimmed == 0
+    assert again.tombstones == 0
+
+
+async def test_the_sweep_leaves_the_instance_chain_standing(tmp_path: Path) -> None:
+    """The register that explains every gap is the one chain that is never trimmed."""
+    subject = open_store(tmp_path)
+    old = 1_000_000_000
+    await subject.append(
+        store.Entry(
+            chain=store.CHAIN_INSTANCE,
+            kind=store.KIND_SWITCH,
+            actor=store.ACTOR_UNKNOWN,
+            reason="on",
+            at=old,
+        )
+    )
+    await write_calls(subject, ALICE, [old + 1, old + 2])
+
+    report = await subject.sweep(moment=old + 400 * 86400, size_limit=0)
+
+    assert report.expired == 2
+    kinds = [row[2] for row in rows(tmp_path)]
+    assert store.KIND_SWITCH in kinds, "the switch is older than the window and stays"
+    assert store.KIND_CALL not in kinds
+    assert kinds.count(store.KIND_TOMBSTONE) == 1
