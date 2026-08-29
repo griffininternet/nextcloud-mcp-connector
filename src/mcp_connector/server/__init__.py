@@ -21,6 +21,7 @@ import functools
 import importlib
 import json
 import pkgutil
+import time
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -29,7 +30,13 @@ from mcp.server import MCPServer
 from mcp.types import ToolAnnotations
 
 from .. import __version__, deps
-from ..errors import ToolError
+from ..audit import OUTCOME_FAILED, OUTCOME_OK, OUTCOME_REJECTED, record
+from ..errors import (
+    REASON_TIMEOUT,
+    REASON_UNREACHABLE,
+    REASON_UNSPECIFIED,
+    ToolError,
+)
 
 __all__ = ["CREATE_ONLY", "READ_ONLY", "compact", "graceful", "mcp"]
 
@@ -77,25 +84,58 @@ def graceful[T](fn: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
     Generic in the return type, because thirteen tools answer with a compact JSON string
     and the two tools of the ChatGPT profile answer with a Pydantic model. Pinning this to
     ``str`` would erase exactly the annotation the SDK builds their output schema from.
+
+    This is also the one place a tool call is recorded (D-04), because it is the one place
+    that already sees every one of them together with its outcome. What goes into a row is
+    the user, the tool, the moment, the calling client, one of the three outcome classes,
+    the duration and the *names* of the parameters that were set: never a value, never a
+    piece of the answer, and of a refusal only the fixed identifier, never the sentence
+    above (T-18-01).
+
+    Two properties of the ``finally`` branch are load bearing. The write is awaited and not
+    handed to ``asyncio.create_task``: a detached task has no defined order against the
+    answer it describes and would swallow its own exception, which is precisely what D-13
+    forbids. And ``record.note`` never raises, which is what keeps the branch honest: an
+    ``await`` in a ``finally`` that raises would replace the exception on its way out with
+    its own (T-18-17).
     """
 
     @functools.wraps(fn)
     async def wrapper(*args: Any, **kwargs: Any) -> T:
+        started = time.perf_counter()
+        ctx = kwargs.get("ctx")
+        outcome: str = OUTCOME_OK
+        reason: str | None = None
         try:
             return await fn(*args, **kwargs)
         except ToolError as exc:
+            outcome, reason = OUTCOME_REJECTED, getattr(exc, "reason", REASON_UNSPECIFIED)
             raise ValueError(f"{exc.message} Hint: {exc.hint}") from None
         except httpx.TimeoutException:
+            outcome, reason = OUTCOME_REJECTED, REASON_TIMEOUT
             raise ValueError(
                 "Nextcloud did not respond in time. Hint: retry with a smaller range or a "
                 "narrower scope."
             ) from None
         except httpx.RequestError:
+            outcome, reason = OUTCOME_REJECTED, REASON_UNREACHABLE
             raise ValueError(
                 "Could not reach Nextcloud. Hint: check the configured Nextcloud URL and "
                 "that the server is online."
             ) from None
+        except BaseException:
+            # Caught to remember the class and for nothing else: the exception leaves this
+            # branch exactly as it arrived, so an ``MCPError`` of the credential layer and a
+            # cancellation stay what they are.
+            outcome, reason = OUTCOME_FAILED, None
+            raise
+        finally:
+            await record.note(ctx, fn.__name__, outcome, reason, time.perf_counter() - started)
 
+    # An explicit marker, and not ``fn.__code__.co_name == "wrapper"``: that name is the one
+    # every decorator in the world gives its inner function, so the check would pass for a
+    # tool that carries some other wrapper and no recording at all.
+    wrapper.__mcp_audited__ = True  # type: ignore[attr-defined]
     return wrapper
 
 
