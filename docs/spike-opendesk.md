@@ -1533,14 +1533,216 @@ zu 87 Prozent Relationen, die niemand angefragt hat.
 
 ## 4. Fragenliste für den ISV-Call am 14.09. (OD-03)
 
-noch nicht gemessen, Plan 17-08
+**Stand 2026-08-29, neun Fragen.** Die Reihenfolge ist festgelegt und nicht kosmetisch: vier Stellen
+dieses Berichts zeigen auf Nummern. Abschnitt 1.4 verweist auf die Fragen 1, 5, 6 und 7, Abschnitt 1.3
+auf Frage 5, Abschnitt 2.2 auf Frage 9 und Abschnitt 2.5 auf Frage 7. Wer hier umsortiert, macht diese
+Verweise falsch.
 
-**Vorgemerkt aus Abschnitt 2.2, damit der Verweis dort nicht ins Leere zeigt.** Frage 9: OpenProject
-17.7.2 erzwingt PKCE für nicht vertrauliche Clients (`force_pkce`, gemessen in 2.2), bewirbt in
-`/.well-known/oauth-authorization-server` aber kein `code_challenge_methods_supported` und keinen
-`registration_endpoint`. Die Frage lautet, ob die Lücke Absicht ist, und der Grund, sie zu stellen,
-ist ein gemessener Fehlschlag: ein Client, der sich allein nach diesem Dokument richtet, lässt PKCE
-weg und wird abgewiesen. Plan 17-08 formuliert die Frage aus und ordnet sie in die Liste ein.
+Jede Frage trägt einen Absatz `Grund:`, und dieser Grund nennt die **Folge** einer Antwort und nicht
+das Interesse an ihr. Eine Frage ohne Folge ist Neugier und kostet im Gespräch dieselbe Zeit wie eine
+mit Folge. Die Fragen 1 bis 4 sind die Pflichtfragen aus OD-01, die Fragen 5 bis 9 sind erst in dieser
+Phase entstanden.
+
+**Was diese Phase beantwortet hat, steht nicht mehr auf der Liste.** Drei Fragen der Ausgangsrecherche
+sind entfernt und werden nicht vorsichtshalber mitgeführt; sie stehen am Ende in der Tabelle
+`Nicht mehr auf der Liste`, jede mit dem Beleg, der sie erledigt hat. Der Grund für das Streichen ist
+nicht Ordnungsliebe: die Gesprächszeit am 14.09. ist die knappe Größe, und eine Frage, deren Antwort
+schon gemessen im Bericht steht, lädt eine Auskunft ein, die wir nicht brauchen, und verdrängt eine,
+die wir brauchen.
+
+**Der Adressat ist nicht überall derselbe, und das steht bei jeder Frage dabei.** Der Termin am 14.09.
+ist mit Nextcloud (Fabrice Mous, Strategic Markets and Initiatives) und nicht mit ZenDiS. Die Fragen 1
+bis 5 sind dort trotzdem richtig aufgehoben, weil sie das Verhältnis des ISV-Programms zu openDesk
+betreffen und weil Nextcloud den Weg zu ZenDiS kennt; die Mail an ZenDiS ist am 28.08. zusätzlich
+hinausgegangen und läuft parallel. Die Fragen 8 und 9 sind Entwicklerfragen, und ihre eigentlichen
+Kanäle sind `nextcloud/user_oidc` und OpenProject. Sie stehen hier, weil Frage 8 eine Lücke im
+Baukasten des souveränen Arbeitsplatzes benennt und nicht eine in unserem Entwurf, und weil beide im
+Gespräch belegen, dass hier gemessen und nicht gelesen wurde.
+
+### Die vier Pflichtfragen aus OD-01
+
+1. **Wie wird eine Drittanbieter-Komponente in openDesk aufgenommen: wer entscheidet darüber, nach
+   welchen Kriterien, und in welchem zeitlichen Rahmen?**
+
+   Grund: Das ist der eine Punkt aus 1.4, den kein Quellcode und kein Helmfile beantworten kann, weil
+   er ein Verfahren und keine Datei ist. Die Folge einer Antwort ist ein Schnitt in der Roadmap und
+   nicht eine Einzelheit: lautet sie "nur als Teil der Distribution", heißt die nächste Phase nicht
+   "OpenProject-Werkzeuge", sondern "Aufnahmefähigkeit herstellen", und OD-04 rückt nach hinten.
+   Lautet sie "eine Dritt-ExApp neben der Suite ist vorgesehen", ist die Reihenfolge umgekehrt. Ohne
+   diese Antwort ist jede Reihenfolge geraten, und geraten wird sie zwei Phasen lang.
+
+2. **Ist die Installation einer External App in openDesk vorgesehen, und wenn ja, auf welchem Weg?**
+
+   Grund: Der Befund, der die Frage erzwingt, ist gemessen und in 1.1 und 1.2 belegt. Der App Store ist
+   abgeschaltet (`appstore: enabled: false`, Zeile 79 bis 80 der Nextcloud-Werte an Tag `v1.18.0`), und
+   im ganzen Deployment-Projekt an demselben Tag kommt AppAPI nicht vor: über 349 entpackte Dateien
+   null Treffer für `app_api`, `appapi`, `external app` und `exapp`, bei einer Gegenprobe, die
+   `integration_openproject` in drei Dateien findet und damit zeigt, dass die Suche nicht ins Leere
+   greift. Was als Daemon-Typ bliebe, ist `manual-install` in seinen zwei Varianten. Die Folge trifft
+   den Kern dieses Produkts: die Ein-Klick-Erzählung existiert in einer openDesk-Installation nicht,
+   die Installation ist dort eine Betreiberhandlung im Helmfile. Auch ein "heute nicht vorgesehen" ist
+   eine verwertbare Antwort, weil es den Aufwand sichtbar auf die Betreiberseite legt, statt ihn in
+   einer Vermutung zu verstecken.
+
+3. **Was bedeutet die AGPL-Lizenz des Kerns für eine Enterprise-Positionierung in openDesk: welche
+   Teile dürfen bezahlt sein, und welche erwartet die Distribution frei?**
+
+   Grund: Das ist eine Verhandlungs- und keine Recherchefrage, und sie ist die einzige der neun, die
+   kein Messwert je beantworten kann. Der Anlass ist konkret: die Produktkarte im Dossier sieht ein
+   Audit-Log mit SIEM-Ausleitung als bezahltes Add-on vor, und ein Audit-Log in einem
+   AGPL-Repository kann kein exklusives kommerzielles Unterscheidungsmerkmal sein, weil jeder Betreiber
+   es weitergeben darf. Dazu der Befund aus 1.1, der die Frage praktisch macht: openDesk trägt in
+   derselben Datei bereits einen Schalter für Protokollierung (`adminAudit`, Zeile 77 bis 78). Die
+   Folge einer Antwort ist der Zuschnitt des Bezahlten: liegt es im Protokoll selbst, oder liegt es in
+   Governance, Ausleitung und Richtlinien und das Protokoll läuft frei mit. Das ändert die Produktkarte
+   und nicht ein Feature.
+
+4. **Talk und Kontakte sind in openDesk abgeschaltet. Was heißt das für die Beschreibung dieser App und
+   für einen openDesk-Zuschnitt: eigene Fassung, Fähigkeitsprüfung zur Laufzeit, oder diese Familien
+   dort gar nicht bewerben?**
+
+   Grund: Der Zustand ist aus der Quelle belegt und nicht vermutet, alles in derselben Datei an Tag
+   `v1.18.0`: `contacts: enabled: false` (Zeile 61 bis 62), `spreed: enabled: false` (Zeile 75 bis 76),
+   dazu `comments` (81 bis 82) und `circles` (83 bis 84). Zwei der neun Werkzeugfamilien dieser App
+   liegen dort dunkel, und dieser Befund trifft unabhängig vom Ausgang des ganzen OpenProject-Teils zu.
+   Die Folge ist eine Wahl zwischen drei Wegen, die unterschiedlich teuer sind: eine eigene
+   openDesk-Fassung der App (teuer, zweiter Wartungsstrang), eine Fähigkeitsprüfung zur Laufzeit
+   (billig, die Technik dafür liegt in `capabilities.py` bereits vor), oder die Familien in einer
+   openDesk-Beschreibung nicht bewerben (billig, kostet Erzählung). Nachfrage mit eigener Folge: ist die
+   Abschaltung eine Vorgabe der Distribution oder eine Voreinstellung, die ein Betreiber ändern darf?
+   Ist sie änderbar, ist die Fähigkeitsprüfung nicht nur die billigste, sondern auch die einzig
+   richtige Antwort, weil dieselbe App dann beide Fälle bedienen muss.
+
+### Die fünf Fragen, die diese Phase neu erzeugt hat
+
+5. **Wann geht openDesk auf Nextcloud 34 oder höher?**
+
+   Grund: Das ist die stärkste Frage dieser Phase, weil sie aus einer Absage eine Terminfrage macht.
+   Der Aufhänger ist in 1.2 belegt: `app_api` an `stable34` zählt in der Hilfe des
+   Registrierungskommandos den Wert `kubernetes-install` auf, `stable33` zählt ihn nicht auf, und die
+   Datei, die ihn umsetzt, antwortet an `stable34` mit HTTP 200 und 803 Zeilen und an `stable33` mit
+   HTTP 404. Die Phasenrecherche hat an demselben Zweig zusätzlich vier Freigabearten für den Dienst und
+   vier eigene CI-Abläufe (`tests-deploy-k8s*.yml`) gelesen, die es an `stable33` nicht gibt. openDesk
+   1.18.0 pinnt Nextcloud auf 33.0.7, und die Messumgebung dieser Phase bestätigt aus der laufenden
+   Instanz, dass dort `app_api` 33.0.0 liegt (S0, 1.3). Die Folge: Versionspin und Kubernetes-Hürde sind
+   dieselbe Hürde, und beide fallen mit demselben Schritt. Ein Datum verwandelt damit die zweite Hürde
+   von OD-01 in eine Wartezeit. Nebenfrage aus demselben Abschnitt: `stable34` bringt für
+   `kubernetes-install` keine Vorlage in der Admin-Oberfläche mit, der Weg ist nur über
+   `occ app_api:daemon:register --k8s` erreichbar. Ist das Absicht oder Rückstand? Die Antwort sagt,
+   ob der Weg betriebsreif gemeint ist oder erst angelegt.
+
+6. **Enthält das openDesk-Nextcloud-Image `app_api`, und ist die App dort eingeschaltet?**
+
+   Grund: Das ist die eine echte Rest-Unbekannte von OD-01 (1.4), und sie ist aus Quellen nicht
+   entscheidbar: das Image wird aus einem anderen, hier nicht mitgelesenen Projekt gebaut, und der
+   Tarball-Griff über das Deployment-Projekt kann eine mitgelieferte Serverapp im Image grundsätzlich
+   nicht sehen. `app_api` ist seit Nextcloud 30 mitgeliefert, und in der Messumgebung dieser Phase
+   liegt sie auf 33.0.7 als `app_api 33.0.0` vor und trägt die gemessene Kette aus Registrierung,
+   Deploy-Daemon und Nutzerimpersonation (S0). Die Folge trennt zwei ganz verschiedene Aufgaben: ist die
+   App im Image und eingeschaltet, ist der Rest eine Daemon-Frage und hängt an Frage 5. Fehlt sie oder
+   ist sie aus, ist eine Installation eine Änderung am Image, also eine ZenDiS-Entscheidung und keine
+   Betreiberhandlung, und dann hängt alles an Frage 1.
+
+   Nachfrage, dieselbe Frage für die Nachbarkomponente: **ist der MCP-Endpunkt, den OpenProject selbst
+   mitbringt, in openDesk eingeschaltet?** Belegt ist seine Existenz an der Fassung, die auch openDesk
+   fährt: `mount API::Mcp => "/mcp"` in `/app/config/routes.rb:48` des laufenden Containers 17.7.2,
+   dazu eine Verwaltungsseite (`:676`), ein eigener OAuth-Bereich `mcp` im Doorkeeper-Initializer
+   (`:136`) und ein Seed-Schritt beim ersten Start; ein unauthentifizierter Aufruf antwortet 500, also
+   eine antwortende Route und keine 404. Über sein Verhalten, seinen Authentifizierungsweg und seine
+   Berechtigungstreue ist in dieser Phase **nichts** gemessen, und der Bericht behauptet dazu nichts.
+   Grund für die Nachfrage: ist der Endpunkt dort an, gibt es für Arbeitspakete einen dritten Weg, den
+   die Weg-0-gegen-Weg-1-Tabelle dieses Berichts nicht führt, nämlich zwei MCP-Server nebeneinander im
+   selben Assistenten. Diese Möglichkeit gehört vor den Entwurf von OD-04 und nicht danach.
+
+7. **In welchem Modus läuft `integration_openproject` in openDesk, `oauth2` oder `oidc`?**
+
+   Grund: An dieser Frage hängt von allen neun am meisten, und der Unterschied, der sie teuer macht,
+   ist in dieser Phase gemessen und nicht mehr nur zitiert (2.1). Im Modus `oauth2` erneuert die App
+   das Nutzertoken serverseitig: derselbe Aufruf nach abgelaufenem Token antwortet **200** mit einem
+   Treffer, `token_expires_at` steht danach 7200 Sekunden in der Zukunft, das Tokenpaar ist
+   ausgetauscht, und im Aufruf war kein Cookie, keine Browsersitzung und kein App-Passwort (S4, einmal
+   mit gestelltem und einmal mit natürlich verstrichenem Ablauf). Im Modus `oidc` antwortet derselbe
+   Aufruf desselben Kontos nach Ablauf **401** mit 77 Bytes, und `user_oidc` protokolliert wörtlich
+   `[TokenService] getToken: no session data` (S5a bis S5c). Die schärfste Fassung des Befundes: Weg 0
+   trägt im Modus `oidc` genau so lange, wie der zwischengespeicherte Token gilt, und fällt danach auf
+   401. Die Folge: die Antwort entscheidet, ob OD-04 auf Weg 0 gebaut werden kann oder ob es dort einen
+   zweiten Weg braucht. Aus Quellen ist sie nicht entscheidbar (1.4), weil die Einrichtung der Job
+   `opendesk-openproject-bootstrap` macht und dessen Logik in einem eigenen Image liegt; das
+   Deployment-Projekt zeigt nur seine Eingaben, und die legen den Zwei-Wege-OAuth2-Weg nahe, ohne ihn
+   zu belegen.
+
+   Drei Nachfragen, jede mit eigener Folge, alle nur nötig, wenn die Antwort `oidc` heißt oder den
+   Bootstrap-Job berührt:
+
+   - **Falls `oidc`: mit welchem `sso_provider_type`?** Von den drei Ereignispfaden stellt genau einer
+     die Sitzungsfrage nicht (`nextcloud_hub`), und er ist in dieser Phase angelaufen, aber nicht zu
+     Ende gemessen: er bricht an `oidc app is not installed`, weil er Nextcloud selbst als Anbieter
+     verlangt. Folge: fährt openDesk diesen Pfad, ist eine eigene Messung lohnend; fährt es `external`,
+     ist Weg 0 dort nach Tokenablauf gemessen tot.
+   - **Liefert der Bootstrap-Job die Nextcloud-Ablage in OpenProject fertig eingerichtet aus?** Folge:
+     `GET /api/v1/work-packages/{id}/file-links` ist die einzige Route der ganzen OCS-Fläche, die eine
+     Id eines Arbeitspakets annimmt, und zugleich das Unterscheidungsmerkmal dieser App gegenüber einem
+     allgemeinen OpenProject-Client (3.3). Ohne registrierte Ablage gibt sie nichts zurück; in dieser
+     Messumgebung antwortet `GET /api/v3/storages` mit `total 0` (5.5.1), und deshalb ist die Route hier
+     ungemessen geblieben. Ist sie in openDesk vorkonfiguriert, ist die für uns wertvollste Route dort
+     die einzige, die sofort trägt.
+   - **Setzt openDesk in OpenProject eine Erlaubnisliste für den SSRF-Schutz?** Folge: der dokumentierte
+     Einrichtungsweg über den Ablagen-Assistenten ist in unserer Loopback-Topologie gemessen nicht
+     gangbar, weil OpenProject jeden Namen abweist, unter dem Nextcloud hier erreichbar wäre (5.4). In
+     einem Cluster tragen beide Seiten private Adressen, und die Frage ist deshalb dieselbe, nur mit
+     anderem Vorzeichen.
+
+8. **Gibt es einen vorgesehenen Weg, wie eine AppAPI-ExApp ohne PHP-Anteil ein audience-korrektes Token
+   für eine Schwesterkomponente derselben Suite bekommt, ohne Browsersitzung?**
+
+   Grund: Diese Frage ist der stärkste fachliche Beitrag, den diese Phase in ein Gespräch mitbringt,
+   und sie steht auf drei Messwerten statt auf einer Vermutung. Erstens: die Vorbedingung ist erfüllt,
+   `IUserSession::isLoggedIn()` liefert unter AppAPI-Impersonation `true`, denn in allen sechs Läufen
+   von S5 erscheint die Zeile des jeweiligen Listeners, die hinter genau dieser Prüfung steht (S5c).
+   Zweitens: der Bruch liegt eine Stufe später, der Sitzungsspeicher trägt unter Impersonation kein
+   Anmeldetoken, und `user_oidc` schreibt das wörtlich als `getToken: no session data`. Drittens:
+   `user_oidc` bietet den Austausch nur als PHP-Ereignis an, seine `appinfo/routes.php` hat keine
+   einzige Route, die ein Token zurückgibt. Die Folge: das ist eine Lücke im Baukasten des souveränen
+   Arbeitsplatzes und nicht eine in unserem Entwurf, und sie trifft jede ExApp, die für den
+   angemeldeten Nutzer gegen eine zweite Komponente derselben Suite handeln will. Kanal: der Entwurf
+   eines Kommentars an `nextcloud/user_oidc#925` liegt unversendet in `docs/contrib/`, gesendet wird er
+   ausschließlich vom Owner.
+
+9. **Warum bewerben die AS-Metadaten von OpenProject `code_challenge_methods_supported` nicht, obwohl
+   `force_pkce` unbedingt im Doorkeeper-Initializer steht?**
+
+   Grund: Der Schaden ist gemessen und nicht befürchtet (2.2). Das Dokument
+   `/.well-known/oauth-authorization-server` der laufenden Instanz 17.7.2 nennt weder
+   `code_challenge_methods_supported` noch einen `registration_endpoint`; dieselbe Instanz weist einen
+   Aufruf ohne `code_challenge` an `/oauth/authorize` mit **400** und dem Text
+   `Code challenge is required.` ab, und derselbe Aufruf mit `code_challenge` antwortet in derselben
+   Sitzung 200 und liefert einen Code. Ein Client, der sich allein nach dem Dokument richtet, lässt
+   PKCE also weg, bekommt eine 400 ohne maschinenlesbaren Hinweis und muss den Text einer HTML-Seite
+   lesen, um den Grund zu erfahren. Die Lücke ist kein lokales Artefakt: die Dokumente der öffentlichen
+   Community-Instanz tragen sie ebenso. Die Folge ist klein und billig: die Fähigkeit ist vorhanden,
+   nur die Ansage fehlt, und das ist der dankbarere Beitrag als jede Beschwerde. **Vermerk:** diese
+   Frage gehört eher in den OpenProject-Kanal als in den ISV-Call. Sie steht hier, damit sie nicht
+   verloren geht, und sie ist im Gespräch die erste, die entfällt, wenn die Zeit knapp wird.
+
+### Nicht mehr auf der Liste
+
+Drei Fragen der Ausgangsrecherche sind entfernt. Sie werden nicht vorsichtshalber mitgeführt, weil eine
+Frage, deren Antwort im selben Bericht steht, im Gespräch eine Antwort einlädt, die wir schon haben.
+
+| Entfallene Frage | Woher sie kam | Warum sie entfällt |
+|------------------|---------------|--------------------|
+| "Ist AppAPI in openDesk aktiviert, und welcher Deploy-Daemon ist vorgesehen?" | `ARCHITECTURE.md` A.7 | Zur Hälfte beantwortet und zur anderen Hälfte präziser gefasst. Beantwortet: im Deployment-Projekt an Tag `v1.18.0` kommt AppAPI in keiner von 349 Dateien vor (1.2), und welcher Daemon auf dem gepinnten Stand überhaupt existieren kann, ist aus `RegisterDaemon.php` beider Zweige belegt. Was offen blieb, ist ausschließlich das Image, und genau das ist jetzt **Frage 6**. Die alte Fassung würde eine Auskunft einladen, die schon gemessen im Bericht steht |
+| "Nimmt `/oauth/authorize` PKCE an, obwohl die Metadaten es nicht bewerben?" | `STACK.md` A.8 | Gemessen beantwortet, und zwar in beide Richtungen: mit `code_challenge` 200 und ein Code, ohne `code_challenge` 400 mit `Code challenge is required.` (2.2). Das ist keine Frage mehr, sondern ein Messwert. Der Rest der Sache, die fehlende Bekanntmachung in den Metadaten, ist **Frage 9** |
+| "Veröffentlicht `integration_openproject` eine Capability, oder braucht es den Navigations-Umweg?" | `ARCHITECTURE.md` A.7 | Gemessen beantwortet: `GET /ocs/v2.php/cloud/capabilities` liefert **ohne jede Anmeldung** einen Abschnitt `integration_openproject` mit `app_version`, `groupfolder_version` und `groupfolders_enabled`, und `app_version` nennt genau die installierte Fassung 3.1.1 (2.1). Der Umweg über `/core/navigation/apps`, den Nextcloud Mail erzwingt, entfällt hier. Eine spätere Fähigkeitsprüfung bekommt die Antwort aus einem Aufruf, der ohnehin läuft |
+
+Die drei nicht-technischen Fragen des Dossiers zum 14.09. (Verkaufsmechanik, Referenz-ISVs, Kanal des
+Enterprise-Flags) sind von dieser Liste unberührt: sie kommen aus dem Validierungsplan und nicht aus
+dieser Phase.
+
+**Wo dieselbe Liste sonst noch steht (D-10).** Der Stand oben ist zusätzlich in das Dossier für den
+Termin übernommen worden, `Desktop/ISV-Call-Dossier-2026-09-14.md`, Abschnitt "Technische Fragen aus
+Phase 17". Das Dossier liegt außerhalb dieses Repositoriums und ist nicht versioniert; versioniert ist
+dieser Abschnitt hier, und er ist bei einem Widerspruch der maßgebliche.
 
 ## 5. Rohmesswerte
 
