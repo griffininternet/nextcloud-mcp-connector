@@ -181,7 +181,35 @@ Plans:
   4. Das Log liegt in einer eigenen Ablage neben dem OAuth-Speicher, hat eine Obergrenze und eine Aufbewahrungsfrist, die mindestens 180 Tage erreichen kann; bei vollem Volume bleiben Token-Rotation und neue Verbindungen funktionsfähig
   5. `occ mcp_connector:purge`, das Entfernen über die Oberfläche, Verbindung trennen und Pausieren lassen das Audit-Log stehen, während alles andere verschwindet; gelöscht wird sonst nur durch die abgelaufene Aufbewahrungsfrist oder die Löschung des Nutzers in Nextcloud (D-v1.5-01). Eine Grenze, gemessen in 18-RESEARCH.md und hier beim Namen genannt: `occ app_api:app:unregister --rm-data` entfernt das Volume und mit ihm auch das Log, weil das Log nach D-01 neben dem OAuth-Speicher liegt; das ausdrückliche Löschen der Daten durch den Administrator ist kein Fall, gegen den diese Phase schützt
 
-**Plans**: TBD
+**Plans**: 10 plans
+Plans:
+**Wave 1**
+
+- [ ] 18-01-PLAN.md , Ablage und Kette: zweite SQLite-Datei, Schema mit actor und Grabsteinspalten, Pragmas samt auto_vacuum, Kettenanhang in einer Transaktion
+- [ ] 18-02-PLAN.md , Erlaubnisliste je Werkzeug und der Vertragstest nach dem Muster des Budget-Gates
+- [ ] 18-03-PLAN.md , feste Ablehnungskennungen: reason an ToolError, gesetzt an den sieben Statusabbildungen und den drei Sicherungsorten
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 18-04-PLAN.md , Prüfung und Abräumen: erste gebrochene Stelle benannt, Frist, Obergrenze gegen used_bytes, Grabsteine, zweiter Eintrag in FILES_WITH_OWN_SQL
+- [ ] 18-05-PLAN.md , Aufrufer-Identität: resolve_caller ohne Geheimnis, client_name im Anspruch des Tokens, Rekorder-Ablage in der Middleware
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 18-06-PLAN.md , Rekorder und Dekorator: Marker plus finally-Zweig in graceful, gesetzte Parameternamen, fail-open, Dekorator-Nachweis im Gate
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 18-07-PLAN.md , Schalter ab Werk aus als siebter Konfigurationswert, Verdrahtung in entry_exapp, Schaltprotokoll in der Instanzkette
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 18-08-PLAN.md , Prüfkommando occ mcp_connector:audit:verify ohne neue Route im Manifest, immer 200, Urteil im Rumpf
+- [ ] 18-09-PLAN.md , Nutzerlöschung nach D-12 mit fail-safe in Löschrichtung, plus die Messung der Annahme A1
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 18-10-PLAN.md , Abschluss: Purge-Überlebenstest, Budget-Stillstand, Gate-Lauf, Nachweistabelle je Erfolgskriterium samt der Grenze aus D-18
 
 ### Phase 19: Audit-Log Bedienung und Textnachzug
 
@@ -219,7 +247,7 @@ Plans:
 | 15. Release 0.1.10 | v1.4 | 4/4 | Complete | 2026-08-28 |
 | 16. Release 0.1.11 | v1.5 | 4/4 | Complete | 2026-08-28 |
 | 17. openDesk-Spike | v1.5 | 9/9 | Complete   | 2026-08-29 |
-| 18. Audit-Log Kern | v1.5 | 0/? | Not started | - |
+| 18. Audit-Log Kern | v1.5 | 0/10 | Planned | - |
 | 19. Audit-Log Bedienung und Textnachzug | v1.5 | 0/? | Not started | - |
 
 ## Next
