@@ -57,6 +57,14 @@ services:
       # browser see :8083 and Rails redirect to :8082, and the consent flow of D-04 would
       # break in a way that looks like an OAuth error and is a port mapping.
       - "127.0.0.1:8082:8082"
+      # Keycloak, stage C, and the same number inside and outside for exactly the reason
+      # given above for OpenProject, only with a third party involved. user_oidc resolves
+      # the discovery URI from inside the Nextcloud container, the browser follows the
+      # authorization redirect from the host, and Keycloak writes its own endpoint
+      # addresses into the discovery document (KC_HOSTNAME below). All three have to agree
+      # on the string kc.localtest.me:8083, or the issuer of the token differs from the
+      # expected one and the failure looks like an OIDC error while it is a port mapping.
+      - "127.0.0.1:8083:8083"
     volumes:
       - ./deploy/Caddyfile.spike-opendesk:/etc/caddy/Caddyfile:ro
     networks:
@@ -97,6 +105,13 @@ services:
       # network without any host entry, and it is what a neighbouring service is actually
       # called from in there.
       - "op.localtest.me:172.29.43.10"
+      # Stage C, same trap and same fix. user_oidc resolves --discoveryuri from inside this
+      # container; kc.localtest.me resolves to 127.0.0.1 in the public DNS, which is right
+      # for the browser on the host and wrong in here, so this line points the name at Caddy
+      # too. Without it the discovery call ends in "connection refused" against this
+      # container's own loopback, and the provider setup fails in a way that reads like a
+      # broken Keycloak.
+      - "kc.localtest.me:172.29.43.10"
     environment:
       SQLITE_DATABASE: nextcloud
       NEXTCLOUD_ADMIN_USER: "${NC_SPIKE_OD_ADMIN_USER:-admin}"
@@ -243,12 +258,35 @@ services:
     # and needs no hostname, no TLS material and no production checks.
     command: ["start-dev"]
     environment:
-      # No secret with a default value in this file (WR-11), and deliberately no secret at
-      # all: a `${...:?}` here would make every command of this topology demand a third
+      # No default value for either of these two (WR-11), and deliberately no `:?` guard
+      # either: a `${...:?}` here would make every command of this topology demand a third
       # export, `ps` on stage A included, because compose interpolates the whole file
-      # regardless of profiles (measured, see the header). Plan 17-07 hands the bootstrap
-      # admin credentials in through the environment; .env.spike-opendesk.example names the
-      # variables, and `kc.sh bootstrap-admin user` inside the container is the fallback.
+      # regardless of profiles (measured, see the header). Plain interpolation is the
+      # compromise that keeps both halves of WR-11 intact: no secret is written into this
+      # public file, and stage A stays runnable without stage C credentials. The values live
+      # in the git-ignored .env.spike-opendesk, which every command of this topology sources
+      # anyway (`set -a && . ./.env.spike-opendesk && set +a`); .env.spike-opendesk.example
+      # names the two variables, and `kc.sh bootstrap-admin user` inside the container is the
+      # fallback if they are ever empty.
+      KC_BOOTSTRAP_ADMIN_USERNAME: "${KC_BOOTSTRAP_ADMIN_USERNAME}"
+      KC_BOOTSTRAP_ADMIN_PASSWORD: "${KC_BOOTSTRAP_ADMIN_PASSWORD}"
+      # The one name this instance knows itself under, port included, and the same string
+      # the browser and the Nextcloud container use (see the Caddy 8083 block and the
+      # extra_hosts entry above). Keycloak writes exactly this into the endpoint addresses of
+      # its discovery document, and user_oidc compares the issuer against what it asked for.
+      #
+      # A full URL and not the bare `kc.localtest.me:8083`. Measured on 2026-08-29 against
+      # 26.7.0: the bare form makes the container crash-loop with "Provided hostname is
+      # neither a plain hostname nor a valid URL", because 26.x accepts either a hostname
+      # without a port or a complete URL, and nothing in between. The scheme has to be there
+      # too, and it has to be http, or Keycloak advertises https endpoints that this
+      # topology does not serve.
+      KC_HOSTNAME: "http://kc.localtest.me:8083"
+      # The proxy in front terminates nothing and speaks plain http, so the strict hostname
+      # checks of a production start would reject every request. This is a throwaway instance
+      # on loopback running `start-dev`; the relaxed check is the documented companion of
+      # that mode and never leaves this file.
+      KC_HOSTNAME_STRICT: "false"
       KC_HEALTH_ENABLED: "true"
     volumes:
       # A named volume and not the dev default, so that the realm survives a restart of the

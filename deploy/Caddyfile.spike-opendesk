@@ -74,3 +74,31 @@
 		header_up X-Forwarded-Proto http
 	}
 }
+
+# Keycloak, stage C of the phase (profile oidc in compose.spike-opendesk.yml). Nothing of
+# this block does anything while that profile is down: Caddy answers 502 on 8083 until the
+# service exists, and no other route is affected.
+#
+# The same name trap as the OpenProject block above, only with a third party in it. Three
+# have to agree on the one string `kc.localtest.me:8083`: the browser on the host when it
+# follows the authorization redirect to Keycloak, the Nextcloud container when user_oidc
+# resolves the address it was given in --discoveryuri, and Keycloak itself when it writes its
+# own endpoint addresses into the discovery document (that is what KC_HOSTNAME in the compose
+# file is for). If two of them disagree, the issuer of the token is not the expected one and
+# the failure reads like an OIDC error while it is a port mapping. Hence the same number
+# inside and outside, exactly as for 8082.
+#
+# 8083 and not 8080: 8080 is the port inside the Keycloak container and the host is not meant
+# to see it. Only 127.0.0.1:8083 on Caddy is published (WR-06).
+:8083 {
+	reverse_proxy keycloak:8080 {
+		# The Host header is passed through unchanged, same as for OpenProject: with
+		# KC_HOSTNAME_STRICT=false Keycloak builds its addresses from the incoming host,
+		# so `kc.localtest.me:8083` has to arrive untouched.
+		#
+		# X-Forwarded-Proto has to be written, and with the literal http: this topology
+		# serves no TLS, and a wrong value produces a redirect to an https port that does
+		# not exist.
+		header_up X-Forwarded-Proto http
+	}
+}
