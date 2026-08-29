@@ -702,6 +702,53 @@ der Zustand verschwindet mit dem Nextcloud-Band beim `down -v`. **`alice` ist un
 nach der Gegenprobe: `occ user:setting alice integration_openproject token_expires_at` antwortet
 weiter `1787949009`. Plan 17-07 braucht ein verbundenes Konto, und das ist `alice`.
 
+**Nachtrag vom 2026-08-29: derselbe Befund noch einmal, diesmal ohne jeden künstlichen Eingriff.**
+Der Hauptlauf oben hat den Ablauf gestellt, und das ist die eine Stelle, an der die Messung angreifbar
+bleibt: `0` ist zugleich der Vorgabewert von `isAccessTokenExpired()`, und ein Kritiker dürfte fragen,
+ob ein von Hand gesetzter Zustandswert überhaupt dasselbe auslöst wie eine wirklich verstrichene Frist.
+Diese Frage ist inzwischen beantwortet, und zwar durch einen Lauf, der gar nicht als S4-Messung geplant
+war. Beim Nachprüfen der S6-Zahlen am Folgetag war der `token_expires_at` von `alice` aus Plan 17-05
+(`1787949009`) **von selbst** verstrichen: zum Zeitpunkt des Aufrufs (`1787968632`) lag er **19623
+Sekunden in der Vergangenheit**, also weit jenseits des Sicherheitsabstands von 60 Sekunden. An diesem
+Konto ist **kein** `occ user:setting` gefahren worden, weder vorher noch nachher.
+
+| Schritt | Messwert |
+|---------|----------|
+| `token_expires_at` von `alice` vor dem Aufruf, aus 17-05 und seither unangetastet | `1787949009`, also `now - 19623` |
+| OCS-Aufruf als `alice`, `?searchQuery=Upload%20presentations&isSmartPicker=true`, wieder ohne Cookie und ohne App-Passwort | **HTTP 200**, `application/json; charset=utf-8`, **2542 Bytes**, ein Treffer `id 12` |
+| `occ user:setting alice integration_openproject token_expires_at` danach | **`1787975808`**, also `now + 7176`, wieder die vollen rund 7200 Sekunden |
+
+**Damit steht S4 auf zwei Beinen statt auf einem: einmal mit gestelltem und einmal mit wirklich
+verstrichenem Ablauf, und beide Male mit demselben Ausgang.** Der künstliche Ablauf ist als Messweg
+also nicht nur zulässig, sondern gemessen deckungsgleich mit dem natürlichen. Die drei Zahlen dieses
+Nachtrags sind zugleich der Beleg, dass die Erneuerung nicht an einer Besonderheit des Wertes `0`
+hängt.
+
+**Eine Buchhaltungsfolge, die hier stehen muss, damit ein Wiederholungslauf sie nicht falsch liest:**
+`alice` trägt seit diesem Aufruf **nicht mehr** den Wert `1787949009` aus Zeile 12 von 5.5.2, sondern
+`1787975808`. Zeile 12 bleibt als Messwert ihres Zeitpunkts richtig und wird nicht geändert. Was
+unverändert gilt, ist die Aussage dahinter: die Verbindung von `alice` ist unversehrt, und sie ist es
+nach diesem Nachtrag sogar belegter als vorher, weil sie gerade eben eine Erneuerung durchlaufen hat.
+Plan 17-07 findet ein verbundenes und frisch erneuertes Konto vor.
+
+#### S6: die Byte-Kosten und der Feldsatz einer Antwort
+
+**Behauptung:** Eine Antwort der Suchfläche trägt in kompakter Form die Felder, aus denen ein späteres
+Werkzeug projizieren würde.
+
+**Gemessen, ja, und die Zahl steht mit ihrer Bezugsgröße in Abschnitt 3.** Gemessen ist dieselbe
+Antwort wie in S3, unter `bob` und vor der Gegenprobe von S4: **4746 Bytes** wie ausgeliefert, ohne
+jeden Leerraum, davon **3895 Bytes in 49 HAL-Relationen** und **585 Bytes in 24 Feldern**. Die
+Bezugsgröße derselben Instanz über die API v3, mit dem als solchen gekennzeichneten Aufbauzugang:
+dieselbe Auskunft roh **15831 Bytes** und mit `select` **88 Bytes**.
+
+**Die Gegenprobe zu S6** ist eine zweite Antwort unter einem anderen Konto, `alice` gegen ein
+Arbeitspaket, das `opa` sehen darf: **2542 Bytes**, 27 Relationen, 22 Felder. Sie belegt, dass die
+Bytezahl keine Eigenschaft der Fläche ist, sondern von Berechtigung und Modulsatz abhängt, und sie
+verhindert, dass aus einer Einzelmessung ein Budget wird. Feldsatz, Relationenliste, die
+`select`-Vergleichswerte und die Einordnung stehen vollständig in Abschnitt 3, weil sie dort für OD-04
+gebraucht werden und hier nur als Messwert von S6 zählen.
+
 #### Die Egress-Kontrollmessung
 
 **Behauptung:** Der ExApp-Container erreicht OpenProject direkt, also bliebe Weg 1 als Rückfall offen.
@@ -784,9 +831,9 @@ Arbeitspaket zu Datei, die `research/FEATURES.md` als Unterscheidungsmerkmal nen
 | **S1** | `GET /api/v1/url` antwortet unter reiner AppAPI-Impersonation mit OCS-JSON und der Adresse | **gemessen, ja.** 200, OCS-Umschlag, `data = http://op.localtest.me:8082`, als `alice`; Gegenprobe 64 Nullen 401 |
 | **S2** | Die Berechtigung hängt am Nutzer, nicht an der App | **gemessen, ja.** `carol` 401 mit leerer Meldung aus der Vorprüfung, `alice` und `bob` je 200 mit Daten; die zwei 401-Formen sind unterscheidbar |
 | **S3** | Konto A sieht in der Suche kein Arbeitspaket, das nur Konto B sehen darf | **gemessen, ja.** `alice` 200 mit 0 Treffern, `bob` 200 mit genau einem (`id 38`); Gegenproben: `Demo` liefert `alice` 14 Treffer ohne die 38, 64 Nullen 401/997, `carol` 401 mit leerer Meldung |
-| **S4** | Nach künstlichem Ablauf antwortet der nächste Aufruf wieder mit Daten, ohne Browsersitzung | **gemessen, ja.** `token_expires_at` 1787949020, künstlich 0, danach 1787950505 (7200 s), Aufruf dazwischen 200 mit einem Treffer, Tokenpaar ausgetauscht, kein Cookie und kein App-Passwort; Gegenprobe mit unbrauchbarem `refresh_token`: **401** samt `invalid_grant` im Protokoll |
+| **S4** | Nach künstlichem Ablauf antwortet der nächste Aufruf wieder mit Daten, ohne Browsersitzung | **gemessen, ja, und zweimal.** Gestellt an `bob`: `token_expires_at` 1787949020, künstlich 0, danach 1787950505 (7200 s), Aufruf dazwischen 200 mit einem Treffer, Tokenpaar ausgetauscht, kein Cookie und kein App-Passwort; Gegenprobe mit unbrauchbarem `refresh_token`: **401** samt `invalid_grant` im Protokoll. **Natürlich verstrichen an `alice`** (Nachtrag 29.08., kein `occ`-Eingriff): Ablauf 19623 s alt, Aufruf **200** mit einem Treffer, danach 1787975808 (7176 s). Der gestellte und der echte Ablauf sind gemessen deckungsgleich |
 | **S5a/b/c** | Verhalten im Modus `oidc` nach Ablauf, drei Pfade | noch nicht gemessen, Plan 17-07 |
-| **S6** | Eine Antwort trägt die Felder für ein späteres Werkzeug in kompakter Form | noch nicht gemessen, Plan 17-06 |
+| **S6** | Eine Antwort trägt die Felder für ein späteres Werkzeug in kompakter Form | **gemessen.** 4746 Bytes als `bob`, ohne Leerraum, davon 3895 in 49 Relationen und 585 in 24 Feldern; Bezugsgröße API v3 roh 15831 gegen 88 Bytes mit `select`; Gegenprobe `alice` 2542 Bytes mit 27 Relationen. Vollständig in Abschnitt 3 |
 
 Der Ausgangszustand für S4 ist mit Plan 17-05 hergestellt und gelesen worden: `alice` und `bob` trugen
 je einen `refresh_token` und ein `token_expires_at` rund 7200 Sekunden in der Zukunft, und der Modus
@@ -1157,7 +1204,146 @@ dieses Abschnitts bleibt 17-09 überlassen.
 
 ## 3. API-Form (Vorarbeit für OD-04, kein Requirement dieser Phase)
 
-noch nicht gemessen, Plan 17-09
+**Teilweise gemessen am 2026-08-28.** Dieser Abschnitt trifft **keine** Entscheidung. Er sammelt, was
+die gemessene Fläche von Weg 0 an Feldern und Bytes liefert und was ein Werkzeug nach dem Entwurf von
+OD-04 davon bräuchte. Der Werkzeugschnitt ist OD-04 und gehört in v2.0; diese Phase erzeugt keinen
+Code (D-12), und die Reihenfolge ist ausdrücklich: erst die Messwerte, dann in 17-09 das Urteil über
+den Weg, dann irgendwann der Schnitt.
+
+### 3.1 Die Byte-Kosten einer Weg-0-Antwort (S6)
+
+Gemessen an derselben Antwort wie S3, unter demselben Konto: `bob`, ein Treffer, Arbeitspaket 38.
+Zeitlich liegt die Messung **vor** der Gegenprobe von S4, deshalb steht hier `bob` und nicht `alice`.
+
+| Messwert | Wert |
+|----------|------|
+| Antwort wie ausgeliefert | **4746 Bytes** |
+| Leerraum darin | **keiner**: 0 Zeilenumbrüche, 0 Tabulatoren, 0 doppelte Leerzeichen. Die Antwort ist also schon minifiziert, PHPs `json_encode` schreibt keinen Leerraum |
+| Anteil reiner Maskierung | 182 maskierte Schrägstriche (`\/`); ohne diese Maskierung neu kodiert sind es **4564 Bytes** |
+| das Arbeitspaket allein, ohne OCS-Umschlag | **4490 Bytes** |
+| davon `_links` | **3895 Bytes** in **49** Relationen, also **87 Prozent** des Objekts |
+| davon die eigentlichen Felder | **585 Bytes** in **24** Feldern |
+
+**Die eine Zahl, die dieser Abschnitt festhält, ist nicht 4746, sondern 3895 von 4490.** Der Aufwand
+einer Weg-0-Antwort liegt fast vollständig im HAL-Relationenblock und nicht in den Daten, die ein
+Werkzeug zeigen würde.
+
+**Der Feldsatz, vollständig.** 25 Schlüssel auf oberster Ebene, das sind die 24 Felder plus `_links`;
+`_embedded` fehlt in dieser Antwort ganz.
+
+```
+_type, id, displayId, subject, description, lockVersion,
+startDate, dueDate, derivedStartDate, derivedDueDate, duration, ignoreNonWorkingDays,
+estimatedTime, derivedEstimatedTime, derivedRemainingTime, spentTime,
+percentageDone, derivedPercentageDone, scheduleManually,
+position, storyPoints, hasProjectAttributes, createdAt, updatedAt
+```
+
+Die 49 Relationen in `_links`, ebenfalls vollständig:
+
+```
+self, schema, update, updateImmediately, move, copy, pdf, generate_pdf, atom,
+project, parent, ancestors, type, status, priority, author, assignee, responsible, version,
+category, projectPhaseDefinition, sprint, backlogBucket, targetVersions,
+attachments, addAttachment, fileLinks, addFileLink,
+activities, addComment, previewMarkup, relations, addRelation, availableRelationCandidates,
+addChild, changeParent, watchers, watch, addWatcher, removeWatcher, availableWatchers,
+timeEntries, logTime, showCosts, customActions, meetings,
+github_pull_requests, gitlab_merge_requests, gitlab_issues
+```
+
+Eine Relation zum Löschen ist in dieser Antwort **nicht** enthalten. Der Satz steht hier, weil die
+Liste vollständig sein soll und eine Abwesenheit sonst wie eine Auslassung des Berichts aussieht.
+
+**Der Feldsatz ist nicht konstant, und das ist der wichtigere Befund an dieser Stelle.** Die
+Kontrollmessung unter `alice` gegen ein Arbeitspaket, das `opa` sehen darf (Suchwort
+`Upload presentations`, ein Treffer, Seed-Projekt):
+
+| Messwert | `bob`, Arbeitspaket 38 | `alice`, Seed-Arbeitspaket 12 |
+|----------|------------------------|-------------------------------|
+| Antwort wie ausgeliefert | 4746 Bytes | **2542 Bytes** |
+| Relationen in `_links` | 49, 3895 Bytes | **27**, 1772 Bytes |
+| Felder | 24, 585 Bytes | **22**, 588 Bytes |
+| Felder nur hier | `position`, `storyPoints`, `spentTime` | `remainingTime` |
+| Relationen nur hier | 23, darunter `update`, `updateImmediately`, `addComment`, `addWatcher`, `addFileLink`, `move`, `copy`, `logTime`, `sprint`, `backlogBucket` | 1: `projectPhase` |
+
+Die **Felder** kosten in beiden Antworten praktisch dasselbe (585 gegen 588 Bytes), die
+**Relationen** unterscheiden sich um fast das Doppelte. Beide Ursachen sind sichtbar: `bob` ist im
+eigenen Projekt schreibberechtigt und bekommt deshalb `update`, `addComment`, `addWatcher` und die
+übrigen 20 Schreibrelationen mitgeliefert, und in seinem Projekt sind Module aktiv, die `storyPoints`
+und `sprint` erst erzeugen. **Eine Bytezahl je Arbeitspaket ist damit keine Budgetgröße, sondern eine
+Zahl mit zwei Abhängigkeiten: Berechtigung des Nutzers und aktive Module des Projekts.** Wer daraus
+ein Token-Budget rechnet, rechnet mit dem günstigsten Fall.
+
+### 3.2 Die Bezugsgröße, ohne die die Zahl wertlos wäre
+
+Eine Bytezahl allein sagt nichts. Gegengerechnet ist deshalb dieselbe Instanz über die API v3, mit dem
+**Aufbauzugang** `Basic apikey:<OP_API_TOKEN>` des Kontos `admin`. Der Zugang ist hier ausdrücklich
+als solcher gekennzeichnet: er ist **kein** Messweg über Berechtigungen und taucht in keinem
+Messwert von S3 oder S4 auf. Er ist genau dann zulässig, wenn nur die Größe einer Antwort verglichen
+wird, und genau das passiert hier.
+
+| Aufruf gegen `http://op.localtest.me:8082` | Status | Bytes |
+|--------------------------------------------|--------|-------|
+| `GET /api/v3/work_packages/38`, roh | 200 | **8115** |
+| dasselbe mit `?select=id,subject` | 200 | **8115**, also **unverändert** |
+| `GET /api/v3/work_packages?filters=[id=38]`, roh | 200 | **15831** |
+| dasselbe mit `select=total,elements/id,elements/subject` | 200 | **88** |
+| dasselbe mit `select=total,elements/id,elements/subject,elements/project,elements/status,elements/type,elements/self` | 200 | **361** |
+| dasselbe mit `select=...,elements/updatedAt` | **400** | 310, `urn:openproject-org:api:v3:errors:InvalidSignal` |
+
+**Zwei gemessene Befunde in dieser Tabelle, die kein Zitat ersetzt.** Erstens: `select` wirkt an der
+**Sammlung** und nicht an der Einzelressource. Am Endpunkt `/api/v3/work_packages/38` ändert der
+Parameter die Antwort um kein einzelnes Byte, an `/api/v3/work_packages` schrumpft dieselbe Auskunft
+von 15831 auf 88 Bytes. Zweitens: die zulässigen Auswahlen zählt der Server im Fehlertext selbst auf,
+wortwörtlich `Unterstützte Auswahlen sind self, project, status, type, author, assignee, responsible,
+_type, id, displayId, subject, startDate, dueDate, date, *`. `updatedAt` ist nicht darunter, und ein
+Client, der es auswählen will, bekommt 400 und nicht eine stille Teilantwort.
+
+**Die Werte aus der Recherche stehen hier als Kontext und nicht als eigener Messwert:** für
+`community.openproject.org` sind ein Arbeitspaket roh **3691 Bytes** und mit `select` **216 Bytes**
+notiert. Die Größenordnung passt zu den 88 und 361 Bytes oben; die absolute Zahl der rohen Antwort
+liegt in dieser Instanz höher (8115), weil ein anderer Modulsatz und andere Felder mitkommen. Genau
+deshalb ist der Vergleich nur als Größenordnung geführt.
+
+**Und die Zeile, die für Weg 0 zählt:** die OCS-Fläche von `integration_openproject` hat **keinen**
+`select`-Parameter. Die Methode nimmt gemessen `searchQuery`, `fileId` und `isSmartPicker`
+(`lib/Controller/OpenProjectAPIController.php:134-138`) und sonst nichts. Wer über Weg 0 liest, kann
+die 4746 Bytes also nicht am Server kleiner machen; wer über die API v3 liest, kann es.
+
+### 3.3 Was die OCS-Fläche für OD-04 hergibt und was nicht
+
+Die vollständige Routentabelle steht in 2.1, gezählt aus `appinfo/routes.php` der installierten
+Fassung 3.1.1: 17 OCS-Routen. Für den Entwurf von OD-04 sind daraus drei Lücken und ein Fund
+entscheidend, und alle vier sind an der installierten Fassung belegt und nicht aus einer Dokumentation
+übernommen.
+
+| Bedarf aus dem OD-04-Entwurf | Lage auf der OCS-Fläche |
+|------------------------------|--------------------------|
+| ein einzelnes Arbeitspaket per Id lesen | **keine Route.** Erreichbar nur als Suche mit einem Filter, und der Suchweg hängt an `isSmartPicker` beziehungsweise an einer registrierten Ablage (2.1) |
+| Kommentare eines Arbeitspakets lesen | **keine Route.** `_links.activities` und `_links.addComment` stehen im Antwortkörper, die Fläche selbst bietet dafür nichts |
+| "meine Arbeit", also die Arbeitspakete des angemeldeten Nutzers | **keine Route.** Es gibt `GET /api/v1/notifications`, und das ist etwas anderes |
+| die Kette Arbeitspaket zu Datei | **`GET /api/v1/work-packages/{id}/file-links` existiert.** Das ist genau das Unterscheidungsmerkmal, das `research/FEATURES.md` nennt, und es ist die einzige Route, die eine Id eines Arbeitspakets annimmt |
+| Suche nach Text | `GET /api/v1/work-packages?searchQuery=...`, gemessen in S3 |
+| Zustand und Typ eines Arbeitspakets auflösen | `GET /api/v1/statuses/{id}` und `GET /api/v1/types/{id}`, nicht gemessen |
+| Projekte auflisten | `GET /api/v1/projects`, nicht gemessen |
+
+`GET /api/v1/work-packages/{id}/file-links` ist in diesem Plan **nicht** aufgerufen worden: die Route
+setzt eine registrierte Ablage voraus, und die gibt es in dieser Instanz gemessen nicht (5.5.1). Der
+Befund ist damit die Existenz der Route und ihre Signatur, nicht ihr Verhalten. Das steht hier als
+`ungemessen` mit Grund und ist ein Kandidat für einen Folgeplan oder für OD-04.
+
+**Keine Entscheidung, und zwar ausdrücklich.** Ob ein künftiges Werkzeug `openproject_browse` über
+Weg 0 oder über Weg 1 liest, welche Felder es projiziert, ob es `wp:<id>` für `fetch` einführt und wie
+es mit den drei Lücken umgeht, entscheidet OD-04 nach dem Urteil aus 2.4, und 2.4 gehört Plan 17-09.
+Dieser Abschnitt liefert dafür Zahlen und Routen, keine Wahl.
+
+**Der Satz, der am Ende dieses Abschnitts stehen soll, weil er die Richtung der Sparsamkeit festlegt.**
+Die Diät macht hier der **Server** über `select`, gemessen 15831 gegen 88 Bytes an derselben Auskunft,
+und nicht eine Projektion in unserem Code. Eine Projektion bei uns spart Ausgabe an das Sprachmodell,
+aber keinen einzigen Byte auf der Leitung und keine Arbeit in OpenProject; ein `select` spart beides.
+Für Weg 0 ist das zugleich der gemessene Nachteil: dort gibt es kein `select`, und eine Antwort trägt
+zu 87 Prozent Relationen, die niemand angefragt hat.
 
 ## 4. Fragenliste für den ISV-Call am 14.09. (OD-03)
 
@@ -1426,6 +1612,60 @@ Zeilen zu `18:55:23` (Gegenprobe, Zeile 10). Die zweite davon steht wörtlich in
 ist `invalid_grant`, dasselbe, das 2.2 auf Weg 1 für einen erfundenen `refresh_token` gemessen hat.
 Die Zeile ist vor der Übernahme in diesen Bericht gegen jeden Wert der Verbindungsdatei geprüft
 worden und trägt keinen davon.
+
+#### 5.5.3 Die Byte-Messung und die Bezugsgröße (S6)
+
+Gemessen am 2026-08-28. Die erste Zeile ist dieselbe Antwort wie Zeile 4 von 5.5.1, es ist kein
+zweiter Aufruf dafür gefahren worden. Die Zählung selbst lief über die gespeicherte Antwortdatei
+außerhalb des Repositoriums.
+
+| Gegenstand | Rohwert |
+|------------|---------|
+| OCS-Antwort als `bob`, ein Treffer `id 38` | 4746 Bytes, 0 Zeilenumbrüche, 0 Tabulatoren, 0 doppelte Leerzeichen, 182 Vorkommen von `\/`, 0 Vorkommen von `\u` |
+| dieselbe Antwort ohne Schrägstrich-Maskierung neu kodiert | 4564 Bytes |
+| das Arbeitspaket-Objekt allein | 4490 Bytes, 25 Schlüssel oberster Ebene, kein `_embedded` |
+| `_links` darin | 3895 Bytes, 49 Relationen |
+| die 24 Felder darin | 585 Bytes |
+| OCS-Antwort als `alice`, Suchwort `Upload presentations`, ein Treffer `id 12` | 2542 Bytes, 27 Relationen (1772 Bytes), 22 Felder (588 Bytes) |
+
+Die Bezugsgrößen derselben Instanz, alle mit dem Aufbauzugang `Basic apikey:<OP_API_TOKEN>` des Kontos
+`admin` und ausdrücklich ohne Beweiskraft über Berechtigungen:
+
+```
+GET /api/v3/work_packages/38                                            -> 200,  8115 Bytes
+GET /api/v3/work_packages/38?select=id,subject                          -> 200,  8115 Bytes
+GET /api/v3/work_packages?filters=[{"id":{"operator":"=","values":["38"]}}]
+                                                                        -> 200, 15831 Bytes
+   ... &select=total,elements/id,elements/subject                       -> 200,    88 Bytes
+   ... &select=total,elements/id,elements/subject,elements/project,
+              elements/status,elements/type,elements/self                -> 200,   361 Bytes
+   ... &select=...,elements/updatedAt                                   -> 400,   310 Bytes,
+       urn:openproject-org:api:v3:errors:InvalidSignal
+```
+
+Der Filterwert ist hier lesbar geschrieben, gefahren wurde er prozentkodiert. Die 88 und die 361 Bytes
+sind die einzigen Antworten dieses Plans **mit** Leerraum: der `select`-Zweig serialisiert mit einem
+Leerzeichen nach dem Doppelpunkt, der reguläre Zweig ohne. Für den Vergleich mit den 4746 Bytes ist das
+ohne Bedeutung und steht hier nur der Vollständigkeit halber.
+
+#### 5.5.4 Der natürlich verstrichene Ablauf an `alice` (Nachtrag zu S4)
+
+Gemessen am 2026-08-29 beim Nachprüfen der Zahlen aus 5.5.3. Der Lauf war nicht als Messung geplant
+und ist deshalb der sauberste, den dieser Plan hat: an `alice` ist zu keinem Zeitpunkt ein
+`occ user:setting` gefahren worden, weder schreibend noch zur Vorbereitung. Der Ablauf ist von selbst
+verstrichen, zwischen der Einrichtung in Plan 17-05 und diesem Aufruf.
+
+| # | Zeitpunkt (Unix) | Schritt | Rohwert |
+|---|------------------|---------|---------|
+| 1 | 1787968632 | Systemzeit zum Zeitpunkt des Aufrufs | `1787968632` |
+| 2 | vor 1 | `token_expires_at` von `alice`, gesetzt in 17-05, seither unangetastet | `1787949009`, Differenz zu Zeile 1: **-19623** |
+| 3 | 1787968632 | OCS-Aufruf als `alice`, `?searchQuery=Upload%20presentations&isSmartPicker=true`, ohne Cookie, ohne App-Passwort | **200**, `application/json; charset=utf-8`, **2542 Bytes**, ein Treffer `id 12`, `subject "Upload presentations to website"` |
+| 4 | nach 3 | `occ user:setting alice integration_openproject token_expires_at` | **`1787975808`**, Differenz zu Zeile 1: **+7176** |
+
+Die Zahl aus Zeile 2 ist dieselbe, die Zeile 12 von 5.5.2 als unverändert protokolliert hat. Zeile 12
+bleibt für ihren Zeitpunkt richtig; wer den Wert heute liest, findet den aus Zeile 4. Die Antwort aus
+Zeile 3 ist dieselbe, deren Byte- und Feldzahlen 5.5.3 unter `alice` führt: es ist **ein** Aufruf, der
+zwei Fragen beantwortet, und kein zweiter dafür gefahren worden.
 
 ## Was diese Messung nicht beweist
 
