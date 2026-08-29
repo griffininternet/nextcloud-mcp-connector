@@ -168,7 +168,27 @@ _.cleanup_at
 #   and that arrives in plan 18-07. It is driven directly by
 #   tests/unit/test_audit_store.py::test_last_entry_of_a_kind_skips_the_calls_between_two_
 #   switches, and it leaves this list with the plan that calls it.
+#
+# sweep: the retention window, the upper bound and the markers of AUDIT-03. Its caller is the
+#   recorder of plan 18-06, which asks should_sweep about the number append just handed back
+#   and pays for the sweep on every five hundredth row (D-11). Driven by four cases in
+#   tests/unit/test_audit_store.py, among them the one that keeps the bound from sweeping to
+#   an empty table, and it leaves this list with plan 18-06.
+# verify_chains: the check of AUDIT-02. Its caller is the check command of plan 18-08, which
+#   turns a finding into a sentence for the administrator; the finding itself stays data here
+#   on purpose, so the same check can also answer machine readable. Driven by four cases in
+#   tests/unit/test_audit_store.py, and it leaves this list with plan 18-08.
+# next_seq and used_bytes_after: the two fields of ChainFinding and SweepReport that no
+#   production line reads yet. next_seq is the second half of "missing between these two
+#   numbers" and is read by the command of plan 18-08, used_bytes_after is what the sweep
+#   measured when it was done and is read by the same command; both are asserted on in
+#   tests/unit/test_audit_store.py today. The other fields of both classes carry names that
+#   are read elsewhere in the module, which is why only these two stand here.
 _.last_entry
+_.sweep
+_.verify_chains
+_.next_seq
+_.used_bytes_after
 
 # --- The two lists of audit/allowlist.py ------------------------------------------------
 # audit/allowlist.py is data and nothing else, so vulture sees two module level names that
