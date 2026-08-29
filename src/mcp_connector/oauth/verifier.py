@@ -54,6 +54,7 @@ from .store import VALIDATION_CACHE_TTL, OAuthStore, token_hash
 __all__ = [
     "AUTH_ID_CLAIM",
     "CACHE_LIMIT",
+    "CLIENT_NAME_CLAIM",
     "OAUTH_STATE_ATTR",
     "IdentitySource",
     "OAuthIdentity",
@@ -85,6 +86,14 @@ class ClientLookup(Protocol):
 #: happened, and by itself it grants nothing.
 AUTH_ID_CLAIM = "auth_id"
 
+#: Where the registered name of the client travels, next to the id of the authorization and
+#: for the same reason: the token model has no field for it, and ``claims`` is what it offers.
+#: The value is public information a client chose for itself at registration time, never a
+#: secret, and it is carried rather than looked up later: the audit log has to survive ``occ
+#: mcp_connector:purge``, which empties the client table, so a name resolved at reading time
+#: would be gone by then.
+CLIENT_NAME_CLAIM = "client_name"
+
 #: The name the transport boundary deposits the resolved identity under, and the name
 #: ``deps.py`` reads. One constant, so the two sides cannot drift apart.
 OAUTH_STATE_ATTR = "oauth_identity"
@@ -110,6 +119,11 @@ class OAuthIdentity:
     answer differently: the transport boundary refuses a token whose connection is gone,
     while the credential layer turns a connection that was ended into a sentence the user
     can act on ("connect the app again").
+
+    ``client_name`` is the name the client gave itself at registration, carried unquoted:
+    it is attacker chosen input, and the one place that quotes it is the one that writes it
+    into a line or onto a page. It defaults to the empty string and never to ``None``, so a
+    reader never has to distinguish "no name" from "no field".
     """
 
     nc_user: str
@@ -117,11 +131,13 @@ class OAuthIdentity:
     auth_id: str
     client_id: str
     revoked: bool = False
+    client_name: str = ""
 
     def __repr__(self) -> str:
         return (
             f"OAuthIdentity(nc_user={self.nc_user!r}, auth_id={self.auth_id!r}, "
-            f"client_id={self.client_id!r}, revoked={self.revoked!r}, app_password='***')"
+            f"client_id={self.client_id!r}, client_name={self.client_name!r}, "
+            f"revoked={self.revoked!r}, app_password='***')"
         )
 
 
@@ -224,7 +240,8 @@ class StoreTokenVerifier:
             # RFC 8707: a token for another MCP server, or one without an audience at all,
             # which would be valid at every server a user connects (pitfall 3, T-03-51).
             return None
-        if await self._get_client(authorization.client_id, may_fetch=False) is None:
+        client = await self._get_client(authorization.client_id, may_fetch=False)
+        if client is None:
             # The fourth enforcement point of AUTH-07: a block has to reach tokens that
             # were issued before it (pitfall 9, T-03-55). ``may_fetch=False`` keeps the
             # promise of the module docstring against every host, not only Nextcloud
@@ -240,7 +257,11 @@ class StoreTokenVerifier:
             expires_at=row.expires_at,
             resource=row.resource,
             subject=row.nc_user,
-            claims={AUTH_ID_CLAIM: row.auth_id},
+            # The name comes from the client this check has just loaded anyway: zero
+            # additional reads, no second lookup and no new ``await``. The price is that a
+            # rename is visible up to the cache window of five seconds later, which is
+            # without consequence for a record of what happened.
+            claims={AUTH_ID_CLAIM: row.auth_id, CLIENT_NAME_CLAIM: client.client_name or ""},
         )
         self._remember(digest, access)
         return access
@@ -252,7 +273,8 @@ class StoreTokenVerifier:
         live Nextcloud credential, and it is the one lookup that still sees a revocation
         that happened inside the cache window of :meth:`verify_token`.
         """
-        auth_id = str((access.claims or {}).get(AUTH_ID_CLAIM) or "")
+        claims = access.claims or {}
+        auth_id = str(claims.get(AUTH_ID_CLAIM) or "")
         if not auth_id:
             # A token from another verifier. Nothing here may act on it.
             return None
@@ -275,6 +297,9 @@ class StoreTokenVerifier:
             auth_id=auth_id,
             client_id=row.client_id,
             revoked=row.revoked_at is not None,
+            # Copied from the claim rather than read from the store: the name rode along
+            # with the token, so a missing claim is an empty name and never a lookup.
+            client_name=str(claims.get(CLIENT_NAME_CLAIM) or ""),
         )
 
     def _cached(self, digest: str) -> AccessToken | None:

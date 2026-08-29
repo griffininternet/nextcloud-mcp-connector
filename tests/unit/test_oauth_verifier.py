@@ -42,6 +42,7 @@ FAMILY_ID = "the-family-of-this-connection"
 NC_USER = "alice"
 APP_PASSWORD = "aaaaa-bbbbb-ccccc-ddddd-eeeee"
 TOKEN = "the-access-token-of-this-connection"
+CLIENT_NAME = "Claude"
 
 #: A key that is not secret, because it never leaves this file.
 KEY = bytes(range(32))
@@ -57,7 +58,20 @@ ENV = {
 REGISTRATION = OAuthClientInformationFull.model_validate(
     {
         "client_id": CLIENT_ID,
-        "client_name": "Claude",
+        "client_name": CLIENT_NAME,
+        "redirect_uris": [REDIRECT],
+        "grant_types": ["authorization_code", "refresh_token"],
+        "response_types": ["code"],
+        "token_endpoint_auth_method": "none",
+        "scope": TOOL_SCOPE,
+    }
+).model_dump_json(exclude={"client_secret"})
+
+#: The same registration without the optional name: dynamic client registration does not
+#: require one, so the nameless client is a case and not an anomaly.
+REGISTRATION_WITHOUT_NAME = OAuthClientInformationFull.model_validate(
+    {
+        "client_id": CLIENT_ID,
         "redirect_uris": [REDIRECT],
         "grant_types": ["authorization_code", "refresh_token"],
         "response_types": ["code"],
@@ -129,9 +143,10 @@ async def seed(
     resource: str = RESOURCE,
     allowed: bool = True,
     issued_at: int | None = None,
+    registration: str = REGISTRATION,
 ) -> None:
     """One registered client, one authorization and one access token of that connection."""
-    await store.save_client(CLIENT_ID, metadata_json=REGISTRATION, allowed=allowed)
+    await store.save_client(CLIENT_ID, metadata_json=registration, allowed=allowed)
     await store.touch_client(CLIENT_ID)
     await store.create_authorization(
         AUTH_ID,
@@ -352,6 +367,41 @@ async def test_the_identity_of_a_token_is_the_user_and_the_app_password(tmp_path
     assert identity.auth_id == AUTH_ID
     assert identity.revoked is False
     assert APP_PASSWORD not in repr(identity), "the credential is masked like every other"
+
+
+@pytest.mark.anyio
+async def test_the_identity_carries_the_registered_name_of_its_client(tmp_path: Path) -> None:
+    """The name rides in the claim of the token, so no lookup is added to the hot path."""
+    subject, store = build(tmp_path)
+    await seed(store)
+    access = await subject.verify_token(TOKEN)
+    assert access is not None
+    assert access.claims is not None
+    assert access.claims[verifier_module.CLIENT_NAME_CLAIM] == CLIENT_NAME
+
+    identity = await subject.resolve_identity(access)
+
+    assert identity is not None
+    assert identity.client_name == CLIENT_NAME
+    assert CLIENT_NAME in repr(identity), "the name is not a secret and stays readable"
+    assert APP_PASSWORD not in repr(identity)
+    assert "app_password='***'" in repr(identity), "the credential is masked as before"
+
+
+@pytest.mark.anyio
+async def test_a_client_without_a_name_becomes_an_empty_string_and_never_none(
+    tmp_path: Path,
+) -> None:
+    """A reader of the log never has to tell "no name" from "no field" apart."""
+    subject, store = build(tmp_path)
+    await seed(store, registration=REGISTRATION_WITHOUT_NAME)
+    access = await subject.verify_token(TOKEN)
+    assert access is not None
+
+    identity = await subject.resolve_identity(access)
+
+    assert identity is not None
+    assert identity.client_name == ""
 
 
 @pytest.mark.anyio
