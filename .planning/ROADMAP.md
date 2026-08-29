@@ -152,7 +152,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 17-06-PLAN.md , Weg 0 gemessen: S3 Zwei-Konten-Negativbeweis, S4 Erneuerung nach künstlichem Ablauf mit Gegenprobe, S6 Byte-Kosten und API-Form
+- [x] 17-06-PLAN.md , Weg 0 gemessen: S3 Zwei-Konten-Negativbeweis, S4 Erneuerung nach künstlichem Ablauf mit Gegenprobe, S6 Byte-Kosten und API-Form
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
@@ -218,7 +218,7 @@ Plans:
 | 14. Doku-Reste und Gate-Entscheid | v1.4 | 2/2 | Complete | 2026-08-27 |
 | 15. Release 0.1.10 | v1.4 | 4/4 | Complete | 2026-08-28 |
 | 16. Release 0.1.11 | v1.5 | 4/4 | Complete | 2026-08-28 |
-| 17. openDesk-Spike | v1.5 | 5/9 | In Progress|  |
+| 17. openDesk-Spike | v1.5 | 6/9 | In Progress|  |
 | 18. Audit-Log Kern | v1.5 | 0/? | Not started | - |
 | 19. Audit-Log Bedienung und Textnachzug | v1.5 | 0/? | Not started | - |
 

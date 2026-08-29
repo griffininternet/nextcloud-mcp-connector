@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
 status: executing
-stopped_at: Completed 17-05-PLAN.md
-last_updated: "2026-08-28T18:45:25.408Z"
-last_activity: 2026-08-28
+stopped_at: Completed 17-06-PLAN.md
+last_updated: "2026-08-29T02:13:23.295Z"
+last_activity: 2026-08-29
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 13
-  completed_plans: 9
+  completed_plans: 10
   percent: 25
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 17 (openDesk-Spike) — EXECUTING
-Plan: 6 of 9
+Plan: 7 of 9
 Status: Ready to execute
-Last activity: 2026-08-28
+Last activity: 2026-08-29
 
 ## Performance Metrics
 
@@ -172,6 +172,7 @@ Last activity: 2026-08-28
 | Phase 17 P03 | 48 | 3 tasks | 3 files |
 | Phase 17 P04 | 41 min | 3 tasks | 2 files |
 | Phase 17 P05 | 78 | 3 tasks | 2 files |
+| Phase 17 P06 | 52 | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -639,6 +640,10 @@ Recent decisions affecting current work:
 - [Phase ?]: 17-05: Weg A des Einrichtungswegs ist gemessen nicht gangbar (SSRF-Schutz von OpenProject); gelaufen ist Weg B, Weg A bleibt ungemessen statt verworfen
 - [Phase ?]: 17-05: allow_local_remote_servers=true als dokumentierter Eingriff in die Messumgebung; beide Produkte sperren Loopback in der Vorgabe
 - [Phase ?]: 17-05: OD-02 bleibt Pending, von Weg 0 fehlen S3 bis S6; abgehakt wird es von 17-09
+- [Phase 17]: S4 steht auf zwei Beinen: der gestellte Ablauf (`token_expires_at 0`, bob) und der natürlich verstrichene (19623 s, alice) liefern denselben Ausgang, damit ist der künstliche Ablauf als Messweg selbst gegengeprobt und die Erneuerung hängt nicht am Wert 0
+- [Phase 17]: die Byte-Kosten einer Weg-0-Antwort sind keine Budgetgröße, sondern eine Zahl mit zwei Abhängigkeiten (Berechtigung des Nutzers, Modulsatz des Projekts): dieselbe Fläche liefert 4746 Bytes als bob und 2542 als alice, davon 87 Prozent HAL-Relationen
+- [Phase 17]: Abschnitt 3 des Berichts trifft ausdrücklich keine Entscheidung über den Werkzeugschnitt; die Wahl gehört 17-09 und OD-04, und die Diät macht der Server über `select` (15831 gegen 88 Bytes) und nicht eine Projektion in unserem Code
+- [Phase 17]: OD-02 bleibt Pending, weil von Weg 0 noch S5 fehlt; abgehakt wird es von 17-09. Fortsetzung der Entscheidung aus 17-01 bis 17-05
 
 ### Pending Todos
 
@@ -678,7 +683,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-28T18:45:25.391Z
+Last session: 2026-08-29T02:13:03.458Z
 Stopped at: Completed 17-05-PLAN.md
 Naechster Schritt: 16-02 (sechs Gates lokal grün, Archiv-Probelauf, Proof-Zeilen der Runbook-Schritte 1 bis 3); der Tag v0.1.11 entsteht erst in 16-03 nach ausdrücklicher Owner-Freigabe
 Resume file: None
