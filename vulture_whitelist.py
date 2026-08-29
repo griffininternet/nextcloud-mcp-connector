@@ -158,6 +158,18 @@ _.created_at
 _.issued_at
 _.cleanup_at
 
+# --- The store API of phase 18 ----------------------------------------------------------
+# audit/store.py was built in one piece in plan 18-01, for the same reason oauth/store.py was
+# in plan 03-02: its schema, its canonical field order and its chain only make sense
+# together, and its callers arrive plan by plan afterwards.
+#
+# last_entry: the youngest row of one chain, optionally of one kind. Its caller is the switch
+#   of D-15, which asks for the last row of kind 'switch' to know which direction it is in,
+#   and that arrives in plan 18-07. It is driven directly by
+#   tests/unit/test_audit_store.py::test_last_entry_of_a_kind_skips_the_calls_between_two_
+#   switches, and it leaves this list with the plan that calls it.
+_.last_entry
+
 # --- The methods of the SDK provider protocol ------------------------------------------
 # oauth/provider.py implements OAuthAuthorizationServerProvider. Every method below is
 # called by the SDK handlers of /authorize, /token and /register, and by nothing in this
