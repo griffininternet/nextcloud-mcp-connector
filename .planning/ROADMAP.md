@@ -179,7 +179,7 @@ Plans:
   2. In keinem Eintrag steht ein Parameterwert oder ein Ergebnisinhalt; eine Erlaubnisliste je Werkzeug nennt die zulässigen Parameternamen, und ein Vertragstest nach dem Muster des Budget-Gates schlägt fehl, sobald ein Werkzeug diese Grenze überschreitet
   3. Ein Prüfkommando bestätigt die ungebrochene Hash-Kette über alle Einträge oder benennt die erste gebrochene Stelle; eine nachträglich veränderte Zeile wird von diesem Kommando gefunden
   4. Das Log liegt in einer eigenen Ablage neben dem OAuth-Speicher, hat eine Obergrenze und eine Aufbewahrungsfrist, die mindestens 180 Tage erreichen kann; bei vollem Volume bleiben Token-Rotation und neue Verbindungen funktionsfähig
-  5. `occ mcp_connector:purge` und die Deinstallation lassen das Audit-Log stehen, während alles andere verschwindet; Verbindung trennen und Pausieren lassen die Einträge ebenfalls stehen, und gelöscht wird nur durch die abgelaufene Aufbewahrungsfrist oder die Löschung des Nutzers in Nextcloud (D-v1.5-01)
+  5. `occ mcp_connector:purge`, das Entfernen über die Oberfläche, Verbindung trennen und Pausieren lassen das Audit-Log stehen, während alles andere verschwindet; gelöscht wird sonst nur durch die abgelaufene Aufbewahrungsfrist oder die Löschung des Nutzers in Nextcloud (D-v1.5-01). Eine Grenze, gemessen in 18-RESEARCH.md und hier beim Namen genannt: `occ app_api:app:unregister --rm-data` entfernt das Volume und mit ihm auch das Log, weil das Log nach D-01 neben dem OAuth-Speicher liegt; das ausdrückliche Löschen der Daten durch den Administrator ist kein Fall, gegen den diese Phase schützt
 
 **Plans**: TBD
 

@@ -116,6 +116,27 @@ Milestones v1.5.
   handelnden Administrator. Sonst ließe sich das Log abschalten, handeln und wieder
   einschalten, ohne dass die Lücke einen Namen hat.
 
+### Nachentscheide nach der Recherche (2026-08-29, nach 18-RESEARCH.md)
+
+- **D-16 (präzisiert D-15):** Der handelnde Administrator lässt sich nicht ermitteln:
+  AppAPIs `SetValueListener` verwirft bei Admin-Formularen die Nutzerangabe (app_api
+  v34.0.3, Beleg in `18-RESEARCH.md`). Das Schema trägt die Spalte `actor` trotzdem von
+  Anfang an, gefüllt mit `unbekannt`. Kommt später ein Weg dazu, braucht es keine
+  Schemaänderung. Zeitpunkt und Richtung der Schaltung werden weiterhin protokolliert.
+- **D-17 (präzisiert D-07):** Feste Ablehnungskennungen entstehen über ein neues Feld
+  `reason` an `ToolError`, gesetzt an **genau den sieben Stellen**, die einen HTTP-Status auf
+  einen Fehler abbilden (`nextcloud/clients/ocs.py`, `dav.py`, `caldav.py`, `carddav.py`;
+  Fundstellen in `18-RESEARCH.md`). Die übrigen rund 223 Wurfstellen bleiben unberührt und
+  landen als "nicht näher bestimmt". Ein flächendeckender Umbau aller Wurfstellen wurde
+  verworfen: diese Phase stellt ein Modul daneben, sie räumt nicht die Fehlerbehandlung auf.
+- **D-18 (präzisiert Erfolgskriterium 5):** Das Log überlebt `purge`, das Entfernen über die
+  Oberfläche, Verbindungstrennen und Pausieren, **nicht aber**
+  `occ app_api:app:unregister --rm-data`: das entfernt das Volume und damit auch die
+  Log-Datei, weil sie nach D-01 neben dem OAuth-Speicher liegt. Das Erfolgskriterium in
+  `.planning/ROADMAP.md` ist entsprechend präzisiert; das Log wird **nicht** ausserhalb des
+  Volumes abgelegt, weil das D-01 widerspräche und Daten an einen Ort legte, den ein
+  Administrator beim Aufräumen nicht findet.
+
 ### Claude's Discretion
 
 - Das Hash-Verfahren und die Kanonisierung der Felder (naheliegend SHA-256 über eine
