@@ -1863,7 +1863,84 @@ dieser Abschnitt hier, und er ist bei einem Widerspruch der maßgebliche.
 
 **Geheimnisregel, gültig für jede Zeile dieses Abschnitts.** Diese Datei liegt in einem öffentlichen Repository. Protokolliert werden ausschließlich Statuscodes, Feldnamen, Zahlen, Längen und Präfixe. Niemals protokolliert wird ein `access_token`, ein `refresh_token`, ein Autorisierungscode, ein `client_secret` oder ein Wert des Headers `AUTHORIZATION-APP-API`: dieser Wert ist Base64 von `<user>:<APP_SECRET>` und damit genau so heikel wie das Geheimnis selbst. Tokenwerte werden auf ihre Länge und ihr Präfix reduziert. `expires_in` ist eine Zahl und darf stehen. Vor jedem Commit an dieser Datei läuft ein Griff nach den vier Zeichenketten, die dieses Projekt als Geheimnisverdacht führt: das JWT-Präfix, das Bearer-Schema mit einem Wert dahinter, und `refresh_token` sowie `client_secret` je mit einem Gleichheitszeichen. Die vier Muster stehen hier bewusst umschrieben und nicht wörtlich: sonst findet der Griff diese Zeile selbst, und ein Gate, das an seiner eigenen Regel scheitert, wird beim nächsten Lauf ignoriert statt gelesen.
 
-Die übrigen Unterabschnitte werden von den Plänen 17-04 bis 17-09 gefüllt.
+Alle Unterabschnitte sind gefüllt. Die Reihenfolge von 5.1 bis 5.6 ist die des Aufbaus und die der
+Pläne; wer die Rohwerte in der Reihenfolge der **Behauptungen** braucht, findet sie in 5.0.
+
+### 5.0 Die Rohwerte in der Reihenfolge der Behauptungen
+
+Diese Tabelle steht vor den nach Plänen geordneten Unterabschnitten und führt jede Messung genau
+einmal: der Aufruf ohne Kopfzeilenwerte, der Statuscode, der Content-Type, die Antwortform, höchstens
+120 Zeichen Körper und das Konto, unter dem der Aufruf lief. Die Reihenfolge ist S0 bis S6, danach
+Weg 1, danach die SSRF-Grenze. Wo eine Zeile mehrere gleichartige Läufe hat, steht hier der tragende
+und die Spalte Stelle nennt die vollständige Liste. Wo ein Wert nicht protokolliert wurde, steht das
+so und nicht ein nachträglich erschlossener Wert.
+
+Die Kopfzeilenwerte fehlen in jeder Zeile nach der Geheimnisregel oben: `AUTHORIZATION-APP-API`,
+Cookies, `Authorization: Bearer` und jedes `client_secret` stehen nirgends, auch nicht gekürzt.
+
+| # | Behauptung | Aufruf (ohne Kopfzeilenwerte) | Konto | Status | Content-Type | Antwortform | Körper, höchstens 120 Zeichen | Stelle |
+|---|-----------|-------------------------------|-------|--------|--------------|-------------|-------------------------------|--------|
+| 1 | **S0** | `GET /ocs/v2.php/cloud/user?format=json` durch Caddy, reine AppAPI-Impersonation | `alice` | **200** | nicht protokolliert | OCS-Umschlag als JSON | `ocs.meta.statuscode 200`, `ocs.data.id alice`, `ocs.data.display-name alice` | 1.3 |
+| 2 | **S0**, Gegenprobe | derselbe Aufruf, `APP_SECRET` aus 64 Nullen | `alice` | **401** | nicht protokolliert | OCS-Umschlag als JSON | `{"ocs":{"meta":{"status":"failure","statuscode":997,"message":"Current user is not logged in"}...` | 1.3 |
+| 3 | **S0**, Route der ExApp | `POST /exapps/mcp_connector/mcp` ohne Token | keines, unauthentifiziert | **401** | nicht protokolliert | `WWW-Authenticate` im Bearer-Schema | `error="invalid_token"`, `scope="nextcloud"`, `resource_metadata=".../.well-known/oauth-protected-resource/mcp"`; **nicht gegengeprobt** | 1.3 |
+| 4 | **S0**, Werkzeugweg | `uv run pytest tests/integration/test_http_tool_call.py -m integration -q` gegen diese Topologie | `alice` | 3 Tests grün | entfällt, kein HTTP-Messwert | Testlauf | `notes_create` legt an, `notes_read` liest zurück; falsches App-Passwort abgewiesen | 1.3 |
+| 5 | **S1** | `GET /ocs/v2.php/apps/integration_openproject/api/v1/url` | `alice` | **200** | `application/json; charset=utf-8`, 103 Bytes | OCS-Umschlag als JSON | `{"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":"http://op.localtest.me:8082"}}` | 2.1 |
+| 6 | **S1**, Gegenprobe | derselbe Aufruf, `APP_SECRET` aus 64 Nullen | `alice` | **401** | `application/json`, 106 Bytes | OCS-Umschlag als JSON | `{"ocs":{"meta":{"status":"failure","statuscode":997,"message":"Current user is not logged in"},"data":[]}}` | 2.1 |
+| 7 | **S2** | `GET /ocs/v2.php/apps/integration_openproject/api/v1/configuration` | `carol`, nie verbunden | **401** | `application/json`, 77 Bytes | OCS-Umschlag als JSON, leere Meldung | `{"ocs":{"meta":{"status":"failure","statuscode":401,"message":""},"data":""}}` | 2.1 |
+| 8 | **S2**, Gegenprobe 1 | derselbe Aufruf | `alice`, verbunden mit `opa` | **200** | `application/json`, 1702 Bytes | OCS-Umschlag als JSON | `ocs.data._type Configuration`, `hostName op.localtest.me:8082`, `maximumAttachmentFileSize 5242880` | 2.1 |
+| 9 | **S2**, Gegenprobe 2 | derselbe Aufruf | `bob`, verbunden mit `opb` | **200** | `application/json`, 1700 Bytes | OCS-Umschlag als JSON | dieselben Felder wie Zeile 8, zweites Konto unabhängig | 2.1 |
+| 10 | **S2**, Pfadkontrolle | `GET /index.php/apps/integration_openproject/api/v1/configuration`, also ohne OCS-Präfix | `alice` | **404** | nicht protokolliert | leerer Körper | (leer) | 2.1 |
+| 11 | **S3** | `GET .../api/v1/work-packages?searchQuery=SPIKE-OD-8471&isSmartPicker=true` | `alice`, kein Mitglied | **200** | `application/json; charset=utf-8`, 74 Bytes | OCS-Umschlag als JSON, leere Liste | `{"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":[]}}` | 5.5.1, Zeile 3 |
+| 12 | **S3**, Gegenprobe 1 | derselbe Aufruf | `bob`, Mitglied | **200** | `application/json; charset=utf-8`, 4746 Bytes | OCS-Umschlag als JSON, ein Objekt | `id 38`, `displayId "38"`, `subject "SPIKE-OD-8471 privat"`, `_type WorkPackage` | 5.5.1, Zeile 4 |
+| 13 | **S3**, Gegenprobe 2 | derselbe Aufruf mit `searchQuery=Demo` | `alice` | **200** | `application/json; charset=utf-8`, 35239 Bytes | OCS-Umschlag als JSON, 14 Objekte | 14 Treffer, `id 38` **nicht** darunter | 5.5.1, Zeile 5 |
+| 14 | **S3**, Gegenprobe 3 | derselbe Aufruf | `carol` | **401** | `application/json; charset=utf-8`, 77 Bytes | OCS-Umschlag als JSON, leere Meldung | `statuscode 401`, Meldung leer | 5.5.1, Zeile 8 |
+| 15 | **S4**, künstlicher Ablauf | derselbe Aufruf nach `token_expires_at 0`, ohne Cookie, ohne App-Passwort | `bob` | **200** | `application/json; charset=utf-8`, 4746 Bytes | OCS-Umschlag als JSON, ein Objekt | ein Treffer `id 38`; `token_expires_at` danach `1787950505`, also 7200 s weiter | 5.5.2, Zeile 5 |
+| 16 | **S4**, Gegenprobe | derselbe Aufruf mit `refresh_token` aus 43 Nullen | `bob` | **401** | `application/json; charset=utf-8`, 77 Bytes | OCS-Umschlag als JSON, leere Meldung | `statuscode 401`, Meldung leer; im Protokoll `invalid_grant` | 5.5.2, Zeile 10 |
+| 17 | **S4**, natürlicher Ablauf | `GET .../api/v1/work-packages?searchQuery=Upload%20presentations&isSmartPicker=true`, kein `occ`-Eingriff | `alice` | **200** | `application/json; charset=utf-8`, 2542 Bytes | OCS-Umschlag als JSON, ein Objekt | Ablauf 19623 s alt, ein Treffer `id 12`; `token_expires_at` danach 7176 s weiter | 5.5.4 |
+| 18 | **S5a**, **S5b**, **S5c** | derselbe Aufruf im Modus `oidc` nach `token_expires_at 0`, sechs Läufe über drei Pfade | `3855a8f7...` (Läufe 1 bis 5), `alice` (Lauf 6) | **401** in allen sechs | `application/json; charset=utf-8`, 77 Bytes | OCS-Umschlag als JSON, leere Meldung | `{"ocs":{"meta":{"status":"failure","statuscode":401,"message":""},"data":""}}`, in allen sechs identisch | 5.6.4 |
+| 19 | **S5**, Gegenprobe mit Sitzung | derselbe Aufruf **mit** dem Sitzungscookie aus der Keycloak-Anmeldung | `3855a8f7...` | **401** | `application/json; charset=utf-8`, 341 Bytes | OCS-Umschlag als JSON mit Fehlerobjekt | `ocs.data.error` trägt `"errorIdentifier":"urn:openproject-org:api:v3:errors:Unauthenticated"` | 5.6.5 |
+| 20 | **S5**, gültiger Zwischenspeicher | derselbe Aufruf ohne Cookie, `token_expires_at` 259 s in der Zukunft | `3855a8f7...` | **401** | `application/json; charset=utf-8`, 341 Bytes | wie Zeile 19 | **keine** Zeile der App `user_oidc` im Zeitfenster; die 401 kommt von OpenProject | 5.6.5 |
+| 21 | **S6** | dieselbe Antwort wie Zeile 12, kein zweiter Aufruf gefahren | `bob` | **200** | `application/json; charset=utf-8`, 4746 Bytes | OCS-Umschlag als JSON | 4490 Bytes im Objekt, davon 3895 in 49 Relationen und 585 in 24 Feldern | 5.5.3 |
+| 22 | **S6**, Gegenprobe | dieselbe Antwort wie Zeile 17 | `alice` | **200** | `application/json; charset=utf-8`, 2542 Bytes | OCS-Umschlag als JSON | 27 Relationen (1772 Bytes), 22 Felder (588 Bytes) | 5.5.3 |
+| 23 | **S6**, Bezugsgröße | `GET /api/v3/work_packages?filters=[{"id":{"operator":"=","values":["38"]}}]`, Aufbauzugang | `admin`, Aufbau und kein Berechtigungsmesswert | **200** | nicht protokolliert, 15831 Bytes | HAL-Sammlung | dieselbe Auskunft mit `select=total,elements/id,elements/subject`: **200**, 88 Bytes | 5.5.3 |
+| 24 | **Weg 1**, Zustimmung | `GET /oauth/authorize` mit `code_challenge_method=S256`, danach `POST /oauth/authorize` | `opb` | **200**, dann **302** | `text/html` (Zustimmungsseite) | HTML-Seite, dann `Location` | `Authorize nc-mcp-spike-weg1 to use your account opb?`; `Location` trägt `code` (43 Zeichen) und das gesendete `state` | 2.2 |
+| 25 | **Weg 1**, Einlösen | `POST /oauth/token`, `grant_type=authorization_code`, ohne `client_secret` | `opb` | **200** | nicht protokolliert, als JSON gelesen | Tokenantwort als JSON | `token_type Bearer`, `scope api_v3`, `expires_in 7200`, `created_at 1787938654`, Tokens je 43 Zeichen | 2.2 |
+| 26 | **Weg 1**, PKCE-Gegenprobe | derselbe `GET /oauth/authorize` **ohne** `code_challenge`, dieselbe Sitzung | `opb` | **400** | HTML, gerenderte Fehlerseite | HTML-Seite, kein JSON, kein `Location` | `An authorization error has occurred. Code challenge is required.` | 2.2 |
+| 27 | **Weg 1**, Erneuerung | `POST /oauth/token`, `grant_type=refresh_token`, ohne jeden Cookie-Speicher | `opb` | **200** | nicht protokolliert, als JSON gelesen | Tokenantwort als JSON | `token_type Bearer`, `expires_in 7200`, `scope api_v3`, beide Tokens neu (Präfixe `IwAN`, `E7kb`) | 2.2 |
+| 28 | **Weg 1**, Gegenprobe 1 | derselbe Aufruf mit einem `refresh_token` aus 43 Nullen | `opb` | **400** | nicht protokolliert, als JSON gelesen | Fehlerantwort als JSON | `error invalid_grant`, `error_description` ist der Doorkeeper-Sammeltext | 2.2 |
+| 29 | **Weg 1**, Gegenprobe 2 | derselbe Aufruf mit dem entwerteten `refresh_token` der Kette A, dreimal | `opb` | **400**, dreimal | nicht protokolliert, als JSON gelesen | Fehlerantwort als JSON | `error invalid_grant`; Kette B mit ungenutztem `access_token` liefert dagegen **200** | 2.2 |
+| 30 | **Weg 1**, Verpackung | derselbe Endpunkt mit `Content-Type: application/json` und JSON-Körper | `opb` | **415** | nicht protokolliert | leeres JSON-Objekt | `{}` (kein PKCE-Befund, sondern `enforce_content_type`); **nicht gegengeprobt** | 2.2 |
+| 31 | **Weg 1**, Identität | `GET /api/v3/users/me` mit dem Token, ohne Cookie | `opb` | **200** | nicht protokolliert, HAL als JSON | Nutzerobjekt | `login opb`, `id 6`, `admin` nicht gesetzt, `status active` | 2.2 |
+| 32 | **Weg 1**, D-05 Hauptlauf | `GET /api/v3/work_packages/38` | `opb`, Mitglied | **200** | nicht protokolliert, HAL als JSON | Arbeitspaket | `subject SPIKE-OD-8471 privat`, `project Spike Privat B` | 2.2 |
+| 33 | **Weg 1**, D-05 Negativ | derselbe Aufruf | `opa`, kein Mitglied | **404** | nicht protokolliert, 166 Bytes | Fehlerobjekt der API v3 | `urn:openproject-org:api:v3:errors:NotFound`, `The work package you are looking for cannot be found...` | 2.2 |
+| 34 | **Weg 1**, D-05 Kontrolle | `GET /api/v3/work_packages/999999999` | `opa` | **404** | nicht protokolliert, 166 Bytes | Fehlerobjekt der API v3 | Byte für Byte dieselbe Antwort wie Zeile 33, gleicher SHA-256 `96f26f0149c7be10...` | 2.2 |
+| 35 | **Weg 1**, D-05 Liste | `GET /api/v3/work_packages?pageSize=100` | `opb`, dann `opa` | **200** / **200** | nicht protokolliert, HAL als JSON | Sammlung | `opb`: `total 34`, enthält 38; `opa`: `total 33`, enthält 38 nicht | 2.2 |
+| 36 | **Weg 1**, Metadaten | `GET /.well-known/oauth-authorization-server` vom Host | keines, unauthentifiziert | **200** | nicht protokolliert, als JSON gelesen | Metadatendokument | weder `registration_endpoint` noch `code_challenge_methods_supported`; `scopes_supported` nennt `api_v3` | 2.2 |
+| 37 | **Weg 1**, Aufräumen | `POST /oauth/revoke`, zwanzig Werte | `opa` und `opb` | **200**, zwanzigmal | nicht protokolliert | leere Antwort | Gegenprobe: `GET /api/v3/users/me` danach je **401** | 2.2 |
+| 38 | **SSRF** | `cimd.resolve_addresses('nextcloud', 80)` im laufenden ExApp-Container | entfällt, prozessinterner Aufruf ohne HTTP | Rückgabe `None` | entfällt | Rückgabewert plus Logzeile | `a document target was refused: an address of it is not public`; gleich für `caddy` und `appapi-harp` | 2.3 |
+| 39 | **SSRF**, Unterscheidung | `cimd.resolve_addresses('openproject', 80)`, Profil `op` nicht gestartet | entfällt | Rückgabe `None` | entfällt | Rückgabewert plus Logzeile | `a document target did not resolve: gaierror`, also derselbe Rückgabewert aus anderer Ursache | 2.3 |
+| 40 | **SSRF**, Gegenprobe | `cimd.resolve_addresses('one.one.one.one', 443)` und `example.com` im selben Lauf | entfällt | Adressliste | entfällt | Liste von IPv4 und IPv6 | `['1.0.0.1', '1.1.1.1', '2606:4700:4700::1111', ...]`, der Resolver im Container ist also heil | 2.3 |
+| 41 | **SSRF**, Katalog | Negativkatalog aus `tests/unit/test_oauth_cimd.py:179-202`, im selben Container gefahren | entfällt | 12 von 12 abgelehnt, 3 von 3 zugelassen | entfällt | Zählung | keine unerwartete Abweichung; die Lücken `100.64.0.1`, `64:ff9b::7f00:1`, `224.0.0.1` sind darin | 2.3 |
+| 42 | **Egress** | `GET http://openproject/api/v3` aus dem ExApp-Container, mit `Host: op.localtest.me:8082` | entfällt, unauthentifiziert | **401** | `application/hal+json`, 153 Bytes | Fehlerobjekt der API v3 | `urn:openproject-org:api:v3:errors:Unauthenticated`; ohne den `Host`-Kopf **400** `Invalid host_name configuration` | 2.1 |
+
+**Zwei Zeilen dieser Tabelle sind ausdrücklich kein Messwert über Berechtigungen.** Zeile 23 läuft
+unter dem Aufbauzugang des Kontos `admin`, und ein Administrator sieht in OpenProject jedes Projekt;
+Zeile 4 ist ein Testlauf und kein HTTP-Messwert. Beide stehen hier, weil sie sonst in 5.5.3 und 1.3
+allein stünden und ein Leser sie für Messwerte der Kette hielte.
+
+**Die Vollständigkeitsprüfung gegen die Nachweisform dieses Berichts, mit ihrem Ergebnis.** Jede Zeile
+oben nennt ein Konto, und wo die Spalte `entfällt` trägt, ist das kein fehlender Wert, sondern die
+Eigenschaft der Messung: die Zeilen 38 bis 41 sind prozessinterne Aufrufe im ExApp-Container ohne
+HTTP und ohne Identität, Zeile 42 läuft unauthentifiziert und misst Erreichbarkeit und nicht
+Berechtigung, und die Zeilen 3 und 36 fragen ein Dokument beziehungsweise eine Route ohne jedes
+Zugangsdatum ab. Zwei Behauptungen dieses Berichts tragen **keine** Gegenprobe und deshalb den Vermerk
+`nicht gegengeprobt`: die 401 der ExApp-Route in Zeile 3 (eine Gegenprobe wäre ein Aufruf mit gültigem
+Token gewesen, den dieser Plan nicht gefahren hat) und die 415 an `/oauth/token` in Zeile 30 (sie ist
+selbst schon die Kontrolle zur Verpackung). Zwei weitere Punkte sind nicht ohne Gegenprobe, sondern
+ohne Messung, und stehen deshalb in 2.5 und nicht hier: der Sprachwechsel der Doorkeeper-Fehlermeldung
+und die Antwortform des nativen MCP-Endpunkts von OpenProject. Die Fassungen im Kopfblock sind alle aus
+der laufenden Instanz gelesen (`occ status`, `occ app:list`, `docker image inspect`, `kc.sh --version`,
+`GET /api/v3`) und keine aus der Recherche übernommen.
 
 ### 5.1 Stufe B: der erste Start von OpenProject 17.7.2
 
@@ -2362,6 +2439,70 @@ level 3, integration_openproject  "OpenProject error : Client error:
 zwischengespeicherten Tokens, und er entscheidet, ob `user_oidc` überhaupt gefragt wird
 (`getAccessToken()`, Zeile 1748). Die 341 gegen 77 Bytes sind der maschinell prüfbare Ausdruck
 desselben Unterschieds.
+
+## Reproduktion
+
+Die Messumgebung ist nach dem letzten Lauf abgeräumt worden. Was hier steht, ist die Befehlsfolge, mit
+der sie wieder entsteht, samt der Schritte, die nur über eine Oberfläche gehen, und samt dem einen
+Befehl, mit dem sie wieder verschwindet.
+
+**Stufe A, Nextcloud 33.0.7 samt ExApp:**
+
+```
+export HP_SHARED_KEY="$(openssl rand -hex 32)"
+export SECRET_KEY_BASE="$(openssl rand -hex 32)"
+docker compose -f compose.spike-opendesk.yml up -d --wait
+bash scripts/bootstrap_spike_opendesk.sh
+set -a && . ./.env.spike-opendesk && set +a
+```
+
+Beide `export` sind auch dann Pflicht, wenn nur Stufe A laufen soll: Compose interpoliert die ganze
+Datei, bevor es nach Profilen filtert, gemessen am 2026-08-28 gegen Docker 29.5.2 (Kopf von
+`compose.spike-opendesk.yml`). Der Bootstrap schreibt die Verbindungsdatei `.env.spike-opendesk`; sie
+ist **git-ignoriert** (`.gitignore` Zeile 17), weil sie zwei funktionierende App-Passwörter, den
+HaRP-Schlüssel und das `APP_SECRET` der Registrierung trägt. `.env.spike-opendesk.example` führt
+ausschließlich die Variablennamen und keinen einzigen Wert; jede Geheimniszeile darin ist auskommentiert.
+
+**Stufe B, OpenProject 17.7.2, und Stufe C, Keycloak 26.7.0:**
+
+```
+docker compose -f compose.spike-opendesk.yml --profile op up -d --wait
+docker compose -f compose.spike-opendesk.yml --profile op --profile oidc up -d
+```
+
+**Die Schritte, die nur über eine Oberfläche gehen.** Zwei Stellen dieses Berichts hat der Owner im
+Browser gemacht, und sie stehen deshalb nicht in der Befehlsfolge oben:
+
+* die OAuth-Anwendungen in OpenProject, `nc-mcp-spike-weg0` und `nc-mcp-spike-weg1`, unter
+  Administration, Authentication, OAuth applications. Zu 17.7.2 ließ sich kein dokumentierter Weg zum
+  Seeden einer OAuth-Anwendung finden, und `registration_endpoint` fehlt in den Metadaten (2.2). Die
+  Anweisungen dazu stehen in den Plänen 17-03 (Weg 1) und 17-05 (Weg 0), samt dem Hinweis, dass
+  "Confidential" und "Client Credentials User ID" leer bleiben (5.3).
+* der persönliche Durchlauf je Konto für Weg 0. Er ist in 17-05 ohne Browser nachgefahren worden
+  (Schritte 1 bis 9 in 2.1), die Anweisung an den Owner nennt trotzdem den Browserweg, weil der
+  Formularweg an zwei Stellen kippen kann.
+
+**Wie der Zustand wieder verschwindet:**
+
+```
+docker compose -f compose.spike-opendesk.yml --profile op --profile oidc down -v
+```
+
+Das `-v` ist keine Bequemlichkeit, sondern für Keycloak Pflicht: die Realm `spike` wird mit `kcadm.sh`
+erzeugt und nicht mit `--import-realm`, und ein Import überspringt eine vorhandene Realm, statt sie zu
+aktualisieren. Ein zweiter Lauf auf einem behaltenen Band misst also die Konfiguration des ersten. Mit
+demselben Befehl verschwinden auch die zwei Eingriffe an der Nextcloud-Instanz, der auf `Debug (0)`
+gesenkte Loglevel und `allow_insecure_http`, weil beide im Nextcloud-Band liegen.
+
+Ein Ding bleibt nach `down -v` liegen und ist keins dieser Topologie: der Deploy-Daemon benennt den
+ExApp-Container global `nc_app_<appid>`, nicht projektgebunden. Wer danach die Topologie aus
+`compose.exapp.yml` wieder braucht, holt sich den Namen mit ihrem eigenen Bootstrap zurück:
+
+```
+export HP_SHARED_KEY="$(sed -n 's/^HP_SHARED_KEY=//p' .env.exapp)"
+docker compose -f compose.exapp.yml up -d --wait
+bash scripts/bootstrap_exapp.sh
+```
 
 ## Was diese Messung nicht beweist
 
