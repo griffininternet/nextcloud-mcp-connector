@@ -169,11 +169,9 @@ _.cleanup_at
 #   tests/unit/test_audit_store.py::test_last_entry_of_a_kind_skips_the_calls_between_two_
 #   switches, and it leaves this list with the plan that calls it.
 #
-# sweep: the retention window, the upper bound and the markers of AUDIT-03. Its caller is the
-#   recorder of plan 18-06, which asks should_sweep about the number append just handed back
-#   and pays for the sweep on every five hundredth row (D-11). Driven by four cases in
-#   tests/unit/test_audit_store.py, among them the one that keeps the bound from sweeping to
-#   an empty table, and it leaves this list with plan 18-06.
+# sweep: gone from this list with plan 18-06, which is the plan that calls it. The recorder
+#   asks should_sweep about the number append just handed back and pays for the sweep on every
+#   five hundredth row (D-11), exactly as the entry announced it would.
 # verify_chains: the check of AUDIT-02. Its caller is the check command of plan 18-08, which
 #   turns a finding into a sentence for the administrator; the finding itself stays data here
 #   on purpose, so the same check can also answer machine readable. Driven by four cases in
@@ -185,28 +183,28 @@ _.cleanup_at
 #   tests/unit/test_audit_store.py today. The other fields of both classes carry names that
 #   are read elsewhere in the module, which is why only these two stand here.
 _.last_entry
-_.sweep
 _.verify_chains
 _.next_seq
 _.used_bytes_after
 
-# --- The two lists of audit/allowlist.py ------------------------------------------------
-# audit/allowlist.py is data and nothing else, so vulture sees two module level names that
-# no production line reads yet. Both are read today by tests/contract/test_audit_surface.py,
-# which measures them against the live tool surface, and both get their production caller in
-# plan 18-06: the recorder intersects the set argument names of a call with PARAM_ALLOWLIST
-# before it writes a row. They leave this list with that plan.
-PARAM_ALLOWLIST
+# --- The block list of audit/allowlist.py -----------------------------------------------
+# PARAM_ALLOWLIST is gone from this list with plan 18-06, which is the plan that reads it:
+# audit/record.py intersects the set argument names of a call with it before it writes a row.
+#
+# FORBIDDEN_PARAMS stays, and the entry of plan 18-02 promised otherwise, so the correction
+# belongs here rather than in a quiet delete. The recorder never reads the block list: it
+# reads the allowlist, and the block list is the rule that keeps a payload name out of that
+# allowlist in the first place. Its one reader is therefore
+# tests/contract/test_audit_surface.py, and vulture is pointed at src, scripts and this file,
+# never at tests. So this name has no production reader by construction rather than by
+# schedule, and it will not leave this list with a later plan of this phase.
 FORBIDDEN_PARAMS
 
 # --- The frozen reason set of errors.py -------------------------------------------------
-# REASONS is the readable half of the rejection reasons: the six REASON_* constants are set
-# at the status mappings and at the three guards, but nobody reads the set itself in
-# production yet. Its reader is the recorder of plan 18-06, which writes the reason of a
-# refused call into a row and refuses a value that is not in this set. Today it is read by
-# tests/unit/test_errors_reason.py, which counts it and keeps it at six, and it leaves this
-# list with that plan.
-REASONS
+# REASONS is gone from this list with plan 18-06, which is the plan that reads it:
+# audit/record.py checks the reason of a refused call against the set before it writes it
+# into a row, so anything that is not one of the six becomes the honest "unspecified"
+# instead of free text in a column that exists to have none.
 
 # --- The methods of the SDK provider protocol ------------------------------------------
 # oauth/provider.py implements OAuthAuthorizationServerProvider. Every method below is
