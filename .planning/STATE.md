@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
-status: executing
-stopped_at: Completed 18-07-PLAN.md
-last_updated: "2026-08-29T11:08:18.604Z"
+status: verifying
+stopped_at: Completed 18-10-PLAN.md
+last_updated: "2026-08-29T11:25:55.242Z"
 last_activity: 2026-08-29
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 23
-  completed_plans: 22
-  percent: 50
+  completed_plans: 23
+  percent: 75
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 
 Phase: 18 (audit-log-kern) — EXECUTING
 Plan: 10 of 10
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-29
 
 ## Performance Metrics
@@ -185,6 +185,7 @@ Last activity: 2026-08-29
 | Phase 18 P07 | 50min | 3 tasks | 10 files |
 | Phase 18 P08 | 55min | 3 tasks | 10 files |
 | Phase 18 P09 | 62min | 3 tasks | 6 files |
+| Phase 18 P10 | 45min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -683,6 +684,8 @@ Recent decisions affecting current work:
 - [Phase 18]: 18-08: Die Zählungen der Prüfausgabe kommen aus AuditStore.overview und nicht aus einem SweepReport, weil eine Prüfung nicht löschen darf, um zu erfahren, wie viel da ist
 - [Phase ?]: 18-09: Eine leere Kontoliste ergibt None und nie ein leeres frozenset, weil eine Ablage mit einer Kette zu einer Instanz mit Nutzern gehoert
 - [Phase ?]: 18-09: Die Loeschung eines Kontos wird im CI-Job exapp wirklich gemessen (occ user:delete); lokal bleibt A1 ungemessen, der fail-safe traegt unabhaengig davon
+- [Phase ?]: 18-10: Erfolgskriterium 5 steht getrennt in getestet (purge, vier Faelle) und hergeleitet (Trennen, Pausieren, Entfernen ueber die Oberflaeche; Beleg ist ein grep ueber die drei Aufraeumpfade, T-18-25 accept)
+- [Phase ?]: 18-10: Die Grenze aus D-18 steht woertlich im Abschlussbericht: occ app_api:app:unregister --rm-data entfernt das Volume und mit ihm das Log; docs/uninstall.md bleibt Phase 19 (AUDIT-06)
 
 ### Pending Todos
 
@@ -722,9 +725,9 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-29T11:08:09.297Z
-Stopped at: Completed 18-07-PLAN.md
-Nächster Schritt: Plan 18-07 ausführen (Schalter aus D-14, Recorder verdrahten); danach offen: Phase 17 verifizieren (/gsd:verify-phase 17) und 16-04 (Store-Einreichung 0.1.11)
+Last session: 2026-08-29T11:24:18.360Z
+Stopped at: Completed 18-10-PLAN.md
+Nächster Schritt: Phase 18 verifizieren (/gsd:verify-phase 18), danach Phase 19 planen (/gsd:plan-phase 19: AUDIT-04, AUDIT-05, AUDIT-06); weiterhin offen: Phase 17 verifizieren (/gsd:verify-phase 17) und 16-04 (Store-Einreichung 0.1.11)
 Resume file: None
 
 ## Operator Next Steps

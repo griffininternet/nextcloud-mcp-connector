@@ -75,7 +75,7 @@ Audit: [milestones/v1.4-MILESTONE-AUDIT.md](milestones/v1.4-MILESTONE-AUDIT.md) 
 
 - [x] **Phase 16: Release 0.1.11** - Den wartenden Textrest ausliefern und den `[Unreleased]`-Block leerräumen, bevor das Audit-Log ihn wieder füllt (4/4 Pläne, completed 2026-08-28, Release live im Store)
 - [x] **Phase 17: openDesk-Spike** - Installierbarkeit und Nutzeridentität gegen OpenProject messen statt argumentieren, plus die Fragenliste für den 14.09. (completed 2026-08-29)
-- [ ] **Phase 18: Audit-Log Kern** - Jeder Werkzeugaufruf hinterlässt einen prüfbaren Metadaten-Eintrag, der keine Inhalte trägt und den OAuth-Speicher nicht gefährdet
+- [x] **Phase 18: Audit-Log Kern** - Jeder Werkzeugaufruf hinterlässt einen prüfbaren Metadaten-Eintrag, der keine Inhalte trägt und den OAuth-Speicher nicht gefährdet (completed 2026-08-29)
 - [ ] **Phase 19: Audit-Log Bedienung und Textnachzug** - Administrator schaltet ein und liest über `occ`, und jede bestehende Aussage über Speicherung und Enterprise-Stand sagt danach die Wahrheit
 
 **Stränge:** Phase 16 und Phase 17 hängen an nichts und können ab Tag 1 laufen. Phase 18 hängt ebenfalls an nichts (der Spike-Ausgang berührt das Audit-Log nicht). Die einzige echte Serialisierung des Meilensteins ist Phase 19: sie braucht das feststehende Satzschema aus Phase 18 und den geleerten `[Unreleased]`-Block aus Phase 16.
@@ -209,7 +209,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 18-10-PLAN.md , Abschluss: Purge-Überlebenstest, Budget-Stillstand, Gate-Lauf, Nachweistabelle je Erfolgskriterium samt der Grenze aus D-18
+- [x] 18-10-PLAN.md , Abschluss: Purge-Überlebenstest, Budget-Stillstand, Gate-Lauf, Nachweistabelle je Erfolgskriterium samt der Grenze aus D-18
 
 ### Phase 19: Audit-Log Bedienung und Textnachzug
 
@@ -247,7 +247,7 @@ Plans:
 | 15. Release 0.1.10 | v1.4 | 4/4 | Complete | 2026-08-28 |
 | 16. Release 0.1.11 | v1.5 | 4/4 | Complete | 2026-08-28 |
 | 17. openDesk-Spike | v1.5 | 9/9 | Complete   | 2026-08-29 |
-| 18. Audit-Log Kern | v1.5 | 9/10 | In Progress|  |
+| 18. Audit-Log Kern | v1.5 | 10/10 | Complete   | 2026-08-29 |
 | 19. Audit-Log Bedienung und Textnachzug | v1.5 | 0/? | Not started | - |
 
 ## Next
