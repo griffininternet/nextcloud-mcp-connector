@@ -20,6 +20,10 @@ Threats covered here, in the order of the plan:
 * **T-05-57** the destructive local half running although not a single app password could
   be handed back (WR-01 of 05-REVIEW.md).
 * **T-05-58** a flag shape nobody sends arming the instance wide deletion (WR-02).
+* **T-18-22** the audit log next to the store: the purge leaves it standing, and these
+  cases hold that claim. It is not a change of the clean up logic, it is a property the
+  existing handler already has and that nobody checked, and a claim nobody checks falls
+  silently at the next rebuild (D-v1.5-01, 18-RESEARCH.md section 11).
 
 Every Nextcloud answer comes from respx and the store is a real SQLite file in
 ``tmp_path``: what is under test is the order of two outgoing calls and the state of that
@@ -44,6 +48,7 @@ from starlette.requests import Request
 from starlette.testclient import TestClient
 
 from mcp_connector import config
+from mcp_connector.audit import store as audit
 from mcp_connector.exapp import admin_settings, audit_verify, lifecycle, occ, purge, settings_form
 from mcp_connector.nextcloud.clients.xml import hardened_parser
 from mcp_connector.oauth import crypto, loginflow
@@ -105,11 +110,18 @@ def appapi_headers(user: str = "", secret: str = APP_SECRET) -> dict[str, str]:
 
 
 class Deployment:
-    """One process of this application with its own store file and the purge route on it."""
+    """One process of this application with its own store file and the purge route on it.
+
+    Since plan 18-10 there is a second file in the same directory: the audit log of D-01
+    lives next to the OAuth store, and the cases at the end of this file read it the way
+    :meth:`counts` reads the tables, with a connection of their own.
+    """
 
     def __init__(self, tmp_path: Path) -> None:
         self.path = tmp_path / "oauth.sqlite3"
         self.store = OAuthStore(self.path, KEY)
+        self.audit_path = tmp_path / audit.AUDIT_FILENAME
+        self.audit = audit.AuditStore(self.audit_path)
         self.client = TestClient(
             Starlette(routes=purge.purge_routes(ENV, store_provider=self._open))
         )
@@ -139,6 +151,48 @@ class Deployment:
         await self.store.set_access("alice", disabled=True)
         for auth_id in revoked:
             await self.store.revoke_authorization(auth_id)
+
+    #: How many audit rows :meth:`note` writes: one per moment and connection.
+    AUDIT_ROWS = 6
+
+    def note(self, moments: tuple[int, ...] = (1000, 1001, 1002)) -> None:
+        """Write a few audit rows next to the OAuth store, before a purge runs.
+
+        Through :meth:`AuditStore.append` and never with an own ``INSERT``: what the cases
+        below claim is that real chains stand afterwards, and a row written past the store
+        would carry no chain at all.
+        """
+        asyncio.run(self._note(moments))
+
+    async def _note(self, moments: tuple[int, ...]) -> None:
+        for at in moments:
+            for auth_id, nc_user, _password in CONNECTIONS:
+                await self.audit.append(
+                    audit.Entry(
+                        chain=audit.user_chain(nc_user),
+                        at=at,
+                        nc_user=nc_user,
+                        tool="files_search",
+                        client_id=CLIENT_ID,
+                        auth_id=auth_id,
+                        client_name=CLIENT_NAME,
+                        outcome=audit.OUTCOME_OK,
+                        params=["query"],
+                    )
+                )
+
+    def audit_rows(self) -> list[tuple[Any, ...]]:
+        """Every row of the audit file, read behind the store's back.
+
+        The same way :meth:`counts` reads the tables: what is under test is the state of a
+        file after a handler ran, and a store method could open the file, find it missing and
+        create it again, which would hide exactly the loss this asks about.
+        """
+        conn = sqlite3.connect(self.audit_path)
+        try:
+            return list(conn.execute("SELECT * FROM entries ORDER BY seq"))
+        finally:
+            conn.close()
 
     def counts(self) -> dict[str, int]:
         """The row count of every table, read out of the file behind the store's back."""
@@ -733,6 +787,85 @@ def test_the_paused_account_row_goes_with_it(live: Deployment) -> None:
         call(live)
 
     assert live.counts()["user_access"] == 0
+
+
+# --- the audit log next to the store: D-v1.5-01 and T-18-22 ------------------------
+# ``exapp/purge.py`` does not change for any of these four cases, and that is the point:
+# the purge hands app passwords back, empties seven tables and deletes the data key, and
+# none of the three touches a second file in the same directory. Survival is a property of
+# the existing handler and not a special case built for the audit log. The measured
+# grounds are in 18-RESEARCH.md section 11.
+
+
+def test_the_purge_leaves_every_row_of_the_audit_log_where_it_is(live: Deployment) -> None:
+    live.note()
+    before = live.audit_rows()
+    assert len(before) == Deployment.AUDIT_ROWS, "or this case measures an empty file"
+
+    with respx.mock:
+        Wire().install()
+        response = call(live)
+
+    assert response.json()["purged"] is True
+    assert live.audit_path.exists()
+    assert live.audit_rows() == before, "same count, same rows, byte for byte"
+
+
+def test_the_chains_of_the_audit_log_are_unbroken_after_the_purge(live: Deployment) -> None:
+    """A file that is still there says little; an unbroken chain says the rows are untouched.
+
+    The row count is asserted first and on purpose: :meth:`AuditStore.verify_chains` opens the
+    file, creates the schema if it is gone and finds nothing to complain about, so an empty
+    list alone is also what a deleted log looks like. Reading the rows behind the store's back
+    is the half of this case that can fail.
+    """
+    live.note()
+
+    with respx.mock:
+        Wire().install()
+        call(live)
+
+    assert len(live.audit_rows()) == Deployment.AUDIT_ROWS
+    assert asyncio.run(live.audit.verify_chains()) == []
+
+
+def test_the_purge_empties_every_oauth_table_and_keeps_the_audit_rows(live: Deployment) -> None:
+    """Both halves in one case: everything else goes, and the log stays."""
+    live.note()
+
+    with respx.mock:
+        wire = Wire()
+        wire.install()
+        body = call(live).json()
+
+    assert body["tables_cleared"] is True
+    assert body["key_deleted"] is True
+    assert wire.seen == ["password", "password", "key"]
+    assert live.counts() == dict.fromkeys(TABLES, 0)
+    assert len(live.audit_rows()) == Deployment.AUDIT_ROWS
+
+
+def test_the_audit_log_is_still_readable_after_the_data_key_was_deleted(
+    live: Deployment,
+) -> None:
+    """The log carries no secret (D-06), so it is not encrypted with the key the purge deletes.
+
+    Were it encrypted with that key, every row would still be in the file after the purge and
+    not one of them could be read again, which would satisfy a case that only counts rows.
+    """
+    live.note()
+
+    with respx.mock:
+        Wire().install()
+        assert call(live).json()["key_deleted"] is True
+
+    tools = [row[6] for row in live.audit_rows()]
+    assert tools == ["files_search"] * Deployment.AUDIT_ROWS, "plain text, no key needed"
+
+    entry = asyncio.run(live.audit.last_entry(audit.user_chain("alice")))
+    assert entry is not None
+    assert entry.tool == "files_search"
+    assert entry.nc_user == "alice"
 
 
 def test_a_failed_revocation_does_not_stop_the_loop_and_is_a_number(
