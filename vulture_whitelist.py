@@ -187,6 +187,15 @@ _.verify_chains
 _.next_seq
 _.used_bytes_after
 
+# --- The marker every recorded tool carries ---------------------------------------------
+# __mcp_audited__ is set on the wrapper of server.graceful and read by
+# tests/contract/test_audit_surface.py, which walks every registered tool and turns red on
+# the first one that does not carry it (D-04). Vulture is pointed at src, scripts and this
+# file, never at tests, so the attribute has no reader it can see. It is a marker on purpose
+# and will never gain a production reader: an explicit name is what makes the gate honest,
+# because fn.__code__.co_name == "wrapper" would pass for any decorator in the world.
+_.__mcp_audited__
+
 # --- The block list of audit/allowlist.py -----------------------------------------------
 # PARAM_ALLOWLIST is gone from this list with plan 18-06, which is the plan that reads it:
 # audit/record.py intersects the set argument names of a call with it before it writes a row.
