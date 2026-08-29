@@ -20,8 +20,8 @@ provides:
   - "NC_CAROL_PASSWORD in .env.spike-opendesk; allow_local_remote_servers=true als Zustand der Messumgebung"
 affects:
   - "17-06 bekommt den vollstaendigen Ausgangszustand fuer S3, S4 und S6: zwei verbundene Konten mit refresh_token, Modus oauth2, und die Routentabelle samt Ausschlussliste"
-  - "17-07 bekommt den unberuehrten OIDC-Zweig als Ausgangszustand (kein sso_provider_type, kein oidc_provider, kein token_exchange) und weiss, dass allow_local_remote_servers schon an ist"
-  - "17-08 bekommt zwei Fragen mit Grund: setzt openDesk eine SSRF-Erlaubnisliste fuer den Bootstrap-Job, und laeuft integration_openproject dort im Modus oauth2 oder oidc"
+  - "17-07 bekommt den unberuehrten OIDC-Zweig als Ausgangszustand (kein sso_provider_type, kein oidc_provider, kein token_exchange) und weiß, dass allow_local_remote_servers schon an ist"
+  - "17-08 bekommt zwei Fragen mit Grund: setzt openDesk eine SSRF-Erlaubnisliste fuer den Bootstrap-Job, und läuft integration_openproject dort im Modus oauth2 oder oidc"
   - "17-09 muss 2.5 ausformulieren; der Absatz zu Weg A ist dort vorgemerkt und darf nicht verloren gehen"
 tech-stack:
   added: []
@@ -37,7 +37,7 @@ key-files:
     - "docs/spike-opendesk.md"
     - ".planning/phases/17-opendesk-spike/deferred-items.md"
 decisions:
-  - "Der Owner hat am 28.08. Variante B mit skriptbarem Durchlauf gewaehlt; Weg A bleibt unausgefuehrt und steht als ungemessen mit Grund, nicht als verworfen (D-03)"
+  - "Der Owner hat am 28.08. Variante B mit skriptbarem Durchlauf gewählt; Weg A bleibt unausgefuehrt und steht als ungemessen mit Grund, nicht als verworfen (D-03)"
   - "Die zwei fehlenden Konfigurationswerte sind ueber die App-Routen POST /nc-oauth und PUT /admin-config gesetzt worden und nicht per occ von Hand, damit das gemessene Verhalten das echte ist und die App ihr eigenes isAdminConfigOk bestaetigt"
   - "allow_local_remote_servers=true ist als Eingriff in die Messumgebung dokumentiert und nicht stillschweigend gesetzt: ohne ihn ist Weg 0 lokal nicht messbar, und der Befund gehoert in den Bericht"
   - "Die Egress-Kontrolle wird nach Antwortform beurteilt und nicht nach Statuscode: die 400 der Host-Pruefung von Rails ist ein Erreichbarkeitsbeleg, die 401 mit der API-v3-Fehlerkennung der bessere"

@@ -22,16 +22,16 @@ provides:
 affects:
   - "17-09 kann 2.4 und 2.5 schreiben, ohne eine Frage doppelt zu fuehren: was offen bleibt, hat jetzt in Abschnitt 4 eine Nummer, und der Bericht kann darauf verweisen statt zu wiederholen"
   - "Der Owner geht am 14.09. mit neun Fragen ins Gespraech, deren Reihenfolge fest ist, weil fuenf Stellen des Berichts auf die Nummern zeigen"
-  - "Drei unversendete Entwuerfe liegen versandfertig im Repository; der Rueckkanal zur OCS-Stabilitaetsfrage laeuft nach dieser Phase weiter"
+  - "Drei unversendete Entwürfe liegen versandfertig im Repository; der Rückkanal zur OCS-Stabilitaetsfrage läuft nach dieser Phase weiter"
   - "OD-03 ist erfuellt, OD-01 bekommt seine offenen Punkte als Fragen mit Nummer, OD-02 bleibt bei 17-09"
 tech-stack:
   added: []
   patterns:
     - "Eine Fragenliste wird kuerzer, wenn gemessen wurde: beantwortete Fragen werden entfernt und in einer Tabelle mit ihrem Beleg gefuehrt, statt sicherheitshalber mitzulaufen. Gespraechszeit ist die knappe Groesse, und eine Frage mit bekannter Antwort verdraengt eine ohne"
-    - "Jede Frage traegt ihre Folge und nicht ihren Anlass: 'heisst die Antwort X, aendert sich Y' macht im Gespraech sofort sichtbar, warum die Frage gestellt wird, und schuetzt vor einer hoeflichen Auskunft ohne Entscheidungswert"
-    - "Nummern in einem Bericht sind eine Schnittstelle: fuenf Stellen zeigten schon auf die Fragen 1, 5, 6, 7 und 9, bevor es sie gab, also war die Reihenfolge nicht mehr frei. Der Abschnitt sagt das ausdruecklich, damit niemand spaeter umsortiert"
+    - "Jede Frage traegt ihre Folge und nicht ihren Anlass: 'heißt die Antwort X, aendert sich Y' macht im Gespraech sofort sichtbar, warum die Frage gestellt wird, und schuetzt vor einer hoeflichen Auskunft ohne Entscheidungswert"
+    - "Nummern in einem Bericht sind eine Schnittstelle: fuenf Stellen zeigten schon auf die Fragen 1, 5, 6, 7 und 9, bevor es sie gab, also war die Reihenfolge nicht mehr frei. Der Abschnitt sagt das ausdruecklich, damit niemand später umsortiert"
     - "Zurueckgestellte Funde als Nachfrage an die passende Hauptfrage haengen statt als zehnte und elfte Frage: die Liste bleibt bei neun, und kein Fund faellt unter den Tisch"
-    - "Ein Entwurf, der keine gepruefte Empfaengeradresse hat, nennt keine: der Kanal steht als offene Owner-Entscheidung im Kopf, statt eine plausible Adresse zu erfinden"
+    - "Ein Entwurf, der keine gepruefte Empfängeradresse hat, nennt keine: der Kanal steht als offene Owner-Entscheidung im Kopf, statt eine plausible Adresse zu erfinden"
 key-files:
   created:
     - "docs/contrib/opendesk-forum-antwort-christianlupus.md"
@@ -43,15 +43,15 @@ decisions:
   - "Die Reihenfolge der neun Fragen ist an die bestehenden Verweise gebunden und nicht nach Wichtigkeit sortiert worden: 1.2, 1.3, 1.4, 2.2 und 2.5 zeigen bereits auf die Nummern 1, 5, 6, 7 und 9. Eine Sortierung nach Wichtigkeit haette fuenf Verweise ins Leere zeigen lassen"
   - "Vier zurueckgestellte Funde sind als Nachfragen eingearbeitet statt als eigene Fragen: DI-17-01 (nativer MCP-Endpunkt von OpenProject) unter Frage 6, DI-17-05 (sso_provider_type), DI-17-04 (vorkonfigurierte Ablage) und DI-17-03 (SSRF-Erlaubnisliste) unter Frage 7. Die geforderte Zahl von neun Fragen bleibt, und keiner der Funde geht verloren"
   - "Bei den Kubernetes-Belegen von Frage 5 sind die vier Freigabearten und die vier CI-Ablaeufe ausdruecklich der Phasenrecherche zugeschrieben und nicht dem Bericht: der Bericht hat in 1.2 nur die Hilfetexte beider Zweige und das 404-gegen-200 selbst abgerufen"
-  - "Die Konto-Anfrage nennt keine Empfaengeradresse: in dieser Phase wurde keine geprueft, und eine erfundene waere genau die Art Behauptung, die die Regel aus context_agent#230 verbietet. Der Kanal ist als Owner-Entscheidung markiert"
-  - "Der Forumsentwurf bleibt bei einer einzigen offenen Frage (Stabilitaetszusage der 17 OCS-Routen) und stellt die drei Luecken nur als Stand dar, ohne erneut nach neuen Routen zu fragen: die Deckungsfrage stand schon im Ausgangsbeitrag, und eine Wiederholung haette die enge Frage verwaessert"
+  - "Die Konto-Anfrage nennt keine Empfängeradresse: in dieser Phase wurde keine geprüft, und eine erfundene wäre genau die Art Behauptung, die die Regel aus context_agent#230 verbietet. Der Kanal ist als Owner-Entscheidung markiert"
+  - "Der Forumsentwurf bleibt bei einer einzigen offenen Frage (Stabilitaetszusage der 17 OCS-Routen) und stellt die drei Lücken nur als Stand dar, ohne erneut nach neuen Routen zu fragen: die Deckungsfrage stand schon im Ausgangsbeitrag, und eine Wiederholung haette die enge Frage verwaessert"
   - "Das Dossier auf dem Desktop bekommt einen ausdruecklichen Vorrangvermerk: bei einem Widerspruch gilt der versionierte Bericht. Sonst haette D-10 zwei Wahrheiten erzeugt, von denen eine nicht nachvollziehbar aelter werden kann"
 metrics:
   duration: 20 min
   completed: 2026-08-29
 ---
 
-# Phase 17 Plan 08: Die Fragenliste fuer den 14.09. und zwei unversendete Rueckkanaele Summary
+# Phase 17 Plan 08: Die Fragenliste fuer den 14.09. und zwei unversendete Rückkanäle Summary
 
 OD-03 ist erfüllt: die Fragenliste für den ISV-Call am 14.09. steht als Abschnitt 4 versioniert im Spike-Bericht und mit demselben Stand im Dossier für den Termin. Neun Fragen, jede mit einem Absatz `Grund:`, der die **Folge** einer Antwort nennt. Drei Fragen der Ausgangsrecherche sind entfernt, weil diese Phase sie gemessen beantwortet hat; sie stehen mit ihrem Beleg in der Tabelle `Nicht mehr auf der Liste` und werden nicht vorsichtshalber mitgeführt. Dazu liegen zwei neue Entwürfe unversendet im Repository.
 

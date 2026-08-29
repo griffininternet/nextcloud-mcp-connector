@@ -11,7 +11,7 @@ provides:
   - "S5a gemessen: Pfad external ohne Austausch bricht, 401 mit 77 Bytes, Log-Zeilen [ExternalTokenRequestedListener] received request und [TokenService] getToken: no session data"
   - "S5b gemessen: beide Meldungen des Austauschpfads woertlich reproduziert, TokenService.php:318 und :328"
   - "S5c gemessen und die Ausgangsvermutung bestaetigt: isLoggedIn() liefert unter AppAPI-Impersonation true, in jedem Lauf erscheint eine Listener-Zeile, der Bruch liegt an der Sitzungsfrage und nicht davor"
-  - "Die S4-gegen-S5-Zeile an demselben Konto alice: derselbe Aufruf, derselbe gestellte Ablauf, oauth2 200 mit Erneuerung gegen oidc 401 ohne jede Aenderung am Zustand"
+  - "Die S4-gegen-S5-Zeile an demselben Konto alice: derselbe Aufruf, derselbe gestellte Ablauf, oauth2 200 mit Erneuerung gegen oidc 401 ohne jede Änderung am Zustand"
   - "Der schaerfste Beleg fuer S5: gueltiger gegen abgelaufener Zwischenspeicher, 341 gegen 77 Bytes, mit und ohne jede user_oidc-Zeile; getAccessToken() Zeile 1748 fragt user_oidc gar nicht, solange der Token gilt"
   - "Die Gegenprobe mit echter Keycloak-Sitzung: getToken findet Sitzungsdaten statt no session data, damit ist die einzige Variable zwischen Haupt- und Gegenlauf das Sitzungscookie"
   - "Stufe C der Messumgebung: Keycloak 26.7.0 hinter Caddy auf 127.0.0.1:8083, user_oidc 8.11.0, Anbieter spike skriptbar eingerichtet, Realm per kcadm.sh statt Import"
@@ -19,7 +19,7 @@ provides:
   - "docs/contrib/user-oidc-925-kommentar.md, Entwurf mit geglueckter Live-Repro, ausdruecklich unversendet (D-08)"
   - "DI-17-05: der einzige sitzungsfreie OIDC-Pfad ist angelaufen und nicht zu Ende gemessen"
 affects:
-  - "17-08 bekommt einen Zusatz zu Frage 7 mit Grund: falls openDesk im Modus oidc laeuft, mit welchem sso_provider_type, weil einer der drei Pfade die Sitzungsfrage nicht stellt"
+  - "17-08 bekommt einen Zusatz zu Frage 7 mit Grund: falls openDesk im Modus oidc läuft, mit welchem sso_provider_type, weil einer der drei Pfade die Sitzungsfrage nicht stellt"
   - "17-09 kann 2.4 jetzt entscheiden: von Weg 0 sind S0 bis S6 vollstaendig gemessen; 2.5 traegt drei vorgemerkte ungemessene Punkte, und der Absatz zum Loglevel steht in Was diese Messung nicht beweist"
   - "OD-04 bekommt den Satz, der die Wahl praegt: Weg 0 traegt im Modus oidc genau so lange wie der zwischengespeicherte Token, und die Erneuerung braucht eine Sitzung, die eine ExApp nicht hat"
   - "Der Owner bekommt einen versandfertigen, unversendeten Entwurf zu nextcloud/user_oidc#925"
@@ -45,8 +45,8 @@ key-files:
     - ".planning/phases/17-opendesk-spike/deferred-items.md"
 decisions:
   - "Die Realm ist mit kcadm.sh im Container angelegt worden und nicht mit start-dev --import-realm: der Import ist nach Annahme A1 [ASSUMED], ueberspringt eine vorhandene Realm stillschweigend und haette vor jedem zweiten Lauf ein down -v samt Neuaufbau von Stufe A erzwungen"
-  - "Der Moduswechsel auf oidc ist mit occ config:app:set gefahren und nicht ueber PUT /admin-config: der Weg ueber den ConfigController haette nach der Warnung aus 17-05 den oauth2-Zweig zurueckgesetzt und damit das Konto alice als Kontrolle vernichtet, mit dem die S4-gegen-S5-Zeile ueberhaupt erst moeglich ist"
-  - "Zwei Kontrollaeufe ueber den Auftrag hinaus genommen: der Pfad nextcloud_hub und das Konto alice. Ohne den ersten stuende der sitzungsfreie Pfad nur als Herleitung da, ohne den zweiten waere S5 nicht mit S4 vergleichbar"
+  - "Der Moduswechsel auf oidc ist mit occ config:app:set gefahren und nicht ueber PUT /admin-config: der Weg ueber den ConfigController haette nach der Warnung aus 17-05 den oauth2-Zweig zurueckgesetzt und damit das Konto alice als Kontrolle vernichtet, mit dem die S4-gegen-S5-Zeile ueberhaupt erst möglich ist"
+  - "Zwei Kontrollaeufe ueber den Auftrag hinaus genommen: der Pfad nextcloud_hub und das Konto alice. Ohne den ersten stuende der sitzungsfreie Pfad nur als Herleitung da, ohne den zweiten wäre S5 nicht mit S4 vergleichbar"
   - "Der Lauf gegen den noch gueltigen Zwischenspeicher ist als eigener Messwert genommen worden, obwohl der Plan ihn nicht verlangt: er ist der einzige, der die Behauptung von S5 auf eine einzige Variable reduziert"
   - "Die Gegenprobe ist als halb gelungen protokolliert und nicht als gelungen gebucht: sie belegt die Sitzungsfrage und nicht die Datenlieferung, und der Unterschied steht als Vermerk am Hauptlauf"
   - "OD-02 bleibt Pending: dieser Plan schliesst Weg 0 mit S5 ab, der Vergleich beider Wege ist 17-09. Fortsetzung der Entscheidung aus 17-01 bis 17-06"
@@ -94,7 +94,7 @@ Daten liefert die Gegenprobe nicht: OpenProject ist an dieselbe Keycloak nicht g
 
 ## Der Entwurf zu `user_oidc#925`
 
-Die Bedingung aus D-08 ist erfüllt: die Live-Reproduktion ist gelaufen, `TokenService.php:318` und `:328` stehen wörtlich im Protokoll. `docs/contrib/user-oidc-925-kommentar.md` liegt deshalb im Repository, englisch, mit der Statuszeile `Entwurf, nicht gesendet. Versand ausschliesslich durch den Owner.`
+Die Bedingung aus D-08 ist erfüllt: die Live-Reproduktion ist gelaufen, `TokenService.php:318` und `:328` stehen wörtlich im Protokoll. `docs/contrib/user-oidc-925-kommentar.md` liegt deshalb im Repository, englisch, mit der Statuszeile `Entwurf, nicht gesendet. Versand ausschließlich durch den Owner.`
 
 **Gesendet wurde nichts.** Kein `gh issue comment`, kein Browserversand, kein Playwright-Lauf, kein Aufruf an eine fremde Adresse. Der Text trägt die Einordnung, dass `#925` die Anfrage ist, aus der die heutige Implementierung entstanden ist, damit er nicht wie eine Fehlermeldung zu einem erledigten Feature liest. Er nennt die vier Fassungen aus `occ status` und `occ app:list`, die Reproduktionsschritte, die wörtlichen Log-Zeilen und die Codestellen mit Datei, Zeile und Tag. Er korrigiert außerdem die eigene Vorannahme des zurückgehaltenen Entwurfs vom 28.08.: der Blocker ist nicht die Anmeldeprüfung, sondern das fehlende Sitzungstoken eine Zeile später. Kein Token, kein Secret, kein Cookie, nur Loopback-Adressen.
 

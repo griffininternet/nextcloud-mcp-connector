@@ -147,7 +147,7 @@ Wer die Tokens tragen, ist aus den Tokens gemessen und nicht aus dem Skript gesc
 
 **7. [Rule 1 - Regelverstoß beim Schreiben, vor dem Commit behoben] ASCII-Ersatzschreibung von Umlauten**
 - **Gefunden bei:** Task 1, beim ersten Entwurf des Abschnitts
-- **Problem:** Der erste Entwurf schrieb `ausschliesslich`, `Laenge`, `Praefix`, `Haekchen` und rund zwanzig weitere Wörter in ASCII-Ersatzschreibung. Das verstößt gegen die Projektregel und gegen die Form der Abschnitte 1 und 5, die 17-01 bis 17-03 mit echten Umlauten geschrieben haben.
+- **Problem:** Der erste Entwurf schrieb `ausschließlich`, `Laenge`, `Praefix`, `Haekchen` und rund zwanzig weitere Wörter in ASCII-Ersatzschreibung. Das verstößt gegen die Projektregel und gegen die Form der Abschnitte 1 und 5, die 17-01 bis 17-03 mit echten Umlauten geschrieben haben.
 - **Fix:** Vor dem ersten Commit berichtigt und danach nach jedem Schreibschritt ein Griff nach `ae|oe|ue|ss` über den Abschnitt gefahren, dessen Restliste nur noch echte Wörter enthält (`Erneuerung`, `Quelle`, `neues`, englische Zitate). Kein Commit dieses Plans trägt eine Ersatzschreibung.
 - **Dateien:** `docs/spike-opendesk.md`
 - **Commit:** 7e64252 (berichtigt vor dem Commit)

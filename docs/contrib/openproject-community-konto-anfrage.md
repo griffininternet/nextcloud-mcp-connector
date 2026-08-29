@@ -1,16 +1,16 @@
 <!--
 Entwurf einer Konto-Anfrage an die OpenProject-Community.
 
-Status: Entwurf, nicht gesendet. Versand ausschliesslich durch den Owner.
+Status: Entwurf, nicht gesendet. Versand ausschließlich durch den Owner.
 
-Kanal:      offen und vom Owner zu waehlen. community.openproject.org ist das Forum, auf
+Kanal:      offen und vom Owner zu wählen. community.openproject.org ist das Forum, auf
             das das Repository nextcloud/integration_openproject verweist (die Issues dort
             sind abgeschaltet). Die Selbstregistrierung ist dort zu, deshalb geht diese
-            Anfrage ueber den veroeffentlichten Kontaktweg von OpenProject und nicht ueber
+            Anfrage ueber den veröffentlichten Kontaktweg von OpenProject und nicht ueber
             das Forum selbst. Dieser Entwurf nennt bewusst keine Adresse, weil in dieser
-            Phase keine geprueft wurde.
+            Phase keine geprüft wurde.
 Anlass:     christianlupus hat am 2026-08-28 im Nextcloud-Forum zu einem Konto in der
-            OpenProject-Community geraten. Owner-Zusage vom selben Tag: "ich wuerde ein
+            OpenProject-Community geraten. Owner-Zusage vom selben Tag: "ich würde ein
             community account beantragen wenn es sein muss" (D-11).
 Messwert:   Der Registrierungs-Einstieg von community.openproject.org antwortete am
             2026-08-28 mit HTTP 400 und dem Text "Registration not allowed".
@@ -19,7 +19,7 @@ Entstanden: Phase 17, Plan 17-08 (D-11), 2026-08-29
 Kein Agent hat diesen Text gesendet, gepostet oder eingereicht. Kein Mailversand, kein
 Browserversand, kein Playwright-Lauf, kein Registrierungsversuch ueber diesen Entwurf hinaus.
 
-Der Text unterhalb dieses Kommentars ist die Anfrage, wie sie hinausgehen wuerde. Er ist
+Der Text unterhalb dieses Kommentars ist die Anfrage, wie sie hinausgehen würde. Er ist
 englisch, weil der Kanal englisch ist.
 -->
 

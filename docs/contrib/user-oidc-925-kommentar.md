@@ -1,7 +1,7 @@
 <!--
 Entwurf eines Kommentars an nextcloud/user_oidc Issue #925.
 
-Status: Entwurf, nicht gesendet. Versand ausschliesslich durch den Owner.
+Status: Entwurf, nicht gesendet. Versand ausschließlich durch den Owner.
 
 Kanal:        https://github.com/nextcloud/user_oidc/issues/925
 Entstanden:   Phase 17, Plan 17-07 (D-08), 2026-08-29
@@ -12,7 +12,7 @@ Kein Agent hat diesen Text gesendet, gepostet oder eingereicht. Kein `gh issue c
 kein Browserversand, kein Playwright-Lauf.
 
 Der Text unterhalb dieses Kommentars ist der Kommentar, wie er auf GitHub erscheinen
-wuerde. Er ist englisch, weil der Kanal englisch ist.
+würde. Er ist englisch, weil der Kanal englisch ist.
 -->
 
 Adding a case that I think this issue does not yet cover: an AppAPI ExApp with no PHP part

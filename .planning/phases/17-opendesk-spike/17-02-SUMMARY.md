@@ -38,8 +38,8 @@ key-files:
     - "docs/spike-opendesk.md"
 decisions:
   - "Stufe A steht mit vier Diensten auf Loopback; OpenProject und Keycloak stehen als Profile in derselben Datei, damit der Stufenschnitt sichtbar ist und ein blankes up keinen von beiden startet"
-  - "Die Spike-Topologie bekommt ein eigenes Verzeichnis fuer die FRP-Zertifikate, weil zwei HaRP-Daemons auf einem gemeinsamen /certs eine geteilte CA untereinander neu erzeugen koennten und die Topologie, die dabei bricht, die taeglich benutzte waere"
-  - "Der Deploy-Daemon benennt den ExApp-Container global nc_app_<appid>; zwei Topologien dieses Repositories koennen dieselbe ExApp deshalb nicht gleichzeitig betreiben. Die ExApp-Topologie ist fuer die Dauer der Phase mit stop angehalten, nie mit down -v"
+  - "Die Spike-Topologie bekommt ein eigenes Verzeichnis fuer die FRP-Zertifikate, weil zwei HaRP-Daemons auf einem gemeinsamen /certs eine geteilte CA untereinander neu erzeugen koennten und die Topologie, die dabei bricht, die täglich benutzte wäre"
+  - "Der Deploy-Daemon benennt den ExApp-Container global nc_app_<appid>; zwei Topologien dieses Repositories können dieselbe ExApp deshalb nicht gleichzeitig betreiben. Die ExApp-Topologie ist fuer die Dauer der Phase mit stop angehalten, nie mit down -v"
   - "Der openproject-Dienstname loest ohne das Profil op nicht auf; die SSRF-Messung entscheidet den Fall stattdessen mit drei Adressliteralen desselben /24 und schreibt den Resolver-Fehlschlag als eigene Zeile in den Bericht, statt ihn als Sperrung zu lesen"
   - "Die drei vorbestehenden Vokabular-Gate-Treffer aus Plan 17-01 sind bereinigt, ohne Abschnitt 1 umzubauen; der eine unvermeidbare Treffer steckte in einer fremden URL und ist als ausgelassener Pfadteil mit Begruendung im Text geloest"
 metrics:

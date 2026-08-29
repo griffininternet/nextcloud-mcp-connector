@@ -11,18 +11,18 @@ provides:
   - "S3 gemessen: der Zwei-Konten-Negativbeweis liegt jetzt auf beiden Wegen vor (D-05 erfuellt), alice 200 mit 0 Treffern, bob 200 mit genau einem"
   - "Die Kette von Weg 0 als Satz belegt: Nextcloud entscheidet per AppAPI-Impersonation die Identitaet, OpenProject die Sichtbarkeit"
   - "Der Grund fuer die leere Vorgabe-Suche gemessen: der Filter linkable_to_storage_url greift ohne registrierte Ablage fuer kein Konto, GET /api/v3/storages total 0"
-  - "S4 gemessen und damit die Behauptung geklaert, an der Weg 0 haengt: kuenstlicher Ablauf 0, Aufruf 200, danach token_expires_at 7200 s in der Zukunft, ohne Cookie und ohne App-Passwort"
+  - "S4 gemessen und damit die Behauptung geklaert, an der Weg 0 hängt: kuenstlicher Ablauf 0, Aufruf 200, danach token_expires_at 7200 s in der Zukunft, ohne Cookie und ohne App-Passwort"
   - "Die Gegenprobe, die S4 erst zu einem Erneuerungsnachweis macht: unbrauchbarer refresh_token liefert 401 mit invalid_grant im Protokoll"
   - "S4 ein zweites Mal, mit natuerlich verstrichenem Ablauf an alice (19623 s), gleicher Ausgang: der kuenstliche Ablauf ist als Messweg gegengeprobt"
   - "S6 gemessen: 4746 Bytes als bob, davon 3895 in 49 HAL-Relationen und 585 in 24 Feldern; Gegenprobe alice 2542 Bytes mit 27 Relationen"
-  - "Die Bezugsgroesse, ohne die die Bytezahl wertlos waere: API v3 derselben Instanz roh 15831 gegen 88 Bytes mit select, dazu der gemessene Befund, dass select nur an der Sammlung wirkt"
-  - "Abschnitt 3 des Berichts vollstaendig: Feldsatz, Relationenliste, drei Luecken der OCS-Flaeche, der file-links-Fund, ausdruecklich ohne Entscheidung ueber den Werkzeugschnitt"
-  - "DI-17-04: die fuer OD-04 wertvollste Route ist die einzige unerprobte, und der Grund haengt an DI-17-03"
+  - "Die Bezugsgroesse, ohne die die Bytezahl wertlos wäre: API v3 derselben Instanz roh 15831 gegen 88 Bytes mit select, dazu der gemessene Befund, dass select nur an der Sammlung wirkt"
+  - "Abschnitt 3 des Berichts vollstaendig: Feldsatz, Relationenliste, drei Lücken der OCS-Flaeche, der file-links-Fund, ausdruecklich ohne Entscheidung ueber den Werkzeugschnitt"
+  - "DI-17-04: die fuer OD-04 wertvollste Route ist die einzige unerprobte, und der Grund hängt an DI-17-03"
 affects:
   - "17-07 bekommt mit alice ein verbundenes und frisch erneuertes Konto (token_expires_at 1787975808) und die gemessene erste Haelfte der oauth2-gegen-oidc-Asymmetrie, gegen die S5 zu lesen ist"
   - "17-08 bekommt zwei Fragen mit Grund: liefert der openDesk-Bootstrap die Nextcloud-Ablage in OpenProject fertig eingerichtet aus, und rechnet ZenDiS mit dem Byte-Aufwand einer Flaeche ohne select"
   - "17-09 kann 2.4 jetzt entscheiden: von Weg 0 fehlt nur noch S5, und Abschnitt 3 liegt als Zahlenbasis vor, ohne der Entscheidung vorzugreifen"
-  - "OD-04 bekommt aus 3.1 bis 3.3 den Feldsatz, die Byte-Kosten mit ihren zwei Abhaengigkeiten und die drei Luecken, dazu aus DI-17-04 die benannte offene Stelle"
+  - "OD-04 bekommt aus 3.1 bis 3.3 den Feldsatz, die Byte-Kosten mit ihren zwei Abhaengigkeiten und die drei Lücken, dazu aus DI-17-04 die benannte offene Stelle"
 tech-stack:
   added: []
   patterns:
@@ -37,8 +37,8 @@ key-files:
     - "docs/spike-opendesk.md"
     - ".planning/phases/17-opendesk-spike/deferred-items.md"
 decisions:
-  - "Der natuerlich verstrichene Ablauf an alice ist als eigener Messwert in den Bericht genommen und nicht als Nebenbeobachtung verworfen: er ist die Gegenprobe zur Methode des kuenstlichen Ablaufs und damit der Teil von S4, der ohne ihn angreifbar geblieben waere"
-  - "Die Byte-Messung ist mit einer zweiten Antwort unter einem anderen Konto gegengeprobt worden, obwohl der Plan nur eine verlangt; ohne sie waere aus einer Einzelmessung eine Budgetgroesse geworden"
+  - "Der natuerlich verstrichene Ablauf an alice ist als eigener Messwert in den Bericht genommen und nicht als Nebenbeobachtung verworfen: er ist die Gegenprobe zur Methode des kuenstlichen Ablaufs und damit der Teil von S4, der ohne ihn angreifbar geblieben wäre"
+  - "Die Byte-Messung ist mit einer zweiten Antwort unter einem anderen Konto gegengeprobt worden, obwohl der Plan nur eine verlangt; ohne sie wäre aus einer Einzelmessung eine Budgetgroesse geworden"
   - "Fuer die Bezugsgroesse ist der Aufbauzugang des Kontos admin benutzt und an jeder Stelle als solcher gekennzeichnet worden; er taucht in keinem Messwert von S3 oder S4 auf"
   - "Abschnitt 3 trifft ausdruecklich keine Entscheidung ueber den Werkzeugschnitt und sagt das im Text; die Wahl gehoert 17-09 und OD-04 (D-12)"
   - "OD-02 bleibt Pending: dieser Plan schliesst von Weg 0 S3, S4 und S6 ab, S5 fehlt und ist 17-07. Fortsetzung der Entscheidung aus 17-01 bis 17-05"

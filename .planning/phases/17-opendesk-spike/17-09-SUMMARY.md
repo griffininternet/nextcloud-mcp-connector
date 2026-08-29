@@ -24,7 +24,7 @@ provides:
   - "Abgeraeumte Messumgebung: kein Container, kein Band und kein Netz mit dem Praefix nc-mcp-spike-od"
   - "Wieder benutzbare ExApp-Topologie aus compose.exapp.yml, gegengeprobt mit 401 auf der mcp-Route"
 affects:
-  - "OD-04 (v2.0) bekommt die Folgerung samt ihrer Bedingung und weiss, dass file-links und der Pfad nextcloud_hub ungemessen sind"
+  - "OD-04 (v2.0) bekommt die Folgerung samt ihrer Bedingung und weiß, dass file-links und der Pfad nextcloud_hub ungemessen sind"
   - "Der ISV-Call am 14.09. bekommt mit 2.5 eine Liste, die zu Abschnitt 4 passt, ohne eine Frage doppelt zu fuehren"
   - "Phase 18 findet die ExApp-Topologie aus compose.exapp.yml wieder laufend vor, mit 0.1.11 registriert und aktiviert"
   - "Der Produktionsbaum ist belegt unveraendert: 15712 Bytes ueber 21 Werkzeuge gegen ein Budget von 18000, wie am 2026-08-28"
@@ -32,10 +32,10 @@ tech-stack:
   added: []
   patterns:
     - "Eine Folgerung wird an Messzeilen gebunden, indem jeder Satz auf 2.1, 2.2 oder 2.3 zeigt; wo die Messung nicht weit genug reicht, steht das im selben Satz und nicht in einer Fussnote. Ein Leser kann so nicht uebersehen, wo das Urteil aufhoert und die offene Frage anfaengt"
-    - "Eine Folgerung mit Bedingung ist ehrlicher als eine ohne: 'laeuft es im Modus oauth2, dann X; laeuft es im Modus oidc, dann Y und fuer den dritten Pfad kein Messwert' sagt genau so viel, wie gemessen wurde"
-    - "Alle Ungemessen-Punkte an einer Stelle sammeln, mit der Spalte 'Was es braeuchte': das macht aus einer Liste von Luecken eine Liste von Aufgaben mit Preis, und niemand muss sie beim Lesen zusammensuchen"
-    - "Rohwerte doppelt ordnen: nach Plaenen (5.1 bis 5.6, so sind sie entstanden) und nach Behauptungen (5.0, so werden sie geprueft). Der Verweis in der Spalte Stelle verbindet beide, ohne einen Wert zweimal zu fuehren"
-    - "Der Geheimnisgriff laeuft nicht nur nach Mustern, sondern gegen jeden Wert der Verbindungsdatei: 34 Werte, 3700 Treffer, und der Nachweis besteht darin, dass alle 3700 auf 12 nicht geheime Werte entfallen und alle 22 geheimen null Treffer haben"
+    - "Eine Folgerung mit Bedingung ist ehrlicher als eine ohne: 'läuft es im Modus oauth2, dann X; läuft es im Modus oidc, dann Y und fuer den dritten Pfad kein Messwert' sagt genau so viel, wie gemessen wurde"
+    - "Alle Ungemessen-Punkte an einer Stelle sammeln, mit der Spalte 'Was es braeuchte': das macht aus einer Liste von Lücken eine Liste von Aufgaben mit Preis, und niemand muss sie beim Lesen zusammensuchen"
+    - "Rohwerte doppelt ordnen: nach Plaenen (5.1 bis 5.6, so sind sie entstanden) und nach Behauptungen (5.0, so werden sie geprüft). Der Verweis in der Spalte Stelle verbindet beide, ohne einen Wert zweimal zu fuehren"
+    - "Der Geheimnisgriff läuft nicht nur nach Mustern, sondern gegen jeden Wert der Verbindungsdatei: 34 Werte, 3700 Treffer, und der Nachweis besteht darin, dass alle 3700 auf 12 nicht geheime Werte entfallen und alle 22 geheimen null Treffer haben"
     - "Ein global benannter Container gehoert zur Messumgebung, auch wenn er ihren Praefix nicht traegt: down -v allein raeumt ihn nicht ab, und der Nachweis 'kein Band mit Praefix' haette ihn uebersehen"
 key-files:
   created:
@@ -43,13 +43,13 @@ key-files:
   modified:
     - "docs/spike-opendesk.md"
 decisions:
-  - "2.4 faellt eine Folgerung, aber mit Bedingung: laeuft integration_openproject im Modus oauth2, traegt Weg 0 gemessen vollstaendig und billiger; laeuft es im Modus oidc, traegt er so lange wie das zwischengespeicherte Token gilt, und fuer die Zeit danach gibt es auf zwei von drei Pfaden einen Bruch und auf dem dritten keinen Messwert. Ein unbedingter Satz haette Frage 7 uebersprungen"
-  - "Der Satz 'Weg 0 traegt unter OIDC nicht' ist ausdruecklich nicht geschrieben worden: er wuerde um genau den Pfad nextcloud_hub ueber die Messung hinausgehen, der als einziger sitzungsfrei ist und der angelaufen, aber nicht zu Ende gemessen ist (DI-17-05)"
-  - "file-links steht in 2.4 im Begruendungssatz der Wahl und nicht in einer Fussnote: wer Weg 0 waehlt, waehlt ihn mit einer unerprobten Route, die zugleich das Unterscheidungsmerkmal aus research/FEATURES.md ist (DI-17-04)"
+  - "2.4 faellt eine Folgerung, aber mit Bedingung: läuft integration_openproject im Modus oauth2, traegt Weg 0 gemessen vollstaendig und billiger; läuft es im Modus oidc, traegt er so lange wie das zwischengespeicherte Token gilt, und fuer die Zeit danach gibt es auf zwei von drei Pfaden einen Bruch und auf dem dritten keinen Messwert. Ein unbedingter Satz haette Frage 7 uebersprungen"
+  - "Der Satz 'Weg 0 traegt unter OIDC nicht' ist ausdruecklich nicht geschrieben worden: er würde um genau den Pfad nextcloud_hub ueber die Messung hinausgehen, der als einziger sitzungsfrei ist und der angelaufen, aber nicht zu Ende gemessen ist (DI-17-05)"
+  - "file-links steht in 2.4 im Begruendungssatz der Wahl und nicht in einer Fussnote: wer Weg 0 wählt, wählt ihn mit einer unerprobten Route, die zugleich das Unterscheidungsmerkmal aus research/FEATURES.md ist (DI-17-04)"
   - "Abschnitt 5 ist nicht umnummeriert worden. Die vorhandenen Unterabschnitte 5.1 bis 5.6 tragen Verweise aus dem ganzen Bericht; die geforderte Reihenfolge S0 bis S6, Weg 1, SSRF steht deshalb als neue Tabelle 5.0 davor, mit einer Spalte Stelle auf den ausfuehrlichen Rohwert"
-  - "Wo ein Content-Type nicht protokolliert wurde, steht 'nicht protokolliert' und kein nachtraeglich erschlossener Wert. Ein erschlossener Content-Type waere genau die Art Wert, die dieser Bericht sonst als Vermutung zurueckweist"
+  - "Wo ein Content-Type nicht protokolliert wurde, steht 'nicht protokolliert' und kein nachtraeglich erschlossener Wert. Ein erschlossener Content-Type wäre genau die Art Wert, die dieser Bericht sonst als Vermutung zurueckweist"
   - "Zwei Behauptungen tragen den Vermerk 'nicht gegengeprobt' (die 401 der ExApp-Route in 1.3 und die 415 an /oauth/token in 2.2), statt sie stillschweigend als gegengeprobt mitlaufen zu lassen"
-  - "Der stehengebliebene ExApp-Container nc_app_mcp_connector ist als Teil der Messumgebung entfernt worden, obwohl er den Praefix nicht traegt: er hing als einziger noch am Spike-Netz und blockierte dessen Entfernung. Ohne diesen Schritt waere die ExApp-Topologie mit 503 statt 401 zurueckgeblieben"
+  - "Der stehengebliebene ExApp-Container nc_app_mcp_connector ist als Teil der Messumgebung entfernt worden, obwohl er den Praefix nicht traegt: er hing als einziger noch am Spike-Netz und blockierte dessen Entfernung. Ohne diesen Schritt wäre die ExApp-Topologie mit 503 statt 401 zurueckgeblieben"
 metrics:
   duration: 35 min
   completed: 2026-08-29

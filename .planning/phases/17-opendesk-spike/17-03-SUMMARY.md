@@ -207,7 +207,7 @@ Der Ungemessen-Rückfall des Checkpoints wurde nicht gebraucht: Weg 1 ist nicht 
 - `OP_USER_A_PASSWORD`, `OP_USER_B_PASSWORD` und `OP_WP_ID` stehen in `.env.spike-opendesk`.
 - `git status --short` zeigt `.env.spike-opendesk` nicht an (`git check-ignore -v` trifft `.gitignore:17`). `git grep -n OP_OAUTH_CLIENT_SECRET` findet den Namen nur in `.env.spike-opendesk.example` (auskommentiert, mit Platzhalter) und in Plantext, nie mit einem Wert dahinter.
 - Geheimnis-Gate über beide geänderten Dateien: kein Treffer. Pitfall-2-Griff: zwei Treffer, beide `apikey:<OP_API_TOKEN>` als Platzhalter, beide im dafür vorgesehenen Absatz.
-- `uv run pytest -q`: grün, Ausgangswert 0, dreimal gefahren (nach Task 1, nach dem Berichtstext von Task 3 und nach der Aenderung an der Beispieldatei).
+- `uv run pytest -q`: grün, Ausgangswert 0, dreimal gefahren (nach Task 1, nach dem Berichtstext von Task 3 und nach der Änderung an der Beispieldatei).
 - Kein U+2014 und kein U+2013 in `docs/spike-opendesk.md` und in `.env.spike-opendesk.example`, kein Zeichen oberhalb U+2600, keine ASCII-Ersatzschreibung von Umlauten.
 - `git status --short src/ appinfo/ pyproject.toml uv.lock`: leer. `files_modified` nennt keinen Pfad unter `src/` (D-12).
 - Keiner der drei Commits löscht eine verfolgte Datei (`git diff --diff-filter=D` je leer), keine unverfolgte Datei bleibt liegen.

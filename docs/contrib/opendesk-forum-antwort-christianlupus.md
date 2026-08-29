@@ -1,23 +1,23 @@
 <!--
 Entwurf einer Antwort an christianlupus im Nextcloud-Forum.
 
-Status: Entwurf, nicht gesendet. Versand ausschliesslich durch den Owner.
+Status: Entwurf, nicht gesendet. Versand ausschließlich durch den Owner.
 
 Kanal:      https://help.nextcloud.com/t/integration-openproject-are-the-ocs-routes-a-public-api-for-other-apps/248660
             (Kategorie Development, Konto street1983nk besteht bereits)
 Anlass:     christianlupus hat am 2026-08-28 auf den Ausgangsbeitrag geantwortet. Er hat
             dieselbe Frage im Community-Chat selbst gestellt und keine Antwort bekommen
-            und raet zu einem Konto in der OpenProject-Community.
+            und rät zu einem Konto in der OpenProject-Community.
 Entstanden: Phase 17, Plan 17-08 (D-11), 2026-08-29
 Belege:     Jede technische Aussage unten steht mit Fassung und Messwert in
-            docs/spike-opendesk.md: die Routenzaehlung in Abschnitt 2.1, die Messwerte
-            S1 bis S4 ebenda, der OIDC-Befund in S5a bis S5c, die drei Luecken und
+            docs/spike-opendesk.md: die Routenzählung in Abschnitt 2.1, die Messwerte
+            S1 bis S4 ebenda, der OIDC-Befund in S5a bis S5c, die drei Lücken und
             file-links in Abschnitt 3.3.
 
 Kein Agent hat diesen Text gesendet, gepostet oder eingereicht. Kein Browserversand,
 kein Playwright-Lauf, kein Forums-Aufruf.
 
-Der Text unterhalb dieses Kommentars ist die Antwort, wie sie im Forum erscheinen wuerde.
+Der Text unterhalb dieses Kommentars ist die Antwort, wie sie im Forum erscheinen würde.
 Er ist englisch, weil der Kanal englisch ist.
 -->
 
