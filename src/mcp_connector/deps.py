@@ -39,6 +39,7 @@ import base64
 import binascii
 import secrets
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
 from mcp.server.auth.provider import AccessToken
@@ -48,16 +49,18 @@ from mcp.types import INVALID_REQUEST
 
 from . import config
 from .config import load_stdio_credentials
-from .exapp.auth import AppApiRejected, verify_appapi_headers
+from .exapp.auth import AppApiRejected, appapi_user, verify_appapi_headers
 from .nextcloud import NcClients
 from .nextcloud.credentials import MODE_BASIC, Credentials
 from .nextcloud.http import shared_client
 from .oauth.verifier import OAUTH_STATE_ATTR, OAuthIdentity
 
 __all__ = [
+    "Caller",
     "MCPError",
     "StaticBearerVerifier",
     "build_auth",
+    "resolve_caller",
     "resolve_clients",
     "resolve_credentials",
 ]
@@ -99,6 +102,77 @@ def resolve_credentials(ctx: Any) -> Credentials:
 def resolve_clients(ctx: Any) -> NcClients:
     """Bundle the event loop client with the credentials of this call."""
     return NcClients(client=shared_client(), creds=resolve_credentials(ctx))
+
+
+@dataclass(frozen=True, slots=True)
+class Caller:
+    """Who made one tool call, in the four values a record of it may name (D-08).
+
+    Four fields and no fifth. There is no Nextcloud password here, and that absence is the
+    point: the recording path must not use :func:`resolve_credentials`, whose result carries
+    the live app password of the connection (``nextcloud/credentials.py``) and which raises
+    ``MCPError`` when a request has no user context. A recorder may do neither. It may not
+    hold a credential it could write into a line, and it may not raise, because a log that
+    fails must not end the call it was recording (D-13).
+
+    No address and no user agent either, and that is a decision and not an omission (D-08):
+    the two together would turn a record of what happened into a record of where somebody
+    was.
+
+    The three client values are ``None`` on every path that has no OAuth client, which are
+    the AppAPI impersonation, stdio, the static bearer and the passthrough mode. ``None``
+    and not the empty string: there is nothing to name, which is a different fact from a
+    client that registered without a name.
+    """
+
+    nc_user: str
+    client_id: str | None
+    auth_id: str | None
+    client_name: str | None
+
+
+def resolve_caller(ctx: Any) -> Caller | None:
+    """Name the caller of this tool call, or answer ``None``. Never raise, never call out.
+
+    Two sources and no third, in this order. The identity the transport boundary resolved
+    from a verified bearer once per request, which fills all four fields; otherwise the
+    Nextcloud user id of the AppAPI handshake, which is signed with ``APP_SECRET`` and
+    parsed locally, and which fills the user alone. Reading is defensive at every step, in
+    the shape of :func:`_oauth_identity`: a context without a request, a request without
+    state, a state without our value and a handshake that does not verify are one answer,
+    and that answer is ``None``. The gap that leaves in the log is what the check command
+    of this phase makes visible.
+
+    Deliberately not read: ``ctx.request_context.params["_meta"]``. The client named there
+    is declared by the client itself and would be a second, unverified identity next to the
+    one D-08 asks for. It stays unread on purpose, so this does not come back one day as an
+    improvement.
+
+    No ``await``, no network call and no read of the OAuth store: everything this needs was
+    resolved before any MCP code ran, and this function only reads the result.
+    """
+    identity = _oauth_identity(ctx)
+    if identity is not None:
+        return Caller(
+            nc_user=identity.nc_user,
+            client_id=identity.client_id,
+            auth_id=identity.auth_id,
+            client_name=identity.client_name,
+        )
+
+    request = _request_of(ctx)
+    if request is None:
+        return None
+    try:
+        user = appapi_user(request)
+    except Exception:
+        # ``appapi_user`` swallows its own two rejections, so anything reaching here is a
+        # request object that is not the one this branch expects. It is still not a reason
+        # to raise inside a recorder.
+        return None
+    if not user:
+        return None
+    return Caller(nc_user=user, client_id=None, auth_id=None, client_name=None)
 
 
 class StaticBearerVerifier:
@@ -235,15 +309,24 @@ def _oauth_identity(ctx: Any) -> OAuthIdentity | None:
     a refusal in the caller. The alternative, guessing an identity from anything else in
     the request, is the confused deputy this whole layer exists against (T-01-12).
     """
-    try:
-        request = getattr(ctx.request_context, "request", None)
-    except (AttributeError, ValueError):
-        return None
+    request = _request_of(ctx)
     state = getattr(request, "state", None)
     if state is None:
         return None
     identity = getattr(state, OAUTH_STATE_ATTR, None)
     return identity if isinstance(identity, OAuthIdentity) else None
+
+
+def _request_of(ctx: Any) -> Any:
+    """The HTTP request behind a tool context, or ``None``. The one defensive read.
+
+    Both readers of the request state go through here, so "a context this server cannot
+    read" means the same thing to the credential layer and to the recording path.
+    """
+    try:
+        return getattr(ctx.request_context, "request", None)
+    except (AttributeError, ValueError):
+        return None
 
 
 def _credentials_from_basic(headers: Mapping[str, str]) -> Credentials:
