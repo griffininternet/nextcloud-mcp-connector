@@ -47,7 +47,10 @@ patterns-established:
   - "Zwei Kettenarten in einer Tabelle, unterschieden durch die Kennung (u:<nc_user> gegen i:instance)"
   - "Grenzbeschreibung im Modul-Docstring: die Kette zeigt eine unbemerkte Änderung, sie schützt nicht gegen jemanden, der die Datei schreiben und die Kette neu rechnen kann"
 
-requirements-completed: [AUDIT-02, AUDIT-03]
+requirements-completed: []
+# AUDIT-02 und AUDIT-03 bleiben Pending: AUDIT-02 verlangt zusätzlich das Prüfkommando,
+# AUDIT-03 zusätzlich Obergrenze und Aufbewahrungsfrist; beide entstehen in Plan 18-04.
+requirements-advanced: [AUDIT-02, AUDIT-03]
 
 # Metrics
 duration: 20min
@@ -131,6 +134,15 @@ completed: 2026-08-29
 - Der Plan nennt in `<behavior>` "siebzehn Spalten", das Akzeptanzkriterium von Task 1 nennt neunzehn. Die Tabelle hat neunzehn Spalten, davon gehen siebzehn in die Kanonisierung ein (alles ausser `prev_hash` und `hash`). Der Test behauptet beide Zahlen und ihren Zusammenhang, damit die Doppeldeutigkeit nicht wiederkommt.
 - Zweitausend Zeilen für den Größenfall werden mit einer eigenen Verbindung in einer Transaktion geschrieben statt über `append`: zweitausend Verbindungen kosten rund vierzehn Sekunden für eine Messung, die von Seiten handelt und nicht von Hashes. Der Grund steht als Docstring an der Hilfe.
 
+## Anforderungen
+
+AUDIT-02 und AUDIT-03 bleiben in `REQUIREMENTS.md` ausdrücklich **Pending**, obwohl die
+Plan-Frontmatter sie nennt. AUDIT-02 verlangt neben der Kette auch das Prüfkommando, das die
+erste gebrochene Stelle benennt; AUDIT-03 verlangt neben der eigenen Ablage auch Obergrenze
+und Aufbewahrungsfrist. Beides entsteht in Plan 18-04. Ein Haken hier wäre die Art von
+Aussage, die dieses Projekt bei EXAPP-10 und TABLES-01 schon einmal bewusst zurückgehalten
+hat.
+
 ## Threat Flags
 
 Keine. Die Ablage hat keine Route, keinen Netzzugang und keine neue Berechtigung; die einzige neue Datei liegt im bereits vorhandenen Volume.
@@ -144,6 +156,11 @@ None - no external service configuration required.
 - Plan 18-02 (Erfassungspfad) kann auf `Entry`, `append`, `user_chain` und `AUDIT_STATE_ATTR` aufsetzen; die Feldreihenfolge der Kanonisierung ist ab jetzt fest.
 - Plan 18-04 (Frist, Obergrenze, Prüfkommando) findet `RETENTION_DAYS`, `SIZE_LIMIT_BYTES`, `SWEEP_EVERY`, `SWEEP_USER_CHECK_EVERY`, `USER_SILENCE_DAYS`, `SWEEP_BATCH_ROWS`, `used_bytes` sowie die Spalten `removed`, `gap_chain` und `gap_hash` vor.
 - Noch niemand schreibt in die Datei: kein Werkzeug, kein Dekorator und keine Route berühren sie, und der Schalter aus D-14 entsteht in einem späteren Plan dieser Phase.
+
+## Self-Check: PASSED
+
+Alle vier Dateien liegen auf der Platte, alle fünf Commits stehen im Log
+(`fa8159e`, `d92c41f`, `704533a`, `16c9a4f`, `13a94ec`).
 
 ---
 *Phase: 18-audit-log-kern*

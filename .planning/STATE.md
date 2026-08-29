@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
-status: completed
-stopped_at: Phase 18 geplant, Plan-Check bestanden
-last_updated: "2026-08-29T08:02:40.146Z"
-last_activity: 2026-08-29 -- Phase 17 marked complete
+status: executing
+stopped_at: Completed 18-01-PLAN.md
+last_updated: "2026-08-29T08:20:54.527Z"
+last_activity: 2026-08-29 -- Plan 18-01 ausgefuehrt (Audit-Ablage und Hash-Kette)
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 23
-  completed_plans: 13
-  percent: 50
+  completed_plans: 14
+  percent: 61
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Current focus:** Phase 17, openDesk-Spike
+**Current focus:** Phase 18 — audit-log-kern
 
 ## Current Position
 
-Phase: 17 — COMPLETE
-Plan: 9 of 9
-Status: Phase 17 complete
-Last activity: 2026-08-29 -- Phase 17 marked complete
+Phase: 18 (audit-log-kern) — EXECUTING
+Plan: 2 of 10
+Status: Ready to execute
+Last activity: 2026-08-29 -- Plan 18-01 ausgefuehrt (Audit-Ablage und Hash-Kette)
 
 ## Performance Metrics
 
@@ -176,6 +176,7 @@ Last activity: 2026-08-29 -- Phase 17 marked complete
 | Phase 17 P07 | 64 min | 3 tasks | 5 files |
 | Phase 17 P08 | 20 | 3 tasks | 3 files |
 | Phase 17 P09 | 35 min | 3 tasks | 1 files |
+| Phase 18-audit-log-kern P01 | 20 min | 3 tasks tasks | 4 files files |
 
 ## Accumulated Context
 
@@ -655,6 +656,8 @@ Recent decisions affecting current work:
 - [Phase ?]: 17-08: Drei von dieser Phase beantwortete Fragen sind aus der Liste entfernt und mit Beleg in einer Streichtabelle gefuehrt; Freigabe des Owners am 2026-08-29 ohne inhaltliche Aenderung, drei Entwuerfe bleiben unversendet
 - [Phase ?]: 17-09: Die Folgerung in 2.4 traegt ihre Bedingung im selben Satz (Modus oauth2 gegen oidc); der Satz 'Weg 0 traegt unter OIDC nicht' ist bewusst nicht geschrieben, weil der Pfad nextcloud_hub ungemessen ist
 - [Phase ?]: 17-09: Abschnitt 5 nicht umnummeriert; die Reihenfolge S0 bis S6, Weg 1, SSRF steht als neue Tabelle 5.0 davor, damit die Verweise auf 5.1 bis 5.6 gueltig bleiben
+- [Phase ?]: [Phase 18]: auto_vacuum = INCREMENTAL muss die erste Anweisung auf einer frischen Audit-Verbindung sein, nicht nur vor executescript(SCHEMA); das Umschalten auf WAL schreibt den Dateikopf und friert den Modus auf 0 ein (eigene Messung beider Reihenfolgen)
+- [Phase ?]: [Phase 18]: die Feldreihenfolge CANONICAL_FIELDS (17 Namen, seq zuerst, ohne prev_hash und hash) steht ab Plan 18-01 fest; INSERT und Digest bauen beide auf _row_values auf, damit ein Pruefkommando den Hash allein aus der Zeile nachrechnen kann
 
 ### Pending Todos
 
@@ -694,10 +697,10 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-29T08:02:40.125Z
-Stopped at: Phase 18 geplant, Plan-Check bestanden
-Naechster Schritt: Phase 17 verifizieren (/gsd:verify-phase 17); danach offen: 16-04 (Store-Einreichung 0.1.11) und die Planung von Phase 18
-Resume file: .planning/phases/18-audit-log-kern/18-01-PLAN.md
+Last session: 2026-08-29T08:20:54.509Z
+Stopped at: Completed 18-01-PLAN.md
+Naechster Schritt: Plan 18-02 ausfuehren; danach offen: Phase 17 verifizieren (/gsd:verify-phase 17) und 16-04 (Store-Einreichung 0.1.11)
+Resume file: None
 
 ## Operator Next Steps
 
