@@ -16,10 +16,16 @@ from collections.abc import Mapping
 from typing import Any
 
 import pytest
+from starlette.applications import Starlette
 from starlette.requests import Request
+from starlette.responses import PlainTextResponse, Response
+from starlette.routing import Route
+from starlette.testclient import TestClient
 
 from mcp_connector import config, deps
+from mcp_connector.audit import AUDIT_STATE_ATTR
 from mcp_connector.deps import Caller, resolve_caller
+from mcp_connector.exapp.middleware import RequireAppApi
 from mcp_connector.oauth.verifier import OAUTH_STATE_ATTR, OAuthIdentity
 
 APP_ID = "mcp_connector"
@@ -98,6 +104,30 @@ class FakeContext:
         if identity is not None:
             setattr(request.state, OAUTH_STATE_ATTR, identity)
         self.request_context = FakeRequestContext(request if with_request else None, params)
+
+
+MIDDLEWARE_ENV = {
+    config.ENV_APP_ID: APP_ID,
+    config.ENV_APP_SECRET: APP_SECRET,
+    config.ENV_APP_VERSION: APP_VERSION,
+    config.ENV_NEXTCLOUD_URL: BASE_URL,
+    config.ENV_PUBLIC_URL: PUBLIC_URL,
+}
+
+
+def guarded_app(recorder: object | None) -> tuple[Starlette, list[object | None]]:
+    """One route behind the real boundary, reporting what the boundary left for it."""
+    seen: list[object | None] = []
+
+    async def served(request: Request) -> Response:
+        seen.append(getattr(request.state, AUDIT_STATE_ATTR, None))
+        return PlainTextResponse("served")
+
+    app = Starlette(routes=[Route("/mcp", served, methods=["GET"])])
+    for route in app.router.routes:
+        if isinstance(route, Route):
+            route.app = RequireAppApi(route.app, MIDDLEWARE_ENV, audit_recorder=recorder)
+    return app, seen
 
 
 def identity(**fields: Any) -> OAuthIdentity:
@@ -181,3 +211,29 @@ def test_the_caller_carries_four_fields_and_no_secret(exapp_env: None) -> None:
     assert caller is not None
     assert APP_PASSWORD not in repr(caller)
     assert "***" not in repr(caller), "there is nothing here that would have to be masked"
+
+
+# --- the recorder travels with the request --------------------------------------------------
+
+
+def test_the_boundary_leaves_the_recorder_where_the_recording_path_reads_it() -> None:
+    """One constant for both sides, so the two cannot drift apart (AUDIT_STATE_ATTR)."""
+    recorder = object()
+    app, seen = guarded_app(recorder)
+
+    with TestClient(app) as client:
+        response = client.get("/mcp", headers=appapi_headers())
+
+    assert response.status_code == 200
+    assert seen == [recorder], "the very object that was handed in, not a copy of it"
+
+
+def test_without_a_recorder_nothing_is_deposited_at_all() -> None:
+    """The state this ships in (D-14): no attribute, no line, no difference to before."""
+    app, seen = guarded_app(None)
+
+    with TestClient(app) as client:
+        response = client.get("/mcp", headers=appapi_headers())
+
+    assert response.status_code == 200
+    assert seen == [None]

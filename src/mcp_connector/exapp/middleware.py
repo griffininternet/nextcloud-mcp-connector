@@ -61,6 +61,7 @@ from starlette.responses import Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from .. import config
+from ..audit import AUDIT_STATE_ATTR
 from ..errors import ToolError
 from ..oauth.metadata import PRM_SUFFIX, TOOL_SCOPE
 from ..oauth.verifier import OAUTH_STATE_ATTR, IdentitySource
@@ -109,11 +110,17 @@ class RequireAppApi:
         *,
         token_verifier: TokenVerifier | None = None,
         access_check: AccessCheck | None = None,
+        audit_recorder: object | None = None,
     ) -> None:
         self._app = app
         self._env = env
         self._token_verifier = token_verifier
         self._access_check = access_check
+        #: ``object`` and not the type of the recorder, on purpose: this boundary has no
+        #: business knowing what a recorder is, and importing the recording path here would
+        #: reach from the transport shell into a layer below it. The reader checks the type
+        #: itself, exactly as ``deps._oauth_identity`` does with ``OAuthIdentity``.
+        self._audit_recorder = audit_recorder
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -144,7 +151,28 @@ class RequireAppApi:
             await refusal(scope, receive, send)
             return
 
+        self._deposit_recorder(request)
         await self._app(scope, receive, send)
+
+    def _deposit_recorder(self, request: Request) -> None:
+        """Leave the recorder of this deployment where the recording path reads it.
+
+        The same seam and the same shape as :meth:`_deposit`: one constant for both sides
+        (``AUDIT_STATE_ATTR``), one value in the state of one request. Here rather than
+        inside :meth:`_deposit`, because that one runs on the OAuth branch alone, while the
+        AppAPI path has a Nextcloud user id and belongs in the record just as much.
+
+        It happens for every request that passed all three checks and for no other: a
+        rejected request has left long before this line, so nothing about a caller that was
+        turned away can reach the log through this path.
+
+        Without a recorder nothing is deposited and nothing is recorded. That is the state
+        this ships in (D-14, off by default), and it is also the permanent state of stdio
+        and of the standalone HTTP mode, neither of which passes through this boundary.
+        """
+        if self._audit_recorder is None:
+            return
+        setattr(request.state, AUDIT_STATE_ATTR, self._audit_recorder)
 
     async def _switch_refusal(self, request: Request, user: str) -> Response | None:
         """The per account switch (EXAPP-02), third and last check of this boundary.
