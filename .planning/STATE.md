@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
 status: executing
-stopped_at: Completed 18-02-PLAN.md
-last_updated: "2026-08-29T08:33:22.282Z"
-last_activity: 2026-08-29 -- Plan 18-02 ausgefuehrt (Erlaubnisliste und Vertragstest)
+stopped_at: Completed 18-03-PLAN.md
+last_updated: "2026-08-29T08:49:43.054Z"
+last_activity: 2026-08-29 -- Plan 18-03 ausgeführt (Ablehnungskennungen an ToolError)
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 23
-  completed_plans: 15
-  percent: 65
+  completed_plans: 16
+  percent: 70
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 18 (audit-log-kern) — EXECUTING
-Plan: 3 of 10
+Plan: 4 of 10
 Status: Ready to execute
-Last activity: 2026-08-29 -- Plan 18-02 ausgefuehrt (Erlaubnisliste und Vertragstest)
+Last activity: 2026-08-29 -- Plan 18-03 ausgeführt (Ablehnungskennungen an ToolError)
 
 ## Performance Metrics
 
@@ -178,6 +178,7 @@ Last activity: 2026-08-29 -- Plan 18-02 ausgefuehrt (Erlaubnisliste und Vertrags
 | Phase 17 P09 | 35 min | 3 tasks | 1 files |
 | Phase 18-audit-log-kern P01 | 20 min | 3 tasks tasks | 4 files files |
 | Phase 18-audit-log-kern P02 | 15 min | 2 tasks tasks | 3 files files |
+| Phase 18-audit-log-kern P03 | 25 min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -659,6 +660,9 @@ Recent decisions affecting current work:
 - [Phase ?]: 17-09: Abschnitt 5 nicht umnummeriert; die Reihenfolge S0 bis S6, Weg 1, SSRF steht als neue Tabelle 5.0 davor, damit die Verweise auf 5.1 bis 5.6 gueltig bleiben
 - [Phase ?]: [Phase 18]: auto_vacuum = INCREMENTAL muss die erste Anweisung auf einer frischen Audit-Verbindung sein, nicht nur vor executescript(SCHEMA); das Umschalten auf WAL schreibt den Dateikopf und friert den Modus auf 0 ein (eigene Messung beider Reihenfolgen)
 - [Phase ?]: [Phase 18]: die Feldreihenfolge CANONICAL_FIELDS (17 Namen, seq zuerst, ohne prev_hash und hash) steht ab Plan 18-01 fest; INSERT und Digest bauen beide auf _row_values auf, damit ein Pruefkommando den Hash allein aus der Zeile nachrechnen kann
+- [Phase 18]: 18-03: Der AST-Lauf prüft nur reason= an Fehlerkonstruktionen; audit/store.py baut Entry(reason=row[11]), und dieser Wert kommt zur Laufzeit aus einer Zeile und kann nie eine Konstante sein
+- [Phase 18]: 18-03: Zwölf Statuszweige statt der erwarteten sieben bis zehn, weil dav, caldav und carddav je einen Schreib- und einen Lesepfad führen
+- [Phase 18]: 18-03: Die sechs Kennungen in errors.REASONS sind eingefroren; eine siebte ist ein Entscheid und gehört in ein Review, gehalten von einem AST-Lauf über src/
 
 ### Pending Todos
 
@@ -698,9 +702,9 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-29T08:33:18.455Z
-Stopped at: Completed 18-01-PLAN.md
-Naechster Schritt: Plan 18-02 ausfuehren; danach offen: Phase 17 verifizieren (/gsd:verify-phase 17) und 16-04 (Store-Einreichung 0.1.11)
+Last session: 2026-08-29T08:49:25.059Z
+Stopped at: Completed 18-03-PLAN.md
+Nächster Schritt: Plan 18-04 ausführen; danach offen: Phase 17 verifizieren (/gsd:verify-phase 17) und 16-04 (Store-Einreichung 0.1.11)
 Resume file: None
 
 ## Operator Next Steps

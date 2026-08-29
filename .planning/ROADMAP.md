@@ -187,7 +187,7 @@ Plans:
 
 - [x] 18-01-PLAN.md , Ablage und Kette: zweite SQLite-Datei, Schema mit actor und Grabsteinspalten, Pragmas samt auto_vacuum, Kettenanhang in einer Transaktion
 - [x] 18-02-PLAN.md , Erlaubnisliste je Werkzeug und der Vertragstest nach dem Muster des Budget-Gates
-- [ ] 18-03-PLAN.md , feste Ablehnungskennungen: reason an ToolError, gesetzt an den sieben Statusabbildungen und den drei Sicherungsorten
+- [x] 18-03-PLAN.md , feste Ablehnungskennungen: reason an ToolError, gesetzt an den sieben Statusabbildungen und den drei Sicherungsorten
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -247,7 +247,7 @@ Plans:
 | 15. Release 0.1.10 | v1.4 | 4/4 | Complete | 2026-08-28 |
 | 16. Release 0.1.11 | v1.5 | 4/4 | Complete | 2026-08-28 |
 | 17. openDesk-Spike | v1.5 | 9/9 | Complete   | 2026-08-29 |
-| 18. Audit-Log Kern | v1.5 | 2/10 | In Progress | - |
+| 18. Audit-Log Kern | v1.5 | 3/10 | In Progress | - |
 | 19. Audit-Log Bedienung und Textnachzug | v1.5 | 0/? | Not started | - |
 
 ## Next
