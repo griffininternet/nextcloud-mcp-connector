@@ -20,7 +20,7 @@ import binascii
 import json
 from typing import Any
 
-from .errors import ToolError
+from .errors import REASON_GUARD_TRIPPED, ToolError
 
 #: A handle of this project stays far below 200 characters. The ceiling is a cheap guard
 #: against a caller that pastes a whole document into the cursor parameter.
@@ -44,28 +44,43 @@ def encode_cursor(state: dict[str, Any]) -> str:
 
 def decode_cursor(cursor: str) -> dict[str, Any]:
     """Read a handle back, defensively. Never raises anything but :class:`ToolError`."""
+    # Every refusal of this module is a guard of this server, not an answer of Nextcloud, so
+    # every raise site names the same identifier (D-17).
     raw = (cursor or "").strip()
     if not raw:
-        raise ToolError(message="The cursor is empty.", hint=_HINT)
+        raise ToolError(message="The cursor is empty.", hint=_HINT, reason=REASON_GUARD_TRIPPED)
     if len(raw) > MAX_CURSOR_CHARS:
         raise ToolError(
             message=f"The cursor is longer than {MAX_CURSOR_CHARS} characters.",
             hint=_HINT,
+            reason=REASON_GUARD_TRIPPED,
         )
 
     padded = raw + "=" * (-len(raw) % 4)
     try:
         blob = base64.b64decode(padded, altchars=b"-_", validate=True)
     except (binascii.Error, ValueError):
-        raise ToolError(message="The cursor is not a valid handle.", hint=_HINT) from None
+        raise ToolError(
+            message="The cursor is not a valid handle.",
+            hint=_HINT,
+            reason=REASON_GUARD_TRIPPED,
+        ) from None
 
     try:
         state = json.loads(blob.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
-        raise ToolError(message="The cursor does not decode to a handle.", hint=_HINT) from None
+        raise ToolError(
+            message="The cursor does not decode to a handle.",
+            hint=_HINT,
+            reason=REASON_GUARD_TRIPPED,
+        ) from None
 
     if not isinstance(state, dict):
-        raise ToolError(message="The cursor does not describe a position.", hint=_HINT)
+        raise ToolError(
+            message="The cursor does not describe a position.",
+            hint=_HINT,
+            reason=REASON_GUARD_TRIPPED,
+        )
     return state
 
 
@@ -73,7 +88,11 @@ def read_offset(state: dict[str, Any]) -> int:
     """Read the offset of a decoded handle, or raise if it is not a position."""
     offset = state.get("o")
     if not isinstance(offset, int) or isinstance(offset, bool) or offset < 0:
-        raise ToolError(message="The cursor has no valid position.", hint=_HINT)
+        raise ToolError(
+            message="The cursor has no valid position.",
+            hint=_HINT,
+            reason=REASON_GUARD_TRIPPED,
+        )
     return offset
 
 
@@ -88,4 +107,5 @@ def check_scope(state: dict[str, Any], key: str, expected: str, what: str) -> No
         raise ToolError(
             message=f"This cursor belongs to a different {what}.",
             hint=f"Call the tool again without cursor to start a new {what}.",
+            reason=REASON_GUARD_TRIPPED,
         )

@@ -179,6 +179,15 @@ _.last_entry
 PARAM_ALLOWLIST
 FORBIDDEN_PARAMS
 
+# --- The frozen reason set of errors.py -------------------------------------------------
+# REASONS is the readable half of the rejection reasons: the six REASON_* constants are set
+# at the status mappings and at the three guards, but nobody reads the set itself in
+# production yet. Its reader is the recorder of plan 18-06, which writes the reason of a
+# refused call into a row and refuses a value that is not in this set. Today it is read by
+# tests/unit/test_errors_reason.py, which counts it and keeps it at six, and it leaves this
+# list with that plan.
+REASONS
+
 # --- The methods of the SDK provider protocol ------------------------------------------
 # oauth/provider.py implements OAuthAuthorizationServerProvider. Every method below is
 # called by the SDK handlers of /authorize, /token and /register, and by nothing in this

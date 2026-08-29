@@ -39,7 +39,7 @@ import re
 from typing import Any
 
 from .. import config, paging
-from ..errors import ToolError
+from ..errors import REASON_GUARD_TRIPPED, ToolError
 from ..exapp.ui import strings
 from ..nextcloud import NcClients, capabilities
 from ..nextcloud.clients import talk as talk_client
@@ -256,6 +256,10 @@ async def send(clients: NcClients, token: str, message: str) -> dict[str, Any]:
                 "is disabled and enabled again. Reading conversations and their history with "
                 "talk_browse is unaffected."
             ),
+            # A guard of this server, not a refusal by Nextcloud: the identifier is set at the
+            # raise site here because there is exactly one of them and because it says
+            # something else than an HTTP status would (D-17).
+            reason=REASON_GUARD_TRIPPED,
         )
 
     caps = await capabilities.require_app(clients, APP)

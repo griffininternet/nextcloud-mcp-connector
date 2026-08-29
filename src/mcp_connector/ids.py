@@ -28,10 +28,14 @@ Formats::
 
 import re
 
-from .errors import ToolError
+from .errors import REASON_GUARD_TRIPPED, ToolError
 
 SEPARATOR = ":"
 
+# Every refusal of this module is a guard of this server and never an answer of Nextcloud, so
+# every raise site below carries ``reason=REASON_GUARD_TRIPPED``. It is set at the raise site
+# and not at a status mapping because there is no status here: nothing has left this process
+# yet (D-17).
 _HINT = (
     "Use an id exactly as returned by a search tool: file:<fileid>, note:<id>, "
     "card:<board>:<stack>:<card>, event:<calendar>:<object>, mail:<databaseId>, "
@@ -113,7 +117,9 @@ def encode_url(url: str) -> str:
     """The rest category: everything we cannot address by a stable Nextcloud id."""
     value = (url or "").strip()
     if not value:
-        raise ToolError(message="Cannot build an id from an empty url.", hint=_HINT)
+        raise ToolError(
+            message="Cannot build an id from an empty url.", hint=_HINT, reason=REASON_GUARD_TRIPPED
+        )
     return f"url{SEPARATOR}{value}"
 
 
@@ -122,7 +128,9 @@ def parse(raw: str) -> tuple[str, tuple[str, ...]]:
     value = (raw or "").strip()
     kind, separator, rest = value.partition(SEPARATOR)
     if not separator or not kind or not rest:
-        raise ToolError(message=f"{raw!r} is not a valid resource id.", hint=_HINT)
+        raise ToolError(
+            message=f"{raw!r} is not a valid resource id.", hint=_HINT, reason=REASON_GUARD_TRIPPED
+        )
 
     if kind == "url":
         # Both halves of this guard stand here and not in the caller, and the yardstick is the
@@ -136,7 +144,11 @@ def parse(raw: str) -> tuple[str, tuple[str, ...]]:
         # ``encode_url("https://a b")`` builds exactly that, and a refusal would be stricter
         # than the encode side and would only turn the asymmetry around.
         if not rest.strip() or rest != rest.strip():
-            raise ToolError(message=f"{raw!r} is not a valid resource id.", hint=_HINT)
+            raise ToolError(
+                message=f"{raw!r} is not a valid resource id.",
+                hint=_HINT,
+                reason=REASON_GUARD_TRIPPED,
+            )
         return "url", (rest,)
     if kind in ("file", "note"):
         # One segment, and the separator may not hide inside it: ``_join`` refuses the
@@ -144,7 +156,11 @@ def parse(raw: str) -> tuple[str, tuple[str, ...]]:
         # never have built, and exactly the set the encode side builds may be read back
         # (the same yardstick the ``url`` branch above wrote down, review finding WR-03).
         if SEPARATOR in rest:
-            raise ToolError(message=f"{raw!r} is not a valid resource id.", hint=_HINT)
+            raise ToolError(
+                message=f"{raw!r} is not a valid resource id.",
+                hint=_HINT,
+                reason=REASON_GUARD_TRIPPED,
+            )
         parts = (rest,)
     elif kind == "mail":
         parts = (rest,)
@@ -155,11 +171,17 @@ def parse(raw: str) -> tuple[str, tuple[str, ...]]:
         # nothing to lean on: PHP casts a non numeric id to 0 and answers 404, so there is no
         # routing error that would stop a wrong value on the way out (pitfall 11).
         if not _DIGITS.fullmatch(rest):
-            raise ToolError(message=f"{raw!r} is not a valid mail id.", hint=_HINT)
+            raise ToolError(
+                message=f"{raw!r} is not a valid mail id.", hint=_HINT, reason=REASON_GUARD_TRIPPED
+            )
     elif kind == "message":
         parts = tuple(rest.split(SEPARATOR, 1))
         if len(parts) != 2:
-            raise ToolError(message=f"{raw!r} is not a valid Talk message id.", hint=_HINT)
+            raise ToolError(
+                message=f"{raw!r} is not a valid Talk message id.",
+                hint=_HINT,
+                reason=REASON_GUARD_TRIPPED,
+            )
         # Both guards stand here and not only in the Talk client, for the same reason the mail
         # guard does: an id out of a model answer becomes part of the URL path of the context
         # route, so ``message:ABC:1`` has to be refused without a single request. The token
@@ -167,19 +189,26 @@ def parse(raw: str) -> tuple[str, tuple[str, ...]]:
         # never existed), the digit check is the other one (the app casts a non numeric message
         # id to 0 and answers with the oldest messages instead of refusing it).
         if not _TOKEN.fullmatch(parts[0]) or not _DIGITS.fullmatch(parts[1]):
-            raise ToolError(message=f"{raw!r} is not a valid Talk message id.", hint=_HINT)
+            raise ToolError(
+                message=f"{raw!r} is not a valid Talk message id.",
+                hint=_HINT,
+                reason=REASON_GUARD_TRIPPED,
+            )
     elif kind == "table":
         parts = (rest,)
         # Same reason as ``mail``: a non numeric table id would reach the URL path, and the app
         # casts it to 0 and answers 404 instead of refusing it.
         if not _DIGITS.fullmatch(rest):
-            raise ToolError(message=f"{raw!r} is not a valid table id.", hint=_HINT)
+            raise ToolError(
+                message=f"{raw!r} is not a valid table id.", hint=_HINT, reason=REASON_GUARD_TRIPPED
+            )
     elif kind == "card":
         parts = tuple(rest.split(SEPARATOR))
         if len(parts) not in (1, 3):
             raise ToolError(
                 message=f"{raw!r} is not a valid card id.",
                 hint=_HINT,
+                reason=REASON_GUARD_TRIPPED,
             )
     elif kind == "event":
         # A full split instead of ``maxsplit=1``: ``_join`` refuses the separator in the
@@ -188,22 +217,33 @@ def parse(raw: str) -> tuple[str, tuple[str, ...]]:
         # into the object name (review finding WR-03).
         parts = tuple(rest.split(SEPARATOR))
         if len(parts) != 2:
-            raise ToolError(message=f"{raw!r} is not a valid event id.", hint=_HINT)
+            raise ToolError(
+                message=f"{raw!r} is not a valid event id.", hint=_HINT, reason=REASON_GUARD_TRIPPED
+            )
     else:
-        raise ToolError(message=f"Unknown id type {kind!r}.", hint=_HINT)
+        raise ToolError(
+            message=f"Unknown id type {kind!r}.", hint=_HINT, reason=REASON_GUARD_TRIPPED
+        )
 
     if any(not part.strip() for part in parts):
-        raise ToolError(message=f"{raw!r} has an empty segment.", hint=_HINT)
+        raise ToolError(
+            message=f"{raw!r} has an empty segment.", hint=_HINT, reason=REASON_GUARD_TRIPPED
+        )
     return kind, parts
 
 
 def _join(kind: str, *parts: str) -> str:
     for part in parts:
         if not part or not part.strip():
-            raise ToolError(message=f"Cannot build a {kind} id from an empty value.", hint=_HINT)
+            raise ToolError(
+                message=f"Cannot build a {kind} id from an empty value.",
+                hint=_HINT,
+                reason=REASON_GUARD_TRIPPED,
+            )
         if SEPARATOR in part:
             raise ToolError(
                 message=f"A {kind} id segment must not contain {SEPARATOR!r} (got {part!r}).",
                 hint="Report this as a bug: ids are built from Nextcloud values, not user input.",
+                reason=REASON_GUARD_TRIPPED,
             )
     return SEPARATOR.join((kind, *parts))
