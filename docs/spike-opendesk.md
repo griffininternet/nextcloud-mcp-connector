@@ -1,7 +1,7 @@
 # openDesk-Spike (OD-01, OD-02, OD-03)
 
-**Status:** in Arbeit
-**Entscheidungsdatum:** offen, wird gesetzt, sobald der Status auf abgeschlossen wechselt
+**Status:** done, mit dem Ergebnis: beide Zugriffswege sind gemessen, Weg 0 trägt im gemessenen Modus `oauth2` vollständig und ist der billigere, Weg 1 trägt unabhängig von der Betriebsart und kostet Zustimmung je Nutzer und einen zweiten Client
+**Entscheidungsdatum:** 2026-08-29, das Datum des letzten Messlaufs (5.5.4 und 5.6)
 **Nextcloud:** 33.0.7 (Build 33.0.7.1), gelesen mit `occ status` am 2026-08-28 aus der Messumgebung dieser Phase
 **AppAPI:** `app_api` 33.0.0, gelesen mit `occ app:list` derselben Instanz (mitgelieferte Serverapp, nicht aus dem App Store)
 **Diese ExApp:** 0.1.11, gelesen mit `occ app_api:app:list`, gleich der Fassung in `appinfo/info.xml`
@@ -12,7 +12,7 @@
 **Deploy-Daemon:** HaRP, gemessen als `harp_proxy_docker` mit Deploy-ID `docker-install` und `NC Url http://caddy`. Die Bildmarke `ghcr.io/nextcloud/nextcloud-appapi-harp:release` ist gleitend, deshalb steht hier die gelaufene Fassung als Digest und nicht als Tag: `sha256:3b335650`, Image erstellt am 2026-08-14, gelesen mit `docker image inspect`
 **Scope:** gemessen wird zweierlei: erstens die Installierbarkeit dieser App in einer openDesk-Umgebung, ausschließlich aus öffentlich ladbaren Quellen an festen Tags, zweitens die beiden Zugriffswege auf die Nutzeridentität gegen OpenProject, lokal in Docker mit gepinnten Fassungen. Ausdrücklich nicht gemessen wird: kein Kubernetes-Cluster wird beschafft, keine openDesk-Installation wird versucht, und es entsteht kein Produktionscode. Die Werkzeugoberfläche und das Budget-Gate der ausgelieferten App stehen in dieser Phase still.
 
-Die Fassungen im Kopfblock werden vor dem Schreiben aus der laufenden Instanz gelesen (`occ status` für den Server, `occ app:list` für `app_api`, `integration_openproject` und `user_oidc`) und nicht aus der Recherche übernommen. Solange eine Zeile `noch nicht gemessen` trägt, steht dort kein Wert aus der Recherche, sondern gar keiner; die Planangabe dahinter nennt den Plan, der die Zeile füllt. Die Messumgebung ist die lokale Docker-Topologie `compose.spike-opendesk.yml`, gepinnt auf die Fassungen aus 1.3 und ausschließlich auf 127.0.0.1 erreichbar (D-02, D-03).
+Die Fassungen im Kopfblock sind vor dem Schreiben aus der laufenden Instanz gelesen worden (`occ status` für den Server, `occ app:list` für `app_api`, `integration_openproject` und `user_oidc`) und nicht aus der Recherche übernommen. Solange die Pläne liefen, stand an einer noch offenen Zeile kein Wert aus der Recherche, sondern gar keiner, samt der Angabe des Plans, der sie füllt; jede dieser Zeilen trägt jetzt entweder ihren Messwert oder eine Ungemessen-Zeile mit Grund in Abschnitt 2.5. Die Messumgebung ist die lokale Docker-Topologie `compose.spike-opendesk.yml`, gepinnt auf die Fassungen aus 1.3 und ausschließlich auf 127.0.0.1 erreichbar (D-02, D-03); sie ist nach dem letzten Messlauf abgeräumt worden, die Befehlsfolge zum Nachbauen steht in `## Reproduktion`.
 
 ## Entscheidungskriterien, vorab festgelegt
 
@@ -1351,42 +1351,157 @@ Beide liefern eine Adressliste. Damit ist das dreifache `None` oben nicht mit ei
 
 ### 2.4 Welcher Weg trägt, als Folge dieser Messungen
 
-noch nicht gemessen, Plan 17-09
+Dieser Abschnitt zieht eine Folgerung und führt kein Argument. Jeder Satz zeigt auf eine Messzeile aus
+Abschnitt 2.1, Abschnitt 2.2 oder Abschnitt 2.3, und wo eine Messung nicht weit genug reicht, steht das
+im selben Satz und nicht in einer Fußnote. Die Überschriften `### 2.4` und `### 2.5` sind Ankerpunkte:
+1.4, 3.3 und Abschnitt 4 verweisen namentlich auf sie, wer sie umbenennt, macht diese Verweise falsch.
+
+**Was Weg 0 gemessen leistet, in der Reihenfolge der Behauptungen.** Die Fläche antwortet unter reiner
+AppAPI-Impersonation mit App-Code und nicht mit einer Loginseite: S1 in Abschnitt 2.1 liefert 200 mit
+OCS-Umschlag und `ocs.data = http://op.localtest.me:8082` als `alice`, und die Gegenprobe mit einem
+`APP_SECRET` aus 64 Nullen antwortet 401 mit `statuscode 997`. Die Berechtigung hängt am Nutzer und
+nicht an der App: S2 misst `carol` (nie verbunden) mit 401 und **leerer** Meldung aus
+`validatePreRequestConditions()` gegen `alice` mit 200 und 1702 Bytes und `bob` mit 200 und 1700 Bytes,
+und die zwei 401-Formen sind unterscheidbar. Die Grenze zwischen zwei Konten hält auf dieser Fläche:
+S3 liefert `alice` 200 mit 0 Treffern und `bob` 200 mit genau einem (`id 38`), während dieselbe `alice`
+auf das Suchwort `Demo` 14 Treffer bekommt, unter denen die 38 nicht ist. Die serverseitige Erneuerung
+trägt ohne Browsersitzung, und zwar zweimal: S4 an `bob` nach künstlichem Ablauf (200 mit einem
+Treffer, `token_expires_at` danach 7200 Sekunden weiter, Tokenpaar ausgetauscht, kein Cookie und kein
+App-Passwort) und an `alice` nach 19623 Sekunden **natürlich** verstrichenem Ablauf, ohne jeden
+`occ`-Eingriff (200, 2542 Bytes, danach 7176 Sekunden weiter). Die Antwort trägt die Felder, aus denen
+ein Werkzeug projizieren würde: S6 misst 4746 Bytes als `bob`, davon 3895 in 49 Relationen und 585 in
+24 Feldern. Dazu der Betriebswert aus derselben Messreihe: Weg 0 kommt mit **einer** Gegenstelle aus,
+weil jede Verbindung zu OpenProject von Nextcloud aufgebaut wird (Egress-Kontrollmessung in
+Abschnitt 2.1).
+
+**Wo Weg 0 gemessen kippt, und wo er nicht widerlegt, sondern ungemessen ist.** Im Modus `oidc` fällt
+der Aufruf nach Ablauf des zwischengespeicherten Tokens auf 401 mit 77 Bytes, in allen sechs Läufen von
+S5, und die Bruchstelle ist die Sitzungsfrage und nicht die Impersonation: S5c misst, dass in jedem
+Lauf die Listener-Zeile hinter `isLoggedIn()` erscheint, S5a und S5b tragen dazu die wörtlichen
+Meldungen `getToken: no session data` und `Failed to exchange token, no login token found in the
+session`. Solange das zwischengespeicherte Token **gültig** ist, kippt gar nichts: der Lauf in 5.6.5
+gegen ein `token_expires_at` 259 Sekunden in der Zukunft erzeugt **keine einzige** Zeile der App
+`user_oidc`, die App fragt den Anbieter also nicht. Gemessen ist damit, dass Weg 0 im Modus `oidc`
+genau so lange trägt, wie das zwischengespeicherte Token gilt, und dass die Erneuerung auf den zwei
+Pfaden `external` bricht; ob nach der Erneuerung Daten kämen, ist an derselben Stelle **ungemessen**,
+weil OpenProject in dieser Umgebung nicht an dieselbe Keycloak gebunden ist und der Lauf mit Sitzung
+deshalb an OpenProjects `Unauthenticated` endet (341 Bytes). Der dritte Pfad, `sso_provider_type =
+nextcloud_hub`, ist der einzige sitzungsfreie: Lauf 5 zeigt den `InternalTokenRequestedListener` und
+**keine** Zeile über eine Sitzung, er bricht hier an `oidc app is not installed`, weil die Server-App
+fehlt, die Nextcloud selbst zum Anbieter macht. Ein Satz "Weg 0 trägt unter OIDC nicht" ginge deshalb
+um genau diesen Pfad über die Messung hinaus; er steht als **ungemessen** in 2.5 und nicht als
+widerlegt.
+
+**Die Stelle, an der die Weg-0-Fläche für den Zweck von OD-04 unerprobt ist, und sie gehört in diesen
+Satz und nicht in eine Fußnote.** Von den 17 OCS-Routen ist
+`GET /api/v1/work-packages/{id}/file-links` die einzige, die eine Id eines Arbeitspakets annimmt, und
+sie ist zugleich die Kette Arbeitspaket zu Datei, die `research/FEATURES.md` als Unterscheidungsmerkmal
+dieser App führt. Belegt sind ihre Existenz und ihre Signatur aus `appinfo/routes.php` der
+installierten Fassung 3.1.1; **gemessen ist an ihr nichts**, weil die Instanz gemessen keine
+registrierte Ablage hat (`GET /api/v3/storages` antwortet 200 mit `total 0` und `count 0`, 5.5.1). Wer
+Weg 0 wählt, wählt ihn mit dieser offenen Stelle, und der Grund dafür hängt an derselben Ursache wie
+Weg A des Einrichtungswegs (2.5).
+
+**Was Weg 1 gemessen leistet.** PKCE ist Pflicht, und die Pflicht steht mit ihrer Gegenprobe da:
+Abschnitt 2.2 misst mit `code_challenge` 200 auf der Zustimmungsseite und einen Code von 43 Zeichen,
+ohne `code_challenge` in derselben Sitzung **400** mit dem Text `Code challenge is required.` und ohne
+jeden Code. Das Token lebt gemessene `expires_in` **7200** Sekunden, derselbe Wert, den 2.1 über die
+Restlaufzeiten der zwei Weg-0-Konten unabhängig bestätigt. Die Erneuerung trägt ohne Browsersitzung: 200
+mit neuem Paar, gefahren ohne `-b` und ohne `-c`, und das neue Token nennt an `GET /api/v3/users/me`
+wieder `login opb`, `id 6`. Der Zwei-Konten-Negativbeweis hält bis auf die Ebene der Liste: `opb` 200
+auf `/api/v3/work_packages/38`, `opa` 404 mit derselben Fehlerkennung und Byte für Byte derselben
+Antwort wie auf eine erfundene Id, und dieselbe Liste trägt für `opb` `total 34` mit der 38 und für
+`opa` `total 33` ohne sie.
+
+**Was Weg 1 gemessen kostet.** Einen Zustimmungsschritt im Browser je Nutzer, der nicht
+wegzuautomatisieren ist, weil `/oauth/authorize` eine OpenProject-Sitzung verlangt und die
+Zustimmungsseite wortwörtlich `Authorize nc-mcp-spike-weg1 to use your account opb?` fragt (2.2);
+einen zweiten OAuth-Client, den ein Betreiber von Hand anlegen muss, weil das Dokument
+`/.well-known/oauth-authorization-server` der laufenden Instanz gemessen **keinen**
+`registration_endpoint` nennt; ein zweites Tokenlager samt der Erneuerungsregel aus dem Befund, dass
+der alte `refresh_token` erst mit dem ersten Gebrauch des neuen `access_token` stirbt (Kette A 400,
+Kette B 200); und eine zweite Gegenstelle im Egress, denn die Egress-Kontrollmessung in Abschnitt 2.1
+misst den zweiten Host als eigene Verbindung des ExApp-Containers (400 `Invalid host_name
+configuration`, mit `Host`-Kopf 401 in `application/hal+json`).
+
+**Was die SSRF-Messung für einen künftigen zweiten Zugriffsweg bedeutet.** Abschnitt 2.3 misst im
+laufenden ExApp-Container, dass `resolve_addresses()` jeden Nachbardienst unter seinem Compose-Namen
+verwirft (dreimal `None` mit der Logzeile `an address of it is not public`), während `one.one.one.one`
+und `example.com` im selben Lauf Adresslisten liefern. Die Folgerung daraus ist keine über heute,
+sondern eine über OD-04: die Grenze sitzt heute ausschließlich am Metadatendokument eines fremden
+OAuth-Clients, und der in dieser Phase gemessene Zugriffsweg berührt sie nicht, weil Weg 0 über die
+konfigurierte Nextcloud läuft. Wer für einen zweiten Zugriffsweg `target_allowed` unbesehen
+wiederverwendet, sperrt jede Cluster-Installation aus, und die Messung oben ist genau dieser Fall; wer
+sie nicht wiederverwendet, braucht eine eigene, ausdrücklich begründete Prüfung für eine URL, die aus
+den Admin-Einstellungen und niemals aus einer Anfrage kommt.
+
+**Die Folgerung, mit ihrer Bedingung im selben Satz.** Läuft `integration_openproject` im Modus
+`oauth2`, trägt Weg 0 den Zugriff, den OD-04 braucht, gemessen vollständig (S1 bis S4 und S6) und
+zugleich billiger als Weg 1, weil er ohne Zustimmungsschritt je Nutzer, ohne zweiten OAuth-Client und
+mit einer einzigen Gegenstelle auskommt; läuft es im Modus `oidc`, trägt Weg 0 gemessen so lange, wie
+das zwischengespeicherte Token gilt, und für die Zeit danach hat diese Phase auf zwei der drei Pfade
+einen gemessenen Bruch und auf dem dritten keinen Messwert. Weg 1 trägt in beiden Fällen, weil er die
+Betriebsart von `integration_openproject` nicht berührt, und er trägt gemessen mit einem Negativbeweis,
+der so scharf ist wie der DAV-Nachweis dieses Projekts; er kostet dafür genau die vier Posten aus dem
+Absatz oben. Eine Wahl zwischen beiden trifft dieser Bericht nicht: sie ist OD-04 und fällt nach dem
+ISV-Call.
+
+**Zwei offene Fragen tragen diese Folgerung mit, und beide sind ausdrücklich nicht gemessen.** Erstens
+die Betriebsart, die openDesk wirklich fährt: ob `integration_openproject` dort im Modus `oauth2` oder
+`oidc` läuft und, wenn `oidc`, auf welchem der drei Pfade, ist aus Quellen nicht entscheidbar (1.4) und
+steht als **Frage 7** in Abschnitt 4. Von dieser Antwort hängt ab, welcher der zwei Zweige des Absatzes
+oben überhaupt gilt. Zweitens die Stabilitätszusage der OCS-Fläche: die 17 Routen sind aus
+`appinfo/routes.php` der installierten Fassung 3.1.1 gezählt (Abschnitt 2.1), das ist ein Messwert über
+diese Fassung und keine Zusage über die nächste. Der Rückkanal dazu ist offen (D-11): der Forumsbeitrag
+hat am 28.08. eine Antwort von `christianlupus` bekommen, eine Zusage über die Stabilität der Fläche
+steht darin nicht, und die Konto-Anfrage an die OpenProject-Community liegt als unversendeter Entwurf.
+Ein tragender Weg 0 und eine offene Stabilitätsfrage sind kein Widerspruch: gemessen ist, was die
+Fläche heute tut, nicht was sie morgen zusagt.
 
 ### 2.5 Was ungemessen blieb, und warum die Messung nicht möglich war
 
-noch nicht gemessen, Plan 17-09
+Diese Tabelle sammelt **jeden** Punkt, den dieser Bericht als `ungemessen` führt, damit der Leser sie
+an einer Stelle findet und nicht über sieben Abschnitte hinweg zusammensuchen muss. Kein Punkt steht
+hier als `verworfen`: eine nicht durchgeführte Messung widerlegt nichts (D-03,
+ROADMAP-Erfolgskriterium 3). Die Spalte "Was es bräuchte" ist eine Kostenschätzung und keine Anleitung,
+weil eine Anleitung einen Versuch voraussetzte, den diese Phase nicht unternommen hat.
 
-**Vorgemerkt aus Abschnitt 2.1, damit der Punkt nicht zwischen den Plänen verloren geht.** Der
-dokumentierte Einrichtungsweg von Weg 0, der Ablagen-Assistent von OpenProject (Weg A, derselbe Weg,
-den der openDesk-Bootstrap-Job geht), bleibt in dieser Phase **ungemessen**. Der Grund ist gemessen und
-steht in 5.4: der SSRF-Schutz von OpenProject weist jeden Namen ab, unter dem Nextcloud in dieser
-Loopback-Topologie zu erreichen wäre, und die dafür nötige Erlaubnisliste ist nur über die Umgebung des
-Containers setzbar. Gelaufen ist Weg B. Damit ist gemessen, dass die App im Modus `oauth2` gegen eine
-lokale Instanz arbeitet, und **nicht**, dass der openDesk-Bootstrap-Weg durchläuft. Die Ausformulierung
-dieses Abschnitts bleibt 17-09 überlassen.
+| Punkt | Zustand | Grund, warum die Messung nicht möglich war | Was es bräuchte |
+|-------|---------|--------------------------------------------|-----------------|
+| Weg A des Einrichtungswegs (Ablagen-Assistent von OpenProject, derselbe Weg, den der openDesk-Bootstrap-Job geht), 2.1 und 5.4 | **ungemessen** | Gemessen am 2026-08-28: `NextcloudCompatibleHostValidator` weist alle vier Namen ab, unter denen Nextcloud hier zu erreichen wäre (`safe_ip? = nil`, Erlaubnisliste leer), während die zwei Netzaufrufe danach beide 200 liefern. Der Schlüssel `OPENPROJECT_SSRF__PROTECTION__IP__ALLOWLIST` trägt `writable: false` und ist nur über die Umgebung des Containers setzbar; D-03 verbietet den Eingriff, und er hätte den in 5.3 aufgebauten Grundzustand riskiert | Die Erlaubnisliste in `compose.spike-opendesk.yml` setzen (mindestens `127.0.0.0/8` und `172.16.0.0/12`, OpenProject-Container neu erzeugen) und einen Namen, der aus dem Browser **und** serverseitig aus dem OpenProject-Container an dieselbe Nextcloud führt (Caddy-Site-Block auf `:8091`, `extra_hosts`, Trusted-Domain). Der Ausgang des zweiten Schritts ist offen, weil `SsrfProtection` über `Resolv::DNS` auflöst und damit ohne `/etc/hosts` (DI-17-03) |
+| `GET /api/v1/work-packages/{id}/file-links`, die für OD-04 wertvollste Route, 3.3 und 5.5.1 | **ungemessen**, belegt sind nur Existenz und Signatur | Die Route setzt eine registrierte Ablage voraus. `GET /api/v3/storages` antwortet gemessen 200 mit `total 0` und `count 0`; ohne Ablage gäbe ein Aufruf eine leere Liste zurück, die über das Verhalten der Route nichts aussagt. Dieselbe fehlende Ablage ist der Grund, warum die Suche in S3 ohne `isSmartPicker=true` für **beide** Konten null Treffer liefert | Eine registrierte Ablage, und die anzulegen ist genau Weg A aus der Zeile darüber. Solange Weg A ungemessen bleibt, bleibt auch diese Route ungemessen (DI-17-04) |
+| Der OIDC-Pfad `sso_provider_type = nextcloud_hub`, der einzige sitzungsfreie, 2.1 und 5.6.4 | **ungemessen**, ob er ein Token liefert; **gemessen**, dass er die Sitzungsfrage nicht stellt | Lauf 5 zeigt `[InternalTokenRequestedListener] received request for audience: openproject` und danach keine Zeile über eine Sitzung, bricht aber an `[TokenService] Failed to get token from Oidc provider app, oidc app is not installed`. Der Pfad verlangt, dass Nextcloud selbst der Anbieter ist (Server-App `oidc`), und die ist hier nicht installiert; sie zu installieren wäre der zweite Aufbau derselben Art, die `REQUIREMENTS.md` als Out of Scope führt | Server-App `oidc` installieren, darin einen Client `openproject` anlegen, `sso_provider_type` und `targeted_audience_client_id` darauf zeigen lassen und OpenProject an diesen Anbieter binden. Der letzte Schritt ist der teure und der ausgeschlossene (DI-17-05) |
+| Die Datenlieferung von Weg 0 im Modus `oidc` **mit** Sitzung, 2.1 und 5.6.5 | **ungemessen** | Die Gegenprobe belegt die Sitzungsfrage (`token is still valid, it expires in 300`) und endet danach an OpenProject mit `401 Unauthorized` auf `/api/v3/users/me`, weil diese OpenProject-Instanz nicht an dieselbe Keycloak gebunden ist | OpenProject an dieselbe Realm binden. Genau das ist in `REQUIREMENTS.md` Out of Scope (kein eigener Keycloak-Client für OpenProject als Dienstkonto) |
+| Die Betriebsart, die openDesk fährt (`oauth2` oder `oidc`, und wenn `oidc`, welcher Pfad), 1.4 | **ungemessen**, aus Quellen nicht entscheidbar | Die Einrichtung macht der Job `opendesk-openproject-bootstrap`, dessen Logik in einem eigenen Image liegt; im Deployment-Projekt stehen nur seine Eingaben. Das legt den Zwei-Wege-OAuth2-Weg nahe, ist aber Indiz und nicht Beleg | Eine Auskunft von ZenDiS oder eine openDesk-Installation. Steht als **Frage 7** in Abschnitt 4 |
+| Ist `app_api` im openDesk-Nextcloud-Image enthalten und eingeschaltet, 1.2 und 1.4 | **ungemessen**, aus Quellen nicht entscheidbar | Das Image wird aus einem anderen, hier nicht mitgelesenen Projekt gebaut; der Tarball-Griff über das Deployment-Projekt kann eine mitgelieferte Serverapp im Image grundsätzlich nicht sehen | Zugriff auf das Image oder eine Auskunft. Steht als **Frage 6** in Abschnitt 4 |
+| Ob openDesk zusätzlich eine SSRF-Erlaubnisliste setzt, 5.4 | **ungemessen** | Auch hier ist die Quelle der Bootstrap-Job und nicht das Deployment-Projekt | Dieselbe Auskunft wie oben; hängt an Frage 7 |
+| Wann openDesk auf Nextcloud 34 oder höher geht, 1.3 und 1.4 | **ungemessen**, Terminfrage | In keiner öffentlichen Quelle beantwortet; sie ist erst durch den Befund aus 1.2 entstanden | Auskunft von ZenDiS. Steht als **Frage 5** in Abschnitt 4 |
+| Ob ein Betreiber eine Dritt-ExApp neben der Suite aufnähme und wer das entscheidet, 1.4 | **ungemessen** | Betriebs- und Verfahrensfrage, öffentlich nicht dokumentiert. Kein Quellcode und kein Helmfile kann sie beantworten | Das Gespräch selbst. Steht als **Frage 1** in Abschnitt 4 |
+| Warum `app_api` an `stable34` keine Oberflächenvorlage für `kubernetes-install` mitbringt, 1.2 und 1.4 | **ungemessen in der Absicht** | Gemessen sind die Zahlen (acht Vorlagen, keine mit `kubernetes-install`, drei geänderte Zeilen gegenüber `stable33`); ob das Absicht oder Rückstand ist, sagt keine Quelle | Eine Auskunft aus dem AppAPI-Kanal. Nebenfrage zu **Frage 5** |
+| Der zusätzliche Umleitungsschritt über Keycloak im Zustimmungsfluss von Weg 1 in openDesk, 2.2 | **ungemessen** | In openDesk gibt es wegen `OPENPROJECT_OMNIAUTH__DIRECT__LOGIN__PROVIDER: "keycloak"` kein lokales Anmeldeformular, und genau dieses Formular ist Schritt 2 des gemessenen Messwegs | Eine openDesk-Installation oder ein an Keycloak gebundenes OpenProject |
+| Die Scope-Pflicht für ein OIDC-JWT (`scope`-Anspruch mit `api_v3`, Breaking Change in OpenProject 16.0.0), 2.2 | **ungemessen** | Im lokalen OAuth-Modus, in dem alle Weg-1-Messwerte entstanden sind, ist sie unsichtbar, weil OpenProject die Tokens selbst ausgibt | Ein OIDC-gebundenes OpenProject, also derselbe Aufbau wie zwei Zeilen darüber |
+| Ob es eine obere Zeitgrenze für den alten `refresh_token` gibt und ob openDesk diese Doorkeeper-Einstellung mitbringt, 2.2 | **ungemessen** | Gemessen ist der Auslöser der Entwertung (der erste Gebrauch des neuen `access_token`), nicht eine Zeitgrenze; eine Zeitgrenze zu messen hieße, den Lauf über Stunden zu strecken | Ein Lauf über die Lebensdauer hinaus und die Doorkeeper-Konfiguration der openDesk-Instanz (DI-17-02) |
+| Warum derselbe Doorkeeper-Fehler einmal auf Deutsch und einmal auf Englisch zurückkam, 2.2 | **ungemessen** | Identischer Aufruf ohne `Accept-Language`, zwei Sprachen. Der Bericht hält den Befund fest und erklärt ihn nicht | Ein gezielter Lauf über die Spracheinstellung des Kontos und den `Accept-Language`-Kopf. Ohne Folge für die vier Messwerte von D-04 |
+| Der native MCP-Endpunkt von OpenProject 17.7.2 (`mount API::Mcp => "/mcp"`) | **ungemessen** | Belegt sind Route, Verwaltungsseite, Scope `mcp` und ein Seed-Schritt aus dem laufenden Container, dazu 500 auf einen unauthentifizierten Aufruf. Werkzeugliste, Authentifizierungsweg, Berechtigungsdurchgriff und ob openDesk ihn einschaltet sind **nicht** gemessen; eine Aussage darüber wäre eine Behauptung über fremden Code | Eine eigene Messreihe gegen diesen Endpunkt, die den Stufenschnitt dieser Phase überschritten hätte (DI-17-01) |
+| Elf der 17 OCS-Routen von Weg 0, 2.1 | **nicht gemessen**, teils absichtlich nicht ausgelöst | Vier Routen sind schreibend oder destruktiv und werden nach der Regel dieses Berichts nicht ausgelöst, eine fünfte (`POST .../work-packages/form`) ist freiwillig ausgeschlossen; die übrigen (`notifications`, `avatar`, `statuses/{id}`, `types/{id}`, `projects`, `available-assignees`) hat OD-02 nicht gebraucht | Ein Messplan für OD-04, der je Route eine eigene Behauptung samt Gegenprobe formuliert |
+| Warum das dokumentierte Seed-Passwort von OpenProject abwich, 5.3 | **nicht untersucht** | Gemessen ist der Zustand (`User.check_password?` falsch, `failed_login_count` 6, `force_password_change` true, Konto nicht gesperrt) und die Auflösung per `rails runner`. Die Ursache ist nicht untersucht und steht deshalb als offener Punkt und nicht als Vermutung | Ein zweiter erster Start derselben Bildmarke mit protokolliertem Seed-Lauf. Ohne Folge für die Messungen, weil keiner der beiden Wege am Passwort des Administrators hängt |
+| Ob eine ExApp in einer Behördeninstallation einen zweiten Host erreicht, 2.1 | **ungemessen** | Die Egress-Kontrollmessung lief im lokalen Docker-Netz, in dem eine Antwort erwartbar ist, weil alle Container in einem Netz hängen. Netzrichtlinien, Egress-Filter und Proxy-Zwang sind hier nicht nachgebildet | Eine Messung in der Zielumgebung. Bis dahin ist die Zahl ein Wert über diese Topologie und über keine andere |
 
-**Vorgemerkt aus Abschnitt 2.1, was von S5 auch bei gelungenen Läufen ungemessen bleibt.** Die sechs
-Läufe von S5 sind gemessen, und trotzdem bleibt an derselben Stelle drei Dinge offen, die ein Leser
-sonst aus ihnen herausliest:
+**Die zwei Zeilen, die zusammenhängen, und der Preis, den sie beziffern.** Weg A und `file-links`
+hängen an derselben Ursache: `file-links` braucht eine registrierte Ablage, eine Ablage anzulegen ist
+Weg A, und Weg A scheitert in dieser Topologie gemessen am Namenscheck von OpenProject. Das ist der
+Preis der Entscheidung des Owners vom 28.08. für Variante B, und er steht hier beziffert statt
+verschwiegen. Gemessen ist damit, dass die App im Modus `oauth2` gegen eine lokale Instanz arbeitet,
+und **nicht**, dass der openDesk-Bootstrap-Weg durchläuft.
 
-1. **Die Betriebsart, die openDesk wirklich fährt, ist unbekannt.** Der lokale Aufbau baut den
-   Anmeldezwang über Keycloak nur nach: eine eigene Realm, eine eigene Client-Kombination und ein
-   `sso_provider_type`, den dieser Bericht selbst gesetzt hat. Ob `integration_openproject` in
-   openDesk im Modus `oauth2` oder `oidc` läuft und, wenn `oidc`, auf welchem der drei Pfade, steht
-   als **Frage 7** in Abschnitt 4 und ist aus Quellen nicht entscheidbar (1.4). Ein Satz, der aus S5
-   auf openDesk schließt, überspringt genau diese Frage.
-2. **Der Pfad `nextcloud_hub` ist angelaufen, aber nicht zu Ende gemessen.** Er stellt die
-   Sitzungsfrage nachweislich nicht, bricht hier aber an `oidc app is not installed`, weil die
-   Server-App, die Nextcloud selbst zum Anbieter macht, in dieser Umgebung fehlt. Ob er ein Token
-   liefern würde, ist **ungemessen**; dass er an der Sitzung nicht scheitert, ist gemessen.
-3. **Die Datenlieferung mit einer Sitzung ist nicht gegengeprobt.** Die Gegenprobe belegt die
-   Sitzungsfrage und endet danach an OpenProject, das an dieselbe Keycloak-Instanz nicht gebunden ist.
-   Diese Bindung ist in `REQUIREMENTS.md` Out of Scope, und der Bericht behauptet deshalb nicht, dass
-   ein OIDC-gebundenes Weg 0 mit Sitzung Daten liefert.
-
-Die Ausformulierung dieses Abschnitts bleibt 17-09 überlassen; diese drei Punkte dürfen dabei nicht
-verloren gehen.
+**Was von S5 auch bei gelungenen Läufen ungemessen bleibt, in drei Sätzen, damit es niemand aus den
+sechs Läufen herausliest.** Erstens: der lokale Aufbau baut den Anmeldezwang über Keycloak nur nach,
+mit einer eigenen Realm, einer eigenen Client-Kombination und einem `sso_provider_type`, den dieser
+Bericht selbst gesetzt hat; ein Satz, der aus S5 auf openDesk schließt, überspringt Frage 7. Zweitens:
+der Pfad `nextcloud_hub` ist angelaufen und nicht zu Ende gemessen, er stellt die Sitzungsfrage
+nachweislich nicht und bricht an einer ganz anderen Stelle. Drittens: die Datenlieferung mit einer
+Sitzung ist nicht gegengeprobt, weil die Gegenprobe an OpenProject endet, und dieser Bericht behauptet
+deshalb nicht, dass ein OIDC-gebundenes Weg 0 mit Sitzung Daten liefert.
 
 ## 3. API-Form (Vorarbeit für OD-04, kein Requirement dieser Phase)
 
@@ -2250,10 +2365,82 @@ desselben Unterschieds.
 
 ## Was diese Messung nicht beweist
 
-noch nicht gemessen, Plan 17-09
+Die Ränder stehen hier vollständig und nicht als Auswahl. Wer einen Messwert dieses Berichts über einen
+dieser Ränder hinaus benutzt, benutzt ihn falsch, und zwar nachlesbar falsch.
 
-**Vorgemerkt aus Abschnitt 2.1, weil es eine Aussage über die Messumgebung und nicht über ein
-Ergebnis ist.** Für S5 ist der Nextcloud-Loglevel auf `Debug (0)` gesenkt worden
+**Sie lief gegen eine Wegwerf-Instanz und gegen genau die Fassungen aus dem Kopfblock.** Nextcloud
+33.0.7 auf **SQLite** (`SQLITE_DATABASE: nextcloud` in `compose.spike-opendesk.yml`), leere Bände, ohne
+Last, ohne zweiten Knoten, `integration_openproject` 3.1.1, `user_oidc` 8.11.0, OpenProject 17.7.2,
+Keycloak 26.7.0. Eine andere Fassung darf sich anders verhalten: alle Zeilennummern und alle
+Quellenzitate dieses Berichts gelten für diese Fassungen und für keine andere, und die OCS-Fläche ist
+aus `appinfo/routes.php` **dieser** Fassung gezählt.
+
+**Der lokale Aufbau reproduziert openDesk nicht, und zwar in fünf benannten Punkten.**
+
+1. **Keycloak als Anmeldezwang ohne lokales Formular.** In openDesk setzt
+   `OPENPROJECT_OMNIAUTH__DIRECT__LOGIN__PROVIDER: "keycloak"` das lokale Anmeldeformular außer Kraft.
+   Genau dieses Formular ist Schritt 2 des gemessenen Weg-1-Messwegs (2.2). Der Zustimmungsfluss hat
+   dort einen zusätzlichen Umleitungsschritt, und der ist hier ungemessen (2.5).
+2. **Die Scope-Pflicht für ein OIDC-JWT.** Seit OpenProject 16.0.0 verlangt ein OIDC-Token den
+   `scope`-Anspruch mit `api_v3`. Im lokalen OAuth-Modus, in dem alle Weg-1-Messwerte entstanden sind,
+   ist diese Pflicht unsichtbar, weil OpenProject die Tokens selbst ausgibt (2.5).
+3. **Die Datenlage.** Die Seed-Instanz hat ein Projekt und wenige Arbeitspakete; die Asymmetrie, auf
+   der beide Negativbeweise stehen, ist in 5.3 von Hand angelegt worden. Eine Behördeninstanz hat
+   andere Projekte, andere Rollen, andere Sichtbarkeiten, und die 14 Treffer auf das Suchwort `Demo`
+   sind eine Eigenschaft der Seed-Daten und keine Aussage über eine echte Instanz.
+4. **Kubernetes samt Helm und abgeschaltetem App Store.** openDesk läuft über ein Helmfile in einem
+   Cluster und hat den App Store aus (1.1); diese Messung lief in vier bis sieben Docker-Containern auf
+   127.0.0.1, und die vier optionalen Apps sind hier aus genau dem App Store installiert worden, den es
+   dort nicht gibt (S0). Kein Kubernetes-Cluster ist beschafft und keine openDesk-Installation versucht
+   worden (D-01, D-03).
+5. **Die tatsächliche Betriebsart von `integration_openproject`.** Eingerichtet wurde hier Weg B über
+   `occ config:app:set` plus persönlichen Durchlauf je Konto; der openDesk-Bootstrap-Job geht Weg A,
+   und Weg A ist in dieser Topologie gemessen nicht gangbar und deshalb ungemessen (2.5, 5.4). Ob dort
+   `oauth2` oder `oidc` läuft, ist Frage 7.
+
+**Die Egress-Kontrollmessung beweist über eine Behördeninstallation nichts.** Sie lief im lokalen
+Docker-Netz, in dem alle Container in einem Netz hängen und nichts sie trennt; eine Antwort ist dort
+erwartbar. In einer Behördeninstallation entscheiden Netzrichtlinien, Egress-Filter und Proxy-Zwang, ob
+eine ExApp einen zweiten Host erreicht, und keine dieser Bedingungen ist hier nachgebildet.
+
+**Die Zahlen aus `community.openproject.org` sind Kontext und kein Messwert dieser Instanz.** Die 3691
+und 216 Bytes aus 3.2 stammen aus der Recherche gegen eine fremde Instanz mit anderem Modulsatz; sie
+stehen dort als Größenordnung neben den gemessenen 15831 und 88 Bytes und nirgends als Beleg.
+
+**Drei Eingriffe halten diesen Aufbau am Laufen, und sie stehen hier, weil ein Nachbau sie sonst für
+Vorgabe hält.**
+
+* **`allow_local_remote_servers = true` in Nextcloud** (Abschnitt 2.1, "Der persönliche Durchlauf lief
+  ohne Browser"): ohne diese Systemeinstellung antwortet der Rückweg von Weg 0 zwar `303`, die Verbindung steht
+  aber nicht, wörtlich `Host "127.0.0.1" (op.localtest.me:80) violates local access rules`. Sie ist
+  eine Lockerung **der Messumgebung** und betrifft die ausgelieferte ExApp an keiner Stelle; für eine
+  openDesk-Installation ist sie ohne Bedeutung, weil dort beide Seiten routbare Adressen haben.
+* **Das Passwort des OpenProject-Kontos `admin` ist per `rails runner` gesetzt worden** (5.3), weil die
+  dokumentierte Vorgabe `admin`/`admin` von dieser Instanz abgewiesen wurde. **Warum das Seed-Passwort
+  abwich, ist nicht untersucht**, steht als offener Punkt in 2.5 und nicht als Vermutung. Der erzwungene
+  Passwortwechsel hat damit nicht stattgefunden.
+* **Keycloak und `user_oidc` sind ausschließlich für S5 dazugekommen** (5.6), nicht als Teil des
+  Aufbaus von Weg 0 oder Weg 1: Keycloak lief als `start-dev` auf einer Datenbank im Arbeitsspeicher,
+  die Realm ist mit `kcadm.sh` erzeugt worden, und der `sso_provider_type` jedes Laufs ist von diesem
+  Bericht selbst gesetzt. Keiner dieser Werte ist aus openDesk übernommen.
+
+**Zwei Punkte, an denen der Bericht ausdrücklich weniger sagt, als ein Leser gern hätte.** Der einzige
+sitzungsfreie OIDC-Pfad, `nextcloud_hub`, ist nicht widerlegt, sondern ungemessen; wer Weg 0 im
+OIDC-Betrieb verwirft, verwirft ihn ohne diesen Messwert (2.5). Und die für OD-04 wertvollste Route,
+`GET /api/v1/work-packages/{id}/file-links`, ist ohne registrierte Ablage nicht aufgerufen worden;
+belegt sind ihre Existenz und ihre Signatur, nicht ihr Verhalten (2.5, 3.3).
+
+**Über den nativen MCP-Endpunkt von OpenProject sagt diese Messung nichts.** OpenProject 17.7.2 bringt
+ihn mit, belegt aus dem laufenden Container: `mount API::Mcp => "/mcp"` in `config/routes.rb:48`, eine
+Verwaltungsseite in Zeile 676, der Scope `mcp` in `doorkeeper.rb:136` und ein Seed-Schritt beim ersten
+Start. Ein unauthentifizierter Aufruf antwortet 500, ist also eine antwortende Route und keine 404.
+Über seine Werkzeugliste, seinen Authentifizierungsweg, seinen Berechtigungsdurchgriff und darüber, ob
+openDesk ihn einschaltet, ist **nichts** gemessen. Der Fund berührt OD-04 (es gäbe einen dritten Weg,
+auf dem der Assistent beide Server nebeneinander spricht) und gehört als Frage in den ISV-Kanal, nicht
+als Aussage in diesen Bericht (DI-17-01).
+
+**Zwei weitere Eingriffe derselben Art, und sie sind Aussagen über die Messumgebung und nicht über ein
+Ergebnis.** Für S5 ist der Nextcloud-Loglevel auf `Debug (0)` gesenkt worden
 (`occ log:manage --level 0`), und zwar vor dem ersten Lauf: die drei Meldungen, die die Ereignispfade
 unterscheiden, sind `logger->debug`, und der Vorgabewert `Warning (2)` verschluckt sie. Ebenso ist
 `occ config:app:set user_oidc allow_insecure_http --value=1` gesetzt worden, weil `user_oidc` die
