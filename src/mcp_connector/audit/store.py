@@ -71,6 +71,7 @@ __all__ = [
     "AuditStore",
     "ChainFinding",
     "Entry",
+    "StoreOverview",
     "SweepReport",
     "should_check_accounts",
     "should_sweep",
@@ -286,6 +287,11 @@ _EXPLAINED_GAPS = (
     "WHERE chain = ? AND kind = ? AND gap_chain IS NOT NULL AND gap_hash IS NOT NULL"
 )
 
+# The two counting statements of :meth:`AuditStore.overview`. They are aggregates and touch
+# no row of a caller: what they answer is how much there is, never what is in it.
+_TOTALS = "SELECT COUNT(DISTINCT chain), COUNT(*) FROM entries"
+_MARKER_TOTALS = "SELECT COUNT(*), COALESCE(SUM(removed), 0) FROM entries WHERE kind = ?"
+
 # The four statements of the sweep. ``chain <> ?`` is the instance chain being spared, and it
 # is written into the statement instead of into a comment, because a sweep that trimmed the
 # instance chain would remove the very rows that explain the gaps of every other one.
@@ -373,6 +379,26 @@ class SweepReport:
     trimmed: int
     tombstones: int
     used_bytes_after: int
+
+
+@dataclass(frozen=True, slots=True)
+class StoreOverview:
+    """How much there is, so a check can say what it looked at and what a gap is worth.
+
+    ``chains`` and ``entries`` are what the check walked. ``tombstones`` is how many markers
+    for a gap the instance chain carries and ``explained_entries`` how many rows they stand
+    for together, which is the difference between an explained hole and an unexplained one:
+    without those two numbers the sentence "no break found" would read the same over a store
+    that gave half its rows to the upper bound as over one that never lost a row.
+
+    Counts only, and that is the rule of this class: nothing here names a chain, an account
+    or a row, so the answer of the check command stays as free of content as the log itself.
+    """
+
+    chains: int
+    entries: int
+    tombstones: int
+    explained_entries: int
 
 
 def should_sweep(seq: int) -> bool:
@@ -797,6 +823,26 @@ class AuditStore:
                 if finding is not None:
                     findings.append(finding)
             return findings
+
+        return await self._read(work)
+
+    async def overview(self) -> StoreOverview:
+        """The counts :class:`StoreOverview` describes, in one read.
+
+        Read next to :meth:`verify_chains` rather than inside it, because the two answer
+        different questions and only one of them may be expensive: this one is four
+        aggregates, and it stays cheap even when the walk of every chain is not.
+        """
+
+        def work(conn: sqlite3.Connection) -> StoreOverview:
+            chains, entries = conn.execute(_TOTALS).fetchone()
+            tombstones, explained = conn.execute(_MARKER_TOTALS, (KIND_TOMBSTONE,)).fetchone()
+            return StoreOverview(
+                chains=chains,
+                entries=entries,
+                tombstones=tombstones,
+                explained_entries=explained,
+            )
 
         return await self._read(work)
 
