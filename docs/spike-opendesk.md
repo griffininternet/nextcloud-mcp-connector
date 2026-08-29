@@ -2594,3 +2594,49 @@ Datei schreiben, die für dieses Niveau nicht gedacht ist, und OpenID Connect ü
 Sitzungstoken auf der Leitung preis. Beide Zustände verschwinden mit dem Nextcloud-Band beim
 `down -v`, und die ausgelieferte ExApp ist von keinem der beiden berührt. Sie stehen hier, damit ein
 Nachbau sie als Eingriff erkennt und nicht als Vorgabe übernimmt.
+
+## Der Produktionsbaum nach dieser Phase
+
+Erfolgskriterium 5 der Roadmap verlangt einen stillstehenden Produktionsbaum: kein neues Werkzeug, kein
+neuer Client im Paket, Werkzeugoberfläche und Budget-Gate unverändert (D-12). Das ist keine Zusicherung,
+sondern ein Nachweis, und er besteht aus vier Läufen am 2026-08-29, alle gegen den Stand dieses
+Berichts.
+
+| # | Nachweis | Kommando | Ergebnis |
+|---|----------|----------|----------|
+| 1 | Nichts liegt unverfolgt herum, und nichts hat sich seit dem Stand vor der Phase bewegt | `git status --short src/ appinfo/ pyproject.toml uv.lock` und `git diff --stat 90d2f68..HEAD -- src appinfo pyproject.toml uv.lock` | beide **leer**. `90d2f68` ist der letzte Commit vor `docs(17): research openDesk spike domain`, also der Stand vor der Phase. Die Phase hat 33 Dateien geändert, keine davon unter `src/` oder `appinfo/` |
+| 2 | Die Werkzeugoberfläche ist unverändert | `uv run python scripts/check_tool_budget.py` | `tools/list: 15712 bytes, 21 tools, budget 18000`, Zeichen für Zeichen dieselbe Zeile wie am 2026-08-28. Keine Grenze ist angehoben worden |
+| 3 | Die Vorgabesuite ist grün | `uv run pytest -q` | **2813 passed, 163 deselected** in 72,69 s. Es ist keine Test-Datei entstanden: die Spike-Messungen laufen außerhalb der Suite |
+| 4 | Lint und Format sind grün | `uv run ruff check .` und `uv run ruff format --check .` | `All checks passed!` und `202 files already formatted`. `.planning/` ist von ruff ausgenommen, und das bleibt so |
+
+Der Nachweis 2 ist der scharfe von den vieren. Ein Werkzeug, das unbemerkt dazukommt, fällt in einem
+Diff über 33 Dateien nicht auf, in dieser einen Zeile aber sofort, weil sie drei Zahlen gleichzeitig
+nennt. Weicht eine davon ab, ist das ein Fehlschlag von Erfolgskriterium 5 und keine Kleinigkeit.
+
+**Die Messumgebung ist abgeräumt.** `docker compose -f compose.spike-opendesk.yml --profile op
+--profile oidc down -v` hat die sechs Container mit dem Präfix `nc-mcp-spike-od` und alle fünf Bände
+der Topologie entfernt. `docker ps -a` nennt danach keinen Container mit diesem Präfix,
+`docker volume ls` kein Band und `docker network ls` kein Netz. Die Wegwerf-Instanz mit ihren
+Wegwerf-Passwörtern, dem abgeschalteten Bruteforce-Schutz, dem auf `debug` gesenkten Loglevel und
+`allow_local_remote_servers = true` existiert damit nicht mehr.
+
+**Ein siebter Container trägt den Präfix nicht und musste deshalb eigens abgeräumt werden, und das ist
+derselbe Befund wie in 17-02, nur in der Gegenrichtung.** Der Deploy-Daemon benennt den ExApp-Container
+global `nc_app_<appid>` und nicht projektgebunden. Nach dem `down -v` lief er weiter, hing als einziger
+noch am Netz `nc-mcp-spike-od-net` (weshalb dessen Entfernung mit `Resource is still in use` scheiterte)
+und trug das Bild aus der Registry auf `127.0.0.1:5001` der Spike-Topologie. Abgeräumt mit
+`docker rm -f nc_app_mcp_connector` und `docker network rm nc-mcp-spike-od-net`.
+
+**Die vorherige ExApp-Topologie ist wieder benutzbar.** `compose.exapp.yml`, die Plan 17-02
+ausdrücklich nur mit `stop` angehalten und nie mit `down -v` entfernt hat, läuft wieder
+(`up -d --wait`, fünf Container gesund). Weil die Registrierung in **ihrer** Nextcloud die Phase
+überdauert hatte, während ihr Container zwischenzeitlich von der Spike-Topologie ersetzt worden war,
+hat der idempotente Bootstrap ihn nicht neu ausgerollt, sondern die vorhandene Registrierung gemeldet.
+Der Weg dafür steht im Skript selbst: `occ app_api:app:unregister mcp_connector --force`, danach
+`bash scripts/bootstrap_exapp.sh`. Gegengeprobt ist der Endzustand und nicht die Absicht:
+`occ app_api:app:list` nennt `mcp_connector (MCP Connector): 0.1.11 [enabled]`, der Container hängt
+wieder am Netz `nc-mcp-exapp-net`, und ein `POST http://127.0.0.1:8081/exapps/mcp_connector/mcp` ohne
+Token antwortet **401** statt der 503, die der stehengebliebene Spike-Container vorher lieferte.
+
+Die Container fremder Projekte auf diesem Rechner sind nicht angefasst worden: `findling-nextcloud` und
+`nc-mcp-test` laufen unverändert seit 13 Tagen beziehungsweise zwei Wochen.
