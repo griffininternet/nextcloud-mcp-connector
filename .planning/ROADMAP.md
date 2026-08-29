@@ -191,7 +191,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 18-04-PLAN.md , Prüfung und Abräumen: erste gebrochene Stelle benannt, Frist, Obergrenze gegen used_bytes, Grabsteine, zweiter Eintrag in FILES_WITH_OWN_SQL
+- [x] 18-04-PLAN.md , Prüfung und Abräumen: erste gebrochene Stelle benannt, Frist, Obergrenze gegen used_bytes, Grabsteine, zweiter Eintrag in FILES_WITH_OWN_SQL
 - [ ] 18-05-PLAN.md , Aufrufer-Identität: resolve_caller ohne Geheimnis, client_name im Anspruch des Tokens, Rekorder-Ablage in der Middleware
 
 **Wave 3** *(blocked on Wave 2 completion)*
@@ -247,7 +247,7 @@ Plans:
 | 15. Release 0.1.10 | v1.4 | 4/4 | Complete | 2026-08-28 |
 | 16. Release 0.1.11 | v1.5 | 4/4 | Complete | 2026-08-28 |
 | 17. openDesk-Spike | v1.5 | 9/9 | Complete   | 2026-08-29 |
-| 18. Audit-Log Kern | v1.5 | 3/10 | In Progress | - |
+| 18. Audit-Log Kern | v1.5 | 4/10 | In Progress | - |
 | 19. Audit-Log Bedienung und Textnachzug | v1.5 | 0/? | Not started | - |
 
 ## Next
