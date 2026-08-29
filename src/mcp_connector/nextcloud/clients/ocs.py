@@ -31,7 +31,7 @@ from urllib.parse import quote
 import httpx
 
 from ... import config
-from ...errors import ToolError
+from ...errors import REASON_PERMISSION_DENIED, REASON_UNKNOWN_ID, ToolError
 from ..credentials import Credentials
 
 #: OCS v2 lives under this prefix; v1 is not used anywhere in this project.
@@ -264,7 +264,14 @@ def _json_payload(response: httpx.Response, what: str) -> Any:
 
 
 def _status_error(status: int, detail: str, what: str) -> ToolError:
-    """One place that turns a Nextcloud status into a sentence the model can act on."""
+    """One place that turns a Nextcloud status into a sentence the model can act on.
+
+    The reason identifiers sit here and not at the roughly 223 other raise sites of this
+    package: this phase puts an audit module next to the error handling, it does not tidy the
+    error handling up (D-17). Everything without a reason reads as "unspecified", which is
+    honest. Only ``reason`` may ever reach a log; ``message`` and ``hint`` name paths, ids and
+    calendar names and stay in the tool answer (T-18-01).
+    """
     suffix = f" Nextcloud says: {detail}" if detail else ""
     if status == 400:
         return ToolError(
@@ -283,11 +290,13 @@ def _status_error(status: int, detail: str, what: str) -> ToolError:
         return ToolError(
             message=f"No permission for {what}.{suffix}",
             hint="Ask the owner in Nextcloud for the missing permission.",
+            reason=REASON_PERMISSION_DENIED,
         )
     if status in (404, 998):
         return ToolError(
             message=f"Nextcloud did not find {what}.{suffix}",
             hint="Search for it first; the id or the name is unknown to this instance.",
+            reason=REASON_UNKNOWN_ID,
         )
     if status == 429:
         return ToolError(

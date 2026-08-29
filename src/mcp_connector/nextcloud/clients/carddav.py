@@ -34,7 +34,7 @@ from lxml import etree
 from vobject.base import ParseError
 
 from ... import config
-from ...errors import ToolError
+from ...errors import REASON_PERMISSION_DENIED, REASON_UNKNOWN_ID, ToolError
 from ..credentials import Credentials
 from . import xml
 
@@ -391,11 +391,15 @@ def _check(response: httpx.Response, what: str) -> None:
         raise ToolError(
             message=f"No permission to read {what}.",
             hint="Ask the owner of that address book for read permission in Nextcloud.",
+            # Why the identifier sits at the status branches only: see the docstring of
+            # ``_status_error`` in ``ocs.py`` (D-17).
+            reason=REASON_PERMISSION_DENIED,
         )
     if status == 404:
         raise ToolError(
             message=f"Nextcloud does not know {what}.",
             hint="Call contacts_search without an address book to see the ones this account has.",
+            reason=REASON_UNKNOWN_ID,
         )
     if status == 429:
         raise ToolError(

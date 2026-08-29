@@ -23,7 +23,12 @@ import httpx
 from lxml import etree
 
 from ... import config
-from ...errors import ConflictError, ToolError
+from ...errors import (
+    REASON_PERMISSION_DENIED,
+    REASON_UNKNOWN_ID,
+    ConflictError,
+    ToolError,
+)
 from ..credentials import Credentials
 from . import xml
 
@@ -527,12 +532,16 @@ def _check_write(response: httpx.Response, path: str) -> None:
         raise ToolError(
             message=f"No permission to write to {path}.",
             hint="Check the share permissions of the target folder in Nextcloud.",
+            # Why the identifier sits at the status branches only: see the docstring of
+            # ``_status_error`` in ``ocs.py`` (D-17).
+            reason=REASON_PERMISSION_DENIED,
         )
     if status in (404, 409):
         parent = dirname(path) or "/"
         raise ToolError(
             message=f"The parent folder {parent} of {path} does not exist.",
             hint="Create the folder in Nextcloud first, or upload into a folder that exists.",
+            reason=REASON_UNKNOWN_ID,
         )
     if status == 405:
         raise ToolError(
@@ -583,11 +592,13 @@ def _check(response: httpx.Response, path: str) -> None:
         raise ToolError(
             message=f"No permission to read {path}.",
             hint="Ask the owner of the share for read permission in Nextcloud.",
+            reason=REASON_PERMISSION_DENIED,
         )
     if status == 404:
         raise ToolError(
             message=f"File not found: {path}.",
             hint="List the parent folder first to get the exact spelling of the path.",
+            reason=REASON_UNKNOWN_ID,
         )
     if status == 416:
         raise ToolError(

@@ -37,7 +37,12 @@ from icalendar import Calendar as IcsCalendar
 from lxml import etree
 
 from ... import config, ids
-from ...errors import ConflictError, ToolError
+from ...errors import (
+    REASON_PERMISSION_DENIED,
+    REASON_UNKNOWN_ID,
+    ConflictError,
+    ToolError,
+)
 from ..credentials import Credentials
 from . import xml
 
@@ -464,11 +469,15 @@ def _check_write(response: httpx.Response, calendar_uri: str, object_name: str) 
         raise ToolError(
             message=f"No permission to write to the calendar {calendar_uri}.",
             hint="Pick one of your own calendars, or ask its owner for write permission.",
+            # Why the identifier sits at the status branches only: see the docstring of
+            # ``_status_error`` in ``ocs.py`` (D-17).
+            reason=REASON_PERMISSION_DENIED,
         )
     if status in (404, 409):
         raise ToolError(
             message=f"The calendar {calendar_uri} does not exist.",
             hint="Call calendar_list_events once to see the calendars of this account.",
+            reason=REASON_UNKNOWN_ID,
         )
     if status == 415:
         raise ToolError(
@@ -504,11 +513,13 @@ def _check(response: httpx.Response, what: str) -> None:
         raise ToolError(
             message=f"No permission to read {what}.",
             hint="Ask the owner of that calendar for read permission in Nextcloud.",
+            reason=REASON_PERMISSION_DENIED,
         )
     if status == 404:
         raise ToolError(
             message=f"Nextcloud does not know {what}.",
             hint="Call calendar_list_events once to see the calendars of this account.",
+            reason=REASON_UNKNOWN_ID,
         )
     if status == 429:
         raise ToolError(
