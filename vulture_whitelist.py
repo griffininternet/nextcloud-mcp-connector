@@ -170,6 +170,15 @@ _.cleanup_at
 #   switches, and it leaves this list with the plan that calls it.
 _.last_entry
 
+# --- The two lists of audit/allowlist.py ------------------------------------------------
+# audit/allowlist.py is data and nothing else, so vulture sees two module level names that
+# no production line reads yet. Both are read today by tests/contract/test_audit_surface.py,
+# which measures them against the live tool surface, and both get their production caller in
+# plan 18-06: the recorder intersects the set argument names of a call with PARAM_ALLOWLIST
+# before it writes a row. They leave this list with that plan.
+PARAM_ALLOWLIST
+FORBIDDEN_PARAMS
+
 # --- The methods of the SDK provider protocol ------------------------------------------
 # oauth/provider.py implements OAuthAuthorizationServerProvider. Every method below is
 # called by the SDK handlers of /authorize, /token and /register, and by nothing in this
