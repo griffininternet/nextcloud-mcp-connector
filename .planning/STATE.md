@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
 status: executing
-stopped_at: Completed 18-04-PLAN.md
-last_updated: "2026-08-29T09:04:20.753Z"
-last_activity: 2026-08-29 -- Plan 18-04 ausgeführt (Prüfung, Frist und Obergrenze der Audit-Ablage)
+stopped_at: Completed 18-05-PLAN.md
+last_updated: "2026-08-29T09:17:28.474Z"
+last_activity: 2026-08-29 -- Plan 18-05 ausgeführt (Auskunft über den Aufrufer, Client-Name im Anspruch, Rekorder-Ablage)
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 23
-  completed_plans: 17
-  percent: 74
+  completed_plans: 18
+  percent: 50
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 18 (audit-log-kern) — EXECUTING
-Plan: 5 of 10
+Plan: 6 of 10
 Status: Ready to execute
-Last activity: 2026-08-29 -- Plan 18-04 ausgeführt (Prüfung, Frist und Obergrenze der Audit-Ablage)
+Last activity: 2026-08-29 -- Plan 18-05 ausgeführt (Auskunft über den Aufrufer, Client-Name im Anspruch, Rekorder-Ablage)
 
 ## Performance Metrics
 
@@ -180,6 +180,7 @@ Last activity: 2026-08-29 -- Plan 18-04 ausgeführt (Prüfung, Frist und Obergre
 | Phase 18-audit-log-kern P02 | 15 min | 2 tasks tasks | 3 files files |
 | Phase 18-audit-log-kern P03 | 25 min | 3 tasks | 10 files |
 | Phase 18-audit-log-kern PP04 | 20 min | 3 tasks tasks | 4 files files |
+| Phase 18-audit-log-kern P05 | 12 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -666,6 +667,8 @@ Recent decisions affecting current work:
 - [Phase 18]: 18-03: Die sechs Kennungen in errors.REASONS sind eingefroren; eine siebte ist ein Entscheid und gehört in ein Review, gehalten von einem AST-Lauf über src/
 - [Phase 18]: Die Obergrenze des Audit-Logs fährt gegen used_bytes = (page_count - freelist_count) * page_size; os.stat und page_count * page_size fallen nach einem DELETE nicht und würden bis zur leeren Tabelle löschen
 - [Phase 18]: Die Löschanweisungen des Aufräumlaufs heissen _DROP_*, weil der Vertragstest zwei exakte SQL-Formen ausnimmt und nicht die Datei; eine Ausweitung hätte auch ein künftiges HTTP-DELETE in audit/store.py verdeckt
+- [Phase 18]: 18-05: Der Client-Name reist im claims-Feld des Tokens mit, gefuellt aus dem Client, den verify_token fuer die Sperrpruefung ohnehin laedt; ein spaeter aufgeloester Name waere nach occ mcp_connector:purge weg
+- [Phase 18]: 18-05: Der Erfassungspfad nimmt resolve_caller und nie resolve_credentials; Caller traegt vier Felder ohne Geheimnis und antwortet None statt zu werfen (D-13), und params-_meta bleibt ungelesen
 
 ### Pending Todos
 
@@ -705,9 +708,9 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-29T09:04:00.223Z
-Stopped at: Completed 18-04-PLAN.md
-Nächster Schritt: Plan 18-04 ausführen; danach offen: Phase 17 verifizieren (/gsd:verify-phase 17) und 16-04 (Store-Einreichung 0.1.11)
+Last session: 2026-08-29T09:16:29.667Z
+Stopped at: Completed 18-05-PLAN.md
+Nächster Schritt: Plan 18-06 ausführen; danach offen: Phase 17 verifizieren (/gsd:verify-phase 17) und 16-04 (Store-Einreichung 0.1.11)
 Resume file: None
 
 ## Operator Next Steps
