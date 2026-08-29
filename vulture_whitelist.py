@@ -172,19 +172,19 @@ _.cleanup_at
 # sweep: gone from this list with plan 18-06, which is the plan that calls it. The recorder
 #   asks should_sweep about the number append just handed back and pays for the sweep on every
 #   five hundredth row (D-11), exactly as the entry announced it would.
-# verify_chains: the check of AUDIT-02. Its caller is the check command of plan 18-08, which
-#   turns a finding into a sentence for the administrator; the finding itself stays data here
-#   on purpose, so the same check can also answer machine readable. Driven by four cases in
-#   tests/unit/test_audit_store.py, and it leaves this list with plan 18-08.
-# next_seq and used_bytes_after: the two fields of ChainFinding and SweepReport that no
-#   production line reads yet. next_seq is the second half of "missing between these two
-#   numbers" and is read by the command of plan 18-08, used_bytes_after is what the sweep
-#   measured when it was done and is read by the same command; both are asserted on in
-#   tests/unit/test_audit_store.py today. The other fields of both classes carry names that
-#   are read elsewhere in the module, which is why only these two stand here.
+# verify_chains and next_seq: gone from this list with plan 18-08, which is the plan that
+#   calls them. exapp/audit_verify.py walks the findings and turns each one into the sentence
+#   an administrator reads, and next_seq is the second half of "missing between these two
+#   numbers" in that sentence. Both left the list with the plan their entry named, which is
+#   what this list is for.
+# used_bytes_after: what the sweep measured when it was done. The check command of plan 18-08
+#   reads its counts through AuditStore.overview and not through a sweep report, because a
+#   check may not delete anything to learn how much there is, so this field still has no
+#   production reader. Its caller is the reading command of AUDIT-04 in phase 19, which
+#   reports what an expiry took; it is asserted on in tests/unit/test_audit_store.py today and
+#   leaves this list with that plan. The other fields of both classes carry names that are
+#   read elsewhere in the module, which is why only this one stands here.
 _.last_entry
-_.verify_chains
-_.next_seq
 _.used_bytes_after
 
 # --- The marker every recorded tool carries ---------------------------------------------

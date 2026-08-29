@@ -44,7 +44,7 @@ from starlette.requests import Request
 from starlette.testclient import TestClient
 
 from mcp_connector import config
-from mcp_connector.exapp import admin_settings, lifecycle, occ, purge, settings_form
+from mcp_connector.exapp import admin_settings, audit_verify, lifecycle, occ, purge, settings_form
 from mcp_connector.nextcloud.clients.xml import hardened_parser
 from mcp_connector.oauth import crypto, loginflow
 from mcp_connector.oauth.store import OAuthStore
@@ -263,14 +263,15 @@ def test_a_request_with_a_wrong_app_secret_is_401(live: Deployment) -> None:
 
 
 def test_the_proxy_marker_is_the_same_header_the_lifecycle_routes_refuse() -> None:
-    """The header is spelled in two modules, so this is where the two are held equal.
+    """The header is spelled in three modules, so this is where all three are held equal.
 
-    ``exapp/lifecycle.py`` imports ``exapp/occ.py``, which imports ``exapp/purge.py``, so an
-    import back would close a cycle. The duplicate string is the price and this assertion is
-    the guard: a rename in one module without the other would leave the purge open to the
-    PHP proxy path (T-05-26).
+    ``exapp/lifecycle.py`` imports ``exapp/occ.py``, which imports ``exapp/purge.py`` and
+    ``exapp/audit_verify.py``, so an import back would close a cycle. The duplicate string is
+    the price and this assertion is the guard: a rename in one module without the others
+    would leave the purge or the audit check open to the PHP proxy path (T-05-26, T-18-07).
     """
     assert purge.HEADER_ORIGIN_IP == lifecycle.HEADER_ORIGIN_IP
+    assert purge.HEADER_ORIGIN_IP == audit_verify.HEADER_ORIGIN_IP
 
 
 def test_the_handler_path_is_declared_in_no_route_of_the_manifest() -> None:

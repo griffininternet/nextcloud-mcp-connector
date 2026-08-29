@@ -21,7 +21,7 @@ from starlette.applications import Starlette
 from starlette.testclient import TestClient
 
 from mcp_connector import config
-from mcp_connector.exapp import lifecycle, settings_form, status
+from mcp_connector.exapp import lifecycle, occ, settings_form, status
 from mcp_connector.exapp.ui import strings
 
 APP_ID = "mcp_connector"
@@ -41,6 +41,7 @@ ENV = {
 }
 
 SETTINGS_URL = f"{BASE_URL}/ocs/v2.php/apps/app_api/api/v1/ui/settings"
+OCC_URL = f"{BASE_URL}{occ.OCC_COMMAND_PATH}"
 
 
 def appapi_headers(user: str = USER, secret: str = APP_SECRET) -> dict[str, str]:
@@ -410,3 +411,74 @@ def test_every_answer_carries_no_store(
     with client() as http:
         response = getattr(http, method)(path, headers=headers)
     assert response.headers["cache-control"] == "no-store"
+
+
+# --- the two occ commands, and their independence (plan 18-08) -------------------
+
+
+def sent_names(route: respx.Route) -> list[str]:
+    """The command name of every registration that went out, in the order it went."""
+    return [json.loads(call.request.content)["name"] for call in route.calls]
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_refused_first_command_does_not_cost_the_second(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """One ``try`` per command, and this is the case that makes it worth having.
+
+    ``OccCommandController::registerCommand`` takes exactly one command per POST, so two
+    commands are two requests. Without the block per command the first refusal would end the
+    loop, and an instance whose purge command could not be registered would silently lose the
+    check of its audit log as well.
+    """
+    route = respx.post(OCC_URL).mock(
+        side_effect=[httpx.Response(500, json={}), httpx.Response(200, json={})]
+    )
+
+    with caplog.at_level(logging.DEBUG):
+        await occ.register_occ_commands(env=ENV)
+
+    assert route.call_count == 2
+    assert sent_names(route) == [scheme["name"] for scheme in occ.command_schemes()]
+    logged = "\n".join(record.getMessage() for record in caplog.records)
+    assert occ.OCC_COMMAND_NAME in logged, "the failure names the command it happened to"
+    assert occ.OCC_AUDIT_COMMAND_NAME not in logged, "the one that worked stays quiet"
+    assert APP_SECRET not in logged
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_first_command_that_never_arrives_does_not_cost_the_second(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The other half of the same rule: a transport failure is caught per command too."""
+    route = respx.post(OCC_URL).mock(
+        side_effect=[httpx.ConnectError("no route to nextcloud"), httpx.Response(200, json={})]
+    )
+
+    with caplog.at_level(logging.DEBUG):
+        await occ.register_occ_commands(env=ENV)
+
+    assert route.call_count == 2
+    assert sent_names(route) == [scheme["name"] for scheme in occ.command_schemes()]
+    assert [record for record in caplog.records if record.levelno >= logging.ERROR]
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_both_commands_failing_is_two_log_lines_and_no_exception(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Pitfall 11: a non empty error field out of ``/enabled`` disables the app again."""
+    route = respx.post(OCC_URL).mock(return_value=httpx.Response(500, json={}))
+
+    with caplog.at_level(logging.DEBUG):
+        await occ.register_occ_commands(env=ENV)
+
+    assert route.call_count == 2
+    errors = [record.getMessage() for record in caplog.records if record.levelno >= logging.ERROR]
+    assert len(errors) == 2
+    assert any(occ.OCC_COMMAND_NAME in line for line in errors)
+    assert any(occ.OCC_AUDIT_COMMAND_NAME in line for line in errors)
