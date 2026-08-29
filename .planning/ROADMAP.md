@@ -204,7 +204,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 18-08-PLAN.md , Prüfkommando occ mcp_connector:audit:verify ohne neue Route im Manifest, immer 200, Urteil im Rumpf
+- [x] 18-08-PLAN.md , Prüfkommando occ mcp_connector:audit:verify ohne neue Route im Manifest, immer 200, Urteil im Rumpf
 - [ ] 18-09-PLAN.md , Nutzerlöschung nach D-12 mit fail-safe in Löschrichtung, plus die Messung der Annahme A1
 
 **Wave 6** *(blocked on Wave 5 completion)*
@@ -247,7 +247,7 @@ Plans:
 | 15. Release 0.1.10 | v1.4 | 4/4 | Complete | 2026-08-28 |
 | 16. Release 0.1.11 | v1.5 | 4/4 | Complete | 2026-08-28 |
 | 17. openDesk-Spike | v1.5 | 9/9 | Complete   | 2026-08-29 |
-| 18. Audit-Log Kern | v1.5 | 7/10 | In Progress|  |
+| 18. Audit-Log Kern | v1.5 | 8/10 | In Progress|  |
 | 19. Audit-Log Bedienung und Textnachzug | v1.5 | 0/? | Not started | - |
 
 ## Next

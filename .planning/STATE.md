@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
 status: executing
-stopped_at: Completed 18-07-PLAN.md
-last_updated: "2026-08-29T10:21:11.325Z"
+stopped_at: Completed 18-08-PLAN.md
+last_updated: "2026-08-29T10:48:27.172Z"
 last_activity: 2026-08-29
 progress:
   total_phases: 4
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 18 (audit-log-kern) — EXECUTING
-Plan: 8 of 10
+Plan: 9 of 10
 Status: Ready to execute
 Last activity: 2026-08-29
 
@@ -183,6 +183,7 @@ Last activity: 2026-08-29
 | Phase 18-audit-log-kern P05 | 12 min | 3 tasks | 5 files |
 | Phase 18 P06 | 28min | 3 tasks | 5 files |
 | Phase 18 P07 | 50min | 3 tasks | 10 files |
+| Phase 18 P08 | 55min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -677,6 +678,8 @@ Recent decisions affecting current work:
 - [Phase 18]: 18-07: Die zwei Vorgabezahlen des Audit-Logs stehen doppelt in config.py statt importiert zu werden: der Import waere ein Ring ueber audit/__init__, und ein Test haelt beide Paare gleich
 - [Phase 18]: 18-07: audit_log_enabled ist die positive Richtung mit Vorgabe aus (D-14) und ausdruecklich nicht das Vorbild von talk_send_enabled; der Recorder entsteht nur hinter dem Schalter
 - [Phase 18]: 18-07: Der Startlauf schreibt die Schaltzeile aus D-15 nur bei einem Zustandswechsel und raeumt eine abgeschaltete Ablage genau dann einmal auf, wenn die Datei schon vor dem Start da war
+- [Phase 18]: 18-08: Das Prüfkommando antwortet immer mit 200 und trägt das Urteil im Rumpf, weil AppAPI den Rumpf bei jedem anderen Status verwirft; --json ist der Weg für ein Überwachungsskript
+- [Phase 18]: 18-08: Die Zählungen der Prüfausgabe kommen aus AuditStore.overview und nicht aus einem SweepReport, weil eine Prüfung nicht löschen darf, um zu erfahren, wie viel da ist
 
 ### Pending Todos
 
@@ -716,7 +719,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-29T10:20:51.322Z
+Last session: 2026-08-29T10:48:11.943Z
 Stopped at: Completed 18-07-PLAN.md
 Nächster Schritt: Plan 18-07 ausführen (Schalter aus D-14, Recorder verdrahten); danach offen: Phase 17 verifizieren (/gsd:verify-phase 17) und 16-04 (Store-Einreichung 0.1.11)
 Resume file: None
