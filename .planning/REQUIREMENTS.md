@@ -26,8 +26,8 @@ Nicht in diesem Milestone entschieden, weil Verhandlungssache: die AGPL-Konseque
 
 ### openDesk-Erkundung (Erkenntnis, kein Produktionscode)
 
-- [ ] **OD-01**: Es ist gemessen und schriftlich belegt, ob und auf welchem Weg diese ExApp in einer openDesk-Umgebung überhaupt installierbar ist, gegen die drei bekannten Hürden: abgeschalteter App Store, keine AppAPI in der Distribution, Kubernetes statt Docker. Der Befund nennt ausdrücklich, was die auf Nextcloud 33.0.7 gepinnte Zielumgebung für unsere auf 34.0.3 erbrachten Ein-Klick-Nachweise bedeutet
-- [ ] **OD-02**: Der Zugangsweg zu OpenProject ist gemessen statt argumentiert. Weg 0 (über die vorhandene Nextcloud-App `integration_openproject` und ihre OCS-Routen) und Weg 1 (eigener OAuth-Autorisierungscode je Nutzer direkt gegen OpenProject) stehen mit Messwerten nebeneinander, mindestens zu PKCE-Unterstützung, Token-Lebensdauer und Erneuerung ohne Browsersitzung, und zur Frage, ob die SSRF-Grenze aus v1.1 eine Nachbarkomponente unter internem Dienstnamen durchlässt. Die Entscheidung fällt auf dieser Messung, nicht auf einem Argument
+- [x] **OD-01**: Es ist gemessen und schriftlich belegt, ob und auf welchem Weg diese ExApp in einer openDesk-Umgebung überhaupt installierbar ist, gegen die drei bekannten Hürden: abgeschalteter App Store, keine AppAPI in der Distribution, Kubernetes statt Docker. Der Befund nennt ausdrücklich, was die auf Nextcloud 33.0.7 gepinnte Zielumgebung für unsere auf 34.0.3 erbrachten Ein-Klick-Nachweise bedeutet
+- [x] **OD-02**: Der Zugangsweg zu OpenProject ist gemessen statt argumentiert. Weg 0 (über die vorhandene Nextcloud-App `integration_openproject` und ihre OCS-Routen) und Weg 1 (eigener OAuth-Autorisierungscode je Nutzer direkt gegen OpenProject) stehen mit Messwerten nebeneinander, mindestens zu PKCE-Unterstützung, Token-Lebensdauer und Erneuerung ohne Browsersitzung, und zur Frage, ob die SSRF-Grenze aus v1.1 eine Nachbarkomponente unter internem Dienstnamen durchlässt. Die Entscheidung fällt auf dieser Messung, nicht auf einem Argument
 - [x] **OD-03**: Eine Fragenliste für den ISV-Call am 14.09. liegt vor, die genau das enthält, was die Recherche nicht klären konnte: das ZenDiS-Aufnahmeverfahren, der Installationsweg in openDesk, die AGPL-Konsequenz für die Enterprise-Positionierung, und was die Abschaltung von Talk und Kontakten in openDesk für zwei unserer bestehenden Werkzeugfamilien bedeutet
 
 ### Audit-Log
@@ -80,8 +80,8 @@ Bei der Roadmap-Erstellung am 2026-08-28 gefüllt. Die Phasennummerierung setzt 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | EXAPP-11 | Phase 16 (Release 0.1.11) | Complete |
-| OD-01 | Phase 17 (openDesk-Spike) | Pending |
-| OD-02 | Phase 17 (openDesk-Spike) | Pending |
+| OD-01 | Phase 17 (openDesk-Spike) | Complete |
+| OD-02 | Phase 17 (openDesk-Spike) | Complete |
 | OD-03 | Phase 17 (openDesk-Spike) | Complete |
 | AUDIT-01 | Phase 18 (Audit-Log Kern) | Pending |
 | AUDIT-02 | Phase 18 (Audit-Log Kern) | Pending |

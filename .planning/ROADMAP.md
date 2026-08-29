@@ -74,7 +74,7 @@ Audit: [milestones/v1.4-MILESTONE-AUDIT.md](milestones/v1.4-MILESTONE-AUDIT.md) 
 ### v1.5 Vorlauf openDesk (Phasen 16-19), AKTIV
 
 - [x] **Phase 16: Release 0.1.11** - Den wartenden Textrest ausliefern und den `[Unreleased]`-Block leerräumen, bevor das Audit-Log ihn wieder füllt (4/4 Pläne, completed 2026-08-28, Release live im Store)
-- [ ] **Phase 17: openDesk-Spike** - Installierbarkeit und Nutzeridentität gegen OpenProject messen statt argumentieren, plus die Fragenliste für den 14.09.
+- [x] **Phase 17: openDesk-Spike** - Installierbarkeit und Nutzeridentität gegen OpenProject messen statt argumentieren, plus die Fragenliste für den 14.09. (completed 2026-08-29)
 - [ ] **Phase 18: Audit-Log Kern** - Jeder Werkzeugaufruf hinterlässt einen prüfbaren Metadaten-Eintrag, der keine Inhalte trägt und den OAuth-Speicher nicht gefährdet
 - [ ] **Phase 19: Audit-Log Bedienung und Textnachzug** - Administrator schaltet ein und liest über `occ`, und jede bestehende Aussage über Speicherung und Enterprise-Stand sagt danach die Wahrheit
 
@@ -164,7 +164,7 @@ Plans:
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [ ] 17-09-PLAN.md , Bericht abgeschlossen (welcher Weg trägt, was ungemessen blieb, Ränder, Reproduktion), Geheimnisgriff, Produktionsbaum-Nachweis und Abräumen der Messumgebung
+- [x] 17-09-PLAN.md , Bericht abgeschlossen (welcher Weg trägt, was ungemessen blieb, Ränder, Reproduktion), Geheimnisgriff, Produktionsbaum-Nachweis und Abräumen der Messumgebung
 
 *Die Wellen sind seriell, weil alle Pläne dieselbe Berichtsdatei füllen und dieselbe eine Messumgebung benutzen; der Schnitt zwischen Welle 2 und 3 sowie vor Welle 7 folgt dem Stufenschnitt der Recherche (Stufe A vollständig protokolliert, bevor Keycloak dazukommt).*
 
@@ -218,7 +218,7 @@ Plans:
 | 14. Doku-Reste und Gate-Entscheid | v1.4 | 2/2 | Complete | 2026-08-27 |
 | 15. Release 0.1.10 | v1.4 | 4/4 | Complete | 2026-08-28 |
 | 16. Release 0.1.11 | v1.5 | 4/4 | Complete | 2026-08-28 |
-| 17. openDesk-Spike | v1.5 | 8/9 | In Progress|  |
+| 17. openDesk-Spike | v1.5 | 9/9 | Complete   | 2026-08-29 |
 | 18. Audit-Log Kern | v1.5 | 0/? | Not started | - |
 | 19. Audit-Log Bedienung und Textnachzug | v1.5 | 0/? | Not started | - |
 

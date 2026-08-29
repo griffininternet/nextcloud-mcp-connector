@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
-status: executing
-stopped_at: Completed 17-07-PLAN.md
-last_updated: "2026-08-29T05:12:05.738Z"
+status: verifying
+stopped_at: Completed 17-09-PLAN.md (Phase 17 abgeschlossen)
+last_updated: "2026-08-29T05:45:41.079Z"
 last_activity: 2026-08-29
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 13
-  completed_plans: 12
-  percent: 25
+  completed_plans: 13
+  percent: 50
 ---
 
 # Project State
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Current focus:** Phase 17 — openDesk-Spike
+**Current focus:** Phase 17, openDesk-Spike
 
 ## Current Position
 
-Phase: 17 (openDesk-Spike) — EXECUTING
+Phase: 17 (openDesk-Spike), abgeschlossen
 Plan: 9 of 9
-Status: Ready to execute
+Status: Phase abgeschlossen, bereit zur Verifikation
 Last activity: 2026-08-29
 
 ## Performance Metrics
@@ -175,6 +175,7 @@ Last activity: 2026-08-29
 | Phase 17 P06 | 52 | 3 tasks | 2 files |
 | Phase 17 P07 | 64 min | 3 tasks | 5 files |
 | Phase 17 P08 | 20 | 3 tasks | 3 files |
+| Phase 17 P09 | 35 min | 3 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -652,6 +653,8 @@ Recent decisions affecting current work:
 - [Phase ?]: 17-08: Die Reihenfolge der neun ISV-Fragen ist an bestehende Berichtsverweise gebunden (1.2, 1.3, 1.4, 2.2, 2.5 zeigen auf 1, 5, 6, 7, 9) und nicht nach Wichtigkeit sortiert
 - [Phase ?]: 17-08: Vier zurueckgestellte Funde (DI-17-01, DI-17-03, DI-17-04, DI-17-05) sind als Nachfragen an die Fragen 6 und 7 gehaengt statt als eigene Fragen, damit die Liste bei neun bleibt
 - [Phase ?]: 17-08: Drei von dieser Phase beantwortete Fragen sind aus der Liste entfernt und mit Beleg in einer Streichtabelle gefuehrt; Freigabe des Owners am 2026-08-29 ohne inhaltliche Aenderung, drei Entwuerfe bleiben unversendet
+- [Phase ?]: 17-09: Die Folgerung in 2.4 traegt ihre Bedingung im selben Satz (Modus oauth2 gegen oidc); der Satz 'Weg 0 traegt unter OIDC nicht' ist bewusst nicht geschrieben, weil der Pfad nextcloud_hub ungemessen ist
+- [Phase ?]: 17-09: Abschnitt 5 nicht umnummeriert; die Reihenfolge S0 bis S6, Weg 1, SSRF steht als neue Tabelle 5.0 davor, damit die Verweise auf 5.1 bis 5.6 gueltig bleiben
 
 ### Pending Todos
 
@@ -691,9 +694,9 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-29T05:11:40.740Z
-Stopped at: Completed 17-07-PLAN.md
-Naechster Schritt: 16-02 (sechs Gates lokal grün, Archiv-Probelauf, Proof-Zeilen der Runbook-Schritte 1 bis 3); der Tag v0.1.11 entsteht erst in 16-03 nach ausdrücklicher Owner-Freigabe
+Last session: 2026-08-29T05:45:41.063Z
+Stopped at: Completed 17-09-PLAN.md (Phase 17 abgeschlossen)
+Naechster Schritt: Phase 17 verifizieren (/gsd:verify-phase 17); danach offen: 16-04 (Store-Einreichung 0.1.11) und die Planung von Phase 18
 Resume file: None
 
 ## Operator Next Steps
