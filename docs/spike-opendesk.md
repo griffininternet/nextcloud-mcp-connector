@@ -879,6 +879,20 @@ in einer einzigen Zahl unterscheidet. Die 341 Bytes der ersten Zeile sind dabei 
 die Abweisung durch OpenProject aus der Gegenprobe oben; die Aussage dieser Tabelle ist allein, dass
 `user_oidc` im ersten Fall gar nicht befragt wird.
 
+##### Was aus dieser Messung nach draußen geht, und was nicht
+
+Derselbe Aufbau ist die Live-Reproduktion, an die D-08 den Kommentar zu
+`nextcloud/user_oidc#925` gebunden hat. Sie ist gelungen: die Meldungen aus
+`TokenService.php:318` und `:328` stehen wörtlich im Protokoll, und die Vorbedingung
+`isLoggedIn()` ist gemessen statt vermutet. Der Entwurf liegt deshalb als
+`docs/contrib/user-oidc-925-kommentar.md` im Repository, **unversendet**.
+
+**Gesendet hat ihn niemand, und senden darf ihn ausschließlich der Owner.** Das Issue selbst
+ist dabei richtig einzuordnen, sonst liest der Kommentar wie eine Fehlermeldung zu einem
+erledigten Feature: `#925` ist die Anfrage, aus der die heutige Implementierung entstanden
+ist, und der Entwurf ergänzt einen Fall, den sie nicht abdeckt, nämlich eine ExApp ohne
+PHP-Anteil.
+
 #### S6: die Byte-Kosten und der Feldsatz einer Antwort
 
 **Behauptung:** Eine Antwort der Suchfläche trägt in kompakter Form die Felder, aus denen ein späteres
