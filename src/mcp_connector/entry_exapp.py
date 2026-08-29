@@ -17,6 +17,7 @@ forbids: ``main`` refuses to start when one is configured.
 import asyncio
 import logging
 import os
+import time
 from collections.abc import Mapping
 
 import httpx
@@ -26,6 +27,9 @@ from starlette.applications import Starlette
 from starlette.routing import Route
 
 from . import config
+from .audit import CHAIN_INSTANCE, KIND_SWITCH, AuditStore, audit_opener
+from .audit import record as audit_record
+from .audit.store import AUDIT_FILENAME
 from .errors import IssuerRefused, ToolError
 from .exapp import config_values
 from .exapp.lifecycle import lifecycle_routes
@@ -101,6 +105,34 @@ def build_exapp_app(env: Mapping[str, str] | None = None) -> Starlette:
     # a tool call arrives with a verified bearer and is answered from the process cache,
     # and rate limiting the actual work of this server would be our own denial of service.
     counters = throttle.Throttle()
+    # One audit store per application, built exactly where the OAuth one is built and for
+    # the same reason: the file cannot be opened while the routes are, because the path comes
+    # from a volume that a deployment may not have mounted yet, so both sides get an opener
+    # and the first row that needs the file pays for opening it. No module global either
+    # (D-20), which is why this is a local of the function that builds one application.
+    audit_store = audit_opener(env)
+    # D-14 in one line: without the switch there is no recorder, without a recorder the
+    # transport boundary deposits nothing, and without a deposit the recording path in
+    # ``graceful`` returns before it has written anything. The known 401 of the first start
+    # after an installation falls the same way and needs no branch of its own: AppAPI refuses
+    # the admin value read while the app is not enabled yet, ``config_values`` answers with an
+    # empty overlay, and an empty overlay leaves the default in code in force, which is off.
+    #
+    # ``env`` and never ``os.environ``: this is the same resolved mapping ``_resolved_env``
+    # handed to every other factory above, and the account check of D-12 (plan 18-09) calls
+    # Nextcloud with it. A second, unresolved mapping would have different values at exactly
+    # the moment it matters, namely on an installation from the app store, which gets no
+    # deploy variable at all.
+    recorder = (
+        audit_record.Recorder(
+            audit_store,
+            env=env,
+            retention_days=config.audit_retention_days(env),
+            size_limit=config.audit_size_limit(env),
+        )
+        if config.audit_log_enabled(env)
+        else None
+    )
 
     async def access_disabled(nc_user: str) -> bool:
         """Whether this Nextcloud account has paused its MCP access (EXAPP-02, D-47).
@@ -118,7 +150,11 @@ def build_exapp_app(env: Mapping[str, str] | None = None) -> Starlette:
     for route in app.router.routes:
         if isinstance(route, Route) and route.path == MCP_PATH:
             route.app = RequireAppApi(
-                route.app, env, token_verifier=verifier, access_check=access_disabled
+                route.app,
+                env,
+                token_verifier=verifier,
+                access_check=access_disabled,
+                audit_recorder=recorder,
             )
             guarded += 1
     if guarded != 1:
@@ -236,6 +272,70 @@ async def _admin_values(env: Mapping[str, str]) -> config_values.AdminValues:
         return await config_values.admin_values(env=env, client=client)
 
 
+async def _audit_startup(env: Mapping[str, str]) -> None:
+    """Record the switching of the log, then give an idle store one chance to clean up.
+
+    **Why the start is the moment.** D-15 asks that switching the log on or off leaves a
+    trace of its own. An admin value only takes effect once this app has been disabled and
+    enabled again, which stops and starts this container, so the start *is* the moment the
+    change becomes real, and it is the one moment this app can observe. There is no callback:
+    AppAPI's ``SetValueListener`` stores an admin value and tells nobody.
+
+    **Why ``actor`` says unknown.** The same listener drops ``$event->getUser()`` for an admin
+    form before anything of ours runs (app_api v34.0.3), so the administrator behind a switch
+    cannot be named on this path. :func:`~mcp_connector.audit.record.note_switch` writes the
+    fixed identifier for it, and its docstring carries the source (D-16).
+
+    **Why a file that does not exist stays absent.** An installation that never switched the
+    log on gets no ``audit.sqlite3``, not even an empty one with a schema in it: a file that
+    exists says something happened, and nothing did.
+
+    **Why the sweep runs here at all.** The expiry of D-11 rides on the write path, every nth
+    row. A log that has been switched off has no write path any more, so without this one call
+    its rows would sit out their retention window and stay forever. This is the only moment
+    left that can take them, which is why it runs whenever the file was already there and not
+    only while the log is on.
+    """
+    path = config.persistent_storage(env) / AUDIT_FILENAME
+    existed = path.exists()
+    enabled = config.audit_log_enabled(env)
+    if not existed and not enabled:
+        return
+
+    store = AuditStore(path)
+    last = await store.last_entry(CHAIN_INSTANCE, kind=KIND_SWITCH)
+    # No switch row yet means the log has never been on: the shipped state is off (D-14), so
+    # a start that finds nothing and is off has nothing to report, and one that finds nothing
+    # and is on reports the change from that shipped state.
+    known = last.outcome if last is not None else audit_record.SWITCH_OFF
+    current = audit_record.SWITCH_ON if enabled else audit_record.SWITCH_OFF
+    if known != current:
+        await audit_record.note_switch(store, enabled=enabled, moment=int(time.time()))
+    if existed:
+        await store.sweep(
+            moment=int(time.time()),
+            retention_days=config.audit_retention_days(env),
+            size_limit=config.audit_size_limit(env),
+        )
+
+
+def _record_the_switch(env: Mapping[str, str]) -> None:
+    """Run :func:`_audit_startup` and let no failure of it cost this container its start.
+
+    The same error model the recording path itself follows (D-13, fail open): a store that
+    cannot be written must not stop this app from serving, because that would turn a full
+    volume into an outage of every assistant. The line names the type of the failure and
+    nothing else, since the message of a store error carries the path of the file (T-18-10).
+    """
+    try:
+        asyncio.run(_audit_startup(env))
+    except Exception as exc:
+        logger.error(
+            "the audit log did not record the state of its switch on this start: %s",
+            type(exc).__name__,
+        )
+
+
 def _resolved_env() -> tuple[dict[str, str], frozenset[str]]:
     """The deploy environment with the values an administrator set in Nextcloud on top.
 
@@ -330,6 +430,10 @@ def main() -> None:
         # (pitfall 12, T-03-15). The data key is not fetched here; that needs a running
         # event loop and a reachable Nextcloud, and the store asks for it when it opens.
         config.persistent_storage(resolved)
+        # Directly behind the volume check, because it writes into that volume, and before
+        # anything is built, because the state it records is the state the application below
+        # is about to be built with (D-15, D-16). It never raises: see :func:`_record_the_switch`.
+        _record_the_switch(resolved)
         # The one value an installation has to set (WR-09). It becomes the issuer, the audience
         # of every token, the resource_metadata pointer, the prefix of every form action and
         # the target of the consent redirect.

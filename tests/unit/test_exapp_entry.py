@@ -17,6 +17,8 @@ import json
 import logging
 import os
 import re
+import sqlite3
+import time
 from collections.abc import Awaitable, Callable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,6 +37,8 @@ from starlette.routing import Route
 from starlette.testclient import TestClient
 
 from mcp_connector import config, entry_exapp, entry_http
+from mcp_connector.audit import record as audit_record
+from mcp_connector.audit import store as audit_store_module
 from mcp_connector.errors import IssuerRefused, ToolError
 from mcp_connector.exapp import config_values
 from mcp_connector.exapp.middleware import RequireAppApi
@@ -100,7 +104,7 @@ MCP_HEADERS = {
 #: :data:`PUBLIC_URL`, so a check can tell which of the two sources won.
 ADMIN_URL = "https://admin.example.com/exapps/mcp_connector"
 
-#: The one outgoing call this file allows: the start time read of the six admin values, on
+#: The one outgoing call this file allows: the start time read of the seven admin values, on
 #: the route plan 03-08 measured. The constants come from ``crypto`` rather than being spelled
 #: a second time here.
 READ_URL = (
@@ -138,7 +142,7 @@ class AdminConfig:
 def admin_config() -> Iterator[AdminConfig]:
     """Answer the start time read locally, for every check of this file.
 
-    Autouse on purpose: since plan 05-04 ``main`` reads the six admin values once before it
+    Autouse on purpose: since plan 05-04 ``main`` reads the seven admin values once before it
     serves, so every check that starts the process would otherwise open a socket against
     ``nc.test``. An empty dictionary is an installation whose administrator has configured
     nothing, which is the state every older check of this file was written under.
@@ -1910,3 +1914,211 @@ def test_the_page_of_this_deployment_is_wired_to_the_store_of_this_deployment(
     assert listed.status_code == 200
     assert "Claude" in listed.text
     assert ui_connections.CONNECTIONS_PATH in paths(entry_exapp.build_exapp_app(env))
+
+
+# --- the switch of D-14 and the switch row of D-15 --------------------------------
+
+
+def audit_rows(tmp_path: Path) -> list[dict[str, Any]]:
+    """Every row of the audit store of a deployment, read with a connection of our own.
+
+    Past the store API on purpose, the same way ``test_audit_record.py`` reads its rows: what
+    is asserted here is what really landed in the file, not what an object says about it.
+    """
+    path = tmp_path / audit_store_module.AUDIT_FILENAME
+    if not path.exists():
+        return []
+    connection = sqlite3.connect(path)
+    try:
+        connection.row_factory = sqlite3.Row
+        return [dict(row) for row in connection.execute("SELECT * FROM entries ORDER BY seq")]
+    finally:
+        connection.close()
+
+
+def recorder_of(app: Starlette) -> object | None:
+    """The recorder the built application handed to its transport boundary, or ``None``.
+
+    Reaches into the wrapper because that is exactly the wire under test: "is a recorder
+    attached" is not visible from outside, and a check that only grepped the source for
+    ``audit_recorder=`` would pass on an application that never built one.
+    """
+    for route in app.router.routes:
+        if isinstance(route, Route) and route.path == "/mcp":
+            return getattr(route.app, "_audit_recorder", None)
+    raise AssertionError("the built application has no /mcp route")
+
+
+def test_without_the_switch_no_recorder_reaches_the_boundary(tmp_path: Path) -> None:
+    """D-14, and the state every installation ships in: nothing is recorded, nothing exists.
+
+    Two halves and both matter. No recorder means the boundary deposits nothing and the
+    recording path in ``graceful`` returns before it writes. And no file: an installation that
+    never switched the log on has no ``audit.sqlite3``, not even an empty one with a schema
+    in it, because a file that exists says something happened.
+    """
+    env = {**EXAPP_ENV, config.ENV_APP_PERSISTENT_STORAGE: str(tmp_path)}
+
+    app = entry_exapp.build_exapp_app(env)
+
+    assert recorder_of(app) is None
+    assert not (tmp_path / audit_store_module.AUDIT_FILENAME).exists()
+    assert audit_rows(tmp_path) == []
+
+
+def test_with_the_switch_on_the_boundary_gets_a_recorder(tmp_path: Path) -> None:
+    """The other direction of the same line, and the whole of what D-14 asks for."""
+    env = {
+        **EXAPP_ENV,
+        config.ENV_APP_PERSISTENT_STORAGE: str(tmp_path),
+        config.ENV_AUDIT_LOG: "on",
+    }
+
+    recorder = recorder_of(entry_exapp.build_exapp_app(env))
+
+    assert isinstance(recorder, audit_record.Recorder)
+    assert recorder.retention_days == 180
+    assert recorder.size_limit == 100_000_000
+
+
+def test_the_recorder_carries_the_mapping_the_application_was_built_with(
+    tmp_path: Path,
+) -> None:
+    """The one check that holds the account check of D-12 (plan 18-09) wired to reality.
+
+    ``Recorder.env`` is what that check will call Nextcloud with. Built from ``os.environ``
+    instead of from the resolved mapping it would carry different values at exactly the moment
+    it matters: an installation from the app store gets no deploy variable at all, so
+    everything an administrator set lives only in the mapping ``_resolved_env`` produced.
+
+    Asserted against the mapping that was handed in, and explicitly not against ``None`` and
+    not against ``os.environ``: a grep for ``env=env`` in the source would pass on all three.
+    """
+    env = {
+        **EXAPP_ENV,
+        config.ENV_APP_PERSISTENT_STORAGE: str(tmp_path),
+        config.ENV_AUDIT_LOG: "on",
+        config.ENV_PUBLIC_URL: PUBLIC_URL,
+    }
+
+    recorder = recorder_of(entry_exapp.build_exapp_app(env))
+
+    assert isinstance(recorder, audit_record.Recorder)
+    assert recorder.env == env
+    assert recorder.env is not None
+    assert recorder.env != dict(os.environ)
+
+
+def test_the_first_start_with_the_log_on_writes_one_switch_row(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """D-15 and D-16: the change of state leaves a trace, and it names no administrator.
+
+    The start is the moment because it is the only one this app can observe: an admin value
+    takes effect after a disable and enable cycle, which stops and starts this container, and
+    AppAPI's ``SetValueListener`` tells the app nothing when a value is stored.
+    """
+    start(monkeypatch, tmp_path, env={config.ENV_AUDIT_LOG: "on"})
+
+    rows = audit_rows(tmp_path)
+    assert len(rows) == 1
+    assert rows[0]["kind"] == "switch"
+    assert rows[0]["chain"] == audit_store_module.CHAIN_INSTANCE
+    assert rows[0]["outcome"] == "on"
+    assert rows[0]["actor"] == audit_store_module.ACTOR_UNKNOWN
+    assert rows[0]["actor"] == "unknown"
+    assert rows[0]["nc_user"] is None, "a switch belongs to the instance and to no account"
+
+
+def test_a_second_start_in_the_same_state_writes_no_second_switch_row(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A restart is not a switching. Only a state that differs from the recorded one is one.
+
+    Without this the instance chain would grow one row per container restart, and the rows
+    that really mean something, the two directions of D-15, would be lost among them.
+    """
+    start(monkeypatch, tmp_path, env={config.ENV_AUDIT_LOG: "on"})
+    first = audit_rows(tmp_path)
+
+    start(monkeypatch, tmp_path, env={config.ENV_AUDIT_LOG: "on"})
+
+    assert len(first) == 1
+    assert audit_rows(tmp_path) == first
+
+
+def test_switching_the_log_off_again_is_recorded_too(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The other direction of D-15, and the reason the record is worth having at all.
+
+    Without it the log could be switched off, something could happen and it could be switched
+    on again, and the gap would have no name.
+    """
+    start(monkeypatch, tmp_path, env={config.ENV_AUDIT_LOG: "on"})
+
+    start(monkeypatch, tmp_path, env={config.ENV_AUDIT_LOG: "off"})
+
+    rows = audit_rows(tmp_path)
+    assert [row["outcome"] for row in rows] == ["on", "off"]
+    assert [row["kind"] for row in rows] == ["switch", "switch"]
+
+
+def test_a_store_that_cannot_be_written_does_not_cost_the_start(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """D-13 at the start as well: a broken store must never keep this container from serving.
+
+    The line names the type of the failure and nothing else, because the message of a store
+    error carries the path of the file (T-18-10).
+    """
+
+    async def explode(env: Mapping[str, str]) -> None:
+        del env
+        raise OSError("no space left on device: /var/lib/mcp_connector/audit.sqlite3")
+
+    monkeypatch.setattr(entry_exapp, "_audit_startup", explode)
+
+    with caplog.at_level(logging.ERROR, logger="mcp_connector.entry_exapp"):
+        app = start(monkeypatch, tmp_path, env={config.ENV_AUDIT_LOG: "on"})
+
+    assert isinstance(app, Starlette), "the application is built whatever the audit log does"
+    logged = " ".join(record.getMessage() for record in caplog.records)
+    assert "OSError" in logged
+    assert "no space left" not in logged
+    assert "audit.sqlite3" not in logged
+
+
+def test_a_switched_off_store_still_loses_its_expired_rows_on_a_start(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """T-18-05: the one moment left to clean up a log that has no write path any more.
+
+    The expiry of D-11 rides on the write path, every nth row. Switch the log off and that
+    path is gone, so without this call the rows of an installation that stopped recording
+    would sit out their retention window and stay forever. The row below is older than the
+    window, the log is off, and the start takes it all the same and leaves the marker of D-10
+    behind, so the gap is an explained one and not a break.
+    """
+    path = tmp_path / audit_store_module.AUDIT_FILENAME
+    old = audit_store_module.AuditStore(path)
+    long_ago = int(time.time()) - 400 * 24 * 60 * 60
+    asyncio.run(
+        old.append(
+            audit_store_module.Entry(
+                chain=audit_store_module.user_chain("alice"),
+                at=long_ago,
+                nc_user="alice",
+                tool="files_list",
+                outcome=audit_store_module.OUTCOME_OK,
+            )
+        )
+    )
+    assert [row["nc_user"] for row in audit_rows(tmp_path)] == ["alice"]
+
+    start(monkeypatch, tmp_path, env={config.ENV_AUDIT_LOG: "off"})
+
+    rows = audit_rows(tmp_path)
+    assert [row["nc_user"] for row in rows] == [None], "the expired call is gone"
+    assert rows[0]["kind"] == audit_store_module.KIND_TOMBSTONE
+    assert rows[0]["chain"] == audit_store_module.CHAIN_INSTANCE
