@@ -64,11 +64,16 @@ __all__ = [
     "SIZE_LIMIT_BYTES",
     "SWEEP_BATCH_ROWS",
     "SWEEP_EVERY",
+    "SWEEP_MAX_ROUNDS",
     "SWEEP_USER_CHECK_EVERY",
+    "SWEEP_VACUUM_PAGES",
     "USER_SILENCE_DAYS",
     "AuditStore",
     "ChainFinding",
     "Entry",
+    "SweepReport",
+    "should_check_accounts",
+    "should_sweep",
     "used_bytes",
     "user_chain",
 ]
@@ -108,6 +113,20 @@ USER_SILENCE_DAYS = 30
 #: checkpointed while a transaction is open, so a single sweep of ten thousand rows grew it
 #: to 5.5 MB in the measurement of 18-RESEARCH.md; a bounded batch keeps that flat.
 SWEEP_BATCH_ROWS = 5000
+
+#: How many batches the upper bound may take in one run. Twenty times five thousand rows is
+#: far more than one run can ever have to give up, and the number exists for the case it does
+#: not cover: a store that is over the bound with no user row left in it is a different fault
+#: (a swollen instance chain, a page size nobody expected) and must not end in an endless loop.
+SWEEP_MAX_ROUNDS = 20
+
+#: How many free pages one incremental vacuum hands back to the filesystem. Ten thousand pages
+#: is about 40 MB at the usual page size, so one run gives everything back that one sweep can
+#: possibly have freed, and the pragma stops by itself when the free list is empty.
+SWEEP_VACUUM_PAGES = 10000
+
+#: Seconds in a day, so the retention window is written as days at every call site.
+_DAY_SECONDS = 86400
 
 #: The registered client name arrives from the outside and is written by whoever registers.
 #: Eighty characters is what the admin output can print on one line; the rest is cut, and
@@ -267,6 +286,25 @@ _EXPLAINED_GAPS = (
     "WHERE chain = ? AND kind = ? AND gap_chain IS NOT NULL AND gap_hash IS NOT NULL"
 )
 
+# The four statements of the sweep. ``chain <> ?`` is the instance chain being spared, and it
+# is written into the statement instead of into a comment, because a sweep that trimmed the
+# instance chain would remove the very rows that explain the gaps of every other one.
+#
+# The two reads pick a bounded batch, the two removals take exactly what the read returned:
+# the batch is ordered by ``seq``, so every row of the same predicate up to the last number of
+# the batch is in it, and ``seq <= ?`` therefore removes that batch and nothing else.
+#
+# The two removals are named ``_DROP_*`` and not ``_DELETE_*`` on purpose. The gate of
+# tests/contract/test_no_destructive_calls.py exempts two exact SQL forms in this file, not
+# the file itself, so a call site that carried the word would be a finding, and widening the
+# exemption to cover it would also hide an HTTP DELETE written in this module one day.
+_EXPIRED_ROWS = (
+    "SELECT seq, chain, hash FROM entries WHERE chain <> ? AND at <= ? ORDER BY seq LIMIT ?"
+)
+_OLDEST_ROWS = "SELECT seq, chain, hash FROM entries WHERE chain <> ? ORDER BY seq LIMIT ?"
+_DROP_EXPIRED = "DELETE FROM entries WHERE chain <> ? AND at <= ? AND seq <= ?"
+_DROP_OLDEST = "DELETE FROM entries WHERE chain <> ? AND seq <= ?"
+
 
 def _now() -> int:
     """Unix seconds. One function, so a row never carries a moment of a request."""
@@ -320,6 +358,41 @@ class ChainFinding:
     kind: str
     seq: int
     next_seq: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SweepReport:
+    """What one sweep did, so a test and later the admin command can read the effect off it.
+
+    ``expired`` is the number of rows the retention window took, ``trimmed`` the number the
+    upper bound took, ``tombstones`` how many chains got a marker for their gap, and
+    ``used_bytes_after`` the measurement of :func:`used_bytes` when the run was over.
+    """
+
+    expired: int
+    trimmed: int
+    tombstones: int
+    used_bytes_after: int
+
+
+def should_sweep(seq: int) -> bool:
+    """True for every :data:`SWEEP_EVERY`-th row: the whole schedule of D-11.
+
+    The sequence number of the row that was just written **is** the interval. A counter on
+    module level is forbidden (D-20), a cron would not run on an instance that never sees an
+    occ command, and a background task would have to survive a restart it cannot promise to
+    survive. This function is pure, so the schedule is a case in a test and not a stopwatch.
+    """
+    return seq % SWEEP_EVERY == 0
+
+
+def should_check_accounts(seq: int) -> bool:
+    """True for every :data:`SWEEP_USER_CHECK_EVERY`-th sweep, on the same number.
+
+    The question whether an account still exists (D-12) is the one step of the sweep that
+    costs an HTTP call to Nextcloud, so it runs a magnitude less often than the rest.
+    """
+    return seq % (SWEEP_EVERY * SWEEP_USER_CHECK_EVERY) == 0
 
 
 def _canonical(fields: tuple[Any, ...]) -> bytes:
@@ -428,6 +501,135 @@ def _next_seq(conn: sqlite3.Connection) -> int:
     return (row[0] if row is not None else 0) + 1
 
 
+def _append_row(conn: sqlite3.Connection, entry: Entry) -> int:
+    """Read the predecessor and write the row, inside a transaction the caller opened.
+
+    One function for both writers of this module: the ordinary call of :meth:`AuditStore.
+    append` and the marker the sweep hangs into the instance chain. Two places that read a
+    previous hash and compute a digest are two places that can disagree about the chain.
+    """
+    row = conn.execute(_LAST_OF_CHAIN, (entry.chain,)).fetchone()
+    previous = row[0] if row is not None else GENESIS
+    seq = _next_seq(conn)
+    values = _row_values(seq, entry)
+    digest = hashlib.sha256(_canonical(values) + previous).digest()
+    conn.execute(_INSERT, (*values, previous, digest))
+    return seq
+
+
+def _note_removed(
+    ends: dict[str, str], counts: dict[str, int], batch: list[tuple[Any, ...]]
+) -> int:
+    """Remember, per chain, the end of the block that gave way and how long it was.
+
+    The batch is ordered by ``seq``, so the last row of a chain in it is the youngest one that
+    goes, and its hash is what the row after the gap points at. That hash is the whole reason
+    a marker can explain a gap instead of leaving a break behind.
+    """
+    for _seq, chain, row_hash in batch:
+        ends[chain] = row_hash.hex()
+        counts[chain] = counts.get(chain, 0) + 1
+    return len(batch)
+
+
+def _sweep_expired(
+    conn: sqlite3.Connection, cutoff: int, ends: dict[str, str], counts: dict[str, int]
+) -> int:
+    """Step one, the retention window: every user row not younger than ``cutoff`` goes.
+
+    In batches of :data:`SWEEP_BATCH_ROWS` and not in one go: no checkpoint can run while a
+    transaction is open, and ten thousand rows in one transaction grew the write ahead log to
+    5.5 MB in the measurement of 18-RESEARCH.md §8. Every round removes at least one row, so
+    the loop ends by itself.
+    """
+    expired = 0
+    while True:
+        conn.execute("BEGIN IMMEDIATE")
+        batch = conn.execute(_EXPIRED_ROWS, (CHAIN_INSTANCE, cutoff, SWEEP_BATCH_ROWS)).fetchall()
+        if not batch:
+            conn.execute("COMMIT")
+            return expired
+        expired += _note_removed(ends, counts, batch)
+        conn.execute(_DROP_EXPIRED, (CHAIN_INSTANCE, cutoff, batch[-1][0]))
+        conn.execute("COMMIT")
+
+
+def _sweep_over_limit(
+    conn: sqlite3.Connection, size_limit: int, ends: dict[str, str], counts: dict[str, int]
+) -> int:
+    """Step two, the upper bound: the oldest user rows go until the store is under it again.
+
+    The loop is driven by :func:`used_bytes` and by nothing else. ``os.stat`` and
+    ``page_count * page_size`` do not fall after a delete, because the pages move to the free
+    list (measured, 18-RESEARCH.md §8), so a loop against either of them keeps deleting until
+    the table is empty. This one falls with the first commit, which is what makes the
+    condition an end and not a wish.
+
+    Two guards beside it: at most :data:`SWEEP_MAX_ROUNDS` batches per run, and a stop as soon
+    as no user row is left. A store that is over the bound while empty is a different fault
+    and may not turn into an endless loop here.
+    """
+    trimmed = 0
+    for _round in range(SWEEP_MAX_ROUNDS):
+        if used_bytes(conn) <= size_limit:
+            break
+        conn.execute("BEGIN IMMEDIATE")
+        batch = conn.execute(_OLDEST_ROWS, (CHAIN_INSTANCE, SWEEP_BATCH_ROWS)).fetchall()
+        if not batch:
+            conn.execute("COMMIT")
+            break
+        trimmed += _note_removed(ends, counts, batch)
+        conn.execute(_DROP_OLDEST, (CHAIN_INSTANCE, batch[-1][0]))
+        conn.execute("COMMIT")
+    return trimmed
+
+
+def _write_tombstones(
+    conn: sqlite3.Connection, moment: int, ends: dict[str, str], counts: dict[str, int]
+) -> int:
+    """Step three: one marker per affected chain, and it stands in the instance chain.
+
+    Not in the chain it explains. A marker there would have to attach to the head of a chain
+    whose head is exactly what just went, so the instance chain is the only place it can hang
+    on to (D-02 plus D-03, 18-RESEARCH.md lines 581 to 585). The instance chain is never
+    trimmed itself: it is the register that explains every gap, and it grows with markers and
+    with switches only.
+
+    A marker carries a count and the end of the block that gave way, never a parameter name
+    and never a value.
+    """
+    if not ends:
+        return 0
+    conn.execute("BEGIN IMMEDIATE")
+    for chain in sorted(ends):
+        _append_row(
+            conn,
+            Entry(
+                chain=CHAIN_INSTANCE,
+                kind=KIND_TOMBSTONE,
+                at=moment,
+                actor=ACTOR_UNKNOWN,
+                removed=counts[chain],
+                gap_chain=chain,
+                gap_hash=ends[chain],
+            ),
+        )
+    conn.execute("COMMIT")
+    return len(ends)
+
+
+def _give_the_space_back(conn: sqlite3.Connection) -> None:
+    """Step four: hand the free pages to the filesystem and shorten the write ahead log.
+
+    ``.fetchall()`` is not decoration. The pragma answers in rows, and without walking them
+    the ``sqlite3`` module runs it to the first step only: measured, one page came back
+    instead of 478. The file itself shrinks with the checkpoint after it, because
+    ``page_count`` falls immediately while the size on disk waits for the next one.
+    """
+    conn.execute(f"PRAGMA incremental_vacuum({SWEEP_VACUUM_PAGES})").fetchall()
+    conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchall()
+
+
 def _explained_gaps(conn: sqlite3.Connection) -> dict[str, set[str]]:
     """Every gap the instance chain explains, from chain identifier to the ends it names.
 
@@ -513,14 +715,46 @@ class AuditStore:
 
         def work(conn: sqlite3.Connection) -> int:
             conn.execute("BEGIN IMMEDIATE")
-            row = conn.execute(_LAST_OF_CHAIN, (entry.chain,)).fetchone()
-            previous = row[0] if row is not None else GENESIS
-            seq = _next_seq(conn)
-            values = _row_values(seq, entry)
-            digest = hashlib.sha256(_canonical(values) + previous).digest()
-            conn.execute(_INSERT, (*values, previous, digest))
+            seq = _append_row(conn, entry)
             conn.execute("COMMIT")
             return seq
+
+        return await self._transaction(work)
+
+    async def sweep(
+        self,
+        *,
+        moment: int,
+        retention_days: int = RETENTION_DAYS,
+        size_limit: int = SIZE_LIMIT_BYTES,
+    ) -> SweepReport:
+        """The retention window, the upper bound, the markers, and the space given back.
+
+        Four steps in this order (D-10, D-11): rows older than ``retention_days`` go, then the
+        oldest rows go until :func:`used_bytes` is under ``size_limit``, then every chain that
+        lost rows gets one marker in the instance chain, and finally the free pages go back to
+        the filesystem. Each step deletes in bounded batches with its own transaction, so the
+        write ahead log can be checkpointed in between.
+
+        ``moment`` is handed in rather than read from the clock, because it is both the end of
+        the retention window and the moment written into every marker of this run, and a run
+        whose two halves disagree about the time is a run nobody can reproduce in a test.
+        """
+
+        def work(conn: sqlite3.Connection) -> SweepReport:
+            ends: dict[str, str] = {}
+            counts: dict[str, int] = {}
+            expired = _sweep_expired(conn, moment - retention_days * _DAY_SECONDS, ends, counts)
+            trimmed = _sweep_over_limit(conn, size_limit, ends, counts)
+            tombstones = _write_tombstones(conn, moment, ends, counts)
+            if expired or trimmed:
+                _give_the_space_back(conn)
+            return SweepReport(
+                expired=expired,
+                trimmed=trimmed,
+                tombstones=tombstones,
+                used_bytes_after=used_bytes(conn),
+            )
 
         return await self._transaction(work)
 

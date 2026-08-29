@@ -226,13 +226,21 @@ TABLES_READ_FORMS = (
 #: either of those segments.
 TABLES_READ_NEEDLES = ("/rows/", "/columns/")
 
-# The one file where the word DELETE is not an HTTP verb. TOOL-09 is a promise about what
-# this server does to data in Nextcloud, and the OAuth store is our own SQLite file: it
-# has to drop an expired authorization code and a registration nobody ever used, or it
-# grows without a bound (T-03-17). The exemption is deliberately narrow, two exact SQL
-# forms in one file, so an HTTP DELETE written in the same module is still reported, and
-# ``.delete(`` above is never exempt anywhere.
-FILES_WITH_OWN_SQL = frozenset({"oauth/store.py"})
+# The two files where the word DELETE is not an HTTP verb. TOOL-09 is a promise about what
+# this server does to data in Nextcloud, and both of these are our own SQLite files.
+#
+# oauth/store.py has to drop an expired authorization code and a registration nobody ever
+# used, or it grows without a bound (T-03-17).
+#
+# audit/store.py has to drop rows for the retention window and for the upper bound of
+# AUDIT-03. Without them the audit log grows without a bound and fills the volume the OAuth
+# store lives in, which would make the store that answers every request unable to write
+# (T-18-05). Nothing of any user is removed: what goes is a row this app wrote about a call
+# of this app, and a marker in the instance chain says how many rows went and where.
+#
+# The exemption is deliberately narrow, two exact SQL forms per file, so an HTTP DELETE
+# written in either module is still reported, and ``.delete(`` above is never exempt anywhere.
+FILES_WITH_OWN_SQL = frozenset({"oauth/store.py", "audit/store.py"})
 SQL_DELETE_FORMS = ("DELETE FROM ", "ON DELETE CASCADE")
 
 # The second file where DELETE is not a tool deleting user data: the login flow revokes the
