@@ -105,3 +105,42 @@ deshalb als `ungemessen` mit Grund und nicht als `verworfen`.
 **Vorgeschlagene Behandlung:** ein Absatz in Plan 17-09 unter 2.5 (dort schon vorgemerkt) und, falls
 der ISV-Call einen Bootstrap-Weg nennt, eine Frage in 17-08 danach, ob openDesk eine
 SSRF-Erlaubnisliste setzt. Eine eigene Messung nur, wenn der Owner den Eingriff ausdrücklich freigibt.
+
+## DI-17-04: Die für OD-04 wichtigste Route ist genau die, die hier nicht messbar war
+
+**Gefunden:** 2026-08-29, Plan 17-06, Task 3, beim Schreiben von Abschnitt 3.3.
+
+**Der Widerspruch, den dieser Eintrag festhält.** Abschnitt 3.3 kommt zu dem Ergebnis, dass die
+OCS-Fläche drei Lücken hat und dass genau ein Fund sie teilweise ausgleicht:
+`GET /api/v1/work-packages/{id}/file-links` ist die einzige Route der ganzen Fläche, die eine Id eines
+Arbeitspakets annimmt, und sie ist zugleich die Kette Arbeitspaket zu Datei, die
+`research/FEATURES.md` als Unterscheidungsmerkmal dieser ExApp gegenüber einem allgemeinen
+OpenProject-Client führt. **Gemessen ist an ihr nichts.** Belegt sind ihre Existenz und ihre Signatur
+aus `appinfo/routes.php` der installierten Fassung 3.1.1, mehr nicht.
+
+**Der Grund ist gemessen und keine Vermutung:** die Instanz hat keine registrierte Ablage.
+`GET /api/v3/storages` antwortet 200 mit `total 0` und `count 0` (5.5.1). Ohne Ablage gibt es keine
+Dateiverknüpfung, die die Route zurückgeben könnte, und ein Aufruf hätte eine leere Liste geliefert,
+die über das Verhalten der Route nichts aussagt. Dieselbe fehlende Ablage ist der Grund, warum die
+Suche in S3 ohne `isSmartPicker=true` für **beide** Konten null Treffer liefert.
+
+**Warum das nicht nebenbei behoben wurde:** eine registrierte Ablage anzulegen ist genau Weg A aus
+DI-17-03, und der scheitert in dieser Topologie gemessen am Namenscheck von OpenProject. Die zwei
+Funde hängen also zusammen: **solange Weg A ungemessen bleibt, bleibt auch `file-links` ungemessen.**
+Das ist der Preis der Entscheidung des Owners vom 28.08. für Variante B, und er ist hier beziffert
+statt verschwiegen.
+
+**Was das für OD-04 bedeutet, ohne hier eine Entscheidung zu treffen:** der Vergleich der beiden Wege
+in 17-09 stützt sich für Weg 0 auf eine Fläche, deren für uns wertvollste Route unerprobt ist. Wer
+Weg 0 wählt, wählt ihn mit dieser offenen Stelle, und das gehört in den Satz, mit dem 2.4 die Wahl
+begründet, statt erst in der Umsetzung aufzutauchen.
+
+**Nicht gemessen und ausdrücklich keine Vermutung:** ob die Route mit registrierter Ablage Daten
+liefert, welche Felder sie trägt, ob sie die Berechtigungen des Nutzers durchsetzt wie die Suche in
+S3, und ob openDesk eine Ablage vorkonfiguriert mitbringt.
+
+**Vorgeschlagene Behandlung:** ein Satz in Plan 17-09 unter 2.4 bei der Begründung der Wahl und einer
+unter "Was diese Messung nicht beweist"; in 17-08 eine Frage, ob der openDesk-Bootstrap die
+Nextcloud-Ablage in OpenProject fertig eingerichtet ausliefert, weil davon abhängt, ob diese Route
+dort überhaupt je leer ist. Eine eigene Messung erst mit einer registrierten Ablage, also frühestens
+zusammen mit DI-17-03.
