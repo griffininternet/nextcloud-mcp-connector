@@ -251,6 +251,13 @@ def _printable(chain: str) -> str:
     is. It is still bracketed the way ``audit/store.py`` brackets the client name, and for
     the same reason: the value comes from outside, and control characters in it could fake a
     line of this answer (T-18-08).
+
+    What this buys and what it does not: a name can no longer end a line and start another,
+    so no name can fake a line of this answer, and a test asserts the line count for a name
+    that tries. A name can still put any text **inside** a finding line, this verdict
+    included, because it is printed on the same line as the sentence. That is the second
+    reason ``--json`` exists: a script watches the ``broken`` key of the machine readable
+    shape and never a substring of the text.
     """
     printable = "".join(
         " " if character < " " or character == "\x7f" else character for character in chain
