@@ -19,11 +19,24 @@ from typing import Any
 import pytest
 
 from mcp_connector.audit import store
+from mcp_connector.oauth import store as oauth
 
 pytestmark = pytest.mark.anyio
 
 ALICE = store.user_chain("alice")
 BOB = store.user_chain("bob")
+
+#: The neighbour in the same volume, for the second half of success criterion 4. A key that
+#: is not secret, because it never leaves this file, and the handful of values one connection
+#: and one rotation need.
+OAUTH_KEY = bytes(range(32))
+CLIENT_ID = "client-4711"
+AUTH_ID = "auth-0001"
+FAMILY = "family-0001"
+APP_PASSWORD = "app-password-of-alice"
+RESOURCE = "https://cloud.example.com/exapps/mcp_connector/mcp"
+FIRST_TOKEN = "refresh-token-before-the-rotation"
+SECOND_TOKEN = "refresh-token-after-the-rotation"
 
 #: A file name of a user, the kind of value a parameter of ``files_read`` carries. It is
 #: never handed to the store: no method here takes a parameter value, and the check below
@@ -476,3 +489,49 @@ async def test_the_sweep_leaves_the_instance_chain_standing(tmp_path: Path) -> N
     assert store.KIND_SWITCH in kinds, "the switch is older than the window and stays"
     assert store.KIND_CALL not in kinds
     assert kinds.count(store.KIND_TOMBSTONE) == 1
+
+
+# --- the neighbour in the same volume: AUDIT-03, T-18-05 ------------------------------
+# The second half of success criterion 4 of the roadmap. The first half is the bound and
+# the window above; this is the sentence "at a full volume token rotation and new
+# connections keep working". Both files live in the one volume of D-01, so the question is
+# about space and not about locks, and the answer is the bound plus the incremental vacuum
+# that hands the pages back to the filesystem instead of to the free list.
+#
+# No case here depends on a measured time. A time threshold in a test is a random number on
+# somebody else's hardware; the cost of one entry is a line in the summary of plan 18-10
+# (measured 2026-08-29, Windows/NTFS) and stays a piece of evidence, not a promise.
+
+
+async def test_the_oauth_store_still_rotates_and_connects_after_the_bound_bit(
+    tmp_path: Path,
+) -> None:
+    subject = open_store(tmp_path)
+    await subject.size()
+    fill(tmp_path, 15000)
+    limit = await subject.size() // 2
+    moment = 1_700_000_000  # older than every row, so the window takes nothing here
+
+    report = await subject.sweep(moment=moment, size_limit=limit)
+
+    assert report.trimmed > 0, "the bound has to bite, or this case measures nothing"
+    assert await subject.size() <= limit
+
+    neighbour = oauth.OAuthStore(tmp_path / oauth.STORE_FILENAME, OAUTH_KEY)
+    await neighbour.save_client(CLIENT_ID, metadata_json='{"client_id": "client-4711"}')
+    await neighbour.create_authorization(
+        AUTH_ID,
+        client_id=CLIENT_ID,
+        nc_user="alice",
+        app_password=APP_PASSWORD,
+        scopes="nextcloud",
+        resource=RESOURCE,
+    )
+    await neighbour.create_refresh_token(FIRST_TOKEN, auth_id=AUTH_ID, family_id=FAMILY)
+
+    rotated = await neighbour.redeem_refresh_token(FIRST_TOKEN, successor=SECOND_TOKEN)
+
+    assert rotated.outcome == oauth.REDEEM_OK, "the rotation is the write that may not fail"
+    assert await neighbour.load_authorization(AUTH_ID) is not None, "and the new connection"
+    assert await neighbour.load_refresh_token(SECOND_TOKEN) is not None
+    assert await subject.size() <= limit, "the audit store is still under its own bound"
