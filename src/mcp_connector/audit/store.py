@@ -1,0 +1,524 @@
+"""The audit log of this app, in a SQLite file of its own, next to the OAuth store.
+
+**Why a second file and not a second table.** The log is swept, capped and read by an admin
+command, which is SQL either way, but it must never take the write lock of the store that
+answers OAuth requests. Two files, two connections, one volume (D-01): the volume is shared
+on purpose, and what protects the neighbour there is the upper bound of this file, not its
+name.
+
+**Why the standard library and nothing else.** Every call runs in :func:`asyncio.to_thread`
+with its own connection, which is the whole of what an async wrapper would add
+(``oauth/store.py`` says the same about the same choice). There is no encryption here and no
+data key either: a row of this log carries no secret, and a log that were encrypted with the
+key of :mod:`mcp_connector.oauth.crypto` would become unreadable the moment an uninstall
+removes that key.
+
+**What a row carries and what it must not.** A user, a tool name, a moment, the calling
+client, an outcome class, a duration, and of the parameters only the names that were set,
+sorted (D-06). Never a parameter value, never a piece of a result, never an address of the
+caller. Nothing in this module takes a value, so nothing here can write one.
+
+**The chain, and the limit that belongs to it.** Every row carries the hash of its
+predecessor in its own chain and its own SHA-256 over the canonical field list plus that
+predecessor hash. This makes the unnoticed change of a single row visible: whoever edits a
+row breaks its own hash, whoever removes one breaks the link of the next.
+
+It does **not** protect against somebody who can write the file and recompute the chain.
+Every part of the proof lives in the same file: there is no external anchor, no signature
+with a key outside this volume, and no second place to check against. A forged marker for a
+gap is indistinguishable from a real one. That is the honest boundary of this construction,
+and it belongs in every text that describes it.
+"""
+
+import asyncio
+import contextlib
+import hashlib
+import json
+import sqlite3
+import time
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+#: What every method below hands to the worker thread: one function, one connection, one
+#: result. Naming it keeps the wrappers at the bottom readable and typed.
+type Work[T] = Callable[[sqlite3.Connection], T]
+
+__all__ = [
+    "ACTOR_UNKNOWN",
+    "AUDIT_FILENAME",
+    "CANONICAL_FIELDS",
+    "CHAIN_INSTANCE",
+    "CLIENT_NAME_LIMIT",
+    "GENESIS",
+    "KIND_CALL",
+    "KIND_SWITCH",
+    "KIND_TOMBSTONE",
+    "OUTCOME_FAILED",
+    "OUTCOME_OK",
+    "OUTCOME_REJECTED",
+    "RETENTION_DAYS",
+    "SIZE_LIMIT_BYTES",
+    "SWEEP_BATCH_ROWS",
+    "SWEEP_EVERY",
+    "SWEEP_USER_CHECK_EVERY",
+    "USER_SILENCE_DAYS",
+    "AuditStore",
+    "Entry",
+    "used_bytes",
+    "user_chain",
+]
+
+#: The second file in the persistent volume of this app. The first one is called
+#: ``oauth.sqlite3`` (``oauth/store.py``), so this one is named after what it holds too.
+AUDIT_FILENAME = "audit.sqlite3"
+
+# --- limits ---------------------------------------------------------------------------
+# Every number this module lives by is one of the names below. A literal at a call site is
+# a value nobody finds again when an instance turns out to need a different one.
+
+#: Six months, the lower bound the phase was asked for (D-09). The retention window is the
+#: limit that is meant to bite in practice; the size below is the one that catches an
+#: instance nobody looked at for a year.
+RETENTION_DAYS = 180
+
+#: 100 MB of used pages (D-09). Measured at roughly 163 byte per row with raw hashes, this
+#: is in the order of half a million entries, and it needs about 6 MB of air in the volume
+#: for the write ahead log beside it.
+SIZE_LIMIT_BYTES = 100_000_000
+
+#: Every five hundredth entry pays for the sweep (D-11), which is roughly every 110 KB of
+#: rows. No cron, no background task, no counter that would have to live between two
+#: requests; the sequence number of the row that was just written is the whole schedule.
+SWEEP_EVERY = 500
+
+#: Only every twentieth sweep asks Nextcloud whether an account still exists (D-12). It is
+#: the one step of the sweep that costs an HTTP call, so it runs a magnitude less often.
+SWEEP_USER_CHECK_EVERY = 20
+
+#: How long a chain has to be silent before the sweep asks whether its account is still
+#: there (D-12). Thirty days is longer than a holiday and shorter than a quarter.
+USER_SILENCE_DAYS = 30
+
+#: How many rows one transaction of the sweep may take. The write ahead log cannot be
+#: checkpointed while a transaction is open, so a single sweep of ten thousand rows grew it
+#: to 5.5 MB in the measurement of 18-RESEARCH.md; a bounded batch keeps that flat.
+SWEEP_BATCH_ROWS = 5000
+
+#: The registered client name arrives from the outside and is written by whoever registers.
+#: Eighty characters is what the admin output can print on one line; the rest is cut, and
+#: control characters never enter a row at all.
+CLIENT_NAME_LIMIT = 80
+
+#: How long the loser of a lock waits for the winner. Long enough for a transaction that
+#: writes one row, short enough that a wedged process answers instead of hanging.
+_BUSY_TIMEOUT_MS = 5000
+_BUSY_TIMEOUT_SECONDS = _BUSY_TIMEOUT_MS / 1000
+
+#: What the first row of a chain points at. Thirty-two zero bytes, the length of a SHA-256
+#: digest, so the first link has the same shape as every other one.
+GENESIS = b"\x00" * 32
+
+#: D-16: the administrator behind a switch cannot be determined today, because AppAPI drops
+#: the user of an admin form before the app sees it. The column exists from the first
+#: version so that a later way to learn the name needs no schema change, and until then it
+#: says so in one word. The code writes its strings in English.
+ACTOR_UNKNOWN = "unknown"
+
+# --- chains ------------------------------------------------------------------------------
+# One table, two kinds of chain, told apart by the identifier in the ``chain`` column. A
+# chain per user (D-02) so that removing one account removes one whole chain instead of
+# breaking everybody else's, and one chain for what happens to the instance (D-03).
+
+#: The chain of instance events: the switch of D-15, and the markers for user chains that
+#: are gone (a marker for a removed chain has nobody left to attach to in that chain).
+CHAIN_INSTANCE = "i:instance"
+
+
+def user_chain(nc_user: str) -> str:
+    """The chain identifier of one account. Prefixed, so it can never collide with
+    :data:`CHAIN_INSTANCE` however an account is named."""
+    return f"u:{nc_user}"
+
+
+# --- kinds of a row ----------------------------------------------------------------------
+
+#: One tool call, the ordinary row (D-05: one row after the call, not a pair around it).
+KIND_CALL = "call"
+
+#: A row that explains a gap: rows that gave way to the upper bound, or a whole chain that
+#: went with its account (D-10, D-12). It carries the count and the end of what it replaces.
+KIND_TOMBSTONE = "tombstone"
+
+#: The log being switched on or off, which is itself logged (D-15).
+KIND_SWITCH = "switch"
+
+# --- outcome classes (D-07) ---------------------------------------------------------------
+# A class, never the sentence of an error: an error message of this server is written for
+# the model and therefore carries paths and names, which would be result content.
+
+OUTCOME_OK = "ok"
+OUTCOME_REJECTED = "rejected"
+OUTCOME_FAILED = "failed"
+
+#: The schema of 18-RESEARCH.md §4, plus the three columns that are here from the first
+#: version rather than through a later migration: ``actor`` (D-16) and the two a marker for
+#: a gap needs (``gap_chain``, ``gap_hash``). ``CREATE TABLE IF NOT EXISTS`` is the whole
+#: migration for a second process opening the same file.
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS entries (
+  -- AUTOINCREMENT and not a plain rowid: SQLite would otherwise hand out max(rowid)+1, and
+  -- a sweep that removed the newest rows would make one number appear twice. A number that
+  -- is reused is a chain that cannot be checked, because the number is hashed with the row.
+  seq         INTEGER PRIMARY KEY AUTOINCREMENT,
+  -- 'u:<nc_user>' or 'i:instance' (D-02, D-03). Two kinds of chain in one table, told apart
+  -- here and nowhere else.
+  chain       TEXT NOT NULL,
+  -- 'call' | 'tombstone' | 'switch'
+  kind        TEXT NOT NULL,
+  -- Unix seconds. The moment the row was written, never a moment from a request.
+  at          INTEGER NOT NULL,
+  -- D-16: who switched the log. 'unknown' until there is a way to learn it.
+  actor       TEXT,
+  -- NULL in the instance chain, which has no account behind it.
+  nc_user     TEXT,
+  tool        TEXT,
+  client_id   TEXT,
+  auth_id     TEXT,
+  -- The name from the dynamic registration, cleaned and cut: it comes from outside.
+  client_name TEXT,
+  outcome     TEXT,
+  -- D-07: a fixed identifier of a refusal, never a message of an error.
+  reason      TEXT,
+  duration_ms INTEGER,
+  -- A sorted JSON list of parameter names, never a value (D-06, AUDIT-01).
+  params      TEXT NOT NULL,
+  -- How many rows a marker replaces.
+  removed     INTEGER,
+  -- Which chain the gap belongs to, for a marker that stands in the instance chain because
+  -- the chain it explains is gone (D-12).
+  gap_chain   TEXT,
+  -- The last hash of the block that gave way, as hex so the canonical form stays JSON.
+  gap_hash    TEXT,
+  -- 32 raw bytes each. Hex would cost 64 byte more per row and buy nothing: unlike the
+  -- token digests of the OAuth store, these two are never looked up by value.
+  prev_hash   BLOB NOT NULL,
+  hash        BLOB NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS entries_chain_seq ON entries(chain, seq);
+CREATE INDEX IF NOT EXISTS entries_at ON entries(at);
+"""
+
+#: The field order of the canonical form, decided once and unchangeable afterwards: every
+#: column except the two hashes, ``seq`` first. ``seq`` is part of it because a row could
+#: otherwise be renumbered inside its own chain without breaking a hash.
+CANONICAL_FIELDS: tuple[str, ...] = (
+    "seq",
+    "chain",
+    "kind",
+    "at",
+    "actor",
+    "nc_user",
+    "tool",
+    "client_id",
+    "auth_id",
+    "client_name",
+    "outcome",
+    "reason",
+    "duration_ms",
+    "params",
+    "removed",
+    "gap_chain",
+    "gap_hash",
+)
+
+# The four statements of this module, assembled once from the field list above rather than
+# written out a second time: two hand written column lists are how an insert and a digest
+# end up meaning different things. Nothing of a caller enters any of them, every part is a
+# name from :data:`CANONICAL_FIELDS`, and every value travels as a placeholder.
+_COLUMNS = ", ".join(CANONICAL_FIELDS)
+_PLACEHOLDERS = ", ".join("?" * (len(CANONICAL_FIELDS) + 2))
+_INSERT = f"INSERT INTO entries ({_COLUMNS}, prev_hash, hash) VALUES ({_PLACEHOLDERS})"  # noqa: S608 - column names of this module, values are placeholders
+_LAST_OF_CHAIN = "SELECT hash FROM entries WHERE chain = ? ORDER BY seq DESC LIMIT 1"
+_LAST_ROW_OF_CHAIN = f"SELECT {_COLUMNS} FROM entries WHERE chain = ? ORDER BY seq DESC LIMIT 1"  # noqa: S608 - same column names, same placeholders
+_LAST_ROW_OF_KIND = (
+    f"SELECT {_COLUMNS} FROM entries WHERE chain = ? AND kind = ? ORDER BY seq DESC LIMIT 1"  # noqa: S608 - same column names, same placeholders
+)
+
+
+def _now() -> int:
+    """Unix seconds. One function, so a row never carries a moment of a request."""
+    return int(time.time())
+
+
+@dataclass(frozen=True, slots=True)
+class Entry:
+    """One row on its way in, without the three fields the store itself decides.
+
+    ``seq``, ``prev_hash`` and ``hash`` are missing on purpose: they are the parts of the
+    chain, and a caller that could set them could fork it. Everything else is a plain value
+    of the row, and ``params`` is a list of names, never of values (D-06).
+    """
+
+    chain: str
+    kind: str = KIND_CALL
+    at: int = field(default_factory=_now)
+    actor: str | None = None
+    nc_user: str | None = None
+    tool: str | None = None
+    client_id: str | None = None
+    auth_id: str | None = None
+    client_name: str | None = None
+    outcome: str | None = None
+    reason: str | None = None
+    duration_ms: int | None = None
+    params: Sequence[str] = ()
+    removed: int | None = None
+    gap_chain: str | None = None
+    gap_hash: str | None = None
+
+
+def _canonical(fields: tuple[Any, ...]) -> bytes:
+    """The one byte form a row is hashed in, in the order of :data:`CANONICAL_FIELDS`.
+
+    JSON and not a separator of our own: a separator inside a value would otherwise be able
+    to fake a field boundary, and JSON escapes it instead. ``ensure_ascii=False`` keeps a
+    name with an umlaut one character rather than six, which changes nothing about the
+    digest as long as both sides agree, and they do, because this is the only writer.
+    """
+    return json.dumps(list(fields), separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+
+def _clean_client_name(value: str | None) -> str | None:
+    """The registered name of a client, made safe to print and bounded in length.
+
+    The name arrives from a dynamic registration, so it is written by whoever registers: two
+    hundred characters with line breaks in them would make the output of the admin command
+    unreadable and could fake a row of its own. Control characters go, runs of whitespace
+    become one space, and the rest is cut at :data:`CLIENT_NAME_LIMIT`.
+    """
+    if value is None:
+        return None
+    printable = "".join(
+        " " if character < " " or character == "\x7f" else character for character in value
+    )
+    collapsed = " ".join(printable.split())
+    return collapsed[:CLIENT_NAME_LIMIT] or None
+
+
+def _row_values(seq: int, entry: Entry) -> tuple[Any, ...]:
+    """The row in the order of :data:`CANONICAL_FIELDS`, which is the order it is hashed in.
+
+    One function for the insert and for the digest, because two hand written field lists are
+    how a chain ends up unverifiable against the rows it is made of.
+    """
+    return (
+        seq,
+        entry.chain,
+        entry.kind,
+        entry.at,
+        entry.actor,
+        entry.nc_user,
+        entry.tool,
+        entry.client_id,
+        entry.auth_id,
+        _clean_client_name(entry.client_name),
+        entry.outcome,
+        entry.reason,
+        entry.duration_ms,
+        json.dumps(sorted(entry.params), separators=(",", ":"), ensure_ascii=False),
+        entry.removed,
+        entry.gap_chain,
+        entry.gap_hash,
+    )
+
+
+def _entry_of_row(row: tuple[Any, ...]) -> Entry:
+    """One shape for every reader of a row, in the column order of the canonical form."""
+    return Entry(
+        chain=row[1],
+        kind=row[2],
+        at=row[3],
+        actor=row[4],
+        nc_user=row[5],
+        tool=row[6],
+        client_id=row[7],
+        auth_id=row[8],
+        client_name=row[9],
+        outcome=row[10],
+        reason=row[11],
+        duration_ms=row[12],
+        params=tuple(json.loads(row[13])),
+        removed=row[14],
+        gap_chain=row[15],
+        gap_hash=row[16],
+    )
+
+
+def used_bytes(conn: sqlite3.Connection) -> int:
+    """How many bytes this store really occupies.
+
+    Not the file size and not ``page_count * page_size``: neither of them falls after rows
+    are dropped, because the pages move to the free list (measured 2026-08-29: 20.000 rows,
+    half of them dropped, file unchanged at 4.579.328 byte, 532 free pages). An upper bound
+    driven by either of those two numbers keeps sweeping until the table is empty. This one
+    falls immediately, needs no filesystem call, and the free pages are reused by the next
+    rows, so the file does not grow past them either.
+    """
+    page_count = conn.execute("PRAGMA page_count").fetchone()[0]
+    page_size = conn.execute("PRAGMA page_size").fetchone()[0]
+    free = conn.execute("PRAGMA freelist_count").fetchone()[0]
+    return (page_count - free) * page_size
+
+
+def _next_seq(conn: sqlite3.Connection) -> int:
+    """The number the next row will carry, read inside the transaction that writes it.
+
+    The number has to be known before the insert, because it is part of what is hashed.
+    ``sqlite_sequence`` is where AUTOINCREMENT keeps the highest number ever handed out, and
+    it is not lowered by a sweep, which is the whole reason that keyword is in the schema.
+    Writing the number explicitly keeps that counter moving: SQLite raises it whenever an
+    explicit key is larger than what it holds.
+    """
+    row = conn.execute("SELECT seq FROM sqlite_sequence WHERE name = 'entries'").fetchone()
+    return (row[0] if row is not None else 0) + 1
+
+
+class AuditStore:
+    """The audit log, bound to one file.
+
+    Every method opens its own connection inside a worker thread and closes it again, the
+    same rule the OAuth store follows and for the same reason: no connection, no cursor and
+    no transaction is shared between two requests, so two workers on one volume behave like
+    two threads in one worker. There is no key here and nothing to mask.
+    """
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+        # False until this object has opened the file once. See :meth:`_call` for what the
+        # flag is worth and what it deliberately does not promise.
+        self._schema_ready = False
+
+    def __repr__(self) -> str:
+        return f"AuditStore(path={self._path!r})"
+
+    async def append(self, entry: Entry) -> int:
+        """Add one row to the end of its chain and return the number it was given.
+
+        Reading the previous hash and writing the new row happen in **one** transaction that
+        takes the write lock at its start. Two calls of the same account want to extend the
+        same chain; in two transactions both would read the same last hash and write two
+        rows with the same predecessor, which is a fork, and a check would report it as a
+        break where nobody manipulated anything.
+
+        The number is returned because the sweep of D-11 hangs its interval on it.
+        """
+
+        def work(conn: sqlite3.Connection) -> int:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(_LAST_OF_CHAIN, (entry.chain,)).fetchone()
+            previous = row[0] if row is not None else GENESIS
+            seq = _next_seq(conn)
+            values = _row_values(seq, entry)
+            digest = hashlib.sha256(_canonical(values) + previous).digest()
+            conn.execute(_INSERT, (*values, previous, digest))
+            conn.execute("COMMIT")
+            return seq
+
+        return await self._transaction(work)
+
+    async def last_entry(self, chain: str, *, kind: str | None = None) -> Entry | None:
+        """The youngest row of a chain, optionally of one kind only.
+
+        The switch of D-15 asks for the last row of its own kind to know which direction it
+        is in; a caller that wants the end of the chain itself leaves ``kind`` out.
+        """
+
+        def work(conn: sqlite3.Connection) -> Entry | None:
+            statement = _LAST_ROW_OF_CHAIN if kind is None else _LAST_ROW_OF_KIND
+            parameters: tuple[Any, ...] = (chain,) if kind is None else (chain, kind)
+            row = conn.execute(statement, parameters).fetchone()
+            return None if row is None else _entry_of_row(row)
+
+        return await self._read(work)
+
+    async def size(self) -> int:
+        """The number :data:`SIZE_LIMIT_BYTES` is compared against, see :func:`used_bytes`."""
+        return await self._read(used_bytes)
+
+    # --- the plumbing ---------------------------------------------------------------
+
+    async def _read[T](self, work: Work[T]) -> T:
+        """A statement without a transaction of its own, in a worker thread."""
+        return await asyncio.to_thread(self._call, work, False)
+
+    async def _write[T](self, work: Work[T]) -> T:
+        """Statements that are committed together when ``work`` returns, or not at all."""
+        return await asyncio.to_thread(self._call, work, True)
+
+    async def _transaction[T](self, work: Work[T]) -> T:
+        """``work`` runs its own ``BEGIN IMMEDIATE`` and its own ``COMMIT``."""
+        return await asyncio.to_thread(self._call, work, False)
+
+    def _call[T](self, work: Work[T], commit: bool) -> T:
+        """Run ``work`` on one connection, inside a transaction when it is a write.
+
+        The schema runs on the first open of this object and when the file is gone. The flag
+        is what makes the ordinary call cheap, and the ``exists`` is what keeps the cheap
+        call honest, because SQLite creates an empty file for a connection to a path that has
+        none: without the second half, a volume removed while the process runs would turn
+        every later call into "no such table" until a restart.
+
+        The rollback is best effort, because there is one case in which no transaction is
+        open any more, and it is the interesting one: a body that hit the busy timeout on its
+        own ``BEGIN``. Failing there would replace the real error with a second one.
+        """
+        conn = _connect(self._path, schema=not self._schema_ready or not self._path.exists())
+        self._schema_ready = True
+        try:
+            if commit:
+                conn.execute("BEGIN IMMEDIATE")
+            result = work(conn)
+            if commit:
+                conn.execute("COMMIT")
+            return result
+        except BaseException:
+            if commit:
+                # Suppressed and not handled: the error of ``work`` is the one that
+                # matters, and it is on its way up.
+                with contextlib.suppress(sqlite3.Error):
+                    conn.execute("ROLLBACK")
+            raise
+        finally:
+            conn.close()
+
+
+def _connect(path: Path, *, schema: bool = True) -> sqlite3.Connection:
+    """One connection with its pragmas, and the schema when the caller asks for it.
+
+    ``isolation_level=None`` turns off the implicit transaction handling of the standard
+    library, which is what makes an explicit ``BEGIN IMMEDIATE`` mean what it says.
+
+    There is no ``foreign_keys`` pragma here, because this schema has no foreign key: one
+    table, and a row of it refers to nothing but a hash it carries itself.
+
+    The order below is load bearing, and it is one step stricter than the research of this
+    phase wrote down. ``auto_vacuum`` is decided while the file is still empty and can
+    afterwards only be changed by a full ``VACUUM`` that rewrites everything. Running it
+    before ``executescript`` is not enough: switching a fresh file to WAL already writes its
+    header, and the pragma after that is silently ignored. Measured on this machine,
+    Python 3.13 with SQLite 3.50.4, both orders against a new file:
+    ``journal_mode`` first leaves ``PRAGMA auto_vacuum`` at 0, ``auto_vacuum`` first leaves
+    it at 2 with ``journal_mode`` still ``wal``. So this pragma is the very first statement
+    on the connection, and on a file that already has its mode it costs one no-op.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path, isolation_level=None, timeout=_BUSY_TIMEOUT_SECONDS)
+    conn.execute("PRAGMA auto_vacuum = INCREMENTAL")
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute(f"PRAGMA busy_timeout = {_BUSY_TIMEOUT_MS}")
+    if schema:
+        conn.executescript(SCHEMA)
+    return conn
