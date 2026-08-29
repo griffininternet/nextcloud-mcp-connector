@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
 status: executing
-stopped_at: Completed 18-06-PLAN.md
-last_updated: "2026-08-29T09:35:32.030Z"
-last_activity: 2026-08-29 -- Plan 18-06 ausgeführt (Erfassungspunkt in graceful, Rekorder, Dekorator-Nachweis über alle 21 Werkzeuge)
+stopped_at: Completed 18-07-PLAN.md
+last_updated: "2026-08-29T10:21:11.325Z"
+last_activity: 2026-08-29
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 23
-  completed_plans: 19
+  completed_plans: 21
   percent: 50
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 18 (audit-log-kern) — EXECUTING
-Plan: 7 of 10
+Plan: 8 of 10
 Status: Ready to execute
-Last activity: 2026-08-29 -- Plan 18-06 ausgeführt (Erfassungspunkt in graceful, Rekorder, Dekorator-Nachweis über alle 21 Werkzeuge)
+Last activity: 2026-08-29
 
 ## Performance Metrics
 
@@ -182,6 +182,7 @@ Last activity: 2026-08-29 -- Plan 18-06 ausgeführt (Erfassungspunkt in graceful
 | Phase 18-audit-log-kern PP04 | 20 min | 3 tasks tasks | 4 files files |
 | Phase 18-audit-log-kern P05 | 12 min | 3 tasks | 5 files |
 | Phase 18 P06 | 28min | 3 tasks | 5 files |
+| Phase 18 P07 | 50min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -673,6 +674,9 @@ Recent decisions affecting current work:
 - [Phase 18]: 18-06: Der Erfassungspunkt ist der finally-Zweig von graceful mit einem awaiteten record.note; note faengt Exception selbst, weil ein await im finally sonst die laufende Ausnahme ersetzt (D-13, T-18-17)
 - [Phase 18]: 18-06: Die gesetzten Parameternamen kommen aus params-arguments-keys() geschnitten mit PARAM_ALLOWLIST; kwargs taugt nicht, weil das SDK Vorgabewerte materialisiert
 - [Phase 18]: 18-06: __mcp_audited__ als ausdruecklicher Marker statt einer Pruefung auf fn.__code__.co_name; der Vertragstest misst ihn ueber alle 21 Werkzeuge
+- [Phase 18]: 18-07: Die zwei Vorgabezahlen des Audit-Logs stehen doppelt in config.py statt importiert zu werden: der Import waere ein Ring ueber audit/__init__, und ein Test haelt beide Paare gleich
+- [Phase 18]: 18-07: audit_log_enabled ist die positive Richtung mit Vorgabe aus (D-14) und ausdruecklich nicht das Vorbild von talk_send_enabled; der Recorder entsteht nur hinter dem Schalter
+- [Phase 18]: 18-07: Der Startlauf schreibt die Schaltzeile aus D-15 nur bei einem Zustandswechsel und raeumt eine abgeschaltete Ablage genau dann einmal auf, wenn die Datei schon vor dem Start da war
 
 ### Pending Todos
 
@@ -712,8 +716,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-29T09:35:32.012Z
-Stopped at: Completed 18-06-PLAN.md
+Last session: 2026-08-29T10:20:51.322Z
+Stopped at: Completed 18-07-PLAN.md
 Nächster Schritt: Plan 18-07 ausführen (Schalter aus D-14, Recorder verdrahten); danach offen: Phase 17 verifizieren (/gsd:verify-phase 17) und 16-04 (Store-Einreichung 0.1.11)
 Resume file: None
 

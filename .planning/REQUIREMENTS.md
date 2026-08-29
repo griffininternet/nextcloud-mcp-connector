@@ -32,9 +32,9 @@ Nicht in diesem Milestone entschieden, weil Verhandlungssache: die AGPL-Konseque
 
 ### Audit-Log
 
-- [ ] **AUDIT-01**: Jeder Werkzeugaufruf erzeugt einen Eintrag mit Nutzer, Werkzeugname, Zeitpunkt, aufrufendem Client und Ergebnisstatus, ohne Parameterwerte und ohne Ergebnisinhalte; eine Erlaubnisliste je Werkzeug hält fest, welche Parameternamen erscheinen, und ein Vertragstest hält diese Grenze nach dem Muster des Budget-Gates
+- [x] **AUDIT-01**: Jeder Werkzeugaufruf erzeugt einen Eintrag mit Nutzer, Werkzeugname, Zeitpunkt, aufrufendem Client und Ergebnisstatus, ohne Parameterwerte und ohne Ergebnisinhalte; eine Erlaubnisliste je Werkzeug hält fest, welche Parameternamen erscheinen, und ein Vertragstest hält diese Grenze nach dem Muster des Budget-Gates
 - [ ] **AUDIT-02**: Jeder Eintrag ist mit seinem Vorgänger hash-verkettet, und ein Prüfkommando bestätigt die ungebrochene Kette oder benennt die erste gebrochene Stelle
-- [ ] **AUDIT-03**: Das Log liegt dauerhaft in einer eigenen Ablage neben dem OAuth-Speicher, hat eine Obergrenze und eine Aufbewahrungsfrist, die mindestens 180 Tage erreichen kann, und kann bei vollem Volume den OAuth-Speicher nicht schreibunfähig machen
+- [x] **AUDIT-03**: Das Log liegt dauerhaft in einer eigenen Ablage neben dem OAuth-Speicher, hat eine Obergrenze und eine Aufbewahrungsfrist, die mindestens 180 Tage erreichen kann, und kann bei vollem Volume den OAuth-Speicher nicht schreibunfähig machen
 - [ ] **AUDIT-04**: Ein Administrator liest und exportiert das Log über ein `occ`-Kommando, ohne dass dafür eine neue Route im Manifest deklariert wird
 - [ ] **AUDIT-05**: Das Audit-Log ist ab Werk abgeschaltet und über die Admin-Einstellungen einschaltbar; die Beschriftung sagt, was das Log leistet, was es nicht leistet, und dass ein nutzerbezogenes Protokoll mitbestimmungsrelevant sein kann
 - [ ] **AUDIT-06**: Die bestehenden Aussagen ziehen mit: `docs/privacy.md` und `docs/uninstall.md` sagen die neue Wahrheit über Speicherung und Purge, und der Enterprise-Absatz nennt das Audit-Log nicht länger als geplant, in allen drei Sprachen und ohne die verbotenen Wörter revisionssicher, AI-Act-konform, DSGVO-konform und SIEM-zertifiziert
@@ -83,9 +83,9 @@ Bei der Roadmap-Erstellung am 2026-08-28 gefüllt. Die Phasennummerierung setzt 
 | OD-01 | Phase 17 (openDesk-Spike) | Complete |
 | OD-02 | Phase 17 (openDesk-Spike) | Complete |
 | OD-03 | Phase 17 (openDesk-Spike) | Complete |
-| AUDIT-01 | Phase 18 (Audit-Log Kern) | Pending |
+| AUDIT-01 | Phase 18 (Audit-Log Kern) | Complete |
 | AUDIT-02 | Phase 18 (Audit-Log Kern) | Pending |
-| AUDIT-03 | Phase 18 (Audit-Log Kern) | Pending |
+| AUDIT-03 | Phase 18 (Audit-Log Kern) | Complete |
 | AUDIT-04 | Phase 19 (Audit-Log Bedienung und Textnachzug) | Pending |
 | AUDIT-05 | Phase 19 (Audit-Log Bedienung und Textnachzug) | Pending |
 | AUDIT-06 | Phase 19 (Audit-Log Bedienung und Textnachzug) | Pending |
