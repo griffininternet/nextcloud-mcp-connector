@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
-status: ready_to_execute
-stopped_at: Phase 19 planned (9 plans, plan check passed), ready to execute
-last_updated: 2026-08-31T14:30:00.000Z
-last_activity: 2026-08-31
+status: executing
+stopped_at: Completed 19-01-PLAN.md
+last_updated: 2026-08-31T14:10:11.341Z
+last_activity: 2026-08-31 -- 19-01 ausgeführt
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 32
-  completed_plans: 23
+  completed_plans: 24
   percent: 75
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Die zugänglichste und sauberste MCP-Anbindung für Nextcloud: per Klick installierbar, spec-konformes OAuth statt App-Passwort-Gebastel, und der Assistent sieht niemals mehr als der angemeldete Nutzer.
-**Current focus:** Phase 19 — audit log bedienung und textnachzug
+**Current focus:** Phase 19 — audit-log-bedienung-und-textnachzug
 
 ## Current Position
 
-Phase: 19
-Plan: 0/9
-Status: Planned, ready to execute
-Last activity: 2026-08-29
+Phase: 19 (audit-log-bedienung-und-textnachzug) — EXECUTING
+Plan: 2 of 9
+Status: Executing Phase 19 (Plan 1 von 9 fertig)
+Last activity: 2026-08-31 -- 19-01 ausgeführt
 
 ## Performance Metrics
 
@@ -187,6 +187,7 @@ Last activity: 2026-08-29
 | Phase 18 P08 | 55min | 3 tasks | 10 files |
 | Phase 18 P09 | 62min | 3 tasks | 6 files |
 | Phase 18 P10 | 45min | 3 tasks | 3 files |
+| Phase 19 P01 | 22 min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -687,6 +688,8 @@ Recent decisions affecting current work:
 - [Phase ?]: 18-09: Die Loeschung eines Kontos wird im CI-Job exapp wirklich gemessen (occ user:delete); lokal bleibt A1 ungemessen, der fail-safe traegt unabhaengig davon
 - [Phase ?]: 18-10: Erfolgskriterium 5 steht getrennt in getestet (purge, vier Faelle) und hergeleitet (Trennen, Pausieren, Entfernen ueber die Oberflaeche; Beleg ist ein grep ueber die drei Aufraeumpfade, T-18-25 accept)
 - [Phase ?]: 18-10: Die Grenze aus D-18 steht woertlich im Abschlussbericht: occ app_api:app:unregister --rm-data entfernt das Volume und mit ihm das Log; docs/uninstall.md bleibt Phase 19 (AUDIT-06)
+- [Phase ?]: [Phase 19]: die drei Namensreiniger sind eine Regel in audit/text.py (printable, isprintable statt C0+DEL, Steuerzeichen werden ersetzt statt getilgt); R-18-06 geschlossen, die vierte Fassung in exapp/ui/layout.py bleibt bewusst stehen
+- [Phase ?]: [Phase 19]: eine angekündigte content-length wird wie in config.py gelesen (isascii vor isdigit) UND die Länge des Ziffernlaufs vor seinem Wert entschieden, weil int() seit Python 3.11 auch einen Lauf über 4300 Ziffern ablehnt; R-18-08 geschlossen
 
 ### Pending Todos
 
@@ -726,9 +729,9 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-29T11:24:18.360Z
-Stopped at: Completed 18-10-PLAN.md
-Nächster Schritt: Phase 18 verifizieren (/gsd:verify-phase 18), danach Phase 19 planen (/gsd:plan-phase 19: AUDIT-04, AUDIT-05, AUDIT-06); weiterhin offen: Phase 17 verifizieren (/gsd:verify-phase 17) und 16-04 (Store-Einreichung 0.1.11)
+Last session: 2026-08-31T14:09:15.666Z
+Stopped at: Completed 19-01-PLAN.md
+Nächster Schritt: Phase 19 weiter ausführen (Welle 1: 19-02, 19-03); weiterhin offen: Phase 17 und Phase 18 verifizieren (/gsd:verify-phase 17, /gsd:verify-phase 18) und 16-04 (Store-Einreichung 0.1.11)
 Resume file: None
 
 ## Operator Next Steps

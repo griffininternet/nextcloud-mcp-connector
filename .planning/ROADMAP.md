@@ -228,7 +228,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 19-01-PLAN.md , Sanitizer und Zahlenprüfung zusammenziehen: audit/text.py als eine Reinigungsregel für drei Aufrufstellen (R-18-06), isascii vor jedem int (R-18-08)
+- [x] 19-01-PLAN.md , Sanitizer und Zahlenprüfung zusammenziehen: audit/text.py als eine Reinigungsregel für drei Aufrufstellen (R-18-06), isascii vor jedem int (R-18-08)
 - [ ] 19-02-PLAN.md , AUDIT-05: die lange Beschriftung des Audit-Schalters mit Leistung, Grenze, Mitbestimmung, Aufbewahrung und Aktivierungszyklus, samt Zusagetests
 - [ ] 19-03-PLAN.md , AUDIT-06: Vier-Wörter-Gate als Anspruchsliste am bestehenden Vokabular-Gate, Reichweite über Markdown und Manifest, zwei Gegenproben
 
@@ -277,7 +277,7 @@ Plans:
 | 16. Release 0.1.11 | v1.5 | 4/4 | Complete | 2026-08-28 |
 | 17. openDesk-Spike | v1.5 | 9/9 | Complete | 2026-08-29 |
 | 18. Audit-Log Kern | v1.5 | 10/10 | Complete | 2026-08-29 |
-| 19. Audit-Log Bedienung und Textnachzug | v1.5 | 0/9 | Planned | - |
+| 19. Audit-Log Bedienung und Textnachzug | v1.5 | 1/9 | In Progress | - |
 
 ## Next
 
