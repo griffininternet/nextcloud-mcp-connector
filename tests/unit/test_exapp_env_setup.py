@@ -2426,3 +2426,155 @@ def test_the_variable_gate_accepts_a_filled_default(manifest_root: etree._Elemen
     etree.SubElement(variable, "default").text = "off"
 
     assert variable_problems(manifest_root) == []
+
+
+# --------------------------------------------------------------------------------------
+# The Enterprise paragraph, held together at six places (AUDIT-06, plan 19-08)
+#
+# One paragraph, three languages, two files each: the three descriptions of the manifest
+# and the three READMEs. The 0.1.10 entry of the changelog records that this paragraph was
+# always maintained across all six of them at once, and a reader ever sees only one of the
+# six, so a drift between them is a repudiation risk and not an untidiness (T-19-31).
+#
+# The sentence this paragraph carried until phase 19 said that the audit log is planned as
+# a commercial add-on. Phase 18 built it, which made that sentence false, and the second
+# test below is the reason a text truth of this kind survives the next phase: it forbids
+# the word for planned in any line that also carries the word for the audit log. What is
+# still planned are group policies and sign in through the identity provider of the
+# organisation, and neither of them is the record this app now keeps.
+#
+# The manifest way goes over the descriptions and their ``lang`` attribute rather than over
+# :func:`element_text_without_comments`: here the language is the distinction, and the
+# comments of the manifest are not part of any of the six places.
+# --------------------------------------------------------------------------------------
+
+#: Per language: the ``lang`` attribute of the manifest description, the README of that
+#: language, the three markers the paragraph owes, and the word forms for "planned".
+#:
+#: The markers are the load bearing statements of the paragraph and not decoration: the
+#: name of the record, that it is off until somebody switches it on, and the first of the
+#: two things that are still planned. A rewrite that drops one of the three has dropped a
+#: statement, which is exactly when this should go red.
+#:
+#: The French entry carries the accented and the bare spelling of "planned", because the
+#: separation rule has to hold whichever of the two a later hand writes; the markers
+#: themselves are accented, because that is the house rule for the text.
+ENTERPRISE_MARKERS: tuple[tuple[str | None, str, tuple[str, ...], tuple[str, ...]], ...] = (
+    (None, "README.md", ("audit log", "off by default", "group policies"), ("planned",)),
+    ("de", "README.de.md", ("Audit-Log", "ab Werk aus", "Gruppen-Policies"), ("geplant",)),
+    (
+        "fr",
+        "README.fr.md",
+        ("journal d'audit", "désactivé par défaut", "politiques de groupe"),
+        ("prévu", "prevu"),
+    ),
+)
+
+#: A heading of the Enterprise section, at either of the two levels the two formats use:
+#: the READMEs write ``## Enterprise`` and the store descriptions ``### Enterprise``.
+ENTERPRISE_HEADING = re.compile(r"^#{2,3}\s+Enterprise\s*$")
+
+
+def enterprise_section(text: str, name: str) -> str:
+    """The lines below the Enterprise heading of ``text``, up to the next heading.
+
+    The section and not the whole document, so a marker that happens to appear elsewhere
+    on the page cannot stand in for the paragraph that owes it. Text and name are
+    parameters for the reason :func:`vocabulary_findings` states: the same function reads
+    a README from disk and a store description out of the parsed tree.
+    """
+    lines = text.splitlines()
+    starts = [number for number, line in enumerate(lines) if ENTERPRISE_HEADING.match(line.strip())]
+    assert len(starts) == 1, f"{name} carries {len(starts)} Enterprise headings, expected one"
+
+    start = starts[0]
+    end = next(
+        (number for number in range(start + 1, len(lines)) if lines[number].startswith("#")),
+        len(lines),
+    )
+    section = "\n".join(lines[start + 1 : end]).strip()
+    assert section, f"the Enterprise section of {name} is empty"
+    return section
+
+
+def enterprise_places(manifest_root: etree._Element) -> list[tuple[str, tuple[str, ...], str]]:
+    """The six places as (name, markers, section), two per language.
+
+    Six and not three: the manifest half and the README half of one language say the same
+    thing to two different readers, and only one of the two is ever in front of a reader.
+    """
+    places: list[tuple[str, tuple[str, ...], str]] = []
+    for lang, readme, markers, _ in ENTERPRISE_MARKERS:
+        description = _localised(manifest_root, "description", lang)
+        assert description is not None, f"the {_lang_label(lang)} description is missing"
+        manifest_name = f"appinfo/info.xml ({_lang_label(lang)})"
+        places.append((manifest_name, markers, enterprise_section(description, manifest_name)))
+        places.append(
+            (readme, markers, enterprise_section((ROOT / readme).read_text("utf-8"), readme))
+        )
+    return places
+
+
+def test_the_enterprise_paragraph_carries_its_markers_at_all_six_places(
+    manifest_root: etree._Element,
+) -> None:
+    """The three languages and the two formats say the same thing or this goes red.
+
+    Every gap is collected before the assertion, so one red line names all of them with
+    file and marker instead of stopping at the first one: whoever rewrites this paragraph
+    rewrites six places, and finding out about the fifth one run after run is the way the
+    six drift apart in the first place.
+
+    The section is flattened to single spaces before the search, because the READMEs wrap
+    their lines and a marker split over a line break is present in the text a reader sees.
+    The count of the languages comes first for the reason
+    :func:`test_the_claim_gate_fires_on_a_constructed_line` states: a loop over an emptied
+    list passes without looking at anything.
+    """
+    assert len(ENTERPRISE_MARKERS) == 3, ENTERPRISE_MARKERS
+
+    missing = [
+        f"{name}: {marker!r}"
+        for name, markers, section in enterprise_places(manifest_root)
+        for marker in markers
+        if marker not in " ".join(section.split())
+    ]
+
+    assert missing == [], (
+        "the Enterprise paragraph lost a statement at one of its six places: " + "; ".join(missing)
+    )
+
+
+def test_no_place_calls_the_audit_log_planned(manifest_root: etree._Element) -> None:
+    """The sentence phase 18 made false must not come back, in any of the six places.
+
+    Until this phase all six said that the audit log is planned as a commercial add-on.
+    The log exists since phase 18, it is part of this app under the AGPL, and a text is
+    the one part of a project that no build breaks when it goes stale. So the rule is
+    written down instead of remembered: no line carries the word for the audit log and the
+    word for planned at the same time. What is still planned keeps its own sentence, and
+    that sentence does not name the record.
+
+    Line by line and not per section, because the two statements live in two paragraphs on
+    purpose: the day somebody joins them into one sentence is the day the old claim is back.
+    """
+    findings: list[str] = []
+    for lang, readme, markers, planned_words in ENTERPRISE_MARKERS:
+        audit_word = markers[0].casefold()
+        description = _localised(manifest_root, "description", lang)
+        assert description is not None
+        manifest_name = f"appinfo/info.xml ({_lang_label(lang)})"
+        sections = {
+            manifest_name: enterprise_section(description, manifest_name),
+            readme: enterprise_section((ROOT / readme).read_text("utf-8"), readme),
+        }
+        for name, section in sections.items():
+            for number, line in enumerate(section.splitlines(), start=1):
+                lowered = line.casefold()
+                if audit_word in lowered and any(word in lowered for word in planned_words):
+                    findings.append(f"{name}:{number}: {line.strip()}")
+
+    assert findings == [], (
+        "a place calls the audit log planned, which it has not been since phase 18: "
+        + "; ".join(findings)
+    )
