@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
 status: executing
-stopped_at: Completed 19-02-PLAN.md
-last_updated: 2026-08-31T14:35:00.000Z
-last_activity: 2026-08-31 -- 19-02 ausgeführt
+stopped_at: Completed 19-03-PLAN.md
+last_updated: 2026-08-31T15:10:00.000Z
+last_activity: 2026-08-31 -- 19-03 ausgeführt
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 32
-  completed_plans: 25
-  percent: 78
+  completed_plans: 26
+  percent: 81
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 19 (audit-log-bedienung-und-textnachzug) — EXECUTING
-Plan: 3 of 9
-Status: Executing Phase 19 (Plan 2 von 9 fertig)
-Last activity: 2026-08-31 -- 19-02 ausgeführt
+Plan: 4 of 9
+Status: Executing Phase 19 (Plan 3 von 9 fertig, Welle 1 abgeschlossen)
+Last activity: 2026-08-31 -- 19-03 ausgeführt
 
 ## Performance Metrics
 
@@ -189,6 +189,7 @@ Last activity: 2026-08-31 -- 19-02 ausgeführt
 | Phase 18 P10 | 45min | 3 tasks | 3 files |
 | Phase 19 P01 | 22 min | 3 tasks | 7 files |
 | Phase 19 P02 | 20 min | 2 tasks | 2 files |
+| Phase 19 P03 | 24 min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -197,6 +198,8 @@ Last activity: 2026-08-31 -- 19-02 ausgeführt
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 19]: die vier verbotenen Ansprüche (revisionssicher, AI-Act-konform, DSGVO-konform, SIEM-zertifiziert) stehen als vier Muster in EN, DE und FR neben `FORBIDDEN_VOCABULARY` in `tests/unit/test_exapp_env_setup.py`, mit der Reichweite des Vokabular-Gates plus dem Manifesttext; verboten ist die Behauptung und nicht das Wort, weshalb "SIEM-Ausleitung", "specification compliant" und "conforme à la spécification" als Negativfälle festgeschrieben sind (T-19-08, T-19-10)
+- [Phase 19]: eine Gegenprobe, die über eine Verbotsliste schleift, nennt die Länge der Liste als erste Behauptung; ohne sie besteht sie eine geleerte Liste kommentarlos, gemessen in 19-03 (T-19-09)
 - [Phase 19]: die Grenzbeschreibung des Audit-Schalters ist inhaltlich und nicht wörtlich an `exapp/audit_verify.LIMIT_SENTENCE` gebunden; gehalten werden die zwei tragenden Begriffe "changed or removed unnoticed" und "recompute", weil das Formular vor der Entscheidung spricht und die Konsole nach der Prüfung, und ein Test hält beide Orte gegeneinander (T-19-06)
 - [Phase 19]: die Beschriftung nennt alle drei automatischen Löschwege (Frist 180 Tage, Obergrenze 100 MB, Kontolöschung in Nextcloud) und erklärt keinen davon zum einzigen; die verengte Formulierung aus D-v1.5-01 wäre am Code falsch, die Korrektur steht in 19-CONTEXT.md
 - [Phase 19]: das Wort einer zweiten Inhaltsstufe ist an der Oberfläche als Wortform mit Wortgrenzen verboten, nicht als Substring, und `src/mcp_connector/exapp/ui/strings.py` trägt es seit 19-02 an keiner Stelle mehr, auch nicht in einem Kommentar
