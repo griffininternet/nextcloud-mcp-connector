@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
 status: executing
-stopped_at: Completed 19-07-PLAN.md
-last_updated: 2026-08-31T15:58:00.000Z
-last_activity: 2026-08-31 -- 19-07 ausgeführt
+stopped_at: Completed 19-08-PLAN.md
+last_updated: 2026-08-31T16:15:00.000Z
+last_activity: 2026-08-31 -- 19-08 ausgeführt
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 32
-  completed_plans: 30
-  percent: 94
+  completed_plans: 31
+  percent: 97
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 19 (audit-log-bedienung-und-textnachzug) — EXECUTING
-Plan: 8 of 9
-Status: Executing Phase 19 (Plan 7 von 9 fertig, Welle 4 abgeschlossen)
-Last activity: 2026-08-31 -- 19-07 ausgeführt
+Plan: 9 of 9
+Status: Executing Phase 19 (Plan 8 von 9 fertig, Welle 5 abgeschlossen)
+Last activity: 2026-08-31 -- 19-08 ausgeführt
 
 ## Performance Metrics
 
@@ -194,6 +194,7 @@ Last activity: 2026-08-31 -- 19-07 ausgeführt
 | Phase 19 P05 | 19 min | 3 tasks | 4 files |
 | Phase 19 P06 | 24 min | 3 tasks | 3 files |
 | Phase 19 P07 | 25 min | 3 tasks | 5 files |
+| Phase 19 P08 | 17 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -202,6 +203,9 @@ Last activity: 2026-08-31 -- 19-07 ausgeführt
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 19]: der Enterprise-Absatz steht an sechs Stellen (drei Manifestbeschreibungen und drei READMEs) in ZWEI Absätzen statt einem: der erste sagt, dass das Protokoll der Werkzeugaufrufe Teil dieser App ist, ab Werk aus, über die Admin-Einstellungen eingeschaltet, mit `occ mcp_connector:audit:read` gelesen und mit `occ mcp_connector:audit:verify` geprüft wird; der zweite behält das Wort "geplant" für Gruppen-Policies und die Anmeldung über den Identitätsanbieter. Die Trennung ist nicht Typografie, sondern die Bedingung, unter der ein Test zeilenweise verbieten kann, dass das Audit-Log wieder als geplant bezeichnet wird (19-08, T-19-31)
+- [Phase 19]: sechs Fundstellen einer öffentlichen Aussage werden durch eine Liste plus Test zusammengehalten und nicht durch Sorgfalt: `ENTERPRISE_MARKERS` trägt je Sprache ein Markertripel (EN "audit log"/"off by default"/"group policies", DE "Audit-Log"/"ab Werk aus"/"Gruppen-Policies", FR "journal d'audit"/"désactivé par défaut"/"politiques de groupe"), `enterprise_section` schneidet den Abschnitt unter seiner Überschrift heraus, und die Marker werden gegen den auf einfache Leerzeichen geglätteten Abschnitt geprüft, weil eine README ihre Zeilen umbricht (19-08)
+- [Phase 19]: die Enterprise-Positionierung verspricht Leistung und nicht Zugang, weil die App unter AGPL-3.0 offen liegt und das Protokoll Teil davon ist; die grössere Lizenzfrage bleibt OD-03 auf der Fragenliste des ISV-Calls und wird nicht im Store-Text beantwortet (19-08, T-19-33 accept)
 - [Phase 19]: kein Optionsmodus eines occ-Kommandos verlässt die Positivliste `required`, `optional`, `none`, und kein Kommando registriert ein Argument; die Regel steht als Test über alle Schemata im Repo, weil `appinfo/register_command.php` von app_api beim Start JEDES occ-Aufrufs alle ExApp-Kommandos baut und nur Container-Ausnahmen fängt: ein abgelehnter Modus kostet die occ-Kommandozeile der ganzen Instanz (19-07, T-19-26)
 - [Phase 19]: das Lesekommando hat eine eigene JSON-Beschreibung statt der des Prüfkommandos, weil die Maschinenform hier zugleich die Übergabe aus AUDIT-04 ist und die Kettenreihenfolge trägt; die Zahlen der Optionsbeschreibungen (200, 5000, 3650) werden aus den Konstanten hineinformatiert und nie abgeschrieben (19-07)
 - [Phase 19]: die drei Audit-Umgebungsvariablen sind im Manifest deklariert, jede ohne `default`; der Hauptweg bleibt das Admin-Formular (BL-06), aber eine öffentlich beschriebene Grenze, die der Deploy-Daemon wortlos verwirft, wäre eine halbe Zusage (19-07, deferred item aus 18-07 geschlossen)

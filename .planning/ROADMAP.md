@@ -247,7 +247,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 19-08-PLAN.md , AUDIT-06: Enterprise-Absatz an allen sechs Stellen in drei Sprachen, Markertripel per Test zusammengehalten
+- [x] 19-08-PLAN.md , AUDIT-06: Enterprise-Absatz an allen sechs Stellen in drei Sprachen, Markertripel per Test zusammengehalten
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -277,7 +277,7 @@ Plans:
 | 16. Release 0.1.11 | v1.5 | 4/4 | Complete | 2026-08-28 |
 | 17. openDesk-Spike | v1.5 | 9/9 | Complete | 2026-08-29 |
 | 18. Audit-Log Kern | v1.5 | 10/10 | Complete | 2026-08-29 |
-| 19. Audit-Log Bedienung und Textnachzug | v1.5 | 7/9 | In Progress | - |
+| 19. Audit-Log Bedienung und Textnachzug | v1.5 | 8/9 | In Progress | - |
 
 ## Next
 
