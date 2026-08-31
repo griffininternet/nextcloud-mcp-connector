@@ -62,6 +62,8 @@ __all__ = [
     "OUTCOME_FAILED",
     "OUTCOME_OK",
     "OUTCOME_REJECTED",
+    "READ_LIMIT_DEFAULT",
+    "READ_LIMIT_MAX",
     "RETENTION_DAYS",
     "SIZE_LIMIT_BYTES",
     "SWEEP_BATCH_ROWS",
@@ -98,6 +100,19 @@ RETENTION_DAYS = 180
 #: is in the order of half a million entries, and it needs about 6 MB of air in the volume
 #: for the write ahead log beside it.
 SIZE_LIMIT_BYTES = 100_000_000
+
+#: How many rows :meth:`AuditStore.read_entries` hands over when nobody said a number. The
+#: bound above is what makes this one necessary: 100 MB are roughly 440.000 rows (measured in
+#: 18-RESEARCH.md §8), and a read without a ceiling pulls every one of them into the memory of
+#: a container that has other work to do. Two hundred is what an administrator reads in one
+#: go, and asking again with a larger number costs one line.
+READ_LIMIT_DEFAULT = 200
+
+#: The number no option can go above, whatever it says. AppAPI calls the handler of an occ
+#: command with ``timeout => 0`` and waits as long as it takes, so nothing outside this module
+#: cuts a read short: the ceiling has to be here. Five thousand rows are far more than a
+#: console shows and far less than the 440.000 that are the alternative.
+READ_LIMIT_MAX = 5000
 
 #: Every five hundredth entry pays for the sweep (D-11), which is roughly every 110 KB of
 #: rows. No cron, no background task, no counter that would have to live between two
@@ -301,6 +316,15 @@ _LAST_ROW_OF_KIND = (
 )
 _CHAINS = "SELECT DISTINCT chain FROM entries ORDER BY chain"
 _ROWS_OF_CHAIN = f"SELECT {_COLUMNS}, prev_hash, hash FROM entries WHERE chain = ? ORDER BY seq"  # noqa: S608 - same column names, no value in the statement
+# The read of AUDIT-04. Three filters, each of them a pair of placeholders so that a filter
+# nobody set is the statement saying so and not a second statement: ``? IS NULL OR column =
+# ?`` is one text for eight combinations. The limit is a placeholder as well, clamped by
+# :meth:`AuditStore.read_entries` before it gets here.
+_READ_ROWS = (
+    f"SELECT {_COLUMNS}, prev_hash, hash FROM entries "  # noqa: S608 - column names of this module, values are placeholders
+    "WHERE (? IS NULL OR chain = ?) AND (? IS NULL OR at >= ?) AND (? IS NULL OR at <= ?) "
+    "ORDER BY seq DESC LIMIT ?"
+)
 _EXPLAINED_GAPS = (
     "SELECT gap_chain, gap_hash FROM entries "
     "WHERE chain = ? AND kind = ? AND gap_chain IS NOT NULL AND gap_hash IS NOT NULL"
@@ -1005,6 +1029,59 @@ class AuditStore:
             parameters: tuple[Any, ...] = (chain,) if kind is None else (chain, kind)
             row = conn.execute(statement, parameters).fetchone()
             return None if row is None else _entry_of_row(row)
+
+        return await self._read(work)
+
+    async def read_entries(
+        self,
+        *,
+        chain: str | None = None,
+        since: int | None = None,
+        until: int | None = None,
+        limit: int = READ_LIMIT_DEFAULT,
+    ) -> list[tuple[Any, ...]]:
+        """Rows out, youngest first, at most ``limit`` of them and never more than
+        :data:`READ_LIMIT_MAX`.
+
+        The one method here that hands the content of a row over, for the read command of
+        AUDIT-04. It changes nothing and runs without a transaction of its own, like every
+        other read of this class. A filter that is ``None`` is a filter nobody set: the
+        statement says so itself, so there is one text for every combination and no value of a
+        caller ever enters it.
+
+        **Why the limit is clamped.** ``limit`` arrives from an option of a console command,
+        so it is a number from the outside, and the answer of this method sits in the memory of
+        a container while it is built. 100 MB of this store are roughly 440.000 rows, and
+        AppAPI calls the handler of an occ command with ``timeout => 0``, so nothing outside
+        cuts a long read short either. The clamp is ``max(1, min(limit, READ_LIMIT_MAX))``:
+        the upper end catches the option that says a billion, the lower end catches the zero
+        and the negative number, because SQLite reads a negative ``LIMIT`` as no limit at all,
+        which is the one answer this method must not be able to give.
+
+        **Why the order is ``seq`` and not ``at``.** ``at`` is the wall clock at the moment a
+        row was written, and a clock stepped backwards (an NTP correction, a resumed VM) puts a
+        smaller moment onto a higher sequence number; ordering by it would hand rows over in an
+        order the chain never had (WR-02 of the phase 18 review). ``seq`` is the order of the
+        chain itself, so it is the order of the answer.
+
+        **The direction is always youngest first.** That is what somebody looking at a console
+        wants, and it is also the only direction a limit can be combined with: ``ORDER BY seq
+        ASC LIMIT ?`` would hand over the *oldest* rows and therefore, for an export, the wrong
+        ones. Whoever needs the order of the chain reverses the list where it is printed.
+
+        **What comes back and why it is not an** :class:`Entry`. The raw rows, in the column
+        order of :data:`CANONICAL_FIELDS` plus ``prev_hash`` and ``hash``. :class:`Entry`
+        carries neither the number nor the two hashes on purpose (it is a row on its way *in*),
+        and an output line without a number cannot be followed up. A caller reads the fields
+        with :func:`_entry_of_row` and takes ``row[0]`` for the number, ``row[-2]`` and
+        ``row[-1]`` for the two hashes, so the column order stays written down once.
+        """
+        bounded = max(1, min(limit, READ_LIMIT_MAX))
+
+        def work(conn: sqlite3.Connection) -> list[tuple[Any, ...]]:
+            return conn.execute(
+                _READ_ROWS, (chain, chain, since, since, until, until, bounded)
+            ).fetchall()
 
         return await self._read(work)
 

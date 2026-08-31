@@ -184,7 +184,15 @@ _.cleanup_at
 #   reports what an expiry took; it is asserted on in tests/unit/test_audit_store.py today and
 #   leaves this list with that plan. The other fields of both classes carry names that are
 #   read elsewhere in the module, which is why only this one stands here.
+#
+# read_entries: the one method that hands the content of a row over, built in plan 19-04
+#   because the query belongs to the module that owns the schema and the chain, and not to a
+#   handler that would have to know the column order. Its caller is the reading command of
+#   AUDIT-04 in plan 19-06, and it is driven today by the thirteen cases under
+#   "reading rows out" in tests/unit/test_audit_store.py. It leaves this list with that plan,
+#   the same way last_entry, sweep and verify_chains did before it.
 _.last_entry
+_.read_entries
 _.used_bytes_after
 
 # --- The marker every recorded tool carries ---------------------------------------------
