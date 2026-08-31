@@ -745,3 +745,54 @@ async def test_the_oauth_store_still_rotates_and_connects_after_the_bound_bit(
     assert await neighbour.load_authorization(AUTH_ID) is not None, "and the new connection"
     assert await neighbour.load_refresh_token(SECOND_TOKEN) is not None
     assert await subject.size() <= limit, "the audit store is still under its own bound"
+
+
+# --- reading rows out: read_entries ---------------------------------------------------
+# The one method of this module that hands the content of a row over, and therefore the one
+# with two bounds instead of none: T-19-11 (nothing of a caller in the statement) and
+# T-19-12 (nothing unbounded in the answer, because 100 MB of this store are roughly
+# 440.000 rows). Every case below runs against the real file for the same reason the rest of
+# this file does.
+
+
+async def test_read_entries_of_an_empty_store_is_an_empty_list(tmp_path: Path) -> None:
+    subject = open_store(tmp_path)
+
+    assert await subject.read_entries() == []
+    assert {path.name for path in tmp_path.iterdir()} <= {
+        store.AUDIT_FILENAME,
+        f"{store.AUDIT_FILENAME}-wal",
+        f"{store.AUDIT_FILENAME}-shm",
+    }, "a read lays down the schema of this store and nothing beside it"
+
+
+async def test_read_entries_hands_the_youngest_row_over_first(tmp_path: Path) -> None:
+    subject = open_store(tmp_path)
+    await write_calls(subject, ALICE, [1000, 1001, 1002])
+
+    read = await subject.read_entries()
+
+    assert [row[0] for row in read] == [3, 2, 1], "newest first, which is what an admin looks for"
+    assert [row[3] for row in read] == [1002, 1001, 1000]
+
+
+async def test_a_limit_below_the_number_of_rows_cuts_the_answer(tmp_path: Path) -> None:
+    subject = open_store(tmp_path)
+    await write_calls(subject, ALICE, [1000, 1001, 1002, 1003, 1004])
+
+    read = await subject.read_entries(limit=2)
+
+    assert [row[0] for row in read] == [5, 4], "the two youngest, not the two oldest"
+
+
+async def test_a_limit_of_zero_or_below_still_answers_with_exactly_one_row(
+    tmp_path: Path,
+) -> None:
+    """The lower bound of the clamp. Zero would be an answer nobody asked for and a negative
+    number is ``LIMIT -5``, which SQLite reads as no limit at all: both ends of the clamp are
+    there to keep an option nobody validated from meaning "everything"."""
+    subject = open_store(tmp_path)
+    await write_calls(subject, ALICE, [1000, 1001, 1002])
+
+    assert [row[0] for row in await subject.read_entries(limit=0)] == [3]
+    assert [row[0] for row in await subject.read_entries(limit=-5)] == [3]
