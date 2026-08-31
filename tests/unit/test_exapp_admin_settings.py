@@ -18,6 +18,7 @@ T-05-03 (the app secret never reaches a log record).
 import base64
 import json
 import logging
+import re
 
 import httpx
 import pytest
@@ -26,7 +27,13 @@ from starlette.applications import Starlette
 from starlette.testclient import TestClient
 
 from mcp_connector import config
-from mcp_connector.exapp import admin_settings, config_values, lifecycle, settings_form
+from mcp_connector.exapp import (
+    admin_settings,
+    audit_verify,
+    config_values,
+    lifecycle,
+    settings_form,
+)
 from mcp_connector.exapp.ui import strings
 
 APP_ID = "mcp_connector"
@@ -63,6 +70,24 @@ FIELD_TYPES = (
     "select",
     "multi-select",
 )
+
+#: The four claims of D-v1.5-02 that no public sentence of this project makes, each with the
+#: wordings it would arrive in in the two other languages this project publishes in. Written
+#: as patterns and not as bare substrings on purpose: forbidden is the claim and not the word,
+#: so a sentence may say that this record has no SIEM connection or that the regulation
+#: concerns the operator, and "specification compliant" stays a legitimate phrase.
+FORBIDDEN_CLAIMS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("revisionssicher", re.compile(r"revisionssicher|tamper[\s-]*proof|audit[\s-]*proof", re.I)),
+    ("AI-Act-konform", re.compile(r"ai[\s-]*act[\s-]*(konform|compliant|conforme)", re.I)),
+    ("DSGVO-konform", re.compile(r"(dsgvo|gdpr|rgpd)[\s-]*(konform|compliant|conforme)", re.I)),
+    ("SIEM-zertifiziert", re.compile(r"siem[\s-]*(zertifiziert|certified|certifi)", re.I)),
+)
+
+#: The word for the other extent of recording, the one that would mean parameter values and
+#: result content. This app has no code for it and the form therefore must not name it, in a
+#: field text, in a field type or in an option list. A word form with boundaries, because the
+#: same letters sit inside ordinary English words this form is free to use.
+LEVEL_WORD = re.compile(r"\bfull\b")
 
 
 def appapi_headers(user: str = USER, secret: str = APP_SECRET) -> dict[str, str]:
@@ -313,12 +338,18 @@ async def test_the_audit_log_field_is_a_checkbox_that_ships_off() -> None:
 @pytest.mark.anyio
 @respx.mock
 async def test_the_audit_log_description_says_what_is_kept_and_what_is_not() -> None:
-    """The three things this short version owes an administrator, and the one it must not say.
+    """The six duties of the long version (AUDIT-05), and the claims it must not make.
 
-    What a row contains, what it never contains, and the activation cycle. The long wording,
-    the works council sentence and the description of what such a record can and cannot prove
-    are AUDIT-05 and belong to phase 19, together with the page that reads the record; half
-    of that copy here would leave two places saying different amounts about one switch.
+    Phase 18 wrote the short version and said so: what a row contains, what it never
+    contains, and the activation cycle. Phase 19 owns the rest, and it is here now, so this
+    test grew instead of being replaced. The three fields the short version kept quiet about
+    are the review finding IN-06 of phase 18: an administrator who reads only "the name of
+    the tool" does not learn that the names of the parameters, the reason of a refusal and
+    the duration of the call are written down as well.
+
+    The limit description is the pledge of D-v1.5-02, the works council sentence is
+    D-v1.5-04, and both of them are the reason this switch can be judged before it is
+    flipped rather than after the first record exists.
     """
     route = respx.post(SETTINGS_URL).mock(return_value=httpx.Response(200, json={}))
 
@@ -327,13 +358,82 @@ async def test_the_audit_log_description_says_what_is_kept_and_what_is_not() -> 
     fields = json.loads(route.calls.last.request.content)["formScheme"]["fields"]
     description = next(field for field in fields if field["id"] == "audit_log")["description"]
     lowered = description.lower()
+    # Duty 1, what a row holds, with the three fields of IN-06.
+    assert "the names of the parameters, never their values" in lowered
+    assert "identifier of the reason" in lowered, "a refusal is a fixed identifier, not a text"
+    assert "how long it took" in lowered, "the duration of the call is stored too"
+    # Duty 2, what a row never holds. The first two wordings are the ones phase 18 wrote.
     assert "no parameter value" in lowered
     assert "no part of a result" in lowered
+    assert "network address" in lowered
+    assert "user agent" in lowered
+    assert "text of an error message" in lowered
+    # Duty 3, the limit, held against the console sentence in its own test below.
+    assert "changed or removed unnoticed" in lowered
+    assert "recompute" in lowered
+    # Duty 4, D-v1.5-04. A hint, and it says so, because an app cannot judge this.
+    assert "works council" in lowered
+    assert "not legal advice" in lowered
+    # Duty 5, retention and what a row outlives, in the numbers of ``audit/store.py``.
+    assert "180 days" in lowered
+    assert "100 mb" in lowered
+    assert "purge" in lowered, "and that a row outlives it"
+    # Duty 6, the cycle every other field of this form spells as well.
     assert "disable and enable this app again" in lowered
     # The four words AUDIT-06 keeps out of every public text of this project, checked at the
     # place a new public sentence enters it.
     for forbidden in ("revisionssicher", "ai-act", "dsgvo", "siem"):
         assert forbidden not in lowered
+    # And the same four claims in the two other languages this project publishes in: the
+    # German compounds alone would let "GDPR compliant" or "conforme au RGPD" through, and a
+    # claim is forbidden in whatever language it is made.
+    for claim, pattern in FORBIDDEN_CLAIMS:
+        assert pattern.search(description) is None, f"the description claims to be {claim}"
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_the_limit_of_the_record_reads_the_same_in_the_form_and_in_the_console() -> None:
+    """One limit, two places, and neither may say more than the other.
+
+    ``audit_verify.LIMIT_SENTENCE`` is the last line of every answer of the check command,
+    and the description of this switch says the same thing to whoever decides about the
+    record in the first place. If one of the two is ever softened, the other keeps the
+    promise the code cannot hold, so both are asserted on their load bearing words here
+    rather than each on its own.
+    """
+    route = respx.post(SETTINGS_URL).mock(return_value=httpx.Response(200, json={}))
+
+    await admin_settings.register_admin_form(env=ENV)
+
+    fields = json.loads(route.calls.last.request.content)["formScheme"]["fields"]
+    description = next(field for field in fields if field["id"] == "audit_log")["description"]
+    for load_bearing in ("changed or removed unnoticed", "recompute"):
+        assert load_bearing in description.lower(), "the form half of the limit"
+        assert load_bearing in audit_verify.LIMIT_SENTENCE.lower(), "the console half of it"
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_no_field_of_the_form_offers_a_level_of_recording() -> None:
+    """There is one extent of what is recorded, so the form must not read like a choice.
+
+    The record holds parameter names and never values (D-06, AUDIT-01). A field text, a
+    field type or an option list carrying the word for the other extent would advertise a
+    setting this app has no code for, and an administrator would switch it on believing a
+    promise nobody made. Asserted as a word and not as a substring, because a legitimate
+    sentence elsewhere on this form may well end up containing it inside another word.
+    """
+    route = respx.post(SETTINGS_URL).mock(return_value=httpx.Response(200, json={}))
+
+    await admin_settings.register_admin_form(env=ENV)
+
+    fields = json.loads(route.calls.last.request.content)["formScheme"]["fields"]
+    assert len(fields) == 7, "every field of the form is walked, not a subset of it"
+    for field in fields:
+        assert LEVEL_WORD.search(json.dumps(field).lower()) is None, (
+            f"{field['id']} offers a level of recording this app cannot deliver"
+        )
 
 
 @pytest.mark.anyio
@@ -620,6 +720,10 @@ def test_the_setup_copy_names_the_place_and_the_restart_step() -> None:
         "ADMIN_FIELD_CIMD_DESCRIPTION",
         "ADMIN_FIELD_ALLOWLIST_DESCRIPTION",
         "ADMIN_FIELD_ALLOWED_CLIENTS_DESCRIPTION",
+        # The longest sentence of the whole form, and the newest, so it is held by the same
+        # rule as the rest of the catalogue rather than by a review.
+        "ADMIN_FIELD_AUDIT_LOG_LABEL",
+        "ADMIN_FIELD_AUDIT_LOG_DESCRIPTION",
         "SETUP_PUBLIC_URL_TITLE",
         "SETUP_PUBLIC_URL_BODY",
         "SETUP_PUBLIC_URL_HINT",
