@@ -185,14 +185,11 @@ _.cleanup_at
 #   leaves this list with that plan. The other fields of both classes carry names that are
 #   read elsewhere in the module, which is why only this one stands here.
 #
-# read_entries: the one method that hands the content of a row over, built in plan 19-04
-#   because the query belongs to the module that owns the schema and the chain, and not to a
-#   handler that would have to know the column order. Its caller is the reading command of
-#   AUDIT-04 in plan 19-06, and it is driven today by the thirteen cases under
-#   "reading rows out" in tests/unit/test_audit_store.py. It leaves this list with that plan,
-#   the same way last_entry, sweep and verify_chains did before it.
+# read_entries: gone from this list with plan 19-06, which is the plan that calls it.
+#   exapp/audit_read.py asks it for the rows of one chain and one window and turns them into
+#   the lines of the read command of AUDIT-04, exactly as the entry of plan 19-04 announced it
+#   would. It left the list with the plan its entry named, which is what this list is for.
 _.last_entry
-_.read_entries
 _.used_bytes_after
 
 # --- The marker every recorded tool carries ---------------------------------------------
