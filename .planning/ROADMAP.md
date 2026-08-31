@@ -239,7 +239,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 19-06-PLAN.md , AUDIT-04: Handlermodul exapp/audit_read.py als Zwilling von audit_verify, Doppelprüfung, immer Status 200, geklammerte Ausgabe, Maschinenform
+- [x] 19-06-PLAN.md , AUDIT-04: Handlermodul exapp/audit_read.py als Zwilling von audit_verify, Doppelprüfung, immer Status 200, geklammerte Ausgabe, Maschinenform
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
