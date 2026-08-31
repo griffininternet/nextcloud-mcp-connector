@@ -58,6 +58,7 @@ from ..audit.store import (
     ChainFinding,
     StoreOverview,
 )
+from ..audit.text import printable
 from ..errors import ToolError
 from .auth import AppApiRejected, require_appapi
 from .responses import NO_STORE, BodyTooLarge, BodyUnreadable, bounded_body, json_response
@@ -104,9 +105,10 @@ TRUE_WORDS = frozenset({"1", "true", "yes", "on"})
 
 #: What a chain identifier is cut to before it is printed. The identifier of a user chain
 #: carries the account name (``u:<nc_user>``), which is written by whoever creates accounts
-#: on this instance, so it is bracketed exactly like the client name in ``audit/store.py``:
-#: control characters go, runs of whitespace become one space, and the rest is cut. A name
-#: with a line break in it could otherwise fake a finding line of its own (T-18-08).
+#: on this instance, so it goes through ``audit/text.py`` first, the one rule of this
+#: application for such a value: whatever cannot be printed becomes a space, runs of
+#: whitespace become one space, and the rest is cut at this bound. A name with a line break
+#: in it could otherwise fake a finding line of its own (T-18-08).
 CHAIN_LIMIT = 80
 
 #: The verdict of a whole store, and the only line of the answer that says nothing happened.
@@ -279,9 +281,14 @@ def _printable(chain: str) -> str:
 
     A user chain is named ``u:<nc_user>`` and is handed out as it is: an account name is no
     secret, and an administrator who has to look at a broken chain needs to know whose it
-    is. It is still bracketed the way ``audit/store.py`` brackets the client name, and for
-    the same reason: the value comes from outside, and control characters in it could fake a
-    line of this answer (T-18-08).
+    is. It is still bracketed by :func:`mcp_connector.audit.text.printable`, the one rule of
+    this application for a value written by a stranger, and for the reason that function
+    names: the value comes from outside, and control characters in it could fake a line of
+    this answer (T-18-08). This module used to carry a version of the rule of its own, as did
+    ``audit/record.py`` and ``audit/store.py``, and two of the three replaced only the C0
+    range and DEL; three versions with two different sets of characters were R-18-06 of phase
+    18, and the narrow set let a right-to-left override through. The bound stays here, because
+    :data:`CHAIN_LIMIT` is what a line of *this* answer can carry.
 
     What this buys and what it does not: a name can no longer end a line and start another,
     so no name can fake a line of this answer, and a test asserts the line count for a name
@@ -290,10 +297,7 @@ def _printable(chain: str) -> str:
     reason ``--json`` exists: a script watches the ``broken`` key of the machine readable
     shape and never a substring of the text.
     """
-    printable = "".join(
-        " " if character < " " or character == "\x7f" else character for character in chain
-    )
-    return " ".join(printable.split())[:CHAIN_LIMIT]
+    return printable(chain, limit=CHAIN_LIMIT)
 
 
 def _guard(request: Request, env: Mapping[str, str] | None) -> str | Response:

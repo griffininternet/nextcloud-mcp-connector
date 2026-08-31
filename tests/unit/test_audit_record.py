@@ -332,3 +332,25 @@ async def test_a_hostile_client_name_is_cleaned_and_cut_before_it_is_written(
     assert "\n" not in stored
     assert "\x00" not in stored
     assert stored.startswith("Claude Assistant")
+
+
+@pytest.mark.anyio
+async def test_a_control_character_in_a_name_becomes_a_space_and_melts_no_two_words(
+    recorder: Recorder, audit_file: Path
+) -> None:
+    """The wanted change of plan 19-01: the rule replaces where it used to drop.
+
+    Dropping the line break turned ``"Claude\\nAssistant"`` into the single word
+    ``"ClaudeAssistant"``, a name nobody registered, and one that could stand for a different
+    client in the output of the admin command. A space cannot melt two parts into one, which is
+    why ``audit/text.py`` replaces every unprintable character instead of filtering it out.
+    """
+    context = FakeContext(
+        params=call_of(path="/notes"),
+        recorder=recorder,
+        who=identity(client_name="Claude\nAssistant"),
+    )
+
+    await probe(ctx=context, path="/notes")
+
+    assert one_row(audit_file)["client_name"] == "Claude Assistant"

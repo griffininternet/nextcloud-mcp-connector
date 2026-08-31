@@ -41,6 +41,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .text import printable
+
 #: What every method below hands to the worker thread: one function, one connection, one
 #: result. Naming it keeps the wrappers at the bottom readable and typed.
 type Work[T] = Callable[[sqlite3.Connection], T]
@@ -508,16 +510,19 @@ def _clean_client_name(value: str | None) -> str | None:
 
     The name arrives from a dynamic registration, so it is written by whoever registers: two
     hundred characters with line breaks in them would make the output of the admin command
-    unreadable and could fake a row of its own. Control characters go, runs of whitespace
-    become one space, and the rest is cut at :data:`CLIENT_NAME_LIMIT`.
+    unreadable and could fake a row of its own.
+
+    The rule is :func:`mcp_connector.audit.text.printable` and stands there once for the whole
+    application. It used to stand here as well, and in ``audit/record.py`` and
+    ``exapp/audit_verify.py`` in versions of their own: this one replaced the C0 range and DEL
+    and the one in ``record.py`` filtered by ``str.isprintable``, so three versions with two
+    different sets of characters were R-18-06 of phase 18, and the narrow set let a
+    right-to-left override reach an output line. What is left here is the bound,
+    :data:`CLIENT_NAME_LIMIT`, and the ``None`` of a client that registered without a name.
     """
     if value is None:
         return None
-    printable = "".join(
-        " " if character < " " or character == "\x7f" else character for character in value
-    )
-    collapsed = " ".join(printable.split())
-    return collapsed[:CLIENT_NAME_LIMIT] or None
+    return printable(value, limit=CLIENT_NAME_LIMIT) or None
 
 
 def _row_values(seq: int, entry: Entry) -> tuple[Any, ...]:

@@ -8,11 +8,17 @@ version of the rule with its own set of characters, which is exactly what R-18-0
 right-to-left override through, and inside one output line that character turns the reading
 direction round.
 
-So the cases below are the rule itself. ``printable`` is synchronous, so nothing here needs
-``anyio``.
+So the cases below are the rule itself, and the last two of them are the other half of the fix:
+one rule that three modules do not use would leave the tree exactly as divided as before, so
+both the call and the absence of a character loop of their own are asserted per module.
+``printable`` is synchronous, so nothing here needs ``anyio``.
 """
 
+import inspect
+
+from mcp_connector.audit import record, store
 from mcp_connector.audit.text import printable
+from mcp_connector.exapp import audit_verify
 
 #: The bound the cases are measured against. Neither of the two real bounds of the project,
 #: on purpose: this module decides no bound, it takes one.
@@ -73,3 +79,33 @@ def test_the_empty_string_stays_the_empty_string() -> None:
 def test_a_name_of_only_whitespace_ends_as_the_empty_string() -> None:
     """The neighbour of the case above, and the one a caller really sees more often."""
     assert printable("   \t ", limit=LIMIT) == ""
+
+
+# --- the other half of R-18-06: the rule is used, and no second one stayed behind ---
+
+
+def test_every_caller_of_the_rule_really_calls_it() -> None:
+    """One rule beside three unchanged callers would be a fourth version and nothing else."""
+    for module in (record, store, audit_verify):
+        source = inspect.getsource(module)
+
+        assert "printable(" in source, f"{module.__name__} does not call the one rule"
+
+
+def test_no_caller_kept_a_character_loop_of_its_own() -> None:
+    """A second set of characters anywhere in the tree is R-18-06 itself, not a copy of it.
+
+    ``.isprintable()`` as a call on a character is what ``record.py`` used, and the pair of
+    ``< " "`` and DEL is what the other two used. Neither may come back without this turning
+    red, which is why the needles are the two spellings and not the word "clean".
+    """
+    leftovers = {
+        record: (".isprintable()",),
+        store: ('< " "', "\\x7f"),
+        audit_verify: ('< " "', "\\x7f"),
+    }
+
+    for module, needles in leftovers.items():
+        source = inspect.getsource(module)
+        for needle in needles:
+            assert needle not in source, f"{module.__name__} still carries {needle!r}"

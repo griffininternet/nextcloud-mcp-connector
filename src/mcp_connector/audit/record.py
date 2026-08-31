@@ -21,7 +21,8 @@ check command of this phase makes visible.
 **What this module must not import.** ``..server``, because the server calls the recorder
 and the import would close a ring, and anything under ``..exapp``, because the ExApp shell
 sits above this package. The one thing borrowed from up there, the cleaning of a client
-name, is rebuilt in five lines below rather than imported.
+name, sits in the leaf module ``audit/text.py`` instead, where all three callers of this
+application reach it without anybody importing upwards.
 """
 
 import logging
@@ -43,6 +44,7 @@ from .store import (
     Entry,
     user_chain,
 )
+from .text import printable
 
 __all__ = ["SWITCH_OFF", "SWITCH_ON", "Recorder", "note", "note_switch", "set_parameter_names"]
 
@@ -106,18 +108,22 @@ def set_parameter_names(ctx: Any, tool: str) -> list[str]:
 def _clamped_client_name(raw: str | None) -> str | None:
     """The registered name of a client, made safe to write down and bounded in length.
 
-    The three lines of ``exapp/ui/layout.py:506-522``, rebuilt and deliberately not imported:
-    ``exapp/ui`` sits above this package, and the import would be a layering break for five
-    lines of string handling. The name comes from a dynamic registration, so it is written by
-    whoever registers (T-18-08): control characters go, runs of whitespace collapse into one
-    space, and the rest is cut at :data:`~mcp_connector.audit.store.CLIENT_NAME_LIMIT`. A
-    name that is empty afterwards is ``None``, because "nothing to print" is not a name.
+    The rule itself lives in :mod:`mcp_connector.audit.text` and lives there exactly once. It
+    used to stand here in five lines of its own, in ``audit/store.py`` in five more and in
+    ``exapp/audit_verify.py`` in five more, and two of those three replaced only the C0 range
+    and DEL: three versions with two different sets of characters were R-18-06 of phase 18, and
+    a name carrying a right-to-left override could turn the reading direction of an output line
+    round. ``exapp/ui/layout.py`` keeps a version of its own on purpose, because ``exapp`` sits
+    above this package and an import upwards would be a layering break.
+
+    What is left here is the part that belongs to this caller: the name comes from a dynamic
+    registration, so it is written by whoever registers (T-18-08), it is cut at
+    :data:`~mcp_connector.audit.store.CLIENT_NAME_LIMIT`, and a name that is empty afterwards is
+    ``None``, because "nothing to print" is not a name.
     """
     if raw is None:
         return None
-    printable = "".join(character for character in raw if character.isprintable())
-    collapsed = " ".join(printable.split())
-    return collapsed[: store.CLIENT_NAME_LIMIT] or None
+    return printable(raw, limit=store.CLIENT_NAME_LIMIT) or None
 
 
 def _recorder_of(ctx: Any) -> Recorder | None:
