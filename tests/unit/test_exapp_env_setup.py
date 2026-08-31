@@ -2338,7 +2338,7 @@ def test_the_claim_gate_fires_on_the_manifest_text(manifest_root: etree._Element
 
 
 def test_no_declared_variable_carries_an_empty_default(manifest_root: etree._Element) -> None:
-    """The shipped state: six variables, not one default among them."""
+    """The shipped state: nine variables, not one default among them."""
     assert variable_problems(manifest_root) == []
 
 
@@ -2353,6 +2353,13 @@ def test_every_variable_the_code_reads_is_declared_in_the_manifest(
     word, so the switch stands on its code default forever and the administrator has no way
     to see why. Set equality rather than a subset: a variable declared here and read nowhere
     is an offer this app does not keep either.
+
+    Six became nine with plan 19-07, and the reason is not convenience. The retention window
+    and the upper bound of the audit log are described in public for the first time in this
+    phase, in the pages of AUDIT-06 and in the labels of AUDIT-05. A limit that is described
+    and cannot be set, because the deploy daemon drops what this manifest does not declare,
+    would be half of a promise. The way meant for an administrator stays the admin settings
+    of this app (BL-06); these three are the way of an installation set up by hand.
     """
     declared = {
         (variable.findtext("name") or "").strip()
@@ -2366,6 +2373,9 @@ def test_every_variable_the_code_reads_is_declared_in_the_manifest(
         registry.ENV_ALLOWLIST_ONLY,
         registry.ENV_ALLOWED_CLIENTS,
         config.ENV_TALK_SEND,
+        config.ENV_AUDIT_LOG,
+        config.ENV_AUDIT_RETENTION_DAYS,
+        config.ENV_AUDIT_MAX_BYTES,
     }
 
 
