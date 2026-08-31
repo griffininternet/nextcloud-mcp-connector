@@ -602,9 +602,7 @@ def _note_removed(
     return len(batch)
 
 
-def _sweep_expired(
-    conn: sqlite3.Connection, cutoff: int, ends: dict[str, str], counts: dict[str, int]
-) -> int:
+def _sweep_expired(conn: sqlite3.Connection, moment: int, cutoff: int, affected: set[str]) -> int:
     """Step one, the retention window: the expired prefix of every user chain goes.
 
     A prefix and never a hole: a row not younger than ``cutoff`` only goes when everything
@@ -612,6 +610,11 @@ def _sweep_expired(
     and its end is always the predecessor of the surviving head. The reason stands at
     :data:`_EXPIRED_PREFIX`: a clock stepped backwards writes a younger moment onto a higher
     sequence number, and a hole torn into the middle of a chain would read as tampering.
+
+    Every batch commits its deletion **together with the markers that explain it** (WR-01 of
+    the phase 18 review): a marker committed separately leaves a window in which a process
+    kill, an OOM or a power loss has removed rows whose gap nothing names, and the next check
+    would report tampering after a perfectly ordinary crash.
 
     In batches of :data:`SWEEP_BATCH_ROWS` and not in one go: no checkpoint can run while a
     transaction is open, and ten thousand rows in one transaction grew the write ahead log to
@@ -625,13 +628,17 @@ def _sweep_expired(
         if not batch:
             conn.execute("COMMIT")
             return expired
+        ends: dict[str, str] = {}
+        counts: dict[str, int] = {}
         expired += _note_removed(ends, counts, batch)
         conn.execute(_DROP_EXPIRED, (CHAIN_INSTANCE, cutoff, batch[-1][0]))
+        _write_markers(conn, moment, ends, counts)
         conn.execute("COMMIT")
+        affected.update(ends)
 
 
 def _sweep_over_limit(
-    conn: sqlite3.Connection, size_limit: int, ends: dict[str, str], counts: dict[str, int]
+    conn: sqlite3.Connection, moment: int, size_limit: int, affected: set[str]
 ) -> int:
     """Step two, the upper bound: the oldest user rows go until the store is under it again.
 
@@ -640,6 +647,9 @@ def _sweep_over_limit(
     list (measured, 18-RESEARCH.md §8), so a loop against either of them keeps deleting until
     the table is empty. This one falls with the first commit, which is what makes the
     condition an end and not a wish.
+
+    Every batch commits its deletion together with the markers that explain it, for the
+    reason :func:`_sweep_expired` gives (WR-01).
 
     Two guards beside it: at most :data:`SWEEP_MAX_ROUNDS` batches per run, and a stop as soon
     as no user row is left. A store that is over the bound while empty is a different fault
@@ -654,29 +664,34 @@ def _sweep_over_limit(
         if not batch:
             conn.execute("COMMIT")
             break
+        ends: dict[str, str] = {}
+        counts: dict[str, int] = {}
         trimmed += _note_removed(ends, counts, batch)
         conn.execute(_DROP_OLDEST, (CHAIN_INSTANCE, batch[-1][0]))
+        _write_markers(conn, moment, ends, counts)
         conn.execute("COMMIT")
+        affected.update(ends)
     return trimmed
 
 
-def _write_tombstones(
+def _write_markers(
     conn: sqlite3.Connection, moment: int, ends: dict[str, str], counts: dict[str, int]
-) -> int:
-    """Step three: one marker per affected chain, and it stands in the instance chain.
+) -> None:
+    """One marker per chain the batch touched, inside the transaction of that batch.
 
-    Not in the chain it explains. A marker there would have to attach to the head of a chain
-    whose head is exactly what just went, so the instance chain is the only place it can hang
-    on to (D-02 plus D-03, 18-RESEARCH.md lines 581 to 585). The instance chain is never
-    trimmed itself: it is the register that explains every gap, and it grows with markers and
-    with switches only.
+    Inside it and never in one of its own: the caller holds the transaction that removes the
+    rows, and the marker and the deletion it explains stand or fall together (WR-01). This
+    function therefore opens nothing and commits nothing.
+
+    The marker stands in the instance chain and not in the chain it explains. A marker there
+    would have to attach to the head of a chain whose head is exactly what just went, so the
+    instance chain is the only place it can hang on to (D-02 plus D-03, 18-RESEARCH.md lines
+    581 to 585). The instance chain is never trimmed by a sweep: it is the register that
+    explains every gap, and it grows with markers and with switches only.
 
     A marker carries a count and the end of the block that gave way, never a parameter name
     and never a value.
     """
-    if not ends:
-        return 0
-    conn.execute("BEGIN IMMEDIATE")
     for chain in sorted(ends):
         _append_row(
             conn,
@@ -690,8 +705,6 @@ def _write_tombstones(
                 gap_hash=ends[chain],
             ),
         )
-    conn.execute("COMMIT")
-    return len(ends)
 
 
 def _give_the_space_back(conn: sqlite3.Connection) -> None:
@@ -806,11 +819,13 @@ class AuditStore:
     ) -> SweepReport:
         """The retention window, the upper bound, the markers, and the space given back.
 
-        Four steps in this order (D-10, D-11): rows older than ``retention_days`` go, then the
-        oldest rows go until :func:`used_bytes` is under ``size_limit``, then every chain that
-        lost rows gets one marker in the instance chain, and finally the free pages go back to
-        the filesystem. Each step deletes in bounded batches with its own transaction, so the
-        write ahead log can be checkpointed in between.
+        Three steps in this order (D-10, D-11): the expired prefix of every chain goes, then
+        the oldest rows go until :func:`used_bytes` is under ``size_limit``, and finally the
+        free pages go back to the filesystem. Every chain that lost rows gets its marker in
+        the instance chain **inside the same transaction as the batch that took its rows**
+        (WR-01): a crash between a committed deletion and a separately committed marker would
+        otherwise leave a gap the check reads as tampering. Each batch is bounded and commits
+        for itself, so the write ahead log can be checkpointed in between.
 
         ``moment`` is handed in rather than read from the clock, because it is both the end of
         the retention window and the moment written into every marker of this run, and a run
@@ -818,17 +833,15 @@ class AuditStore:
         """
 
         def work(conn: sqlite3.Connection) -> SweepReport:
-            ends: dict[str, str] = {}
-            counts: dict[str, int] = {}
-            expired = _sweep_expired(conn, moment - retention_days * _DAY_SECONDS, ends, counts)
-            trimmed = _sweep_over_limit(conn, size_limit, ends, counts)
-            tombstones = _write_tombstones(conn, moment, ends, counts)
+            affected: set[str] = set()
+            expired = _sweep_expired(conn, moment, moment - retention_days * _DAY_SECONDS, affected)
+            trimmed = _sweep_over_limit(conn, moment, size_limit, affected)
             if expired or trimmed:
                 _give_the_space_back(conn)
             return SweepReport(
                 expired=expired,
                 trimmed=trimmed,
-                tombstones=tombstones,
+                tombstones=len(affected),
                 used_bytes_after=used_bytes(conn),
             )
 
@@ -869,7 +882,7 @@ class AuditStore:
         this method itself guarantees is the other half: whatever it removes leaves a trace.
 
         The marker stands in the instance chain and not in the chain it explains, for the
-        reason :func:`_write_tombstones` gives at length: the chain it would attach to is
+        reason :func:`_write_markers` gives at length: the chain it would attach to is
         exactly what just went. It carries the count and the end of what it replaces, never a
         tool, never a parameter name.
 

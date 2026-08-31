@@ -524,6 +524,73 @@ async def test_the_sweep_leaves_the_instance_chain_standing(tmp_path: Path) -> N
     assert kinds.count(store.KIND_TOMBSTONE) == 1
 
 
+async def test_a_batch_whose_marker_cannot_be_written_removes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """WR-01 of the phase 18 review: the marker is atomic with the deletion it explains.
+
+    The fault is injected into the marker write of the one batch this sweep has. If deletion
+    and marker were two commits, the rows would already be gone here and the next check would
+    report tampering after a perfectly ordinary crash. In one transaction the batch rolls
+    back whole: no row gone, no marker written, no finding.
+    """
+    subject = open_store(tmp_path)
+    old = 1_000_000_000
+    await write_calls(subject, ALICE, [old, old + 1, old + 2])
+
+    def refuse(
+        conn: sqlite3.Connection, moment: int, ends: dict[str, str], counts: dict[str, int]
+    ) -> None:
+        raise sqlite3.OperationalError("disk I/O error")
+
+    monkeypatch.setattr(store, "_write_markers", refuse)
+
+    with pytest.raises(sqlite3.OperationalError):
+        await subject.sweep(moment=old + 400 * 86400)
+
+    assert len([row for row in rows(tmp_path) if row[2] == store.KIND_CALL]) == 3
+    assert [row for row in rows(tmp_path) if row[2] == store.KIND_TOMBSTONE] == []
+    assert await subject.verify_chains() == []
+
+
+async def test_a_crash_between_two_batches_leaves_every_committed_batch_explained(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """WR-01, the multi-batch half: every committed batch carries its own marker.
+
+    The first batch goes through, the second dies mid-transaction. Whatever the crash left
+    behind has to be a store the check calls whole: the surviving head points at the end the
+    marker of the committed batch names, and the rolled back batch left no trace.
+    """
+    subject = open_store(tmp_path)
+    old = 1_000_000_000
+    await write_calls(subject, ALICE, [old, old + 1, old + 2, old + 3, old + 4])
+    monkeypatch.setattr(store, "SWEEP_BATCH_ROWS", 2)
+
+    real = store._write_markers
+    batches = {"count": 0}
+
+    def flaky(
+        conn: sqlite3.Connection, moment: int, ends: dict[str, str], counts: dict[str, int]
+    ) -> None:
+        batches["count"] += 1
+        if batches["count"] == 2:
+            raise sqlite3.OperationalError("disk I/O error")
+        real(conn, moment, ends, counts)
+
+    monkeypatch.setattr(store, "_write_markers", flaky)
+
+    with pytest.raises(sqlite3.OperationalError):
+        await subject.sweep(moment=old + 400 * 86400)
+
+    assert await subject.verify_chains() == [], "a crashed sweep is not a tamper finding"
+    left = [row[0] for row in rows(tmp_path) if row[2] == store.KIND_CALL]
+    assert left == [3, 4, 5], "batch one is gone, batch two rolled back whole"
+    (marker,) = [row for row in rows(tmp_path) if row[2] == store.KIND_TOMBSTONE]
+    assert marker[14] == 2, "the marker explains exactly the batch it was committed with"
+    assert marker[15] == ALICE
+
+
 # --- the neighbour in the same volume: AUDIT-03, T-18-05 ------------------------------
 # The second half of success criterion 4 of the roadmap. The first half is the bound and
 # the window above; this is the sentence "at a full volume token rotation and new
