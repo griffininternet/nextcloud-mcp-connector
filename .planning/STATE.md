@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
 status: executing
-stopped_at: Completed 19-03-PLAN.md
-last_updated: 2026-08-31T15:10:00.000Z
-last_activity: 2026-08-31 -- 19-03 ausgeführt
+stopped_at: Completed 19-04-PLAN.md
+last_updated: 2026-08-31T15:02:00.000Z
+last_activity: 2026-08-31 -- 19-04 ausgeführt
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 32
-  completed_plans: 26
-  percent: 81
+  completed_plans: 27
+  percent: 84
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 19 (audit-log-bedienung-und-textnachzug) — EXECUTING
-Plan: 4 of 9
-Status: Executing Phase 19 (Plan 3 von 9 fertig, Welle 1 abgeschlossen)
-Last activity: 2026-08-31 -- 19-03 ausgeführt
+Plan: 5 of 9
+Status: Executing Phase 19 (Plan 4 von 9 fertig, Welle 2 begonnen)
+Last activity: 2026-08-31 -- 19-04 ausgeführt
 
 ## Performance Metrics
 
@@ -190,6 +190,7 @@ Last activity: 2026-08-31 -- 19-03 ausgeführt
 | Phase 19 P01 | 22 min | 3 tasks | 7 files |
 | Phase 19 P02 | 20 min | 2 tasks | 2 files |
 | Phase 19 P03 | 24 min | 2 tasks | 1 files |
+| Phase 19 P04 | 16 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -198,6 +199,9 @@ Last activity: 2026-08-31 -- 19-03 ausgeführt
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 19]: `AuditStore.read_entries` gibt rohe Tupel heraus und keine `Entry`-Objekte, weil `Entry` `seq`, `prev_hash` und `hash` absichtlich nicht trägt und eine Ausgabezeile ohne Nummer nicht nachvollziehbar ist; der Aufrufer nimmt `_entry_of_row(row)`, `row[0]`, `row[-2]` und `row[-1]` (19-04)
+- [Phase 19]: sortiert wird `ORDER BY seq DESC` und nie nach `at`, weil `at` die Wanduhr beim Schreiben ist und nach einem Zeitsprung nicht monoton (WR-02); die Richtung ist immer neueste zuerst, weil `ORDER BY seq ASC LIMIT ?` die ältesten Zeilen liefern würde, und die Umkehrung für einen Export gehört in den Handler von 19-06
+- [Phase 19]: das Leselimit ist an beiden Enden geklemmt (`max(1, min(limit, READ_LIMIT_MAX))`, Vorgabe 200, Höchstwert 5000): ein negatives `LIMIT` liest SQLite als kein Limit, und AppAPI wartet mit `timeout => 0`, also deckelt von aussen nichts (T-19-12)
 - [Phase 19]: die vier verbotenen Ansprüche (revisionssicher, AI-Act-konform, DSGVO-konform, SIEM-zertifiziert) stehen als vier Muster in EN, DE und FR neben `FORBIDDEN_VOCABULARY` in `tests/unit/test_exapp_env_setup.py`, mit der Reichweite des Vokabular-Gates plus dem Manifesttext; verboten ist die Behauptung und nicht das Wort, weshalb "SIEM-Ausleitung", "specification compliant" und "conforme à la spécification" als Negativfälle festgeschrieben sind (T-19-08, T-19-10)
 - [Phase 19]: eine Gegenprobe, die über eine Verbotsliste schleift, nennt die Länge der Liste als erste Behauptung; ohne sie besteht sie eine geleerte Liste kommentarlos, gemessen in 19-03 (T-19-09)
 - [Phase 19]: die Grenzbeschreibung des Audit-Schalters ist inhaltlich und nicht wörtlich an `exapp/audit_verify.LIMIT_SENTENCE` gebunden; gehalten werden die zwei tragenden Begriffe "changed or removed unnoticed" und "recompute", weil das Formular vor der Entscheidung spricht und die Konsole nach der Prüfung, und ein Test hält beide Orte gegeneinander (T-19-06)
