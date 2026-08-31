@@ -639,18 +639,43 @@ ADMIN_FIELD_TALK_SEND_DESCRIPTION = (
 
 ADMIN_FIELD_AUDIT_LOG_LABEL = "Keep a record of tool calls"
 
-#: The form half of ``NC_MCP_AUDIT_LOG`` (D-14), and deliberately the short version. It says
-#: three things: what a recorded call contains, what it never contains, and the activation
-#: cycle this file already spells for every other value. The full wording an administrator
-#: needs before switching this on, the works council sentence and the description of what the
-#: record can and cannot prove, is AUDIT-05 and belongs to phase 19, which owns that copy
-#: together with the page that reads the record. Writing half of it here would leave two
-#: places saying different amounts about the same switch.
+#: The form half of ``NC_MCP_AUDIT_LOG`` (D-14), now the long version phase 18 left to phase
+#: 19 on purpose (AUDIT-05, D-v1.5-02, D-v1.5-04). Six things, none of them optional:
+#:
+#: 1. What a row holds, including the three fields the short version kept quiet about, which
+#:    is the review finding IN-06 of phase 18: the names of the parameters, the reason of a
+#:    refusal as a fixed identifier, and how long the call took.
+#: 2. What a row never holds: no parameter value, no part of a result, no network address,
+#:    no user agent, no text of an error message.
+#: 3. What the record does not prove. This is the pledge of D-v1.5-02, and it is bound to
+#:    ``exapp/audit_verify.LIMIT_SENTENCE``, the same limit said to whoever runs the check:
+#:    the words "changed or removed unnoticed" and "recompute" are in both sentences, and
+#:    ``tests/unit/test_exapp_admin_settings.py`` holds the two against each other so the
+#:    form and the console cannot end up saying different amounts about one limit.
+#: 4. That a record tied to named accounts can come under the codetermination of a works
+#:    council (D-v1.5-04). A hint, never advice: an app cannot judge that for an instance.
+#: 5. How long a row is kept and what it outlives, with the numbers of ``audit/store.py``
+#:    (``RETENTION_DAYS``, ``SIZE_LIMIT_BYTES``) rather than a promise of forever.
+#: 6. The activation cycle in the sentence this file already spells for every other value.
+#:
+#: What the wording must not do: name a level. There is one extent of what is recorded and
+#: no second one to pick, so no sentence here offers a choice the code cannot answer.
 ADMIN_FIELD_AUDIT_LOG_DESCRIPTION = (
     "With this on, every tool call is written down: the account it ran for, the name of the "
-    "tool, the time, the app that called and whether the call succeeded. No parameter value "
-    "and no part of a result is stored. This is off unless you switch it on, and a change "
-    "takes effect after you disable and enable this app again."
+    "tool, the time, the app that called, whether the call succeeded, how long it took, and, "
+    "where a call was refused, a fixed identifier of the reason. A row also holds the names "
+    "of the parameters, never their values. No parameter value and no part of a result is "
+    "stored, and neither is a network address, a user agent or the text of an error message. "
+    "A later check of the record shows that an entry was changed or removed unnoticed. It "
+    "does not show who is able to write the file behind it, because whoever can write it can "
+    "recompute the chain behind the change. A record that ties calls to named accounts can "
+    "come under the codetermination of a works council in Germany and in Austria, so whoever "
+    "switches this on settles that beforehand; this is a hint and not legal advice. Rows are "
+    "kept for 180 days by default, the record stops growing at 100 MB where the oldest rows "
+    "give way, and an account removed in Nextcloud takes its own rows with it. A row outlives "
+    "occ mcp_connector:purge and the removal of this app, and only deleting the data volume "
+    "of this app deletes the record with it. This is off unless you switch it on, and a "
+    "change takes effect after you disable and enable this app again."
 )
 
 # --- The setup state a missing public address produces (consumed by plan 05-04) -----------
