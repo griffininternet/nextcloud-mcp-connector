@@ -21,7 +21,7 @@ from starlette.applications import Starlette
 from starlette.testclient import TestClient
 
 from mcp_connector import config
-from mcp_connector.exapp import lifecycle, occ, settings_form, status
+from mcp_connector.exapp import audit_read, lifecycle, occ, settings_form, status
 from mcp_connector.exapp.ui import strings
 
 APP_ID = "mcp_connector"
@@ -413,12 +413,84 @@ def test_every_answer_carries_no_store(
     assert response.headers["cache-control"] == "no-store"
 
 
-# --- the two occ commands, and their independence (plan 18-08) -------------------
+# --- the three occ commands, and their independence (plans 18-08 and 19-07) ------
 
 
 def sent_names(route: respx.Route) -> list[str]:
     """The command name of every registration that went out, in the order it went."""
     return [json.loads(call.request.content)["name"] for call in route.calls]
+
+
+#: The only modes an option of an ExApp command may carry. Measured at the source of app_api
+#: v34.0.3, ``lib/Service/ExAppOccService.php:217-256``: that file also accepts ``array`` and
+#: ``negatable``, and both of them are refused here, because the first one alone becomes
+#: ``InputOption::VALUE_IS_ARRAY`` without a value mode and the second one next to a value
+#: raises the same way.
+ALLOWED_OPTION_MODES = frozenset({"required", "optional", "none"})
+
+
+def test_no_command_scheme_leaves_the_positive_list_of_option_modes() -> None:
+    """The most expensive mistake this module can make, and the rule now lives here (T-19-26).
+
+    ``appinfo/register_command.php`` of app_api builds EVERY registered ExApp command at the
+    start of EVERY occ call and catches ``NotFoundExceptionInterface`` and
+    ``ContainerExceptionInterface`` only. An ``InvalidArgumentException`` out of Symfony's
+    ``configure()`` therefore does not cost the command that carries the bad mode, it costs
+    the occ command line of the whole instance, including the ones an administrator would
+    need to repair it. The rule stands in this repository rather than in a research document,
+    because a document does not go red.
+
+    An argument is refused for the other half of the same measurement: AppAPI reads
+    ``$argument['default']`` unconditionally as soon as the mode is ``optional`` or ``array``,
+    while it reads ``$option['default'] ?? null``, so an argument without that key writes a
+    PHP warning on every occ call. Every filter of every command of this app is an option.
+    """
+    schemes = occ.command_schemes()
+    assert schemes, "with no scheme at all this test would prove nothing"
+
+    for scheme in schemes:
+        name = scheme["name"]
+        assert scheme["arguments"] == [], f"{name} registers an argument"
+        assert scheme["hidden"] == 0, f"{name} would be invisible in occ list"
+        assert scheme["usages"], f"{name} shows an administrator no usage"
+        assert scheme["description"], f"{name} carries no description"
+        assert scheme["execute_handler"], f"{name} names no handler and would answer 404"
+        for option in scheme["options"]:
+            option_name = option["name"]
+            assert option["mode"] in ALLOWED_OPTION_MODES, (
+                f"{name} --{option_name} carries mode {option['mode']!r}, which is outside "
+                f"{sorted(ALLOWED_OPTION_MODES)} and can break every occ call of the instance"
+            )
+            assert option["description"], f"{name} --{option_name} carries no description"
+            if option["mode"] != "none":
+                assert "default" in option, (
+                    f"{name} --{option_name} carries a value and no default key, "
+                    "which AppAPI reads as null only for options and not for arguments"
+                )
+
+
+def test_the_read_command_is_the_one_plan_19_06_reserved_its_constants_for() -> None:
+    """The third scheme, held against the handler module it belongs to (T-19-28).
+
+    The name is keyed by AppAPI's ``insertOrUpdate`` on the app id and the name, so a rename
+    does not replace the registration, it leaves the old one behind as an entry of ``occ
+    list`` that answers 404. And the handler is derived from the path constant of the module
+    rather than written a second time, which is what the two commands before it do as well.
+    """
+    scheme = occ.command_schemes()[2]
+
+    assert occ.OCC_AUDIT_READ_COMMAND_NAME == "mcp_connector:audit:read"
+    assert scheme["name"] == occ.OCC_AUDIT_READ_COMMAND_NAME
+    assert audit_read.AUDIT_READ_PATH.removeprefix("/") == occ.OCC_AUDIT_READ_HANDLER
+    assert scheme["execute_handler"] == occ.OCC_AUDIT_READ_HANDLER
+    assert f"/{scheme['execute_handler']}" == audit_read.AUDIT_READ_PATH
+    assert [(option["name"], option["mode"]) for option in scheme["options"]] == [
+        (audit_read.USER_OPTION, "optional"),
+        (audit_read.SINCE_OPTION, "optional"),
+        (audit_read.LIMIT_OPTION, "optional"),
+        (audit_read.JSON_OPTION, "none"),
+    ]
+    assert scheme["usages"][0] == occ.OCC_AUDIT_READ_COMMAND_NAME
 
 
 @pytest.mark.anyio
@@ -428,23 +500,28 @@ async def test_a_refused_first_command_does_not_cost_the_second(
 ) -> None:
     """One ``try`` per command, and this is the case that makes it worth having.
 
-    ``OccCommandController::registerCommand`` takes exactly one command per POST, so two
-    commands are two requests. Without the block per command the first refusal would end the
-    loop, and an instance whose purge command could not be registered would silently lose the
-    check of its audit log as well.
+    ``OccCommandController::registerCommand`` takes exactly one command per POST, so three
+    commands are three requests. Without the block per command the first refusal would end the
+    loop, and an instance whose purge command could not be registered would silently lose both
+    commands of its audit log as well.
     """
     route = respx.post(OCC_URL).mock(
-        side_effect=[httpx.Response(500, json={}), httpx.Response(200, json={})]
+        side_effect=[
+            httpx.Response(500, json={}),
+            httpx.Response(200, json={}),
+            httpx.Response(200, json={}),
+        ]
     )
 
     with caplog.at_level(logging.DEBUG):
         await occ.register_occ_commands(env=ENV)
 
-    assert route.call_count == 2
+    assert route.call_count == 3
     assert sent_names(route) == [scheme["name"] for scheme in occ.command_schemes()]
     logged = "\n".join(record.getMessage() for record in caplog.records)
     assert occ.OCC_COMMAND_NAME in logged, "the failure names the command it happened to"
-    assert occ.OCC_AUDIT_COMMAND_NAME not in logged, "the one that worked stays quiet"
+    assert occ.OCC_AUDIT_COMMAND_NAME not in logged, "the ones that worked stay quiet"
+    assert occ.OCC_AUDIT_READ_COMMAND_NAME not in logged
     assert APP_SECRET not in logged
 
 
@@ -455,30 +532,43 @@ async def test_a_first_command_that_never_arrives_does_not_cost_the_second(
 ) -> None:
     """The other half of the same rule: a transport failure is caught per command too."""
     route = respx.post(OCC_URL).mock(
-        side_effect=[httpx.ConnectError("no route to nextcloud"), httpx.Response(200, json={})]
+        side_effect=[
+            httpx.ConnectError("no route to nextcloud"),
+            httpx.Response(200, json={}),
+            httpx.Response(200, json={}),
+        ]
     )
 
     with caplog.at_level(logging.DEBUG):
         await occ.register_occ_commands(env=ENV)
 
-    assert route.call_count == 2
+    assert route.call_count == 3
     assert sent_names(route) == [scheme["name"] for scheme in occ.command_schemes()]
     assert [record for record in caplog.records if record.levelno >= logging.ERROR]
 
 
 @pytest.mark.anyio
 @respx.mock
-async def test_both_commands_failing_is_two_log_lines_and_no_exception(
+async def test_every_command_failing_is_one_log_line_each_and_no_exception(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Pitfall 11: a non empty error field out of ``/enabled`` disables the app again."""
+    """Pitfall 11: a non empty error field out of ``/enabled`` disables the app again.
+
+    Renamed with plan 19-07, and the name is the whole reason: "both commands" was the truth
+    of plan 18-08 and became a number that has to be maintained. One line per command is the
+    rule, whatever the number of commands is, and the count is read from the schemes.
+    """
     route = respx.post(OCC_URL).mock(return_value=httpx.Response(500, json={}))
 
     with caplog.at_level(logging.DEBUG):
         await occ.register_occ_commands(env=ENV)
 
-    assert route.call_count == 2
+    assert route.call_count == len(occ.command_schemes())
     errors = [record.getMessage() for record in caplog.records if record.levelno >= logging.ERROR]
-    assert len(errors) == 2
-    assert any(occ.OCC_COMMAND_NAME in line for line in errors)
-    assert any(occ.OCC_AUDIT_COMMAND_NAME in line for line in errors)
+    assert len(errors) == len(occ.command_schemes())
+    for name in (
+        occ.OCC_COMMAND_NAME,
+        occ.OCC_AUDIT_COMMAND_NAME,
+        occ.OCC_AUDIT_READ_COMMAND_NAME,
+    ):
+        assert any(name in line for line in errors), f"no line names {name}"
