@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
 status: executing
-stopped_at: Completed 19-01-PLAN.md
-last_updated: 2026-08-31T14:10:11.341Z
-last_activity: 2026-08-31 -- 19-01 ausgeführt
+stopped_at: Completed 19-02-PLAN.md
+last_updated: 2026-08-31T14:35:00.000Z
+last_activity: 2026-08-31 -- 19-02 ausgeführt
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 32
-  completed_plans: 24
-  percent: 75
+  completed_plans: 25
+  percent: 78
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 19 (audit-log-bedienung-und-textnachzug) — EXECUTING
-Plan: 2 of 9
-Status: Executing Phase 19 (Plan 1 von 9 fertig)
-Last activity: 2026-08-31 -- 19-01 ausgeführt
+Plan: 3 of 9
+Status: Executing Phase 19 (Plan 2 von 9 fertig)
+Last activity: 2026-08-31 -- 19-02 ausgeführt
 
 ## Performance Metrics
 
@@ -188,6 +188,7 @@ Last activity: 2026-08-31 -- 19-01 ausgeführt
 | Phase 18 P09 | 62min | 3 tasks | 6 files |
 | Phase 18 P10 | 45min | 3 tasks | 3 files |
 | Phase 19 P01 | 22 min | 3 tasks | 7 files |
+| Phase 19 P02 | 20 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -196,6 +197,9 @@ Last activity: 2026-08-31 -- 19-01 ausgeführt
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 19]: die Grenzbeschreibung des Audit-Schalters ist inhaltlich und nicht wörtlich an `exapp/audit_verify.LIMIT_SENTENCE` gebunden; gehalten werden die zwei tragenden Begriffe "changed or removed unnoticed" und "recompute", weil das Formular vor der Entscheidung spricht und die Konsole nach der Prüfung, und ein Test hält beide Orte gegeneinander (T-19-06)
+- [Phase 19]: die Beschriftung nennt alle drei automatischen Löschwege (Frist 180 Tage, Obergrenze 100 MB, Kontolöschung in Nextcloud) und erklärt keinen davon zum einzigen; die verengte Formulierung aus D-v1.5-01 wäre am Code falsch, die Korrektur steht in 19-CONTEXT.md
+- [Phase 19]: das Wort einer zweiten Inhaltsstufe ist an der Oberfläche als Wortform mit Wortgrenzen verboten, nicht als Substring, und `src/mcp_connector/exapp/ui/strings.py` trägt es seit 19-02 an keiner Stelle mehr, auch nicht in einem Kommentar
 - Roadmap v1.5: Phasennummerierung setzt bei 16 fort (v1.4 verbrauchte 14 und 15); vier Phasen bei Granularität coarse, weil der Meilenstein zwei fast unabhängige Stränge plus ein fertiges Release trägt
 - Roadmap v1.5: KEINE Entscheidungsphase, obwohl die Recherche eine vorschlägt; die vier Owner-Entscheidungen D-v1.5-01 bis D-v1.5-04 stehen bereits oben in REQUIREMENTS.md und werden in der Planung nicht wieder aufgemacht
 - Roadmap v1.5: die offene Architekturfrage aus SUMMARY.md (Weg 0 über `integration_openproject` gegen Weg 1 als eigener OAuth-Client) wird von der Roadmap NICHT vorentschieden; sie fällt in Phase 17 auf der Messung in OD-02
