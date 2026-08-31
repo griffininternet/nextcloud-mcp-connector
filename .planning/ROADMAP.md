@@ -235,7 +235,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 19-04-PLAN.md , AUDIT-04: AuditStore.read_entries mit Vorgabe- und Höchstlimit, Sortierung nach seq statt at, alle Pfade als Test
-- [ ] 19-05-PLAN.md , AUDIT-06: docs/privacy.md, docs/uninstall.md und docs/faq.md sagen zwei Datenbanken, drei automatische Löschwege und die --rm-data-Grenze; Doku-Sätze an Codekonstanten gebunden
+- [x] 19-05-PLAN.md , AUDIT-06: docs/privacy.md, docs/uninstall.md und docs/faq.md sagen zwei Datenbanken, drei automatische Löschwege und die --rm-data-Grenze; Doku-Sätze an Codekonstanten gebunden
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -277,7 +277,7 @@ Plans:
 | 16. Release 0.1.11 | v1.5 | 4/4 | Complete | 2026-08-28 |
 | 17. openDesk-Spike | v1.5 | 9/9 | Complete | 2026-08-29 |
 | 18. Audit-Log Kern | v1.5 | 10/10 | Complete | 2026-08-29 |
-| 19. Audit-Log Bedienung und Textnachzug | v1.5 | 4/9 | In Progress | - |
+| 19. Audit-Log Bedienung und Textnachzug | v1.5 | 5/9 | In Progress | - |
 
 ## Next
 
