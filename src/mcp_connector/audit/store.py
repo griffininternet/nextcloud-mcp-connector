@@ -311,6 +311,17 @@ _MARKER_TOTALS = "SELECT COUNT(*), COALESCE(SUM(removed), 0) FROM entries WHERE 
 # is written into the statement instead of into a comment, because a sweep that trimmed the
 # instance chain would remove the very rows that explain the gaps of every other one.
 #
+# The retention pair does not take every expired row: it takes the expired **prefix** of each
+# chain, so a row only goes when every row before it in its own chain goes too. ``at`` comes
+# from the wall clock at write time, and a clock stepped backwards (an NTP correction, a VM
+# resume) puts a younger moment onto a higher sequence number; a bare ``at``-predicate would
+# then tear rows out of the middle of a chain, and the surviving row behind the hole would
+# point at a hash no marker names, which the check reports as tampering that never happened
+# (WR-02 of the phase 18 review, reproduced against this store). An expired row behind a
+# survivor therefore stays until the survivor expires as well. The subquery names the first
+# surviving row of the chain, and ``COALESCE(..., seq + 1)`` is the chain that has none, in
+# which case the whole chain is expired.
+#
 # The two reads pick a bounded batch, the two removals take exactly what the read returned:
 # the batch is ordered by ``seq``, so every row of the same predicate up to the last number of
 # the batch is in it, and ``seq <= ?`` therefore removes that batch and nothing else.
@@ -319,11 +330,16 @@ _MARKER_TOTALS = "SELECT COUNT(*), COALESCE(SUM(removed), 0) FROM entries WHERE 
 # tests/contract/test_no_destructive_calls.py exempts two exact SQL forms in this file, not
 # the file itself, so a call site that carried the word would be a finding, and widening the
 # exemption to cover it would also hide an HTTP DELETE written in this module one day.
+_EXPIRED_PREFIX = (
+    "seq < COALESCE((SELECT MIN(survivor.seq) FROM entries AS survivor "
+    "WHERE survivor.chain = entries.chain AND survivor.at > ?), entries.seq + 1)"
+)
 _EXPIRED_ROWS = (
-    "SELECT seq, chain, hash FROM entries WHERE chain <> ? AND at <= ? ORDER BY seq LIMIT ?"
+    f"SELECT seq, chain, hash FROM entries WHERE chain <> ? AND {_EXPIRED_PREFIX} "  # noqa: S608 - the fragment is a constant of this module, every value is a placeholder
+    "ORDER BY seq LIMIT ?"
 )
 _OLDEST_ROWS = "SELECT seq, chain, hash FROM entries WHERE chain <> ? ORDER BY seq LIMIT ?"
-_DROP_EXPIRED = "DELETE FROM entries WHERE chain <> ? AND at <= ? AND seq <= ?"
+_DROP_EXPIRED = f"DELETE FROM entries WHERE chain <> ? AND {_EXPIRED_PREFIX} AND seq <= ?"  # noqa: S608 - same fragment, same placeholders
 _DROP_OLDEST = "DELETE FROM entries WHERE chain <> ? AND seq <= ?"
 
 # The three statements of the account check (D-12). ``chain <> ?`` spares the instance chain
@@ -589,7 +605,13 @@ def _note_removed(
 def _sweep_expired(
     conn: sqlite3.Connection, cutoff: int, ends: dict[str, str], counts: dict[str, int]
 ) -> int:
-    """Step one, the retention window: every user row not younger than ``cutoff`` goes.
+    """Step one, the retention window: the expired prefix of every user chain goes.
+
+    A prefix and never a hole: a row not younger than ``cutoff`` only goes when everything
+    before it in its own chain goes too, so the block a chain gives up is always contiguous
+    and its end is always the predecessor of the surviving head. The reason stands at
+    :data:`_EXPIRED_PREFIX`: a clock stepped backwards writes a younger moment onto a higher
+    sequence number, and a hole torn into the middle of a chain would read as tampering.
 
     In batches of :data:`SWEEP_BATCH_ROWS` and not in one go: no checkpoint can run while a
     transaction is open, and ten thousand rows in one transaction grew the write ahead log to

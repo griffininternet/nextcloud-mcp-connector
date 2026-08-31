@@ -443,6 +443,39 @@ async def test_the_retention_window_takes_the_old_rows_and_leaves_the_young_ones
     assert shorter.expired == 2, "the window is a parameter, not a law of nature"
 
 
+async def test_a_backwards_clock_step_never_tears_a_hole_into_the_middle_of_a_chain(
+    tmp_path: Path,
+) -> None:
+    """WR-02 of the phase 18 review, reproduced there against this store.
+
+    ``at`` comes from the wall clock at write time, so an NTP correction or a VM resume can
+    put a younger moment onto a higher sequence number. The window may then only take the
+    expired **prefix** of a chain: an expired row behind a survivor has to stay, or the
+    surviving head points at a hash no marker names and the check reports tampering where a
+    clock corrected itself.
+    """
+    subject = open_store(tmp_path)
+    base = 1_000_000_000
+    jump = base + 400 * 86400  # the clock jumped forward and stepped back again
+    await write_calls(subject, ALICE, [base, jump, base + 1, jump + 1])
+    await write_calls(subject, BOB, [base, base + 1])
+
+    report = await subject.sweep(moment=base + store.RETENTION_DAYS * 86400 + 10)
+
+    # alice: only seq 1 is prefix-expired; seq 3 is old enough for the window but stands
+    # behind the younger seq 2 and must stay. bob has no survivor and goes whole.
+    assert report.expired == 3
+    assert await subject.verify_chains() == [], "a clock step is not a tamper finding"
+    left = [(row[0], row[1]) for row in rows(tmp_path) if row[2] == store.KIND_CALL]
+    assert left == [(2, ALICE), (3, ALICE), (4, ALICE)]
+
+    # once the survivor in front has expired too, the rest follows, whole at every step
+    later = await subject.sweep(moment=jump + store.RETENTION_DAYS * 86400 + 10)
+    assert later.expired == 3
+    assert await subject.verify_chains() == []
+    assert [row for row in rows(tmp_path) if row[2] == store.KIND_CALL] == []
+
+
 async def test_the_upper_bound_stops_before_the_table_is_empty(tmp_path: Path) -> None:
     """The case falle 2 of the research asks for: a bound that sweeps to zero is broken."""
     subject = open_store(tmp_path)
