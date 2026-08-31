@@ -45,9 +45,10 @@ observations:
    external component authors mentioning MCP, audit, search or federation. We do not
    read that as absence of interest. We read it as the funnel: two platforms, two CLA
    regimes, and no written expectation of what happens to an outside contribution.
-   That PR #4 got merged is genuinely good news, but from the outside that outcome
-   was invisible until one logs in and reads this thread; the documented state was
-   still "in triage".
+   That the upstream PR (intercom-service PR 4) got merged is genuinely good news,
+   but from the outside that outcome was invisible until one logs in and reads this
+   thread; the documented state was still "in triage". (Im GitLab-Kommentar bewusst
+   ohne Raute vor der 4, weil GitLab "#4" auf das lokale Work-Item 4 verlinken wuerde.)
 
 3. A concrete data point for the CLA and SLA questions: we are willing to sign a CLA
    to contribute, and we still hesitated, because it is two of them, on two platforms,
