@@ -26,9 +26,11 @@ send it on its own, but it is the door through which it leaves. See
 
 ## What the app stores
 
-The app keeps one SQLite database inside its own container, for the OAuth 2.1 and
-credential state it needs to answer a request without a fresh sign in every time.
-It holds these personal data:
+The app keeps two SQLite databases inside its own container. `oauth.sqlite3` holds
+the OAuth 2.1 and credential state it needs to answer a request without a fresh sign
+in every time. `audit.sqlite3` holds the audit log, the record of tool calls, and that
+second file exists only if an administrator switched the record on, or switched it on
+once before. Together the two hold these personal data:
 
 | Data | Where | Form |
 |------|-------|------|
@@ -38,6 +40,14 @@ It holds these personal data:
 | Client registrations | `clients` | the assistant apps and their redirect targets; the secret issued to a client is stored as a hash only, never in the clear |
 | Access switch state | `user_access` | one row per paused account, a timestamp |
 | Timestamps | across the tables | created, revoked, cleanup and expiry times |
+| Nextcloud user id of a recorded call | `audit.sqlite3`, `entries.nc_user` | plain, and it is what the record is grouped by: one group of rows per account |
+| Name of the called tool | `audit.sqlite3`, `entries.tool` | plain, the name of the tool the assistant asked for |
+| Time of the call | `audit.sqlite3`, `entries.at` | Unix seconds, the moment the row was written |
+| The assistant app that called | `audit.sqlite3`, `entries.client_id`, `entries.client_name`, `entries.auth_id` | the registered id of the client, its registered name cleaned and cut to 80 characters, and the id of the connection it used |
+| Outcome of the call | `audit.sqlite3`, `entries.outcome`, `entries.reason` | one of `ok`, `rejected`, `failed`, and where a call was refused a fixed identifier of the reason, never the sentence of an error |
+| How long the call took | `audit.sqlite3`, `entries.duration_ms` | milliseconds |
+| Names of the parameters | `audit.sqlite3`, `entries.params` | a sorted list of parameter names as JSON, never a value |
+| What a recorded call never holds | `audit.sqlite3` | no network address, no user agent, no parameter value, no part of a result, no text of an error message |
 
 The app does not store the content of your files, calendar, notes, deck cards or
 contacts. It reads them per request, under the user's identity, and returns them in
@@ -172,8 +182,8 @@ remains a path outwards that no switch of this app removes.
   act of the administrator, and the order of the two commands is part of it:
 
   1. `occ mcp_connector:purge --force` hands every Nextcloud app password of this
-     app back to Nextcloud, empties every table of its database and deletes its
-     encryption key.
+     app back to Nextcloud, empties the seven tables of its OAuth database and
+     deletes its encryption key.
   2. `occ app_api:app:unregister mcp_connector --rm-data` then removes the app
      together with its data volume.
 
@@ -181,11 +191,44 @@ remains a path outwards that no switch of this app removes.
   only record of which app password belongs to which connection, so those
   credentials would stay valid in Nextcloud with nothing left that knows about
   them. The administration runbook `uninstall.md` in this directory spells out both
-  steps and how to verify that nothing is left.
+  steps, how to check what is gone afterwards, and how to see what stays.
+
+  **The audit log survives the purge.** `occ mcp_connector:purge --force` does not
+  empty `audit.sqlite3`. That is a decision and not an oversight: a record that one
+  command removes records nothing, because that command is the first thing anybody
+  reaches for who wants an entry gone. The file therefore stays in the data volume
+  after the purge, with every row it held. The second command is the one that takes
+  it: `--rm-data` deletes the volume, and the record lies in it. `uninstall.md` has
+  the check that reads the row count out of the volume, so what stays is a number an
+  administrator can see rather than a sentence on this page.
 
 ## Retention
 
 Tokens and codes carry their own expiry and are swept after it. A revoked or ended
-authorization returns its app password to Nextcloud and is cleared. There is no
-long lived store of personal data beyond the active connections a user has chosen
-to keep.
+authorization returns its app password to Nextcloud and is cleared. Beyond the active
+connections a user has chosen to keep, `oauth.sqlite3` holds no personal data that
+outlives them.
+
+The audit log in `audit.sqlite3` is kept longer, and three things delete from it
+without anybody asking for it:
+
+1. **The retention window.** A row is kept for 180 days by default. The default is a
+   default and not a promise for every instance: `NC_MCP_AUDIT_RETENTION_DAYS` moves
+   it, up or down, and the number in force is the one this instance was deployed with.
+2. **The upper bound.** The record stops growing at 100 MB. Above that size the oldest
+   rows give way, so a record nobody looked at for a year cannot fill the volume of
+   this app.
+3. **The account.** An account removed in Nextcloud takes its own rows with it. Every
+   row belongs to the account the call ran for, so this is one group of rows and not a
+   search through the file. The app asks Nextcloud whether an account is still there
+   after that account has been silent in the record for 30 days.
+
+In all three cases a marker stays where the rows were, and the marker says how many
+rows are missing. That is why a later check of the record reports an explained gap
+instead of a break: the rows are gone, the count of them is not, and the difference
+between a deletion this app made and an entry somebody changed afterwards stays
+readable.
+
+Pausing access or disconnecting an assistant deletes nothing from the record. Both are
+events of today and the record is about what happened, so the rows stay where they
+are.
