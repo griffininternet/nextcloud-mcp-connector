@@ -2149,6 +2149,96 @@ def test_the_vocabulary_gate_stops_at_the_internal_planning_area() -> None:
         )
 
 
+# --------------------------------------------------------------------------------------
+# The four claims this project cannot keep (AUDIT-06, decision D-v1.5-02, plan 19-03)
+#
+# Same reach, same message shape and same kind of counter probe as the vocabulary gate
+# above, and the list lives next to that one for the reason its own comment gives: two
+# places holding the same kind of rule would be two truths. What differs is the rule.
+# Forbidden here is the claim and not the word, so :data:`FORBIDDEN_CLAIMS` carries word
+# forms per language instead of bare substrings. The three legitimate occurrences a bare
+# substring list would hit today are named in the comment of that constant and each one
+# has its own case below, so a later tightening of the patterns cannot swallow them
+# unnoticed.
+# --------------------------------------------------------------------------------------
+
+
+def test_no_public_text_carries_a_forbidden_claim(manifest_root: etree._Element) -> None:
+    """The gate: every public markdown page of this repository plus the manifest text.
+
+    The reach is the one of the vocabulary gate, read from the same function, so a page
+    added under ``docs/`` is covered by both rules or by neither. The manifest travels
+    through :func:`element_text_without_comments` for the same reason as there: its own
+    explanatory comments quote the words a gate looks for.
+    """
+    findings = [
+        finding
+        for page in public_markdown_pages()
+        for finding in claim_findings(
+            page.read_text(encoding="utf-8"), page.relative_to(ROOT).as_posix()
+        )
+    ]
+    findings += claim_findings(element_text_without_comments(manifest_root), "appinfo/info.xml")
+
+    assert findings == [], "a public text carries a claim nobody here can keep: " + "; ".join(
+        findings
+    )
+
+
+def test_the_claim_of_a_revision_proof_log_is_reported_with_its_line() -> None:
+    """The German compound, and the message names the file and the line, nothing else."""
+    findings = claim_findings("This log is revisionssicher.\n", "probe.md")
+
+    assert len(findings) == 1, findings
+    assert findings[0].startswith("probe.md:1:"), findings[0]
+
+
+def test_the_claim_of_gdpr_compliance_is_reported() -> None:
+    """The English form of the claim, the one a store description would carry."""
+    assert claim_findings("Our store description says GDPR compliant.\n", "probe.md")
+
+
+def test_the_claim_of_ai_act_compliance_is_reported() -> None:
+    """Two words with a space between them, which is how English writes this claim."""
+    assert claim_findings("The app is AI Act compliant.\n", "probe.md")
+
+
+def test_the_french_claim_of_gdpr_compliance_is_reported() -> None:
+    """French puts the regulation last, so the pattern has to read both word orders."""
+    assert claim_findings("conforme au RGPD\n", "probe.md")
+
+
+def test_the_claim_of_a_siem_certification_is_reported() -> None:
+    """Nobody certified this log for anything, in any language."""
+    assert claim_findings("SIEM certified\n", "probe.md")
+
+
+def test_the_siem_readout_question_of_the_spike_is_no_claim() -> None:
+    """``docs/spike-opendesk.md`` records an open question about a SIEM readout.
+
+    That page is inside the reach of the gate, and a bare substring list would turn it
+    red for writing down what somebody else offers. A text of this project may also say
+    that this log has no SIEM connection at all.
+    """
+    assert claim_findings("Audit-Log mit SIEM-Ausleitung ist offen.\n", "probe.md") == []
+
+
+def test_a_specification_compliant_client_is_no_claim() -> None:
+    """``docs/oauth-setup.md:204`` says "specification compliant client" and stays."""
+    assert claim_findings("a specification compliant client\n", "probe.md") == []
+
+
+def test_the_french_conformance_to_the_specification_is_no_claim() -> None:
+    """``README.fr.md:68`` says "conforme a la specification", with and without accents."""
+    assert claim_findings("conforme a la specification\n", "probe.md") == []
+    assert claim_findings("conforme à la spécification d'autorisation MCP\n", "x.md") == []
+
+
+def test_a_plain_sentence_about_the_audit_log_is_no_claim() -> None:
+    """The wording "Audit-Log" itself stays allowed: the phase writes it into three texts."""
+    assert claim_findings("Das Audit-Log hält seine Einträge hash-verkettet.\n", "probe.md") == []
+
+
 def test_no_declared_variable_carries_an_empty_default(manifest_root: etree._Element) -> None:
     """The shipped state: six variables, not one default among them."""
     assert variable_problems(manifest_root) == []
