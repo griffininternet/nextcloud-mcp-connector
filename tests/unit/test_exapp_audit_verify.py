@@ -68,15 +68,24 @@ def appapi_headers(user: str = "", secret: str = APP_SECRET) -> dict[str, str]:
     }
 
 
+def appapi_header_pairs(*extra: tuple[bytes, bytes]) -> list[tuple[bytes, bytes]]:
+    """The same headers as raw byte pairs, plus whatever a case wants to add to them."""
+    pairs = [(name.lower().encode(), text.encode()) for name, text in appapi_headers().items()]
+    return [*pairs, *extra]
+
+
 class Deployment:
     """One process of this application with its own audit file and the check route on it."""
 
     def __init__(self, tmp_path: Path) -> None:
         self.path = tmp_path / store.AUDIT_FILENAME
         self.store = store.AuditStore(self.path)
-        self.client = TestClient(
-            Starlette(routes=audit_verify.audit_verify_routes(ENV, store_provider=self._open))
+        #: The application itself, kept next to the client because one case has to drive it
+        #: without the client in between; see :func:`raw_call`.
+        self.app = Starlette(
+            routes=audit_verify.audit_verify_routes(ENV, store_provider=self._open)
         )
+        self.client = TestClient(self.app)
 
     async def _open(self) -> store.AuditStore:
         return self.store
@@ -128,7 +137,7 @@ def call(
     *,
     as_json: bool = False,
     body: object | None = None,
-    headers: dict[str, str] | None = None,
+    headers: dict[str, str] | list[tuple[bytes, bytes]] | None = None,
 ) -> Any:
     """One occ invocation, as AppAPI delivers it: a POST with the options in the body.
 
@@ -140,6 +149,48 @@ def call(
     payload = body if body is not None else {"occ": {"arguments": None, "options": options}}
     sent = appapi_headers() if headers is None else headers
     return deployment.client.post(audit_verify.AUDIT_VERIFY_PATH, json=payload, headers=sent)
+
+
+def raw_call(
+    deployment: Deployment, headers: list[tuple[bytes, bytes]], body: bytes = b"{}"
+) -> tuple[int, str]:
+    """One POST straight into the application, with the header bytes handed over untouched.
+
+    Not through the test client, and the reason is a property of the client and not of this
+    handler: httpx reads a field value it cannot decode as ASCII with latin-1 and the test
+    client encodes it again as UTF-8, so a single byte such as ``b"\\xb2"`` arrives as two
+    characters and a case built on it would assert the mangling instead of the handler. A real
+    HTTP stack passes the byte through, which is exactly why the handler has to survive it.
+    """
+    scope: dict[str, Any] = {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.3"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": audit_verify.AUDIT_VERIFY_PATH,
+        "raw_path": audit_verify.AUDIT_VERIFY_PATH.encode(),
+        "query_string": b"",
+        "root_path": "",
+        "headers": headers,
+        "client": ("127.0.0.1", 45678),
+        "server": ("testserver", 80),
+    }
+    answered: list[dict[str, Any]] = []
+
+    async def receive() -> dict[str, Any]:
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    async def send(message: dict[str, Any]) -> None:
+        answered.append(message)
+
+    asyncio.run(deployment.app(scope, receive, send))
+
+    status = next(part["status"] for part in answered if part["type"] == "http.response.start")
+    text = b"".join(
+        part.get("body", b"") for part in answered if part["type"] == "http.response.body"
+    )
+    return status, text.decode("utf-8")
 
 
 # --- the boundary: T-18-07 ----------------------------------------------------------
@@ -471,6 +522,58 @@ def test_a_body_above_the_limit_is_not_parsed_and_costs_no_answer(live: Deployme
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/plain")
+
+
+def test_a_unicode_digit_in_the_announced_length_answers_like_any_other_call(
+    live: Deployment, caplog: pytest.LogCaptureFixture
+) -> None:
+    """R-18-08: ``"²".isdigit()`` is True and ``int("²")`` raises, so the digit test alone
+    turned one header of an authenticated caller into a 500.
+
+    A 500 is the worst answer this handler can give, for the reason T-18-20 names: AppAPI drops
+    the body of anything that is not a 200, so an administrator would be left with an empty
+    console instead of a verdict. The value is treated like a length that was never announced,
+    which costs nothing, because ``responses.bounded_body`` is what really holds the bound.
+    """
+    superscript_two = b"\xb2"
+
+    with caplog.at_level(logging.DEBUG):
+        status, text = raw_call(live, appapi_header_pairs((b"content-length", superscript_two)))
+
+    assert status == 200
+    assert audit_verify.NO_BREAK in text
+    assert superscript_two.decode("latin-1") not in text, "the answer repeats no header value"
+    assert "Traceback" not in text
+    assert str(live.path) not in text
+    logged = "\n".join(entry.getMessage() for entry in caplog.records)
+    assert superscript_two.decode("latin-1") not in logged, "and neither does the log (T-05-03)"
+
+
+def test_a_digit_run_no_integer_can_hold_answers_like_any_other_call(live: Deployment) -> None:
+    """The second half of the same trap, and ASCII throughout: since Python 3.11 a run of more
+    than 4300 digits makes :func:`int` raise as well.
+
+    ``isascii`` alone does not catch this one, which is why the length of the run is decided
+    before its value is. ``config.py:433-465`` carries both halves for the same reason.
+    """
+    status, text = raw_call(live, appapi_header_pairs((b"content-length", b"9" * 5000)))
+
+    assert status == 200
+    assert audit_verify.NO_BREAK in text
+
+
+def test_an_announced_length_above_the_limit_still_costs_no_answer(live: Deployment) -> None:
+    """The neighbour of the two cases above, unchanged by them: a plain number is read as one.
+
+    The body of this call is small and the header lies about it, which is precisely the case the
+    announced length exists for. The answer stays the ordinary text one, because a body this
+    handler does not read is not a rejection.
+    """
+    response = call(live, headers=appapi_headers() | {"content-length": "99999"})
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    assert audit_verify.NO_BREAK in response.text
 
 
 # --- the store that cannot be read: T-18-10 -----------------------------------------
