@@ -53,6 +53,7 @@ from starlette.routing import Route
 from ..audit.store import (
     FINDING_MISSING,
     FINDING_MODIFIED,
+    SIZE_LIMIT_BYTES,
     AuditStore,
     ChainFinding,
     StoreOverview,
@@ -119,6 +120,16 @@ LIMIT_SENTENCE = (
     "chain behind the change."
 )
 
+#: The one state no sweep resolves, said out loud instead of staying silent (WR-03 of the
+#: phase 18 review): the upper bound may only evict user rows, so a store whose budget is
+#: filled by the permanent markers and switch rows of the instance chain stays over it
+#: forever. The sentence names the cause, because "over its bound" alone would read like a
+#: fault the next sweep fixes by itself.
+OVER_BOUND_SENTENCE = (
+    "the store is over its size bound and nothing is left to sweep: the permanent markers "
+    "of the instance chain fill the budget by themselves"
+)
+
 logger = logging.getLogger("mcp_connector.exapp.audit_verify")
 
 #: How a caller hands in its own store, the shape ``exapp/purge.py`` uses for the OAuth one.
@@ -174,6 +185,11 @@ def _report(overview: StoreOverview, findings: list[ChainFinding]) -> str:
     third one is there so an explained hole can be told from an unexplained one: a store
     whose oldest rows gave way to the upper bound is whole, and it says so next to the
     number of rows that went (D-10).
+
+    One line is conditional: :data:`OVER_BOUND_SENTENCE` appears only in the state it names,
+    over the bound with nothing sweepable left (WR-03). Over the bound with user rows still
+    in the store is what the next sweep resolves by itself, and a warning about that would
+    cry wolf on every busy instance between two sweeps.
     """
     chains = _count(overview.chains, "chain", "chains")
     entries = _count(overview.entries, "entry", "entries")
@@ -183,8 +199,20 @@ def _report(overview: StoreOverview, findings: list[ChainFinding]) -> str:
         f"{_count(overview.tombstones, 'tombstone', 'tombstones')} in the instance chain, "
         f"explaining {_count(overview.explained_entries, 'entry', 'entries')} that were removed"
     )
+    if _over_bound(overview):
+        lines.append(OVER_BOUND_SENTENCE)
     lines.append(LIMIT_SENTENCE)
     return "\n".join(lines) + "\n"
+
+
+def _over_bound(overview: StoreOverview) -> bool:
+    """Over the size bound with nothing the sweep may take: the state of WR-03.
+
+    ``sweepable_entries`` counts the rows outside the instance chain, which are the only
+    rows the upper bound may evict. :data:`~mcp_connector.audit.store.SIZE_LIMIT_BYTES` is
+    read at call time, so a test can lower it instead of building a hundred megabyte file.
+    """
+    return overview.used_bytes > SIZE_LIMIT_BYTES and overview.sweepable_entries == 0
 
 
 def _count(number: int, one: str, many: str) -> str:
@@ -228,6 +256,9 @@ def _machine_readable(overview: StoreOverview, findings: list[ChainFinding]) -> 
         "entries": overview.entries,
         "tombstones": overview.tombstones,
         "explained_entries": overview.explained_entries,
+        "used_bytes": overview.used_bytes,
+        "sweepable_entries": overview.sweepable_entries,
+        "over_bound_unevictable": _over_bound(overview),
         "broken": bool(findings),
         "findings": [
             {

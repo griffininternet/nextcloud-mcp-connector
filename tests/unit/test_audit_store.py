@@ -591,6 +591,116 @@ async def test_a_crash_between_two_batches_leaves_every_committed_batch_explaine
     assert marker[15] == ALICE
 
 
+# --- the register of markers: bounded, not append-only --------------------------------
+# WR-03 of the phase 18 review: the instance chain is never swept, so an append-only
+# register would crowd the actual audit rows out of the fixed budget over the years. Only
+# the newest marker of a chain explains its surviving head (the sweep takes prefixes), so
+# the trailing run of markers is consolidated instead of extended.
+
+
+async def test_repeated_sweeps_consolidate_to_one_marker_per_chain(tmp_path: Path) -> None:
+    """Four sweeps, one chain: the register holds one marker, not four.
+
+    The counts of the superseded markers are summed into the survivor, so the overview
+    still answers with the true number of rows that ever went, and the surviving head still
+    points at the end the one marker names.
+    """
+    subject = open_store(tmp_path)
+    base = 1_000_000_000
+    ats = [base + day * 86400 for day in range(6)]
+    await write_calls(subject, ALICE, ats)
+
+    for day in range(1, 5):
+        await subject.sweep(moment=ats[day] + store.RETENTION_DAYS * 86400)
+
+    (marker,) = [row for row in rows(tmp_path) if row[2] == store.KIND_TOMBSTONE]
+    assert marker[14] == 5, "the counts of the superseded markers are summed"
+    assert marker[15] == ALICE
+    assert await subject.verify_chains() == []
+    assert [row[0] for row in rows(tmp_path) if row[2] == store.KIND_CALL] == [6]
+
+    overview = await subject.overview()
+    assert overview.tombstones == 1
+    assert overview.explained_entries == 5, "the true total survives the consolidation"
+
+
+async def test_two_chains_keep_one_consolidated_marker_each(tmp_path: Path) -> None:
+    subject = open_store(tmp_path)
+    base = 1_000_000_000
+    far = base + 400 * 86400
+
+    for round_number in range(3):
+        await write_calls(subject, ALICE, [base + round_number])
+        await write_calls(subject, BOB, [base + round_number])
+        await subject.sweep(moment=far + round_number)
+
+    markers = [row for row in rows(tmp_path) if row[2] == store.KIND_TOMBSTONE]
+    assert sorted((row[15], row[14]) for row in markers) == [(ALICE, 3), (BOB, 3)]
+    assert await subject.verify_chains() == []
+
+
+async def test_a_switch_row_is_a_barrier_the_consolidation_never_crosses(
+    tmp_path: Path,
+) -> None:
+    """The consolidation absorbs only the trailing run of markers. A switch row belongs to
+    the record of D-15 and stays where it stands, and so do the markers older than it: the
+    register grows with switches and chains, never with sweeps."""
+    subject = open_store(tmp_path)
+    base = 1_000_000_000
+    far = base + 400 * 86400
+    await write_calls(subject, ALICE, [base, base + 1])
+    await subject.sweep(moment=far)
+    await subject.append(
+        store.Entry(
+            chain=store.CHAIN_INSTANCE,
+            kind=store.KIND_SWITCH,
+            actor=store.ACTOR_UNKNOWN,
+            outcome="off",
+            at=far,
+        )
+    )
+    await write_calls(subject, ALICE, [base + 2, base + 3])
+    await subject.sweep(moment=far + 10)
+    await write_calls(subject, ALICE, [base + 4, base + 5])
+    await subject.sweep(moment=far + 20)
+
+    kinds = [row[2] for row in rows(tmp_path)]
+    assert kinds.count(store.KIND_SWITCH) == 1, "the switch is never absorbed"
+    assert kinds.count(store.KIND_TOMBSTONE) == 2, "one marker before the barrier, one after"
+    markers = [row for row in rows(tmp_path) if row[2] == store.KIND_TOMBSTONE]
+    assert [row[14] for row in markers] == [2, 4], "only the run behind the barrier is summed"
+    assert await subject.verify_chains() == []
+
+    overview = await subject.overview()
+    assert overview.explained_entries == 6, "the true total survives the barrier as well"
+
+
+async def test_overview_measures_the_size_and_the_rows_the_sweep_may_take(
+    tmp_path: Path,
+) -> None:
+    """The two numbers of the over-bound state (WR-03): how much the store occupies and how
+    many rows a sweep may still take. Zero sweepable rows over the bound is the one state no
+    sweep resolves, and the check command needs both numbers to say so."""
+    subject = open_store(tmp_path)
+    await write_calls(subject, ALICE, [1000, 1001])
+    await subject.append(
+        store.Entry(
+            chain=store.CHAIN_INSTANCE,
+            kind=store.KIND_SWITCH,
+            actor=store.ACTOR_UNKNOWN,
+            outcome="on",
+            at=1002,
+        )
+    )
+
+    overview = await subject.overview()
+
+    assert overview.entries == 3
+    assert overview.sweepable_entries == 2, "the instance chain is never the sweep's to take"
+    assert overview.used_bytes == await subject.size()
+    assert overview.used_bytes > 0
+
+
 # --- the neighbour in the same volume: AUDIT-03, T-18-05 ------------------------------
 # The second half of success criterion 4 of the roadmap. The first half is the bound and
 # the window above; this is the sentence "at a full volume token rotation and new

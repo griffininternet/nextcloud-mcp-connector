@@ -312,6 +312,66 @@ def test_the_line_about_the_markers_is_there_even_when_there_is_none(live: Deplo
     )
 
 
+# --- the one state no sweep resolves: WR-03 ------------------------------------------
+# The upper bound may only evict user rows. A store whose budget is filled by the permanent
+# markers and switch rows of the instance chain therefore stays over it forever, and this
+# answer is the one place that state can become visible instead of staying silent.
+
+
+def test_a_store_over_its_bound_with_nothing_sweepable_says_so(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only instance rows in the store and the bound below the file size: the answer has to
+    name the state and its cause. The bound is lowered instead of building a hundred
+    megabyte file; the state under test is the same one."""
+    deployment = Deployment(tmp_path)
+    asyncio.run(
+        deployment.store.append(
+            store.Entry(
+                chain=store.CHAIN_INSTANCE,
+                kind=store.KIND_SWITCH,
+                actor=store.ACTOR_UNKNOWN,
+                outcome="off",
+                at=1000,
+            )
+        )
+    )
+    monkeypatch.setattr(audit_verify, "SIZE_LIMIT_BYTES", 1)
+
+    response = call(deployment)
+    machine = call(deployment, as_json=True).json()
+
+    assert response.status_code == 200
+    assert audit_verify.OVER_BOUND_SENTENCE in response.text
+    assert machine["over_bound_unevictable"] is True
+    assert machine["sweepable_entries"] == 0
+    assert machine["used_bytes"] > 1
+
+
+def test_a_store_under_its_bound_carries_no_over_bound_line(live: Deployment) -> None:
+    """The ordinary store: the line is absent and the keys a script watches say why."""
+    response = call(live)
+    machine = call(live, as_json=True).json()
+
+    assert audit_verify.OVER_BOUND_SENTENCE not in response.text
+    assert machine["over_bound_unevictable"] is False
+    assert machine["sweepable_entries"] == 7
+    assert machine["used_bytes"] > 0
+
+
+def test_a_store_over_its_bound_with_sweepable_rows_stays_quiet(
+    live: Deployment, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Over the bound with user rows left is what the next sweep resolves by itself, and a
+    warning about it would cry wolf on every busy instance between two sweeps."""
+    monkeypatch.setattr(audit_verify, "SIZE_LIMIT_BYTES", 1)
+
+    response = call(live)
+
+    assert audit_verify.OVER_BOUND_SENTENCE not in response.text
+    assert call(live, as_json=True).json()["over_bound_unevictable"] is False
+
+
 def test_every_answer_that_got_past_the_guard_carries_200(live: Deployment) -> None:
     """T-18-20 as one case over all four outcomes: the body is the answer, and a status
     other than 200 makes AppAPI print "command executeHandler failed" instead of it."""

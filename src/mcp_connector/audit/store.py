@@ -118,7 +118,9 @@ SWEEP_BATCH_ROWS = 5000
 #: How many batches the upper bound may take in one run. Twenty times five thousand rows is
 #: far more than one run can ever have to give up, and the number exists for the case it does
 #: not cover: a store that is over the bound with no user row left in it is a different fault
-#: (a swollen instance chain, a page size nobody expected) and must not end in an endless loop.
+#: (a swollen instance chain, a page size nobody expected) and must not end in an endless
+#: loop. That state is not silent either: :meth:`AuditStore.overview` measures it and the
+#: check command of AUDIT-02 names it (WR-03).
 SWEEP_MAX_ROUNDS = 20
 
 #: How many free pages one incremental vacuum hands back to the filesystem. Ten thousand pages
@@ -302,10 +304,14 @@ _EXPLAINED_GAPS = (
     "WHERE chain = ? AND kind = ? AND gap_chain IS NOT NULL AND gap_hash IS NOT NULL"
 )
 
-# The two counting statements of :meth:`AuditStore.overview`. They are aggregates and touch
-# no row of a caller: what they answer is how much there is, never what is in it.
+# The three counting statements of :meth:`AuditStore.overview`. They are aggregates and touch
+# no row of a caller: what they answer is how much there is, never what is in it. The third
+# one counts what the sweep is allowed to take, which is every row outside the instance
+# chain: zero of those while the store is over its bound is the one state no sweep resolves,
+# and the check command needs the number to say so (WR-03).
 _TOTALS = "SELECT COUNT(DISTINCT chain), COUNT(*) FROM entries"
 _MARKER_TOTALS = "SELECT COUNT(*), COALESCE(SUM(removed), 0) FROM entries WHERE kind = ?"
+_SWEEPABLE_TOTAL = "SELECT COUNT(*) FROM entries WHERE chain <> ?"
 
 # The four statements of the sweep. ``chain <> ?`` is the instance chain being spared, and it
 # is written into the statement instead of into a comment, because a sweep that trimmed the
@@ -341,6 +347,19 @@ _EXPIRED_ROWS = (
 _OLDEST_ROWS = "SELECT seq, chain, hash FROM entries WHERE chain <> ? ORDER BY seq LIMIT ?"
 _DROP_EXPIRED = f"DELETE FROM entries WHERE chain <> ? AND {_EXPIRED_PREFIX} AND seq <= ?"  # noqa: S608 - same fragment, same placeholders
 _DROP_OLDEST = "DELETE FROM entries WHERE chain <> ? AND seq <= ?"
+
+# The two statements of the marker consolidation (:func:`_write_markers`, WR-03). The read
+# walks the instance chain newest first and is stopped in Python at the first row that is not
+# a marker for a gap, so a switch row is a barrier the consolidation never crosses. The
+# removal takes exactly the rows of that trailing run, one sequence number at a time, and only
+# ever the tail of the chain: a new marker appended in the same transaction attaches to the
+# row before the absorbed run, so no hole opens and the instance chain stays verifiable link
+# by link.
+_INSTANCE_TAIL = (
+    "SELECT seq, kind, at, removed, gap_chain, gap_hash FROM entries "
+    "WHERE chain = ? ORDER BY seq DESC"
+)
+_DROP_SUPERSEDED = "DELETE FROM entries WHERE chain = ? AND seq = ?"
 
 # The three statements of the account check (D-12). ``chain <> ?`` spares the instance chain
 # here for a second reason on top of the one above: it has no account behind it, so it can
@@ -435,14 +454,22 @@ class StoreOverview:
     without those two numbers the sentence "no break found" would read the same over a store
     that gave half its rows to the upper bound as over one that never lost a row.
 
-    Counts only, and that is the rule of this class: nothing here names a chain, an account
-    or a row, so the answer of the check command stays as free of content as the log itself.
+    ``used_bytes`` and ``sweepable_entries`` exist for the one state no sweep resolves: over
+    the bound of :data:`SIZE_LIMIT_BYTES` with nothing outside the instance chain left to
+    take. The bound may only evict user rows, so without these two numbers that state would
+    stay silent forever, and the check command is where it has to become visible (WR-03).
+
+    Counts and one measurement, and that is the rule of this class: nothing here names a
+    chain, an account or a row, so the answer of the check command stays as free of content
+    as the log itself.
     """
 
     chains: int
     entries: int
     tombstones: int
     explained_entries: int
+    used_bytes: int
+    sweepable_entries: int
 
 
 def should_sweep(seq: int) -> bool:
@@ -677,28 +704,63 @@ def _sweep_over_limit(
 def _write_markers(
     conn: sqlite3.Connection, moment: int, ends: dict[str, str], counts: dict[str, int]
 ) -> None:
-    """One marker per chain the batch touched, inside the transaction of that batch.
+    """One consolidated marker per chain, inside the transaction of the batch.
 
     Inside it and never in one of its own: the caller holds the transaction that removes the
     rows, and the marker and the deletion it explains stand or fall together (WR-01). This
     function therefore opens nothing and commits nothing.
 
+    **Consolidated, so the register stays bounded (WR-03).** Every sweep used to append one
+    more marker per affected chain, and no statement ever removes an instance row, so on a
+    busy instance the permanent markers would slowly crowd the actual audit rows out of the
+    fixed budget of :data:`SIZE_LIMIT_BYTES`, which may only evict user rows. Since a chain
+    only ever loses a contiguous prefix, only the **newest** marker of a chain explains its
+    surviving head; the older ones name hashes no row points at any more. So the trailing run
+    of markers of the instance chain is absorbed: its counts are summed into the new markers,
+    its ends give way to the newer ones, and an untouched chain among them is re-appended
+    with its own moment and its own end. Removing only the tail of a chain and appending in
+    the same transaction opens no hole: the new rows attach to the row before the absorbed
+    run, and the chain stays verifiable link by link.
+
+    A switch row is never absorbed. The walk stops at the first row that is not a marker for
+    a gap, so a switch stays where it stands and so do the markers older than it; the
+    register therefore grows with switches and with chains, never with sweeps.
+
     The marker stands in the instance chain and not in the chain it explains. A marker there
     would have to attach to the head of a chain whose head is exactly what just went, so the
     instance chain is the only place it can hang on to (D-02 plus D-03, 18-RESEARCH.md lines
-    581 to 585). The instance chain is never trimmed by a sweep: it is the register that
-    explains every gap, and it grows with markers and with switches only.
+    581 to 585). A sweep never trims the instance chain: it is the register that explains
+    every gap, and what happens here is a replacement inside one transaction, never a loss.
 
     A marker carries a count and the end of the block that gave way, never a parameter name
     and never a value.
     """
+    # Copies, because the consolidation extends them with absorbed chains the batch never
+    # touched, and the caller counts its own dictionary as "chains this run affected".
+    ends = dict(ends)
+    counts = dict(counts)
+    ats = dict.fromkeys(ends, moment)
+    superseded: list[int] = []
+    tail = conn.execute(_INSTANCE_TAIL, (CHAIN_INSTANCE,))
+    for seq, kind, at, removed, gap_chain, gap_hash in tail:
+        if kind != KIND_TOMBSTONE or gap_chain is None or gap_hash is None:
+            break
+        superseded.append(seq)
+        counts[gap_chain] = counts.get(gap_chain, 0) + (removed or 0)
+        if gap_chain not in ends:
+            # Newest first, so the first absorbed marker of a chain carries its youngest
+            # end and its own moment; an older one of the same chain only adds its count.
+            ends[gap_chain] = gap_hash
+            ats[gap_chain] = at
+    tail.close()
+    conn.executemany(_DROP_SUPERSEDED, [(CHAIN_INSTANCE, seq) for seq in superseded])
     for chain in sorted(ends):
         _append_row(
             conn,
             Entry(
                 chain=CHAIN_INSTANCE,
                 kind=KIND_TOMBSTONE,
-                at=moment,
+                at=ats[chain],
                 actor=ACTOR_UNKNOWN,
                 removed=counts[chain],
                 gap_chain=chain,
@@ -972,18 +1034,22 @@ class AuditStore:
         """The counts :class:`StoreOverview` describes, in one read.
 
         Read next to :meth:`verify_chains` rather than inside it, because the two answer
-        different questions and only one of them may be expensive: this one is four
-        aggregates, and it stays cheap even when the walk of every chain is not.
+        different questions and only one of them may be expensive: this one is five
+        aggregates and one size measurement, and it stays cheap even when the walk of every
+        chain is not.
         """
 
         def work(conn: sqlite3.Connection) -> StoreOverview:
             chains, entries = conn.execute(_TOTALS).fetchone()
             tombstones, explained = conn.execute(_MARKER_TOTALS, (KIND_TOMBSTONE,)).fetchone()
+            (sweepable,) = conn.execute(_SWEEPABLE_TOTAL, (CHAIN_INSTANCE,)).fetchone()
             return StoreOverview(
                 chains=chains,
                 entries=entries,
                 tombstones=tombstones,
                 explained_entries=explained,
+                used_bytes=used_bytes(conn),
+                sweepable_entries=sweepable,
             )
 
         return await self._read(work)
