@@ -7,8 +7,10 @@ Kanal:      offen und vom Owner zu wählen. community.openproject.org ist das Fo
             das das Repository nextcloud/integration_openproject verweist (die Issues dort
             sind abgeschaltet). Die Selbstregistrierung ist dort zu, deshalb geht diese
             Anfrage ueber den veröffentlichten Kontaktweg von OpenProject und nicht ueber
-            das Forum selbst. Dieser Entwurf nennt bewusst keine Adresse, weil in dieser
-            Phase keine geprüft wurde.
+            das Forum selbst. NACHTRAG 2026-08-31, Kontaktseite geprüft
+            (openproject.org/contact/): es gibt keinen eigenen Community-Kanal; publiziert
+            sind info@openproject.com (allgemein), das Kontaktformular auf der Seite,
+            press@ und security@. Empfehlung: info@openproject.com oder das Formular.
 Anlass:     christianlupus hat am 2026-08-28 im Nextcloud-Forum zu einem Konto in der
             OpenProject-Community geraten. Owner-Zusage vom selben Tag: "ich würde ein
             community account beantragen wenn es sein muss" (D-11).
