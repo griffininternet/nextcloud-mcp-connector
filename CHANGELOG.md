@@ -9,6 +9,67 @@ All notable changes to this app are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Nothing here is released. The record of tool calls that 0.1.11 did not carry is usable now: an
+administrator switches it on in the admin settings and reads it with an occ command, and every
+sentence this app publishes about storage, about the purge and about what is planned says what
+the code does. An installed instance sees none of it before the next release, because the store
+reads the manifest at upload time and an installed app keeps the code it was installed with.
+
+### Added
+
+- An occ command that reads the record: `occ mcp_connector:audit:read` prints the entries of one
+  account or of the instance, newest first, one line per entry, and never a parameter value.
+  `--user` takes an account name, or the word `instance` for the chain that belongs to no
+  account; `--since` takes whole days; `--limit` takes a count; `--json` gives the same entries as
+  one machine readable document, in the order the hash chain has them. Without `--limit` the
+  output stops at 200 entries and says in its first line that it did, and a count above 5000 is
+  brought back to 5000. The command reaches this app the way `occ mcp_connector:audit:verify`
+  does, so the manifest declares no route for it and the surface reachable from outside is the
+  one 0.1.11 published.
+- The three environment variables of the record are declared in the manifest:
+  `NC_MCP_AUDIT_LOG`, `NC_MCP_AUDIT_RETENTION_DAYS` and `NC_MCP_AUDIT_MAX_BYTES`. They are a
+  convenience for an installation set up by hand; the admin settings of this app stay the way an
+  administrator switches the record on, and nothing needs an environment variable.
+- A fifth check in [docs/uninstall.md](docs/uninstall.md) reads the number of rows in
+  `audit.sqlite3` out of the data volume, so what stays behind after a removal is a number an
+  administrator can see rather than a sentence on a page.
+
+### Changed
+
+- The wording of the audit switch in the admin settings names the three things the short version
+  left out: the names of the parameters, never their values, a fixed identifier of the reason
+  where a call was refused, and how long a call took. It also says what a later check of the
+  record does not show, that a record which ties calls to named accounts can come under the
+  codetermination of a works council in Germany and in Austria, and how long rows are kept: 180
+  days by default, the record stops growing at 100 MB where the oldest rows give way, and an
+  account removed in Nextcloud takes its own rows with it.
+- [docs/privacy.md](docs/privacy.md), [docs/uninstall.md](docs/uninstall.md) and
+  [docs/faq.md](docs/faq.md) describe two databases instead of one. `occ mcp_connector:purge`
+  empties the seven tables of the OAuth database and leaves the record standing, because a record
+  that one command removes records nothing. All three automatic deletions are named with their
+  numbers, the retention window of 180 days by default, the ceiling of 100 MB, and the removal of
+  an account in Nextcloud, and deleting the data volume of this app stays the one way that takes
+  the whole record with it.
+- The enterprise paragraph of the store description and of all three READMEs no longer calls the
+  record of tool calls planned. It is part of this app, in the open, and planned now means two
+  things: policies per group, and sign in through the identity provider an organisation already
+  runs.
+- An installation that already runs this app sees neither the new command nor the new wording
+  until an administrator has it disable and enable once, because both registrations happen on the
+  path that enables the app.
+
+### Fixed
+
+- The three separate cleaners for names that come from outside are one rule. A name that carries
+  a formatting character, such as U+202E, can no longer turn the reading direction of a line of
+  output around: a character that cannot be printed becomes a space instead of falling away, so
+  two parts of a name do not melt into one word.
+- A `content-length` header carrying a digit that is not an ASCII digit no longer ends in a server
+  error, and neither does a run of digits no integer can hold. The check command answers such a
+  call the way it answers any other.
+
 ## [0.1.11] - 2026-08-28
 
 A release without a code change. The same twenty one tools answer the same questions they
@@ -526,6 +587,7 @@ First release, submitted to the Nextcloud App Store.
   never sees more than that user sees in the web interface.
 - A privacy and data flow description, see [docs/privacy.md](docs/privacy.md).
 
+[Unreleased]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.11...HEAD
 [0.1.11]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/street1983nk/nextcloud-mcp-connector/compare/v0.1.8...v0.1.9
