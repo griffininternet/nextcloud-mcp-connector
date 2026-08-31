@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
 status: executing
-stopped_at: Completed 19-08-PLAN.md
-last_updated: 2026-08-31T16:15:00.000Z
-last_activity: 2026-08-31 -- 19-08 ausgeführt
+stopped_at: Completed 19-09-PLAN.md
+last_updated: 2026-08-31T16:35:00.000Z
+last_activity: 2026-08-31 -- 19-09 ausgeführt, Phase 19 vollständig ausgeführt (Verifikation offen)
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 32
-  completed_plans: 31
-  percent: 97
+  completed_plans: 32
+  percent: 100
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 
 ## Current Position
 
-Phase: 19 (audit-log-bedienung-und-textnachzug) — EXECUTING
+Phase: 19 (audit-log-bedienung-und-textnachzug) — EXECUTED, Verifikation offen
 Plan: 9 of 9
-Status: Executing Phase 19 (Plan 8 von 9 fertig, Welle 5 abgeschlossen)
-Last activity: 2026-08-31 -- 19-08 ausgeführt
+Status: Phase 19 vollständig ausgeführt (9 von 9 Plänen, alle sechs Wellen); AUDIT-04, AUDIT-05 und AUDIT-06 sind Complete. Offen: /gsd:verify-phase 19 (dazu weiterhin /gsd:verify-phase 17 und 18). Kein Tag, kein Store-Upload: die Auslieferung ist EXAPP-12
+Last activity: 2026-08-31 -- 19-09 ausgeführt
 
 ## Performance Metrics
 
@@ -195,6 +195,7 @@ Last activity: 2026-08-31 -- 19-08 ausgeführt
 | Phase 19 P06 | 24 min | 3 tasks | 3 files |
 | Phase 19 P07 | 25 min | 3 tasks | 5 files |
 | Phase 19 P08 | 17 min | 2 tasks | 5 files |
+| Phase 19 P09 | 12 min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -203,6 +204,9 @@ Last activity: 2026-08-31 -- 19-08 ausgeführt
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 19]: der wartende Textrest der Phase steht in einem NEU angelegten `[Unreleased]`-Block über dem Eintrag zu 0.1.11 (Phase 16 hatte den vorigen Block in diesen Eintrag überführt, die Datei begann danach direkt mit 0.1.11): drei Added-Punkte, vier Changed-Punkte, zwei Fixed-Punkte, eine Linkdefinition auf `compare/v0.1.11...HEAD`; kein Release-Eintrag ist angefasst, weil ein Release-Eintrag ein Datum ist (19-09, T-19-37, Diff 62 Einfügungen und 0 Löschungen)
+- [Phase 19]: der Deaktivieren-Aktivieren-Zyklus ist ein eigener Changelog-Punkt und kein Nebensatz: er ist die einzige Aussage des Blocks, die eine Handlung verlangt, und ohne ihn sieht eine bestehende Installation weder das neue Kommando noch die neue Beschriftung (19-09)
+- [Phase 19]: ein Urteil in einer Nachweistabelle ist `gemessen` oder `hergeleitet`, und wo der Kern am Baum gemessen, die Aussage über eine laufende Instanz aber nicht messbar ist, folgt das Urteil dem schwächeren Teil; drei Punkte sind ausdrücklich hergeleitet (Erscheinen des Kommandos in `occ list`, Ausbleiben einer Optionsnamen-Kollision, Sichtbarkeit der neuen Beschriftung), Präzedenz R-18-05 (19-09, T-19-38)
 - [Phase 19]: der Enterprise-Absatz steht an sechs Stellen (drei Manifestbeschreibungen und drei READMEs) in ZWEI Absätzen statt einem: der erste sagt, dass das Protokoll der Werkzeugaufrufe Teil dieser App ist, ab Werk aus, über die Admin-Einstellungen eingeschaltet, mit `occ mcp_connector:audit:read` gelesen und mit `occ mcp_connector:audit:verify` geprüft wird; der zweite behält das Wort "geplant" für Gruppen-Policies und die Anmeldung über den Identitätsanbieter. Die Trennung ist nicht Typografie, sondern die Bedingung, unter der ein Test zeilenweise verbieten kann, dass das Audit-Log wieder als geplant bezeichnet wird (19-08, T-19-31)
 - [Phase 19]: sechs Fundstellen einer öffentlichen Aussage werden durch eine Liste plus Test zusammengehalten und nicht durch Sorgfalt: `ENTERPRISE_MARKERS` trägt je Sprache ein Markertripel (EN "audit log"/"off by default"/"group policies", DE "Audit-Log"/"ab Werk aus"/"Gruppen-Policies", FR "journal d'audit"/"désactivé par défaut"/"politiques de groupe"), `enterprise_section` schneidet den Abschnitt unter seiner Überschrift heraus, und die Marker werden gegen den auf einfache Leerzeichen geglätteten Abschnitt geprüft, weil eine README ihre Zeilen umbricht (19-08)
 - [Phase 19]: die Enterprise-Positionierung verspricht Leistung und nicht Zugang, weil die App unter AGPL-3.0 offen liegt und das Protokoll Teil davon ist; die grössere Lizenzfrage bleibt OD-03 auf der Fragenliste des ISV-Calls und wird nicht im Store-Text beantwortet (19-08, T-19-33 accept)
@@ -760,14 +764,14 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-31T15:58:00.000Z
-Stopped at: Completed 19-07-PLAN.md
-Nächster Schritt: Phase 19 weiter ausführen (Welle 5: 19-08, Enterprise-Absatz an sechs Stellen in drei Sprachen); weiterhin offen: Phase 17 und Phase 18 verifizieren (/gsd:verify-phase 17, /gsd:verify-phase 18) und 16-04 (Store-Einreichung 0.1.11). Owner-Gate nach 19-07: der echte occ-Lauf gegen eine laufende Nextcloud (Deaktivieren, Aktivieren, `occ list | grep mcp_connector`) ist hergeleitet und nicht gemessen, die Schrittliste steht in 19-07-SUMMARY.md
+Last session: 2026-08-31T16:35:00.000Z
+Stopped at: Completed 19-09-PLAN.md
+Nächster Schritt: /gsd:verify-phase 19; weiterhin offen: Phase 17 und Phase 18 verifizieren (/gsd:verify-phase 17, /gsd:verify-phase 18) und 16-04 (Store-Einreichung 0.1.11). Owner-Gate aus 19-07 und 19-09: der echte occ-Lauf gegen eine laufende Nextcloud (Deaktivieren, Aktivieren, `occ list | grep mcp_connector`, das Lesekommando in vier Formen, dann `occ mcp_connector:audit:verify`) ist hergeleitet und nicht gemessen; die neunschrittige Liste steht in 19-09-SUMMARY.md
 Resume file: None
 
 ## Operator Next Steps
 
-- Phase 16 planen: /gsd:plan-phase 16 (Release 0.1.11, räumt den `[Unreleased]`-Block)
-- Danach oder parallel: /gsd:plan-phase 17 (openDesk-Spike) und /gsd:plan-phase 18 (Audit-Log Kern)
-- Phase 19 erst planen, wenn 16 ausgeliefert und 18 abgeschlossen ist
-- Owner-Gate bleibt: der Tag v0.1.11 entsteht nur nach ausdrücklicher, wörtlicher Freigabe
+- Phase 19 verifizieren: /gsd:verify-phase 19 (Nachweistabelle, sechs Lieferverbote und die drei hergeleiteten Punkte stehen in 19-09-SUMMARY.md)
+- Danach die offenen Verifikationen: /gsd:verify-phase 17 und /gsd:verify-phase 18
+- Offen aus Phase 16: 16-04 (Store-Einreichung 0.1.11)
+- Owner-Gate bleibt: ein Tag auf `v*` entsteht nur nach ausdrücklicher, wörtlicher Freigabe; Milestone-Tags heissen `milestone-v*`, weil `release.yml` auf `v*` triggert. Die Auslieferung des Audit-Logs ist EXAPP-12 (Release 0.1.12) und ausdrücklich nicht Teil von v1.5

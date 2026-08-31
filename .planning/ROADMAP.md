@@ -251,7 +251,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 19-09-PLAN.md , Abschluss: neuer [Unreleased]-Block, volle Gate-Kette, sechs Lieferverbote belegt, Nachweistabelle je Erfolgskriterium
+- [x] 19-09-PLAN.md , Abschluss: neuer [Unreleased]-Block, volle Gate-Kette, sechs Lieferverbote belegt, Nachweistabelle je Erfolgskriterium
 
 *Die Serialisierung folgt den Dateien und nicht der Bequemlichkeit: 19-01 liegt vor 19-04 und 19-06, weil sonst ein vierter Namensreiniger entstünde; 19-03 liegt vor jedem Textplan, damit die neuen Sätze gegen ein stehendes Gate geschrieben werden; 19-06 liegt vor 19-07, weil die Registrierung den Handlerpfad ableitet; 19-08 liegt nach 19-07, weil beide appinfo/info.xml anfassen. Erfolgskriterium 4 wird bewusst nicht wörtlich erfüllt: der Code kennt drei automatische Löschwege (Frist 180 Tage, Obergrenze 100 MB, Löschung des Kontos in Nextcloud), nicht einen, und der Nutzertext nennt alle drei. Das ist eine Messung und keine Änderung an D-v1.5-01; Begründung in 19-RESEARCH.md und in Plan 19-05.*
 
@@ -277,11 +277,11 @@ Plans:
 | 16. Release 0.1.11 | v1.5 | 4/4 | Complete | 2026-08-28 |
 | 17. openDesk-Spike | v1.5 | 9/9 | Complete | 2026-08-29 |
 | 18. Audit-Log Kern | v1.5 | 10/10 | Complete | 2026-08-29 |
-| 19. Audit-Log Bedienung und Textnachzug | v1.5 | 8/9 | In Progress | - |
+| 19. Audit-Log Bedienung und Textnachzug | v1.5 | 9/9 | Executed (Verifikation offen) | - |
 
 ## Next
 
-`/gsd:execute-phase 19`: Phase 19 (Audit-Log Bedienung und Textnachzug) ausführen, neun Pläne in sechs Wellen, alle autonom, kein Owner-Gate. Die Wellen sind seriell zu fahren, weil auf diesem Rechner ohne Worktrees gearbeitet wird; innerhalb von Welle 1 und Welle 2 gibt es keine Dateiüberschneidung. Kein Tag, kein Store-Upload: die Auslieferung ist EXAPP-12 und liegt hinter diesem Meilenstein.
+`/gsd:verify-phase 19`: Phase 19 ist ausgeführt (9 von 9 Plänen, alle sechs Wellen). Die Verifikation findet in `19-09-SUMMARY.md` die Nachweistabelle je Erfolgskriterium, die sechs belegten Lieferverbote und die drei ausdrücklich hergeleiteten Punkte (Erscheinen des Kommandos in `occ list`, Ausbleiben einer Optionsnamen-Kollision, Sichtbarkeit der neuen Beschriftung), die ohne laufende Test-Nextcloud nicht messbar waren. Erfolgskriterium 4 ist bewusst nicht wörtlich erfüllt (drei automatische Löschwege statt einem, siehe unten). Kein Tag, kein Store-Upload: die Auslieferung ist EXAPP-12 und liegt hinter diesem Meilenstein.
 
 ---
 *Roadmap created: 2026-08-14 (granularity: coarse, mode: mvp); v1.0 abgeschlossen: 2026-08-20; v1.1 abgeschlossen: 2026-08-20 (Phase 7 deferred); v1.2 abgeschlossen: 2026-08-25 (Release 0.1.8 live); v1.3 abgeschlossen: 2026-08-26 (Release 0.1.9 live, CIMD nachgemessen, Enterprise-Fake-Door); v1.4 abgeschlossen: 2026-08-28 (Release 0.1.10 live); v1.5 aufgesetzt: 2026-08-28 (Phasen 16-19: Release 0.1.11, openDesk-Spike, Audit-Log in zwei Phasen); Phase 17 geplant: 2026-08-28 (9 Pläne, 9 Wellen); Phase 19 geplant: 2026-08-31 (9 Pläne, 6 Wellen)*
