@@ -33,6 +33,7 @@ import pytest
 from lxml import etree
 from starlette.applications import Starlette
 from starlette.testclient import TestClient
+from starlette.types import Message
 
 from mcp_connector import config
 from mcp_connector.audit import store
@@ -176,12 +177,12 @@ def raw_call(
         "client": ("127.0.0.1", 45678),
         "server": ("testserver", 80),
     }
-    answered: list[dict[str, Any]] = []
+    answered: list[Message] = []
 
-    async def receive() -> dict[str, Any]:
+    async def receive() -> Message:
         return {"type": "http.request", "body": body, "more_body": False}
 
-    async def send(message: dict[str, Any]) -> None:
+    async def send(message: Message) -> None:
         answered.append(message)
 
     asyncio.run(deployment.app(scope, receive, send))
