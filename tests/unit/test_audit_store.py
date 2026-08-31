@@ -118,6 +118,12 @@ def drop_oldest(tmp_path: Path, count: int) -> None:
         conn.close()
 
 
+def file_names(tmp_path: Path) -> set[str]:
+    """What the store laid down in its directory. Sync, like every other helper that touches
+    the filesystem here: a path call inside an async test blocks the loop."""
+    return {path.name for path in tmp_path.iterdir()}
+
+
 def past_the_store(tmp_path: Path, statement: str, parameters: tuple[Any, ...]) -> None:
     """Change the file with a connection of its own, the way an attacker would.
 
@@ -759,7 +765,7 @@ async def test_read_entries_of_an_empty_store_is_an_empty_list(tmp_path: Path) -
     subject = open_store(tmp_path)
 
     assert await subject.read_entries() == []
-    assert {path.name for path in tmp_path.iterdir()} <= {
+    assert file_names(tmp_path) <= {
         store.AUDIT_FILENAME,
         f"{store.AUDIT_FILENAME}-wal",
         f"{store.AUDIT_FILENAME}-shm",
@@ -776,7 +782,9 @@ async def test_read_entries_hands_the_youngest_row_over_first(tmp_path: Path) ->
     assert [row[3] for row in read] == [1002, 1001, 1000]
 
 
-async def test_a_limit_below_the_number_of_rows_cuts_the_answer(tmp_path: Path) -> None:
+async def test_read_entries_with_a_limit_below_the_number_of_rows_cuts_the_answer(
+    tmp_path: Path,
+) -> None:
     subject = open_store(tmp_path)
     await write_calls(subject, ALICE, [1000, 1001, 1002, 1003, 1004])
 
@@ -785,7 +793,7 @@ async def test_a_limit_below_the_number_of_rows_cuts_the_answer(tmp_path: Path) 
     assert [row[0] for row in read] == [5, 4], "the two youngest, not the two oldest"
 
 
-async def test_a_limit_of_zero_or_below_still_answers_with_exactly_one_row(
+async def test_read_entries_with_a_limit_of_zero_or_below_answers_with_exactly_one_row(
     tmp_path: Path,
 ) -> None:
     """The lower bound of the clamp. Zero would be an answer nobody asked for and a negative
@@ -796,3 +804,151 @@ async def test_a_limit_of_zero_or_below_still_answers_with_exactly_one_row(
 
     assert [row[0] for row in await subject.read_entries(limit=0)] == [3]
     assert [row[0] for row in await subject.read_entries(limit=-5)] == [3]
+
+
+async def test_read_entries_with_a_chain_filter_leaves_every_other_chain_out(
+    tmp_path: Path,
+) -> None:
+    subject = open_store(tmp_path)
+    await write_calls(subject, ALICE, [1000, 1002])
+    await write_calls(subject, BOB, [1001])
+    await subject.append(
+        store.Entry(
+            chain=store.CHAIN_INSTANCE,
+            kind=store.KIND_SWITCH,
+            actor=store.ACTOR_UNKNOWN,
+            outcome="on",
+            at=1003,
+        )
+    )
+
+    read = await subject.read_entries(chain=ALICE)
+
+    assert {row[1] for row in read} == {ALICE}, "neither bob nor the instance chain"
+    assert [row[0] for row in read] == [2, 1], "the numbers bob and the switch left over"
+    assert [row[3] for row in read] == [1002, 1000]
+
+
+async def test_read_entries_of_a_chain_nobody_wrote_to_is_an_empty_list_and_not_an_error(
+    tmp_path: Path,
+) -> None:
+    subject = open_store(tmp_path)
+    await write_calls(subject, ALICE, [1000, 1001])
+
+    assert await subject.read_entries(chain=store.user_chain("nobody")) == []
+
+
+async def test_read_entries_cuts_a_limit_above_the_maximum_down_to_the_maximum(
+    tmp_path: Path,
+) -> None:
+    """The upper end of the clamp, measured against more rows than the maximum, because a
+    store with three rows in it would pass this assertion with no clamp at all."""
+    subject = open_store(tmp_path)
+    await subject.size()  # the schema, so the bulk insert below has a table
+    fill(tmp_path, store.READ_LIMIT_MAX + 3)
+
+    read = await subject.read_entries(limit=10**9)
+
+    assert len(read) == store.READ_LIMIT_MAX
+    assert read[0][0] == store.READ_LIMIT_MAX + 3, "cut at the old end, not at the young one"
+
+
+async def test_read_entries_without_a_limit_stops_at_the_default(tmp_path: Path) -> None:
+    subject = open_store(tmp_path)
+    await subject.size()
+    fill(tmp_path, store.READ_LIMIT_DEFAULT + 5)
+
+    read = await subject.read_entries()
+
+    assert len(read) == store.READ_LIMIT_DEFAULT
+    assert store.READ_LIMIT_DEFAULT < store.READ_LIMIT_MAX, "or the default were no default"
+
+
+async def test_read_entries_since_takes_the_moment_itself_and_not_the_one_before_it(
+    tmp_path: Path,
+) -> None:
+    subject = open_store(tmp_path)
+    await write_calls(subject, ALICE, [999, 1000, 1001])
+
+    read = await subject.read_entries(since=1000)
+
+    assert [row[3] for row in read] == [1001, 1000], "the border belongs to the window"
+
+
+async def test_read_entries_until_takes_the_moment_itself_and_not_the_one_after_it(
+    tmp_path: Path,
+) -> None:
+    subject = open_store(tmp_path)
+    await write_calls(subject, ALICE, [999, 1000, 1001])
+
+    read = await subject.read_entries(until=1000)
+
+    assert [row[3] for row in read] == [1000, 999]
+
+
+async def test_read_entries_puts_a_row_with_a_smaller_moment_than_its_predecessor_first(
+    tmp_path: Path,
+) -> None:
+    """WR-02 against the read: ``at`` is the wall clock at write time, and a clock stepped
+    backwards puts a smaller moment onto a higher sequence number. The youngest row of the
+    chain is the one with the highest ``seq``, whatever its moment says.
+
+    The moment is changed behind the store's back, which breaks the hash of that row. That is
+    beside the point here: what is under test is the order of the answer, not the chain.
+    """
+    subject = open_store(tmp_path)
+    await write_calls(subject, ALICE, [1000, 1001, 1002])
+    past_the_store(tmp_path, "UPDATE entries SET at = ? WHERE seq = ?", (500, 3))
+
+    read = await subject.read_entries()
+
+    assert [row[0] for row in read] == [3, 2, 1], "seq decides, or a clock step reorders history"
+    assert [row[3] for row in read] == [500, 1001, 1000], "and the moments are not sorted at all"
+
+
+async def test_read_entries_hands_an_account_with_a_control_character_over_untouched(
+    tmp_path: Path,
+) -> None:
+    """The store cleans the one value it writes itself, the registered client name, and hands
+    the account through as it is. Bracketing an account for an output line belongs immediately
+    before that line (plan 19-06); a store that cleaned it here would hand a name over that
+    does not match the chain it is in, and no reader could look the chain up again.
+    """
+    hostile = "al\nice"
+    subject = open_store(tmp_path)
+    await subject.append(
+        store.Entry(
+            chain=store.user_chain(hostile),
+            tool="files_search",
+            nc_user=hostile,
+            client_name="Claude\nAssistant",
+            outcome=store.OUTCOME_OK,
+            at=1000,
+        )
+    )
+
+    (row,) = await subject.read_entries()
+
+    assert row[5] == hostile, "the account is handed over unchanged"
+    assert row[1] == store.user_chain(hostile)
+    assert row[9] == "Claude Assistant", "the client name is the one the store itself cleans"
+
+
+async def test_read_entries_carries_the_number_the_canonical_fields_and_both_hashes(
+    tmp_path: Path,
+) -> None:
+    subject = open_store(tmp_path)
+    await write_calls(subject, ALICE, [1000, 1001])
+
+    read = await subject.read_entries()
+
+    for row in read:
+        assert len(row) == len(store.CANONICAL_FIELDS) + 2
+        assert isinstance(row[0], int), "row[0] is the number an output line needs"
+        assert isinstance(row[-2], bytes), "the hashes stay raw bytes, they are not hex here"
+        assert isinstance(row[-1], bytes)
+        assert len(row[-2]) == 32
+        assert len(row[-1]) == 32
+        assert digest_of(row) == row[-1], "the answer is enough to recompute the chain"
+        assert store._entry_of_row(row).tool == "files_search", "and the fields read as an Entry"
+    assert read[0][-2] == read[1][-1], "the younger row points at the older one"
