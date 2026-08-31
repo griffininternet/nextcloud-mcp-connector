@@ -35,7 +35,7 @@ Nicht in diesem Milestone entschieden, weil Verhandlungssache: die AGPL-Konseque
 - [x] **AUDIT-01**: Jeder Werkzeugaufruf erzeugt einen Eintrag mit Nutzer, Werkzeugname, Zeitpunkt, aufrufendem Client und Ergebnisstatus, ohne Parameterwerte und ohne Ergebnisinhalte; eine Erlaubnisliste je Werkzeug hält fest, welche Parameternamen erscheinen, und ein Vertragstest hält diese Grenze nach dem Muster des Budget-Gates
 - [x] **AUDIT-02**: Jeder Eintrag ist mit seinem Vorgänger hash-verkettet, und ein Prüfkommando bestätigt die ungebrochene Kette oder benennt die erste gebrochene Stelle
 - [x] **AUDIT-03**: Das Log liegt dauerhaft in einer eigenen Ablage neben dem OAuth-Speicher, hat eine Obergrenze und eine Aufbewahrungsfrist, die mindestens 180 Tage erreichen kann, und kann bei vollem Volume den OAuth-Speicher nicht schreibunfähig machen
-- [ ] **AUDIT-04**: Ein Administrator liest und exportiert das Log über ein `occ`-Kommando, ohne dass dafür eine neue Route im Manifest deklariert wird
+- [x] **AUDIT-04**: Ein Administrator liest und exportiert das Log über ein `occ`-Kommando, ohne dass dafür eine neue Route im Manifest deklariert wird
 - [x] **AUDIT-05**: Das Audit-Log ist ab Werk abgeschaltet und über die Admin-Einstellungen einschaltbar; die Beschriftung sagt, was das Log leistet, was es nicht leistet, und dass ein nutzerbezogenes Protokoll mitbestimmungsrelevant sein kann
 - [ ] **AUDIT-06**: Die bestehenden Aussagen ziehen mit: `docs/privacy.md` und `docs/uninstall.md` sagen die neue Wahrheit über Speicherung und Purge, und der Enterprise-Absatz nennt das Audit-Log nicht länger als geplant, in allen drei Sprachen und ohne die verbotenen Wörter revisionssicher, AI-Act-konform, DSGVO-konform und SIEM-zertifiziert
 
@@ -86,7 +86,7 @@ Bei der Roadmap-Erstellung am 2026-08-28 gefüllt. Die Phasennummerierung setzt 
 | AUDIT-01 | Phase 18 (Audit-Log Kern) | Complete |
 | AUDIT-02 | Phase 18 (Audit-Log Kern) | Complete |
 | AUDIT-03 | Phase 18 (Audit-Log Kern) | Complete |
-| AUDIT-04 | Phase 19 (Audit-Log Bedienung und Textnachzug) | Pending |
+| AUDIT-04 | Phase 19 (Audit-Log Bedienung und Textnachzug) | Complete |
 | AUDIT-05 | Phase 19 (Audit-Log Bedienung und Textnachzug) | Complete |
 | AUDIT-06 | Phase 19 (Audit-Log Bedienung und Textnachzug) | Pending |
 
@@ -97,6 +97,8 @@ Bei der Roadmap-Erstellung am 2026-08-28 gefüllt. Die Phasennummerierung setzt 
 
 EXAPP-12 steht per Owner-Entscheid unter Future Requirements und ist bewusst in keiner Phase dieses Meilensteins abgebildet.
 
+**Anmerkung zu AUDIT-04 (abgehakt mit Plan 19-07):** Das Kommando `mcp_connector:audit:read` ist registriert, seine Route hängt an der Anwendung, und es kommt keine Route ins Manifest (die Zahl der `<url>`-Einträge bleibt 13). Der Lauf gegen eine laufende Nextcloud ist hergeleitet und nicht gemessen: auf dem Entwicklungsrechner läuft keine Test-Instanz. Die Messung (Deaktivieren, Aktivieren, `occ list | grep mcp_connector`, dann das Kommando ohne Option, mit `--user`, mit `--json`) bleibt ein Release-Gate von EXAPP-12; die Schrittliste steht in `19-07-SUMMARY.md`.
+
 ---
 *Requirements defined: 2026-08-28*
-*Last updated: 2026-08-28 nach der Roadmap-Erstellung (Traceability gefüllt, Phasen 16-19)*
+*Last updated: 2026-08-31 nach Plan 19-07 (AUDIT-04 abgehakt, Messung als Release-Gate vermerkt)*

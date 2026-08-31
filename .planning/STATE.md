@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Vorlauf openDesk
 status: executing
-stopped_at: Completed 19-06-PLAN.md
-last_updated: 2026-08-31T15:35:00.000Z
-last_activity: 2026-08-31 -- 19-06 ausgeführt
+stopped_at: Completed 19-07-PLAN.md
+last_updated: 2026-08-31T15:58:00.000Z
+last_activity: 2026-08-31 -- 19-07 ausgeführt
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 32
-  completed_plans: 29
-  percent: 91
+  completed_plans: 30
+  percent: 94
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-21)
 ## Current Position
 
 Phase: 19 (audit-log-bedienung-und-textnachzug) — EXECUTING
-Plan: 7 of 9
-Status: Executing Phase 19 (Plan 6 von 9 fertig, Welle 3 abgeschlossen)
-Last activity: 2026-08-31 -- 19-06 ausgeführt
+Plan: 8 of 9
+Status: Executing Phase 19 (Plan 7 von 9 fertig, Welle 4 abgeschlossen)
+Last activity: 2026-08-31 -- 19-07 ausgeführt
 
 ## Performance Metrics
 
@@ -193,6 +193,7 @@ Last activity: 2026-08-31 -- 19-06 ausgeführt
 | Phase 19 P04 | 16 min | 2 tasks | 3 files |
 | Phase 19 P05 | 19 min | 3 tasks | 4 files |
 | Phase 19 P06 | 24 min | 3 tasks | 3 files |
+| Phase 19 P07 | 25 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -201,6 +202,10 @@ Last activity: 2026-08-31 -- 19-06 ausgeführt
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 19]: kein Optionsmodus eines occ-Kommandos verlässt die Positivliste `required`, `optional`, `none`, und kein Kommando registriert ein Argument; die Regel steht als Test über alle Schemata im Repo, weil `appinfo/register_command.php` von app_api beim Start JEDES occ-Aufrufs alle ExApp-Kommandos baut und nur Container-Ausnahmen fängt: ein abgelehnter Modus kostet die occ-Kommandozeile der ganzen Instanz (19-07, T-19-26)
+- [Phase 19]: das Lesekommando hat eine eigene JSON-Beschreibung statt der des Prüfkommandos, weil die Maschinenform hier zugleich die Übergabe aus AUDIT-04 ist und die Kettenreihenfolge trägt; die Zahlen der Optionsbeschreibungen (200, 5000, 3650) werden aus den Konstanten hineinformatiert und nie abgeschrieben (19-07)
+- [Phase 19]: die drei Audit-Umgebungsvariablen sind im Manifest deklariert, jede ohne `default`; der Hauptweg bleibt das Admin-Formular (BL-06), aber eine öffentlich beschriebene Grenze, die der Deploy-Daemon wortlos verwirft, wäre eine halbe Zusage (19-07, deferred item aus 18-07 geschlossen)
+- [Phase 19]: harte Zahlen in Registrierungstests lesen ab jetzt `len(occ.command_schemes())`; `test_both_commands_failing_...` trug die Zahl sogar im Namen und heisst jetzt `test_every_command_failing_...` (19-07)
 - [Phase 19]: das Lesekommando ist EIN Kommando `mcp_connector:audit:read` mit einer Maschinenform und nicht zwei Kommandos, und die Maschinenform ist EIN JSON-Dokument über `json_response` statt JSONL, gegen die Empfehlung der Recherche: `json_response` samt `NO_STORE` ist die etablierte Maschinenform dieses Projekts; CSV oder JSONL können später Werte einer `--format`-Option werden (19-06)
 - [Phase 19]: die Textform des Lesekommandos zeigt die neuesten Einträge zuerst, die Maschinenform die Kettenreihenfolge (`reversed`); die Umkehrung steht im Handler, weil der Speicher immer die jüngsten zuerst liefert (19-06, Fortschreibung von 19-04)
 - [Phase 19]: `limit_applied` wird im Handler gegen die importierte Konstante `READ_LIMIT_MAX` geklemmt und nicht nur im Speicher, sonst stünde bei `--limit 999999` eine Zahl im Kopf, die die Antwort nie erreicht, und `truncated` wäre falsch (19-06)
@@ -751,9 +756,9 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-31T15:35:00.000Z
-Stopped at: Completed 19-06-PLAN.md
-Nächster Schritt: Phase 19 weiter ausführen (Welle 4: 19-07, die Registrierung des Lesekommandos); weiterhin offen: Phase 17 und Phase 18 verifizieren (/gsd:verify-phase 17, /gsd:verify-phase 18) und 16-04 (Store-Einreichung 0.1.11)
+Last session: 2026-08-31T15:58:00.000Z
+Stopped at: Completed 19-07-PLAN.md
+Nächster Schritt: Phase 19 weiter ausführen (Welle 5: 19-08, Enterprise-Absatz an sechs Stellen in drei Sprachen); weiterhin offen: Phase 17 und Phase 18 verifizieren (/gsd:verify-phase 17, /gsd:verify-phase 18) und 16-04 (Store-Einreichung 0.1.11). Owner-Gate nach 19-07: der echte occ-Lauf gegen eine laufende Nextcloud (Deaktivieren, Aktivieren, `occ list | grep mcp_connector`) ist hergeleitet und nicht gemessen, die Schrittliste steht in 19-07-SUMMARY.md
 Resume file: None
 
 ## Operator Next Steps

@@ -243,7 +243,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 19-07-PLAN.md , AUDIT-04: dritter Eintrag in command_schemes samt Modus-Positivliste, Route in entry_exapp, sechster abwesender Pfad im Manifest, drei Env-Variablen deklariert
+- [x] 19-07-PLAN.md , AUDIT-04: dritter Eintrag in command_schemes samt Modus-Positivliste, Route in entry_exapp, sechster abwesender Pfad im Manifest, drei Env-Variablen deklariert
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -277,7 +277,7 @@ Plans:
 | 16. Release 0.1.11 | v1.5 | 4/4 | Complete | 2026-08-28 |
 | 17. openDesk-Spike | v1.5 | 9/9 | Complete | 2026-08-29 |
 | 18. Audit-Log Kern | v1.5 | 10/10 | Complete | 2026-08-29 |
-| 19. Audit-Log Bedienung und Textnachzug | v1.5 | 5/9 | In Progress | - |
+| 19. Audit-Log Bedienung und Textnachzug | v1.5 | 7/9 | In Progress | - |
 
 ## Next
 
