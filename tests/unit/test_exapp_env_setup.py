@@ -1685,6 +1685,45 @@ SUMMARY_MAX_LENGTH = 128
 #: against element text, so the explanatory comments of the manifest cannot trip it.
 FORBIDDEN_VOCABULARY = "archiv"
 
+#: The four claims of decision D-v1.5-02, which no text of this project may make: that a
+#: record here is revision proof, that this app is compliant with the AI Act, that it is
+#: compliant with the GDPR, or that anything about it is SIEM certified. Nobody audited,
+#: certified or legally assessed this app, and the store description is read by people who
+#: have to answer for such a sentence.
+#:
+#: Forbidden is the claim, not the word, and that distinction is the whole reason this is a
+#: list of patterns instead of a second :data:`FORBIDDEN_VOCABULARY`. A bare substring rule
+#: would be red today in three places that are all legitimate: ``docs/spike-opendesk.md``
+#: writes down "Audit-Log mit SIEM-Ausleitung" as an open negotiation question about what
+#: somebody else offers, ``docs/oauth-setup.md:204`` says "specification compliant client",
+#: and ``README.fr.md:68`` says "conforme a la specification". A privacy text also has to be
+#: able to say that this log has no SIEM connection and that the GDPR binds the operator of
+#: the instance. Each of those three has its own case next to the gate below.
+#:
+#: One pattern per claim, ``re.I``, the German, English and French form of it, and an
+#: optional separator between the parts, because English writes "AI Act compliant" with a
+#: space where German writes "AI-Act-konform" with a hyphen. Stricter than this list is
+#: allowed, laxer is not.
+FORBIDDEN_CLAIMS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "revisionssicher",
+        re.compile(r"revisionssicher|tamper[\s-]*proof|audit[\s-]*proof|inviolable", re.I),
+    ),
+    ("AI-Act-konform", re.compile(r"ai[\s-]*act[\s-]*(?:konform|compliant|conformes?)", re.I)),
+    (
+        "DSGVO-konform",
+        re.compile(
+            r"(?:dsgvo|gdpr|rgpd)[\s-]*(?:konform|compliant|conformes?)"
+            r"|conformes?[\s-]*(?:au|aux|a la|à la)?[\s-]*(?:rgpd|gdpr|dsgvo)",
+            re.I,
+        ),
+    ),
+    (
+        "SIEM-zertifiziert",
+        re.compile(r"siem[\s-]*(?:zertifiziert|certified|certifi[eé]e?s?)", re.I),
+    ),
+)
+
 #: A line that renders as a table row or a table separator in either pipeline.
 TABLE_LINE = re.compile(r"\|")
 
@@ -2161,6 +2200,24 @@ def test_the_vocabulary_gate_stops_at_the_internal_planning_area() -> None:
 # has its own case below, so a later tightening of the patterns cannot swallow them
 # unnoticed.
 # --------------------------------------------------------------------------------------
+
+
+def claim_findings(text: str, name: str) -> list[str]:
+    """Return one entry per line and claim in ``text``, name, line number and claim first.
+
+    The shape of :func:`vocabulary_findings` and for the same reason: a violation is a one
+    line correction and not a search through the tree, and the claim is named so the message
+    says which promise was made and not only that some pattern matched. Text and name are
+    parameters and nothing is read inside, so the gate can point this at a real page while
+    the counter probes point the same function at a constructed line and at a manifest that
+    exists only in memory.
+    """
+    return [
+        f"{name}:{number}: {claim}: {line.strip()}"
+        for number, line in enumerate(text.splitlines(), start=1)
+        for claim, pattern in FORBIDDEN_CLAIMS
+        if pattern.search(line)
+    ]
 
 
 def test_no_public_text_carries_a_forbidden_claim(manifest_root: etree._Element) -> None:
