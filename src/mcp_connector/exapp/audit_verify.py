@@ -96,6 +96,12 @@ HEADER_ORIGIN_IP = "x-origin-ip"
 #: rule of ``exapp/purge.py`` and of ``oauth/connections.py``).
 MAX_BODY_BYTES = 4096
 
+#: How many digits an announced length may carry before it is refused unread. Ten digits are
+#: ten gigabytes, so a longer run is above :data:`MAX_BODY_BYTES` whatever it says, and it is
+#: never converted: since Python 3.11 :func:`int` refuses a run of more than 4300 digits and
+#: raises, which would answer a header with a 500 (R-18-08).
+MAX_ANNOUNCED_DIGITS = 10
+
 #: The words that mean "yes" when the option arrives with a value. Written here rather than
 #: imported from ``exapp/purge.py``: that list belongs to the one action of this app that
 #: cannot be undone, and a change made for a deletion must not silently change how a reading
@@ -379,9 +385,20 @@ async def _payload(request: Request) -> Any:
     first because refusing before a byte is on the wire is cheaper than counting, and
     ``responses.bounded_body`` is what actually holds, because a chunked request announces
     nothing at all (IN-01 of the re-review of phase 5).
+
+    The announced length is read in the form of ``config.py:433-465``, and for the reason that
+    function gives: ``"²".isdigit()`` is True while ``int("²")`` raises, so the digit test alone
+    turned one header of an authenticated caller into a 500 (R-18-08 of phase 18). A run of more
+    than 4300 digits makes :func:`int` raise as well, since the integer conversion limit of
+    Python 3.11, which ``isascii`` does not catch: a run longer than
+    :data:`MAX_ANNOUNCED_DIGITS` is above the bound whatever it says, so its length is decided
+    before its value. A 500 would be the worst answer this handler has, because AppAPI drops the
+    body of anything that is not a 200 (T-18-20). The warning names the circumstance and never
+    the value, the rule every reader of a value from outside in this project follows (T-05-03).
     """
     announced = request.headers.get("content-length", "")
-    if announced.isdigit() and int(announced) > MAX_BODY_BYTES:
+    plain_number = announced.isascii() and announced.isdigit()
+    if plain_number and _above_the_body_bound(announced):
         logger.warning("a check call announced a body this handler does not read")
         return None
     try:
@@ -399,6 +416,15 @@ async def _payload(request: Request) -> Any:
     except ValueError:
         logger.warning("the body of a check call is not JSON")
         return None
+
+
+def _above_the_body_bound(announced: str) -> bool:
+    """Whether a run of ASCII digits stands for a number above :data:`MAX_BODY_BYTES`.
+
+    Called with a run this module has already tested for ``isascii`` and ``isdigit``, and the
+    length is asked before the value, so :func:`int` never sees a run it refuses to convert.
+    """
+    return len(announced) > MAX_ANNOUNCED_DIGITS or int(announced) > MAX_BODY_BYTES
 
 
 def _text(body: str, status_code: int = 200) -> Response:
