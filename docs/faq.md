@@ -115,12 +115,17 @@ be authorized in the browser before anything can be read at all.
 ### How do I remove the app and its data completely?
 
 Two commands, in this order: `occ mcp_connector:purge --force` first, which hands
-every Nextcloud app password this app created back to Nextcloud, empties every table
-of its database and deletes its encryption key, then
+every Nextcloud app password this app created back to Nextcloud, empties the seven
+tables of its OAuth database and deletes its encryption key, then
 `occ app_api:app:unregister mcp_connector --rm-data`, which removes the app together
 with its data volume. The second must not run first, because it deletes the only
-record of which app password belongs to which connection. The runbook with the
-verification steps is [uninstall.md](uninstall.md).
+record of which app password belongs to which connection.
+
+One thing the purge leaves standing: the audit log, if an administrator switched it on.
+It is a second database file beside the OAuth one, `audit.sqlite3`, and the purge does
+not empty it, because a record that one command removes records nothing. The `--rm-data`
+of the second command is what takes it, together with the volume it lies in. The runbook
+with the verification steps is [uninstall.md](uninstall.md).
 
 ### I want to close the outgoing channel completely. What do I set?
 

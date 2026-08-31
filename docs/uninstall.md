@@ -1,9 +1,10 @@
-# Removing this app, and proving that nothing is left
+# Removing this app, and proving what is gone and what stays
 
 **Status:** measured in both directions on a local HaRP topology
 **Measured on:** 2026-08-19, against Nextcloud 34.0.2 with AppAPI 34.0.0 and HaRP
 **Scope:** removing this app from a Nextcloud instance so that no credential it created
-stays valid and no data it stored stays behind, and checking that claim command by command.
+stays valid, and checking command by command what is gone afterwards and what is still
+there: the audit log outlives the purge and goes only with the data volume.
 
 Read the one sentence that makes this page necessary: **removing the app in the Nextcloud
 interface does not delete its data, and every Nextcloud app password it created keeps
@@ -44,9 +45,9 @@ do not behave alike.
 
 | Version | What the interface offers | What it does to the data |
 |---------|---------------------------|--------------------------|
-| Nextcloud 32, 33 | The ExApp appears in the app management of `apps/settings`, with a "Delete data on remove" checkbox in the app details | Uninstall with the checkbox ticked calls the uninstall path with `removeData=true`; the volume goes. Nextcloud app passwords this app created are still not touched: they are not part of any AppAPI uninstall path. |
+| Nextcloud 32, 33 | The ExApp appears in the app management of `apps/settings`, with a "Delete data on remove" checkbox in the app details | Uninstall with the checkbox ticked calls the uninstall path with `removeData=true`; the volume goes. Nextcloud app passwords this app created are still not touched: they are not part of any AppAPI uninstall path. The volume is where `audit.sqlite3` lies, so this path removes the audit log with it, the same as `--rm-data` below. |
 | Nextcloud 34 | Nothing. Measured on 34.0.2: no ExApp appears in the app list at all, so there is no Install button and no Remove button for this class of app | The path the frontend used to call for an ExApp is `disableExApp`: the container stops, and the app stays registered with its volume, its key and every app password intact |
-| all three | `occ mcp_connector:purge --force` then `occ app_api:app:unregister mcp_connector --rm-data` | Every app password handed back, every table emptied, the key deleted, then the volume, the container and the registration removed |
+| all three | `occ mcp_connector:purge --force` then `occ app_api:app:unregister mcp_connector --rm-data` | Every app password handed back, the seven tables of `oauth.sqlite3` emptied, the key deleted, then the volume with `audit.sqlite3` in it, the container and the registration removed |
 
 The last row is the only one that is the same on every supported version, which is why this
 page describes it as the way and everything else as background.
@@ -85,7 +86,7 @@ equivalence is not assumed, it is read off the instance: the route
 `occ app_api:app:disable` calls the same method in `Command/ExApp/Disable.php:46`.
 
 The starting point was two real connections, one for each of two accounts, created over the
-full chain, plus the row counts of all seven tables of the app's database.
+full chain, plus the row counts of all seven tables of the app's OAuth database.
 
 ```
 $ occ app_api:app:disable mcp_connector
@@ -148,7 +149,7 @@ Two details of that measurement are worth carrying:
 * `auth_codes` holds short lived rows and is emptied by the app's own housekeeping on the
   next request, not by anything on this page. A `0` there means nothing was removed.
 
-## What the occ way leaves behind: nothing
+## What the occ way leaves behind: the audit log, and nothing else
 
 Same instance, same two connections, restored to the state above.
 
@@ -167,7 +168,7 @@ Every field of that answer is a number an administrator has to read:
 | `connections` | authorizations found, revoked ones included | the number of Nextcloud app passwords this is about |
 | `revoked` | app passwords handed back to Nextcloud | equal to `connections` is the good case |
 | `revoke_failures` | app passwords that could not be handed back | above zero means that many app passwords can still be valid. Each affected user has to remove the entry named `MCP Connector: <client>` under Settings, Security, Devices and sessions. |
-| `tables_cleared` | whether all seven tables were emptied | `false` still allows step 2, which takes the file with the volume, but the finding belongs in your notes |
+| `tables_cleared` | whether all seven tables of `oauth.sqlite3` were emptied. `audit.sqlite3` is a second file beside it, it is not one of the seven, and it stays with every row it holds (see check 5 below) | `false` still allows step 2, which takes both files with the volume, but the finding belongs in your notes |
 | `key_deleted` | whether the encryption key was removed from the ExApp configuration | `false` leaves a value behind. It is useless without the volume, but it is there: remove it with the AppAPI configuration API, or accept it and record it. |
 
 #### When the purge stops on purpose
@@ -217,6 +218,32 @@ Four counter-checks, all measured:
   no entry with the prefix "MCP Connector:" in either list
 ```
 
+A fifth check belongs to the same step, and unlike the four above it is not a
+measurement from 2026-08-19: the audit log did not exist in this app on that day. It is
+the check to run, in the form of check 2, with the same throwaway container and the same
+copy to `/tmp`, because sqlite3 cannot open a read only mounted database:
+
+```
+5 $ docker run --rm -v nc_app_mcp_connector_data:/d:ro alpine:3 sh -c '
+      apk add --no-cache sqlite >/dev/null 2>&1
+      cp /d/audit.sqlite3 /tmp/a.db
+      sqlite3 /tmp/a.db "select count(*) from entries"'
+  either a row count of the audit log, for example 1284
+  or     cp: can't stat '/d/audit.sqlite3': No such file or directory
+```
+
+Both answers are correct here and neither of them is a fault:
+
+* **A number other than zero** is what an instance answers that had the record switched
+  on. `audit.sqlite3` is the second database of this app, the purge does not empty it,
+  and a record that one command removes records nothing. Those rows stay until the
+  retention window of 180 days runs out for them, until the bound of 100 MB pushes the
+  oldest ones out, until the account they belong to is removed in Nextcloud, or until
+  the data volume goes in step 2.
+* **A missing file** is what an instance answers that never had the record on. The file
+  is written the first time the record is switched on, so before that there is nothing
+  to read, and [privacy.md](./privacy.md) says the same in its storage table.
+
 ### Step 2, removing the app with its data
 
 ```
@@ -238,6 +265,13 @@ $ docker ps -a --format '{{.Names}}' | grep '^nc_app_mcp_connector$'           #
 $ occ user:setting alice | grep -c 'MCP Connector:'                            # 0
 $ occ list | grep -c mcp_connector                                             # 0
 ```
+
+The audit log goes with the volume, because the file lies in it. This is the one
+deletion path of this app that takes `audit.sqlite3` whole: the purge leaves it
+standing, `--rm-data` removes the volume it lives in, and the "Delete data on remove"
+checkbox of Nextcloud 32 and 33 does the same by the same route. An instance that has to
+keep the record beyond the removal copies the file out of the volume before this command
+runs, because afterwards there is nothing left to copy.
 
 One thing does stay, and it is the only one:
 
