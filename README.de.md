@@ -526,8 +526,16 @@ von denen es abhing:
 
 ## Enterprise
 
-Audit-Log, Gruppen-Policies und SSO über den Identitätsanbieter, den Ihre Organisation
-ohnehin betreibt, sind als kommerzielles Add-on geplant. Für Evaluierung und Einsatz in
+Das Audit-Log gehört zu dieser App und nicht zu einem Add-on. Eingeschaltet hält es jeden
+Werkzeugaufruf fest: das Konto, für das er lief, das Werkzeug, die Zeit, die aufrufende App und
+das Ergebnis, nie einen Parameterwert und nie einen Teil eines Ergebnisses. Es ist ab Werk aus,
+die Administration schaltet es in den Admin-Einstellungen dieser App ein, und gelesen wird es mit
+`occ mcp_connector:audit:read`. Jeder Eintrag ist mit dem vorigen hash-verkettet, und
+`occ mcp_connector:audit:verify` prüft die Ketten und nennt die erste Stelle, an der eine
+gebrochen ist.
+
+Zwei Dinge sind als kommerzielles Add-on geplant: Gruppen-Policies und die Anmeldung über den
+Identitätsanbieter, den Ihre Organisation ohnehin betreibt. Für Evaluierung und Einsatz in
 Ihrer Organisation stehen wir zur Verfügung: admin@infranode.dev
 
 ## Entwicklung

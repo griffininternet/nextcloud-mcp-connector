@@ -511,9 +511,17 @@ depended on:
 
 ## Enterprise
 
-Audit log, group policies and SSO through the identity provider your organisation already
-runs are planned as a commercial add-on. Happy to support your organisation with evaluation
-and deployment: admin@infranode.dev
+The audit log is part of this app and not of an add-on. With it on, every tool call is written
+down with the account it ran for, the tool, the time, the calling app and the outcome, and never
+a parameter value or any part of a result. It is off by default, an administrator switches it on
+in the admin settings of this app, and the entries are read with
+`occ mcp_connector:audit:read`. Every entry is hash chained to the one before it, and
+`occ mcp_connector:audit:verify` walks the chains and names the first place one of them is
+broken.
+
+Two things are planned as a commercial add-on: group policies, and sign in through the identity
+provider your organisation already runs. Happy to support your organisation with evaluation and
+deployment: admin@infranode.dev
 
 ## Development
 

@@ -544,8 +544,16 @@ ainsi que des deux spikes dont elle dépendait :
 
 ## Enterprise
 
-Journal d'audit, politiques de groupe et SSO via le fournisseur d'identité que votre
-organisation exploite déjà sont prévus comme module commercial. Nous nous tenons à la
+Le journal d'audit fait partie de cette application et non d'un module complémentaire. Activé, il
+consigne chaque appel d'outil : le compte pour lequel il s'est exécuté, l'outil, l'heure,
+l'application appelante et le résultat, jamais une valeur de paramètre ni une partie d'un
+résultat. Il est désactivé par défaut, un administrateur l'active dans les paramètres
+d'administration de cette application, et il se lit avec `occ mcp_connector:audit:read`. Chaque
+entrée est chaînée par empreinte à la précédente, et `occ mcp_connector:audit:verify` parcourt
+les chaînes et indique le premier endroit où l'une d'elles est rompue.
+
+Deux choses sont prévues comme module commercial : les politiques de groupe et l'authentification
+via le fournisseur d'identité que votre organisation exploite déjà. Nous nous tenons à la
 disposition de votre organisation pour l'évaluation et le déploiement : admin@infranode.dev
 
 ## Développement

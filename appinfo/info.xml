@@ -76,7 +76,9 @@ An assistant also reads text that strangers wrote, right next to your data. The 
 
 ### Enterprise
 
-Audit log, group policies and SSO through your identity provider are planned as a commercial add-on for organisations. Want to run this app in your organisation? Talk to us: admin@infranode.dev
+The audit log is part of this app and not of an add-on. With it on, every tool call is written down with the account it ran for, the tool, the time, the calling app and the outcome, and never a parameter value or any part of a result. It is off by default, an administrator switches it on in the admin settings of this app, and the entries are read with the command occ mcp_connector:audit:read. Every entry is hash chained to the one before it, and occ mcp_connector:audit:verify walks the chains and names the first place one of them is broken.
+
+Two things are planned as a commercial add-on for organisations: group policies, and sign in through the identity provider your organisation already runs. Want to run this app in your organisation? Talk to us: admin@infranode.dev
 
 ### Resources
 
@@ -121,7 +123,9 @@ Eine Assistenz liest auch fremde Texte neben Ihren Daten. Der einzige direkte We
 
 ### Enterprise
 
-Audit-Log, Gruppen-Policies und SSO über Ihren Identitätsanbieter sind als kommerzielles Add-on für Organisationen geplant. Sie möchten die App in Ihrer Organisation einsetzen? Sprechen Sie uns an: admin@infranode.dev
+Das Audit-Log gehört zu dieser App und nicht zu einem Add-on. Eingeschaltet hält es jeden Werkzeugaufruf fest: das Konto, für das er lief, das Werkzeug, die Zeit, die aufrufende App und das Ergebnis, nie einen Parameterwert und nie einen Teil eines Ergebnisses. Es ist ab Werk aus, die Administration schaltet es in den Admin-Einstellungen dieser App ein, und gelesen wird es mit dem Kommando occ mcp_connector:audit:read. Jeder Eintrag ist mit dem vorigen hash-verkettet, und occ mcp_connector:audit:verify prüft die Ketten und nennt die erste Stelle, an der eine gebrochen ist.
+
+Zwei Dinge sind als kommerzielles Add-on für Organisationen geplant: Gruppen-Policies und die Anmeldung über den Identitätsanbieter Ihrer Organisation. Sie möchten die App in Ihrer Organisation einsetzen? Sprechen Sie uns an: admin@infranode.dev
 
 ### Weiterführendes
 
@@ -168,7 +172,9 @@ Un assistant lit aussi des textes écrits par des inconnus, à côté de vos don
 
 ### Enterprise
 
-Journal d'audit, politiques de groupe et SSO via votre fournisseur d'identité sont prévus comme module commercial pour les organisations. Vous souhaitez déployer l'application dans votre organisation ? Contactez-nous : admin@infranode.dev
+Le journal d'audit fait partie de cette application et non d'un module complémentaire. Activé, il consigne chaque appel d'outil : le compte pour lequel il s'est exécuté, l'outil, l'heure, l'application appelante et le résultat, jamais une valeur de paramètre ni une partie d'un résultat. Il est désactivé par défaut, un administrateur l'active dans les paramètres d'administration de cette application, et il se lit avec la commande occ mcp_connector:audit:read. Chaque entrée est chaînée par empreinte à la précédente, et occ mcp_connector:audit:verify parcourt les chaînes et indique le premier endroit où l'une d'elles est rompue.
+
+Deux choses sont prévues comme module commercial pour les organisations : les politiques de groupe et l'authentification via le fournisseur d'identité de votre organisation. Vous souhaitez déployer l'application dans votre organisation ? Contactez-nous : admin@infranode.dev
 
 ### Pour aller plus loin
 
