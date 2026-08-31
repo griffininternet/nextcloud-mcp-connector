@@ -25,6 +25,7 @@ raises, because a broken file is not a state this suite may create by hand.
 import asyncio
 import base64
 import hashlib
+import json
 import logging
 import sqlite3
 import time
@@ -255,13 +256,16 @@ def raw_call(
     return status, text.decode("utf-8")
 
 
-def entry_lines(text: str) -> list[str]:
-    """The lines of an answer that are entries: everything but the head and the note."""
-    return [
-        line
-        for line in text.splitlines()
-        if line and line != audit_read.READ_NOTE and not line.startswith(("0 ", "1 ", "2 ", "3 "))
-    ]
+def parts(text: str) -> tuple[str, list[str], str]:
+    """The head, the entry lines and the note of a text answer, taken by position.
+
+    By position and not by a pattern on purpose: the claim of this shape is that an entry is
+    exactly one line, so the count of the middle is what the cases assert, and a helper that
+    filtered lines by what they look like would repair the very thing that must not break
+    (T-19-22).
+    """
+    lines = text.splitlines()
+    return lines[0], lines[1:-1], lines[-1]
 
 
 # --- the boundary: T-19-20 ------------------------------------------------------------
@@ -587,3 +591,219 @@ def test_a_body_that_is_not_json_leaves_the_answer_as_it_was(live: Deployment) -
 
     assert status == 200
     assert audit_read.READ_NOTE in text
+
+
+# --- the shape of the answer, line by line --------------------------------------------
+
+
+def test_three_entries_are_three_lines_between_the_head_and_the_note(live: Deployment) -> None:
+    """The head first, one line per entry, the note last, and the newest entry on top.
+
+    The order is asserted with the numbers of the rows and not with a moment, because ``seq``
+    is what the store sorts by and a moment can move backwards (WR-02).
+    """
+    head, lines, note = parts(call(live).text)
+
+    assert head == f"3 entries, newest first, at most {store.READ_LIMIT_DEFAULT} per read"
+    assert len(lines) == 3
+    assert note == audit_read.READ_NOTE
+    assert [line.split(audit_read.FIELD_SEPARATOR)[0] for line in lines] == ["3", "2", "1"]
+    assert lines[0].startswith(f"3{audit_read.FIELD_SEPARATOR}")
+    assert BOB in lines[0], "the newest entry is the one of the chain written last"
+
+
+def test_an_account_with_a_line_break_adds_no_line_to_the_answer(tmp_path: Path) -> None:
+    """The case that justifies the bracketing (T-18-08, T-19-22).
+
+    Without :func:`mcp_connector.audit.text.printable` in front of the column, the account
+    name below ends its line and starts another one, and whoever registered that account
+    decides what the extra line says.
+    """
+    deployment = Deployment(tmp_path)
+    deployment.write_calls(store.user_chain("ali\nce - 99 - files_read"), [1000])
+    deployment.write_calls(BOB, [1001])
+
+    head, lines, note = parts(call(deployment).text)
+
+    assert head.startswith("2 entries")
+    assert len(lines) == 2, "an account name may not add a line of its own"
+    assert note == audit_read.READ_NOTE
+    assert "\n" not in lines[0]
+
+
+def test_an_account_with_a_right_to_left_override_loses_it(tmp_path: Path) -> None:
+    """A character of the category Cf turns the reading direction of the rest of the line
+    round, so a name can look like a different name without one different letter (R-18-06)."""
+    override = "‮"
+    deployment = Deployment(tmp_path)
+    deployment.write_calls(store.user_chain(f"al{override}ice"), [1000])
+
+    response = call(deployment)
+    document = call(deployment, options={audit_read.JSON_OPTION: True}).json()
+
+    assert response.status_code == 200
+    assert override not in response.text
+    assert override not in json.dumps(document)
+    assert "al ice" in response.text, "the character became a space and melted no two words"
+
+
+def test_no_shape_of_the_answer_carries_a_parameter_value(tmp_path: Path) -> None:
+    """D-06 and AUDIT-01 at the far end: no method of the store takes a parameter value, so no
+    line and no document can carry one, and this is the case that says it out loud."""
+    deployment = Deployment(tmp_path)
+    deployment.write_calls(ALICE, [1000], client_name="A Client With A Name")
+
+    text = call(deployment).text
+    document = call(deployment, options={audit_read.JSON_OPTION: True}).json()
+
+    assert A_VALUE not in text
+    assert A_VALUE not in json.dumps(document)
+    assert "kuendigung" not in text.lower()
+
+
+def test_the_names_of_the_parameters_are_there_and_the_values_are_not(live: Deployment) -> None:
+    """The names are the point of the log: which parameters a call carried is what makes a
+    refusal readable afterwards, and the schema says "never a value" next to them."""
+    text = call(live).text
+    document = call(live, options={audit_read.JSON_OPTION: True}).json()
+
+    assert "dir,query" in text, "sorted, the way the store writes them"
+    assert document["entries"][0]["params"] == ["dir", "query"]
+
+
+def test_a_column_that_holds_nothing_is_a_dash_and_never_the_word_none(live: Deployment) -> None:
+    """``None`` is a word of a language, and this is a line for a person."""
+    _, lines, _ = parts(call(live).text)
+
+    assert audit_read.NULL_FIELD in lines[0].split(audit_read.FIELD_SEPARATOR)
+    assert "None" not in call(live).text
+
+
+def test_a_line_carries_the_moment_as_utc_to_the_second(live: Deployment) -> None:
+    """A console line with the timezone of its reader in it cannot be compared with the line
+    above it, so every moment is UTC and says so."""
+    _, lines, _ = parts(call(live).text)
+
+    assert lines[0].split(audit_read.FIELD_SEPARATOR)[1] == "1970-01-01T00:16:42Z"
+
+
+# --- the machine readable shape -------------------------------------------------------
+
+
+def test_the_document_carries_the_state_key_the_counts_and_the_note(live: Deployment) -> None:
+    """``read`` is the key a script watches, because the exit code of the command is always 0
+    for the reason T-18-20 measures."""
+    answer = call(live, options={audit_read.JSON_OPTION: True}).json()
+
+    assert list(answer) == ["read", "count", "limit_applied", "truncated", "entries", "note"]
+    assert answer["read"] is True
+    assert answer["count"] == 3
+    assert answer["limit_applied"] == store.READ_LIMIT_DEFAULT
+    assert answer["truncated"] is False
+    assert answer["note"] == audit_read.READ_NOTE
+
+
+def test_the_document_hands_the_entries_over_in_the_order_of_the_chain(live: Deployment) -> None:
+    """The text shows the newest first because that is what a console wants; a document that is
+    kept is read in the order the chain has, because that order is what makes it checkable."""
+    answer = call(live, options={audit_read.JSON_OPTION: True}).json()
+
+    assert [entry["seq"] for entry in answer["entries"]] == [1, 2, 3]
+
+
+def test_the_hashes_of_the_document_are_hex_and_not_bytes(live: Deployment) -> None:
+    """A BLOB is not JSON, and the chain cannot be recomputed from a truncated one."""
+    first = call(live, options={audit_read.JSON_OPTION: True}).json()["entries"][0]
+
+    assert isinstance(first["hash"], str)
+    assert isinstance(first["prev_hash"], str)
+    assert len(first["hash"]) == 64
+    assert first["prev_hash"] == store.GENESIS.hex()
+    assert bytes.fromhex(first["hash"])
+
+
+def test_an_entry_of_the_document_carries_every_field_of_the_row(live: Deployment) -> None:
+    """The fields come out of the store through ``_entry_of_row``, so the column order stays
+    written down once, in the module that owns the schema."""
+    first = call(live, options={audit_read.JSON_OPTION: True}).json()["entries"][0]
+
+    assert first == {
+        "seq": 1,
+        "chain": ALICE,
+        "kind": store.KIND_CALL,
+        "at": 1000,
+        "nc_user": "alice",
+        "tool": "files_search",
+        "client_id": None,
+        "auth_id": None,
+        "client_name": "A Client With A Name",
+        "outcome": store.OUTCOME_OK,
+        "reason": None,
+        "duration_ms": None,
+        "params": ["dir", "query"],
+        "prev_hash": store.GENESIS.hex(),
+        "hash": first["hash"],
+    }
+
+
+@pytest.mark.parametrize(("limit", "expected"), [("4", True), ("5", False)])
+def test_truncated_says_whether_there_may_be_more_behind_the_last_entry(
+    tmp_path: Path, limit: str, expected: bool
+) -> None:
+    """As many entries as the ceiling allows means there may be more, and one less means there
+    are not. Both ends are asserted, because the first one alone is true of every ceiling."""
+    deployment = Deployment(tmp_path)
+    deployment.write_calls(ALICE, [1000, 1001, 1002, 1003])
+
+    answer = call(
+        deployment, options={audit_read.LIMIT_OPTION: limit, audit_read.JSON_OPTION: True}
+    ).json()
+
+    assert answer["truncated"] is expected
+    assert answer["count"] == 4
+
+
+# --- a store that cannot be read: T-19-21 ---------------------------------------------
+
+
+def test_a_store_that_cannot_be_read_answers_200_with_the_type_and_nothing_else(
+    tmp_path: Path,
+) -> None:
+    """The type of the exception, never its message: a store error carries a path, and a path
+    of a container is not something a console line of an occ command has to hand out.
+
+    The status is 200 for the reason T-18-20 measures: with anything else AppAPI drops this
+    body, and an administrator would be left with an empty console instead of the sentence.
+    """
+    deployment = broken(tmp_path)
+
+    response = call(deployment)
+
+    assert response.status_code == 200
+    assert "DatabaseError" in response.text
+    assert "malformed" not in response.text, "the message of the error stays out of the answer"
+    assert store.AUDIT_FILENAME not in response.text
+    assert str(tmp_path) not in response.text
+    assert "Traceback" not in response.text
+
+
+def test_a_store_that_cannot_be_read_puts_the_state_key_on_false(tmp_path: Path) -> None:
+    """The half of the same answer a script reads, because the exit code is always 0."""
+    answer = call(broken(tmp_path), options={audit_read.JSON_OPTION: True}).json()
+
+    assert answer == {"read": False, "error": "DatabaseError"}
+    assert store.AUDIT_FILENAME not in json.dumps(answer)
+
+
+def test_the_failure_is_logged_with_the_type_and_without_the_path(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The same rule in the log of the instance: the type says what happened, the message would
+    say where, and the where is what T-19-21 keeps out."""
+    with caplog.at_level(logging.DEBUG):
+        call(broken(tmp_path))
+
+    logged = "\n".join(entry.getMessage() for entry in caplog.records)
+    assert "DatabaseError" in logged
+    assert str(tmp_path) not in logged
+    assert "malformed" not in logged
