@@ -2296,6 +2296,47 @@ def test_a_plain_sentence_about_the_audit_log_is_no_claim() -> None:
     assert claim_findings("Das Audit-Log hält seine Einträge hash-verkettet.\n", "probe.md") == []
 
 
+def test_the_claim_gate_fires_on_a_constructed_line() -> None:
+    """Counter probe, and it has to be constructed: no covered page carries a claim today.
+
+    Without it the green run of the gate above says that the check ran, not that it checks.
+    Once per claim rather than once for the list, so a red line names the pattern that
+    stopped matching instead of the fact that some pattern did.
+
+    The count comes first for the same reason
+    :func:`test_the_vocabulary_gate_reads_a_list_that_is_not_empty` exists: a loop over an
+    emptied list passes without looking at anything, so the four claims of decision
+    D-v1.5-02 are stated here as a number. Adding a fifth claim is meant to make this line
+    red once, in the open, and not to slip past a probe that measures nothing.
+    """
+    assert len(FORBIDDEN_CLAIMS) == 4, FORBIDDEN_CLAIMS
+
+    for claim, _ in FORBIDDEN_CLAIMS:
+        findings = claim_findings(f"This log is {claim}.\n", "probe.md")
+
+        assert findings, f"the pattern of {claim} matches its own claim no more"
+        assert any(claim in finding for finding in findings), (
+            f"a finding has to name the claim it is about, {claim} is missing: {findings}"
+        )
+
+
+def test_the_claim_gate_fires_on_the_manifest_text(manifest_root: etree._Element) -> None:
+    """The second half of the reach, probed the way the vocabulary gate probes it.
+
+    The tree is changed in memory and the file on disk is not touched, so this proves that a
+    claim written into the English store description is found, without a fixture that has to
+    be cleaned up afterwards.
+    """
+    for element in manifest_root.findall("description"):
+        if element.get("lang") is None:
+            element.text = "First paragraph.\n\nThis app is GDPR compliant.\n"
+
+    findings = claim_findings(element_text_without_comments(manifest_root), "appinfo/info.xml")
+
+    assert findings, "a claim in the store description has to be found"
+    assert any("DSGVO-konform" in finding for finding in findings), findings
+
+
 def test_no_declared_variable_carries_an_empty_default(manifest_root: etree._Element) -> None:
     """The shipped state: six variables, not one default among them."""
     assert variable_problems(manifest_root) == []
