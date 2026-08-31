@@ -846,21 +846,23 @@ def test_the_claim_gate_fires_on_a_constructed_line() -> None:
 
 ## Open Questions
 
-1. **Ein Kommando mit `--format` oder zwei Kommandos `:read` und `:export`?**
+Alle vier Fragen sind mit der Planung entschieden (Plan-Check 31.08.): Q1 RESOLVED in 19-06 (ein Kommando `:read` mit `--json`), Q2 RESOLVED in 19-07 Task 3 (deklarieren, Test auf neun Namen), Q3 RESOLVED in 19-01 (R-18-06+R-18-08 ja, R-18-07 bleibt Accepted Risk), Q4 RESOLVED in 19-04/19-06 (ein Statement `ORDER BY seq DESC`, Umkehrung im Handler).
+
+1. **(RESOLVED in 19-06) Ein Kommando mit `--format` oder zwei Kommandos `:read` und `:export`?**
    - Was wir wissen: `mcp_connector:audit:` ist ausdrücklich als Namensraum für zwei Kommandos gebaut (`occ.py:81-83`). Jede Registrierung ist ein eigener POST mit eigenem `try`. Die etablierte Form für "dasselbe für eine Maschine" ist im verify-Kommando `--json`.
    - Was unklar ist: ob "liest und exportiert" (AUDIT-04) als zwei Kommandos gelesen werden soll.
    - Empfehlung: **ein** Kommando `mcp_connector:audit:read` mit `--json` als Exportform. Das erfüllt beide Verben, hält die Registrierungsfläche klein und erbt die Leseform von `_wants_json`. CSV kann später ein `--format`-Wert werden.
 
-2. **Die drei Env-Variablen im Manifest deklarieren?**
+2. **(RESOLVED in 19-07 Task 3) Die drei Env-Variablen im Manifest deklarieren?**
    - Was wir wissen: `NC_MCP_AUDIT_LOG`, `NC_MCP_AUDIT_RETENTION_DAYS`, `NC_MCP_AUDIT_MAX_BYTES` werden vom Code gelesen und sind nicht deklariert; der Deploy-Daemon injiziert nur deklarierte Variablen. Der Weg des Administrators ist das Admin-Formular (BL-06). Der Test `test_every_variable_the_code_reads_is_declared_in_the_manifest` prüft Mengengleichheit gegen **sechs handgepflegte Namen**, nicht gegen einen Scan des Codes: sein Name ist weiter als seine Prüfung, deshalb ist er heute grün.
    - Was unklar ist: ob die Bequemlichkeit für Hand-Installationen den Preis wert ist (drei `<variable>`-Blöcke mit `display-name` und `description` in einer Datei, die sonst in dieser Phase nur zwei Absätze und einen Kommentar ändert).
    - Empfehlung: **ja, aber als eigener Plan-Task**, mit den drei Testanpassungen im selben Task. Begründung: die Aufbewahrungsfrist und die Obergrenze werden durch diese Phase erstmals öffentlich beschrieben; eine beschriebene Grenze, die ein Administrator nicht setzen kann, weil der Deploy-Daemon die Variable verwirft, ist eine halbe Zusage. Wenn der Owner das anders sieht, bleibt es ein Deferred Item und der Text sagt "Vorgabe", ohne einen Setzweg zu versprechen.
 
-3. **Werden R-18-06/07/08 hier mitgenommen?**
+3. **(RESOLVED in 19-01) Werden R-18-06/07/08 hier mitgenommen?**
    - Was wir wissen: R-18-08 (`isdigit` ohne `isascii`) ist eine Einzeilenkorrektur genau in der Datei, deren Zwilling hier entsteht, und das neue Modul würde die Falle sonst kopieren. R-18-06 (drei divergente Reiniger) berührt die Ausgabe dieser Phase unmittelbar; ein vierter Reiniger im neuen Modul macht die Lage schlechter. R-18-07 (`note()` vs `CancelledError`) liegt im Schreibpfad und hat mit dieser Phase nichts zu tun.
    - Empfehlung: **R-18-08 und R-18-06 ja, R-18-07 nein.** R-18-06 als ein gemeinsamer Reiniger in einem Blattmodul (`audit/text.py`), von allen drei bestehenden Stellen und der neuen genutzt; das ist genau der Vorschlag des Reviews. R-18-07 bleibt im Accepted Risks Log.
 
-4. **Sortierung und Standardausschnitt der Leseansicht.**
+4. **(RESOLVED in 19-04/19-06) Sortierung und Standardausschnitt der Leseansicht.**
    - Was wir wissen: Ein Administrator, der ein Kommando eintippt, sucht meist das Letzte. Ein Export, der weiterverarbeitet wird, braucht die Kettenreihenfolge. `at` ist nicht garantiert monoton (WR-02), `seq` ist es.
    - Empfehlung: Textausgabe `ORDER BY seq DESC` mit Vorgabelimit, JSONL-Ausgabe `ORDER BY seq ASC`. Beides ausdrücklich im Docstring begründen, damit es nicht als Inkonsistenz gelesen wird.
 

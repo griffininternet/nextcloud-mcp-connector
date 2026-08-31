@@ -9,7 +9,7 @@ Vor der Anforderungsdefinition getroffen, aus den acht in `research/SUMMARY.md` 
 
 | Id | Entscheidung | Folge |
 |----|--------------|-------|
-| D-v1.5-01 | Das Audit-Log überlebt `occ mcp_connector:purge` und die Deinstallation | Das v1.0-Erfolgskriterium "eine Deinstallation entfernt alle Daten" und `docs/privacy.md` werden ausdrücklich umgeschrieben; einziger automatischer Löscher ist die Aufbewahrungsfrist |
+| D-v1.5-01 | Das Audit-Log überlebt `occ mcp_connector:purge` und die Deinstallation | Das v1.0-Erfolgskriterium "eine Deinstallation entfernt alle Daten" und `docs/privacy.md` werden ausdrücklich umgeschrieben; einziger automatischer Löscher ist die Aufbewahrungsfrist. Messbefund Phase 19 (19-RESEARCH.md): der Kern aus Phase 18 hat drei automatische Löschwege (Frist 180 Tage, Obergrenze 100 MB mit Grabstein nach D-10, Nutzerlöschung nach D-12); der Textnachzug nennt alle drei, die Entscheidung selbst bleibt unberührt |
 | D-v1.5-02 | Die Einträge werden hash-verkettet, das Wort "Audit-Log" bleibt im Text | Der Anspruch hält einer Nachfrage stand (BSI OPS.1.1.5 Integritätssicherung); eine Grenzbeschreibung "was es nicht leistet" ist Pflichtbestandteil, die Verbotsliste gilt |
 | D-v1.5-03 | Release 0.1.11 geht sofort und eigenständig raus | Der wartende Textrest wird abgeräumt, bevor das Audit-Log fertig ist; das Release für das Audit-Log selbst ist bewusst nicht Teil dieses Milestones (EXAPP-12 unter Future Requirements) |
 | D-v1.5-04 | Der Audit-Schalter steht ab Werk aus, Inhaltsstufe `keys` | Keine ungefragte neue Datenerhebung bei bestehenden Nutzern; Parameternamen ja, Parameterwerte nein, Ergebnisinhalte nie; die Stufe `full` wird nicht angeboten |

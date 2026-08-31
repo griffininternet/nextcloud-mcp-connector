@@ -76,7 +76,7 @@ Audit: [milestones/v1.4-MILESTONE-AUDIT.md](milestones/v1.4-MILESTONE-AUDIT.md) 
 - [x] **Phase 16: Release 0.1.11** - Den wartenden Textrest ausliefern und den `[Unreleased]`-Block leerräumen, bevor das Audit-Log ihn wieder füllt (4/4 Pläne, completed 2026-08-28, Release live im Store)
 - [x] **Phase 17: openDesk-Spike** - Installierbarkeit und Nutzeridentität gegen OpenProject messen statt argumentieren, plus die Fragenliste für den 14.09. (completed 2026-08-29)
 - [x] **Phase 18: Audit-Log Kern** - Jeder Werkzeugaufruf hinterlässt einen prüfbaren Metadaten-Eintrag, der keine Inhalte trägt und den OAuth-Speicher nicht gefährdet (completed 2026-08-29)
-- [ ] **Phase 19: Audit-Log Bedienung und Textnachzug** - Administrator schaltet ein und liest über `occ`, und jede bestehende Aussage über Speicherung und Enterprise-Stand sagt danach die Wahrheit
+- [ ] **Phase 19: Audit-Log Bedienung und Textnachzug** - Administrator schaltet ein und liest über `occ`, und jede bestehende Aussage über Speicherung und Enterprise-Stand sagt danach die Wahrheit (9 Pläne, geplant 2026-08-31)
 
 **Stränge:** Phase 16 und Phase 17 hängen an nichts und können ab Tag 1 laufen. Phase 18 hängt ebenfalls an nichts (der Spike-Ausgang berührt das Audit-Log nicht). Die einzige echte Serialisierung des Meilensteins ist Phase 19: sie braucht das feststehende Satzschema aus Phase 18 und den geleerten `[Unreleased]`-Block aus Phase 16.
 
@@ -224,7 +224,36 @@ Plans:
   4. `docs/privacy.md` und `docs/uninstall.md` sagen in ihrem eigenen Text, dass das Audit-Log Purge und Deinstallation übersteht und die Aufbewahrungsfrist der einzige automatische Löscher ist; das v1.0-Erfolgskriterium "eine Deinstallation entfernt alle Daten" ist entsprechend umgeschrieben statt stillschweigend falsch
   5. Der Enterprise-Absatz nennt das Audit-Log in allen drei Sprachen nicht länger als geplant, ein Gate hält die Wörter revisionssicher, AI-Act-konform, DSGVO-konform und SIEM-zertifiziert draußen, und alle Textänderungen dieser Phase warten im `[Unreleased]`-Block: kein Tag, kein Store-Upload, die Auslieferung ist EXAPP-12 und ausdrücklich nicht Teil dieses Meilensteins (D-v1.5-03)
 
-**Plans**: TBD
+**Plans**: 9 plans
+Plans:
+**Wave 1**
+
+- [ ] 19-01-PLAN.md , Sanitizer und Zahlenprüfung zusammenziehen: audit/text.py als eine Reinigungsregel für drei Aufrufstellen (R-18-06), isascii vor jedem int (R-18-08)
+- [ ] 19-02-PLAN.md , AUDIT-05: die lange Beschriftung des Audit-Schalters mit Leistung, Grenze, Mitbestimmung, Aufbewahrung und Aktivierungszyklus, samt Zusagetests
+- [ ] 19-03-PLAN.md , AUDIT-06: Vier-Wörter-Gate als Anspruchsliste am bestehenden Vokabular-Gate, Reichweite über Markdown und Manifest, zwei Gegenproben
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 19-04-PLAN.md , AUDIT-04: AuditStore.read_entries mit Vorgabe- und Höchstlimit, Sortierung nach seq statt at, alle Pfade als Test
+- [ ] 19-05-PLAN.md , AUDIT-06: docs/privacy.md, docs/uninstall.md und docs/faq.md sagen zwei Datenbanken, drei automatische Löschwege und die --rm-data-Grenze; Doku-Sätze an Codekonstanten gebunden
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 19-06-PLAN.md , AUDIT-04: Handlermodul exapp/audit_read.py als Zwilling von audit_verify, Doppelprüfung, immer Status 200, geklammerte Ausgabe, Maschinenform
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 19-07-PLAN.md , AUDIT-04: dritter Eintrag in command_schemes samt Modus-Positivliste, Route in entry_exapp, sechster abwesender Pfad im Manifest, drei Env-Variablen deklariert
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 19-08-PLAN.md , AUDIT-06: Enterprise-Absatz an allen sechs Stellen in drei Sprachen, Markertripel per Test zusammengehalten
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 19-09-PLAN.md , Abschluss: neuer [Unreleased]-Block, volle Gate-Kette, sechs Lieferverbote belegt, Nachweistabelle je Erfolgskriterium
+
+*Die Serialisierung folgt den Dateien und nicht der Bequemlichkeit: 19-01 liegt vor 19-04 und 19-06, weil sonst ein vierter Namensreiniger entstünde; 19-03 liegt vor jedem Textplan, damit die neuen Sätze gegen ein stehendes Gate geschrieben werden; 19-06 liegt vor 19-07, weil die Registrierung den Handlerpfad ableitet; 19-08 liegt nach 19-07, weil beide appinfo/info.xml anfassen. Erfolgskriterium 4 wird bewusst nicht wörtlich erfüllt: der Code kennt drei automatische Löschwege (Frist 180 Tage, Obergrenze 100 MB, Löschung des Kontos in Nextcloud), nicht einen, und der Nutzertext nennt alle drei. Das ist eine Messung und keine Änderung an D-v1.5-01; Begründung in 19-RESEARCH.md und in Plan 19-05.*
 
 ## Progress
 
@@ -246,13 +275,13 @@ Plans:
 | 14. Doku-Reste und Gate-Entscheid | v1.4 | 2/2 | Complete | 2026-08-27 |
 | 15. Release 0.1.10 | v1.4 | 4/4 | Complete | 2026-08-28 |
 | 16. Release 0.1.11 | v1.5 | 4/4 | Complete | 2026-08-28 |
-| 17. openDesk-Spike | v1.5 | 9/9 | Complete   | 2026-08-29 |
-| 18. Audit-Log Kern | v1.5 | 10/10 | Complete    | 2026-08-29 |
-| 19. Audit-Log Bedienung und Textnachzug | v1.5 | 0/? | Not started | - |
+| 17. openDesk-Spike | v1.5 | 9/9 | Complete | 2026-08-29 |
+| 18. Audit-Log Kern | v1.5 | 10/10 | Complete | 2026-08-29 |
+| 19. Audit-Log Bedienung und Textnachzug | v1.5 | 0/9 | Planned | - |
 
 ## Next
 
-`/gsd:execute-phase 17`: Phase 17 (openDesk-Spike) ausführen, neun Pläne in neun seriellen Wellen, drei davon mit Owner-Gate. Phase 18 (Audit-Log Kern) kann parallel dazu geplant werden.
+`/gsd:execute-phase 19`: Phase 19 (Audit-Log Bedienung und Textnachzug) ausführen, neun Pläne in sechs Wellen, alle autonom, kein Owner-Gate. Die Wellen sind seriell zu fahren, weil auf diesem Rechner ohne Worktrees gearbeitet wird; innerhalb von Welle 1 und Welle 2 gibt es keine Dateiüberschneidung. Kein Tag, kein Store-Upload: die Auslieferung ist EXAPP-12 und liegt hinter diesem Meilenstein.
 
 ---
-*Roadmap created: 2026-08-14 (granularity: coarse, mode: mvp); v1.0 abgeschlossen: 2026-08-20; v1.1 abgeschlossen: 2026-08-20 (Phase 7 deferred); v1.2 abgeschlossen: 2026-08-25 (Release 0.1.8 live); v1.3 abgeschlossen: 2026-08-26 (Release 0.1.9 live, CIMD nachgemessen, Enterprise-Fake-Door); v1.4 abgeschlossen: 2026-08-28 (Release 0.1.10 live); v1.5 aufgesetzt: 2026-08-28 (Phasen 16-19: Release 0.1.11, openDesk-Spike, Audit-Log in zwei Phasen); Phase 17 geplant: 2026-08-28 (9 Pläne, 9 Wellen)*
+*Roadmap created: 2026-08-14 (granularity: coarse, mode: mvp); v1.0 abgeschlossen: 2026-08-20; v1.1 abgeschlossen: 2026-08-20 (Phase 7 deferred); v1.2 abgeschlossen: 2026-08-25 (Release 0.1.8 live); v1.3 abgeschlossen: 2026-08-26 (Release 0.1.9 live, CIMD nachgemessen, Enterprise-Fake-Door); v1.4 abgeschlossen: 2026-08-28 (Release 0.1.10 live); v1.5 aufgesetzt: 2026-08-28 (Phasen 16-19: Release 0.1.11, openDesk-Spike, Audit-Log in zwei Phasen); Phase 17 geplant: 2026-08-28 (9 Pläne, 9 Wellen); Phase 19 geplant: 2026-08-31 (9 Pläne, 6 Wellen)*
