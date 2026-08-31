@@ -293,6 +293,20 @@ Les pages liées sont en anglais.
 		  - the same double check. It has no mandatory option, because it changes nothing.
 		  - A test asserts that this path is declared in no route below either.
 		  -
+		  - The sixth deliberately absent path is /audit-read, added in plan 19-07, and it
+		  - is the one where a declaration would cost the most. It is the handler of the
+		  - occ command mcp_connector:audit:read, which reads the rows of the audit log out
+		  - and hands them over. Its answer names accounts, so a declared route would hand
+		  - the list of everybody who ever used this app to anyone who can reach the PHP
+		  - proxy, and one option further the tools each of them called, for exactly the
+		  - reason stated above: that proxy attaches valid AppAPI headers itself (T-02-20,
+		  - T-19-20, T-19-27). AppAPI calls this path over PublicFunctions like the five
+		  - above, so it needs no declaration to work, and the handler carries the same
+		  - double check plus a ceiling on every read. A test asserts that this path is
+		  - declared in no route below either, and it is declared in no url element,
+		  - which is why the number of routes below stays the one the first line of this
+		  - comment names.
+		  -
 		  - Order matters: the first route that matches path and verb wins, and its access
 		  - level decides alone.
 		  -

@@ -32,6 +32,7 @@ from .audit import record as audit_record
 from .audit.store import AUDIT_FILENAME
 from .errors import IssuerRefused, ToolError
 from .exapp import config_values
+from .exapp.audit_read import audit_read_routes
 from .exapp.audit_verify import audit_verify_routes
 from .exapp.lifecycle import lifecycle_routes
 from .exapp.middleware import RequireAppApi
@@ -201,6 +202,18 @@ def build_exapp_app(env: Mapping[str, str] | None = None) -> Starlette:
     # because it checks exactly that file, and it gets it whether the switch of D-14 is on or
     # off: a log that was switched off is the one that most needs to stay checkable.
     #
+    # The read of plan 19-07 hangs here for the same rule a sixth time, and it is the loss of
+    # the fifth one with one option more: /audit-read is the handler of the occ command
+    # mcp_connector:audit:read, and where the check names the chains, this answer names the
+    # rows themselves, so a declared route would hand the list of everybody who used this app
+    # to anyone who can reach the PHP proxy and, one option further, the tools each of them
+    # called (T-02-20, T-19-20). So this path is absent from appinfo/info.xml as well, named
+    # there only in the comment, and the handler carries the same double check. It gets the
+    # audit store and not the OAuth one, because it reads exactly that file, and it is
+    # appended whether the switch of D-14 is on or off: a log that was switched off has to
+    # stay readable, because that is what makes it auditable at all, and what a period without
+    # recording holds is exactly what somebody will have to be able to look up.
+    #
     # The policy read above is what the two places that answer to it read as well: the
     # discovery document stops advertising a registration endpoint when the switch is off,
     # and the routes stop containing one (AUTH-07, D-35). One store opener serves the
@@ -227,6 +240,7 @@ def build_exapp_app(env: Mapping[str, str] | None = None) -> Starlette:
         *consent_routes(env, provider=provider, throttle=counters),
         *purge_routes(env, store_provider=store),
         *audit_verify_routes(env, store_provider=audit_store),
+        *audit_read_routes(env, store_provider=audit_store),
     ):
         app.router.routes.append(route)
     return app
