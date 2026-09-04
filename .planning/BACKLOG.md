@@ -3,21 +3,59 @@
 Ideas and tasks that are decided in principle but not yet assigned to a phase.
 Review with /gsd:review-backlog before planning a new phase.
 
-## BL-01: Findling synergy, README cross-link (after Findling v1.0 release)
+## BL-01: Findling synergy, a prominent banner on both sides (after the 1.0.0 release)
 
-**Trigger:** Findling v1.0 (github.com/street1983nk/nextcloud-search) is released
-to the app store. Not before, the app is a walking skeleton until then.
+**Trigger:** Findling is released to the app store as 1.0.0. Note that there is no
+separate v1.0: owner decisions D-08 and D-11 bundle full text, OCR and semantic
+search into one store first release. That is deliberately the right moment for this
+banner, because the semantic half is what makes the retrieval claim fully true. Not
+before, and before Findling's phase 6 the claim would be the weaker one about a
+lexical index with OCR.
 
-**What:** One paragraph in README.md under "Known limitations", row "Search matches
-names, not contents": with Findling installed, unified_search answers content hits
-including scanned PDFs, because the connector reads the search provider list at
-runtime (D-08, tools/search.py) and Findling registers an IProvider. Nothing to
-configure on either side. Ask the Findling side (parallel session) for a matching
-"works great with" note plus store listing cross-links.
+**Blocked by:** BL-02 (the fidelity test has to pass before the claim goes anywhere)
+and BL-15 (while every search answer says contents are not indexed, the banner
+contradicts the product's own tool output).
 
-**Why:** Each product closes the other one's biggest gap; the combination is the
-local RAG story (assistant finds the passage, files_read fetches the document,
-content never leaves the house).
+**What:** Owner directive 2026-09-04, "prominently on both sides". A banner near the
+top of README.md, README.de.md and README.fr.md, mirrored by the Findling side
+(their BACKLOG BL-F01), plus the docs site and the n8n guide.
+
+The wording is the point of this entry, so it is fixed here rather than left to the
+day. Say **retrieval layer for your own RAG**, do NOT say "this is a RAG system".
+RAG has three parts and neither product ships the generation: the model is always
+the client (Claude, ChatGPT, MUCGPT, n8n). Whoever reads "RAG system" expects a
+finished thing with a chat UI, chunking and a bundled model, and that gap between
+expectation and delivery lands straight in the store reviews, where five honest
+ones in 90 days are the strongest ranking lever there is.
+
+Lead instead with the property that almost every turnkey RAG product gets wrong:
+**per-user permission fidelity**. The usual build indexes everything into one vector
+store under a service account and then leaks across users. Here the ACL prefilter
+plus Findling's final PHP recheck, behind this connector's impersonation, means the
+assistant sees exactly what that user may see and not one sentence more. That is
+rare, it is measurable (BL-02 measures it), and it is the first question a data
+protection officer asks.
+
+Draft, to be translated for the other two READMEs:
+
+    Findling + Nextcloud MCP Connector = the retrieval layer for your own RAG.
+    Findling makes the content of your documents searchable, scans included, and
+    1.0.0 adds semantic search. The connector hands those hits to any MCP client,
+    with exactly the rights of the asking user. You bring the model, and no content
+    leaves your server.
+
+**Audience split, on purpose:** the acronym belongs in the READMEs, on the docs site
+and in the n8n guide, where developers read and search for it. The store texts of
+both apps keep their plain language ("Search the inside of your documents") and get
+at most one closing sentence. A Nextcloud admin in a mid-sized company does not
+search for RAG, and Nextcloud markets something RAG shaped first party with Assistant
+and context_chat; a head-on comparison with a first-party feature does not help us.
+The store text is gated by D-12 of the Findling side anyway.
+
+**Why:** Each product closes the other one's biggest gap. Findling without a client
+is a search box; the connector without Findling tells every assistant that contents
+are not indexed. Together they are the retrieval half of a local RAG, and the half
+that is hard to buy: the permission-correct one.
 
 ## BL-02: Findling synergy, content-hit permission fidelity test (after Findling v1.0)
 
@@ -490,3 +528,43 @@ server does.
 server behaves as specified, and no other measured client is affected (Claude.ai, Claude
 Desktop, Claude Code, ChatGPT and Open WebUI all publish admissible addresses). CLIENT-04
 stays unchecked in REQUIREMENTS.md because its wording asks for a completed sign in.
+
+## BL-15: The search note becomes false the day Findling ships (blocker for BL-01)
+
+**Found:** 2026-09-04, while the owner asked whether the combination can be
+advertised as a RAG system. Verified against the code and against STATE.md.
+
+**What is wrong:** `src/mcp_connector/tools/search.py:47` carries
+
+    SEARCH_NOTE = "matched on names and metadata; file contents are not indexed"
+
+unconditionally in every `unified_search` answer. STATE.md records that under
+phase 01: the note "steht in jeder Suchantwort, nicht nur bei null Treffern
+(Pitfall 5, gegen NC 34 verifiziert)". The same claim sits a second time in
+`_TERM_HINT` at `search.py:49-52`, "words that only appear inside a document are
+not indexed", and that one is worse, because a client reads the tool description
+before it ever calls the tool.
+
+`unified_search` reads the provider list at runtime (D-08). The moment Findling is
+installed it therefore returns real content hits, including text out of scanned
+PDFs, while telling the model in the same payload that contents are not indexed.
+The comment above the constant calls it "one sentence against a whole class of
+wrong model statements (pitfall 5)". After Findling that very sentence causes one,
+just in the other direction: an assistant that believes the note will distrust
+correct hits or not use them at all.
+
+**Not affected:** `src/mcp_connector/tools/files.py:43` keeps its own note.
+`files_search` goes through WebDAV search, which does not consult the search
+providers, so "matched on names only" stays true there. Do not "fix" it along the
+way.
+
+**Shape of the fix:** make both texts depend on what the provider list actually
+offers, which `unified_search` already holds at runtime, instead of stating a
+property of the instance as a constant. Cheapest honest version: keep the note when
+no content provider answered and replace it when one did, so the sentence describes
+the answer in hand rather than the installation in general. A test belongs with it,
+because the whole value of the note is that a model can trust it.
+
+**Why it blocks BL-01:** a banner that promises the retrieval layer for a RAG, on a
+product whose own tool output says contents are not indexed, contradicts itself at
+the only place a machine reads. Fix this first, then claim it.
