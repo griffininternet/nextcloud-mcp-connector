@@ -74,6 +74,10 @@ An assistant also reads text that strangers wrote, right next to your data. The 
 - **Nothing in the background**: no scheduled job, no indexing, no telemetry
 - **Your data stays yours**: what an assistant reads goes to that assistant, in most cases a hosted provider
 
+### Automation with n8n
+
+Nextcloud data in n8n AI workflows, without a new line of code. n8n speaks MCP since version 1.119.0, so one node reaches every tool of this app, and each person signs in once with their own account instead of a shared administrator credential. A measured walkthrough, with both registration paths, an unattended workflow that needs no language model, a file trigger built from Nextcloud's own webhook app and the pitfalls that actually happen: [Nextcloud in n8n over MCP](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/n8n-setup.md)
+
 ### Enterprise
 
 The audit log is part of this app and not of an add-on. With it on, every tool call is written down with the account it ran for, the tool, the time, the calling app and the outcome, and never a parameter value or any part of a result. It is off by default, an administrator switches it on in the admin settings of this app, and the entries are read with the command occ mcp_connector:audit:read. Every entry is hash chained to the one before it, and occ mcp_connector:audit:verify walks the chains and names the first place one of them is broken.
@@ -83,6 +87,7 @@ Two things are planned as a commercial add-on for organisations: group policies,
 ### Resources
 
 - [Set up a client](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/client-setup.md)
+- [Nextcloud in n8n over MCP](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/n8n-setup.md)
 - [Privacy and data flow](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/privacy.md)
 - [Questions and answers](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/faq.md)
 - [Source code and issues](https://github.com/street1983nk/nextcloud-mcp-connector)
@@ -121,6 +126,10 @@ Eine Assistenz liest auch fremde Texte neben Ihren Daten. Der einzige direkte We
 - **Nichts im Hintergrund**: keine geplante Aufgabe, keine Indizierung, keine Telemetrie
 - **Ihre Daten bleiben Ihre**: was eine Assistenz liest, geht an genau diese Assistenz, meist an einen gehosteten Anbieter
 
+### Automatisierung mit n8n
+
+Nextcloud-Daten in n8n-KI-Workflows, ohne eine neue Zeile Code. n8n spricht MCP seit Version 1.119.0, ein einziger Knoten erreicht damit jedes Werkzeug dieser App, und jede Person meldet sich einmal mit dem eigenen Konto an, statt ein geteiltes Administrationskonto zu benutzen. Eine durchgemessene Anleitung mit beiden Registrierungswegen, einem unbeaufsichtigten Workflow ohne Sprachmodell, einem Datei-Auslöser aus Nextclouds eigener Webhook-App und den Stolpersteinen, die wirklich auftreten: [Nextcloud in n8n über MCP](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/n8n-setup.md)
+
 ### Enterprise
 
 Das Audit-Log gehört zu dieser App und nicht zu einem Add-on. Eingeschaltet hält es jeden Werkzeugaufruf fest: das Konto, für das er lief, das Werkzeug, die Zeit, die aufrufende App und das Ergebnis, nie einen Parameterwert und nie einen Teil eines Ergebnisses. Es ist ab Werk aus, die Administration schaltet es in den Admin-Einstellungen dieser App ein, und gelesen wird es mit dem Kommando occ mcp_connector:audit:read. Jeder Eintrag ist mit dem vorigen hash-verkettet, und occ mcp_connector:audit:verify prüft die Ketten und nennt die erste Stelle, an der eine gebrochen ist.
@@ -130,6 +139,7 @@ Zwei Dinge sind als kommerzielles Add-on für Organisationen geplant: Gruppen-Po
 ### Weiterführendes
 
 - [Einen Client einrichten](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/client-setup.md)
+- [Nextcloud in n8n über MCP](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/n8n-setup.md)
 - [Datenschutz und Datenfluss](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/privacy.md)
 - [Fragen und Antworten](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/faq.md)
 - [Quellcode und Fehlermeldungen](https://github.com/street1983nk/nextcloud-mcp-connector)
@@ -170,6 +180,10 @@ Un assistant lit aussi des textes écrits par des inconnus, à côté de vos don
 - **Rien en arrière-plan** : ni tâche planifiée, ni indexation, ni télémétrie
 - **Vos données restent les vôtres** : ce qu'un assistant lit va à cet assistant, dans la plupart des cas un fournisseur hébergé
 
+### Automatisation avec n8n
+
+Les données Nextcloud dans les workflows IA de n8n, sans une nouvelle ligne de code. n8n parle MCP depuis la version 1.119.0 : un seul nœud atteint tous les outils de cette application, et chaque personne se connecte une fois avec son propre compte au lieu de partager un identifiant d'administration. Un guide mesuré, avec les deux voies d'enregistrement, un workflow autonome qui n'a besoin d'aucun modèle de langage, un déclencheur de fichier construit avec l'application webhook de Nextcloud et les pièges qui surviennent vraiment : [Nextcloud dans n8n via MCP](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/n8n-setup.md)
+
 ### Enterprise
 
 Le journal d'audit fait partie de cette application et non d'un module complémentaire. Activé, il consigne chaque appel d'outil : le compte pour lequel il s'est exécuté, l'outil, l'heure, l'application appelante et le résultat, jamais une valeur de paramètre ni une partie d'un résultat. Il est désactivé par défaut, un administrateur l'active dans les paramètres d'administration de cette application, et il se lit avec la commande occ mcp_connector:audit:read. Chaque entrée est chaînée par empreinte à la précédente, et occ mcp_connector:audit:verify parcourt les chaînes et indique le premier endroit où l'une d'elles est rompue.
@@ -179,6 +193,7 @@ Deux choses sont prévues comme module commercial pour les organisations : les p
 ### Pour aller plus loin
 
 - [Configurer un client](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/client-setup.md)
+- [Nextcloud dans n8n via MCP](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/n8n-setup.md)
 - [Confidentialité et flux de données](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/privacy.md)
 - [Questions et réponses](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/faq.md)
 - [Code source et signalements](https://github.com/street1983nk/nextcloud-mcp-connector)
