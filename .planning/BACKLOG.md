@@ -601,3 +601,44 @@ because the whole value of the note is that a model can trust it.
 **Why it blocks BL-01:** a banner that promises the retrieval layer for a RAG, on a
 product whose own tool output says contents are not indexed, contradicts itself at
 the only place a machine reads. Fix this first, then claim it.
+
+## BL-16: Free exclusion tag `kein-ki`, fail-closed in every tool answer (before the ISV story is told again)
+
+**Found:** 2026-09-04, while the owner asked whether exclusion tags and folder
+exclusion exist in the paid tier. The ISV call dossier
+(Desktop/ISV-Call-Dossier-2026-09-14.md) listed the tag in the "live" row of the
+roadmap table, but the code has no trace of it: no tag check in the response
+layer, nothing in `src/`, nothing in this backlog until now. The dossier row is
+corrected to "planned" the same day; this entry is the plan.
+
+**What:** a collaborative system tag named `kein-ki`. A file or folder carrying
+it never appears in any tool answer: not in `unified_search`, not in file
+listings, not in `prepare_context`, not as content. Subtree semantics: a tag on
+a folder covers everything below it. Fail-closed: when the tag lookup cannot be
+answered (systemtags app off, OCS error, timeout), the affected entries are
+withheld, never shown; the degradation is named in the answer the same way the
+other families do it.
+
+**Where it sits in the open-core split:** free, deliberately. The dossier's rule
+is that security boundaries are never paid (ACL recheck, OAuth, read-only gate,
+this tag). Paid Connector Enterprise gets the governance on top: instance-wide
+exclusions (tags/folders/group folders/groups), allow-mode instead of
+block-mode, the blocked-access proof in the audit log, four-eyes approval for
+policy changes. The free tag is what makes the enterprise pitch honest: the
+mechanism exists for everyone, the paid tier is central control and evidence.
+
+**Open question carried from the concept brief:** whether a simple folder
+exclusion (an admin-set list, no policies) also belongs in the free core. Owner
+leaned "useful" on 2026-09-04. The subtree semantics of the tag already cover
+the single-folder case, so the answer may be "the tag on a folder IS the free
+folder exclusion"; decide in the discuss of the phase that builds this.
+
+**Why not now:** 0.1.12 is release-ready and waits for the ISV call of
+2026-09-14; this is a feature, not a fix, and it changes tool answers, so it
+belongs in a planned phase with its own tests (all paths: tagged file, tagged
+parent, tag lookup failing, systemtags disabled).
+
+**Cost note for the phase that takes it:** every tool family that returns file
+paths needs the check, so the lookup must be batched (one OCS/DAV round trip
+per answer, not per file) or the latency budget of D-xx-style answer times is
+gone. Measure before fixing the design.
