@@ -97,7 +97,7 @@ An assistant also reads text that strangers wrote, right next to your data. The 
 
 ### Automation with n8n
 
-Nextcloud data in n8n AI workflows, without a new line of code. n8n speaks MCP since version 1.119.0, so one node reaches every tool of this app, and each person signs in once with their own account instead of a shared administrator credential. A measured walkthrough, with both registration paths, an unattended workflow that needs no language model, a file trigger built from Nextcloud's own webhook app and the pitfalls that actually happen: [Nextcloud in n8n over MCP](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/n8n-setup.md)
+Nextcloud data in n8n AI workflows, without a new line of code. n8n speaks MCP since version 1.119.0, so one node reaches every tool of this app, and each person signs in once with their own account instead of a shared administrator credential. That is what turns an n8n workflow into an agent: agentic AI working on real Nextcloud data, with the permissions of the account that signed in. A measured walkthrough, with both registration paths, an unattended workflow that needs no language model, a file trigger built from Nextcloud's own webhook app and the pitfalls that actually happen: [Nextcloud in n8n over MCP](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/n8n-setup.md)
 
 ### Enterprise
 
@@ -149,7 +149,7 @@ Eine Assistenz liest auch fremde Texte neben Ihren Daten. Der einzige direkte We
 
 ### Automatisierung mit n8n
 
-Nextcloud-Daten in n8n-KI-Workflows, ohne eine neue Zeile Code. n8n spricht MCP seit Version 1.119.0, ein einziger Knoten erreicht damit jedes Werkzeug dieser App, und jede Person meldet sich einmal mit dem eigenen Konto an, statt ein geteiltes Administrationskonto zu benutzen. Eine durchgemessene Anleitung mit beiden Registrierungswegen, einem unbeaufsichtigten Workflow ohne Sprachmodell, einem Datei-Auslöser aus Nextclouds eigener Webhook-App und den Stolpersteinen, die wirklich auftreten: [Nextcloud in n8n über MCP](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/n8n-setup.md)
+Nextcloud-Daten in n8n-KI-Workflows, ohne eine neue Zeile Code. n8n spricht MCP seit Version 1.119.0, ein einziger Knoten erreicht damit jedes Werkzeug dieser App, und jede Person meldet sich einmal mit dem eigenen Konto an, statt ein geteiltes Administrationskonto zu benutzen. Genau das macht aus einem n8n-Workflow einen Agenten: agentic AI auf echten Nextcloud-Daten, mit den Rechten des Kontos, das sich angemeldet hat. Eine durchgemessene Anleitung mit beiden Registrierungswegen, einem unbeaufsichtigten Workflow ohne Sprachmodell, einem Datei-Auslöser aus Nextclouds eigener Webhook-App und den Stolpersteinen, die wirklich auftreten: [Nextcloud in n8n über MCP](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/n8n-setup.md)
 
 ### Enterprise
 
@@ -203,7 +203,7 @@ Un assistant lit aussi des textes écrits par des inconnus, à côté de vos don
 
 ### Automatisation avec n8n
 
-Les données Nextcloud dans les workflows IA de n8n, sans une nouvelle ligne de code. n8n parle MCP depuis la version 1.119.0 : un seul nœud atteint tous les outils de cette application, et chaque personne se connecte une fois avec son propre compte au lieu de partager un identifiant d'administration. Un guide mesuré, avec les deux voies d'enregistrement, un workflow autonome qui n'a besoin d'aucun modèle de langage, un déclencheur de fichier construit avec l'application webhook de Nextcloud et les pièges qui surviennent vraiment : [Nextcloud dans n8n via MCP](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/n8n-setup.md)
+Les données Nextcloud dans les workflows IA de n8n, sans une nouvelle ligne de code. n8n parle MCP depuis la version 1.119.0 : un seul nœud atteint tous les outils de cette application, et chaque personne se connecte une fois avec son propre compte au lieu de partager un identifiant d'administration. C'est ce qui transforme un workflow n8n en agent : de l'agentic AI sur de vraies données Nextcloud, avec les droits du compte connecté. Un guide mesuré, avec les deux voies d'enregistrement, un workflow autonome qui n'a besoin d'aucun modèle de langage, un déclencheur de fichier construit avec l'application webhook de Nextcloud et les pièges qui surviennent vraiment : [Nextcloud dans n8n via MCP](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/docs/n8n-setup.md)
 
 ### Enterprise
 
