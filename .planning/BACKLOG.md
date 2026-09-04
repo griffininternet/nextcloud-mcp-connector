@@ -52,6 +52,39 @@ search for RAG, and Nextcloud markets something RAG shaped first party with Assi
 and context_chat; a head-on comparison with a first-party feature does not help us.
 The store text is gated by D-12 of the Findling side anyway.
 
+**Store mechanics, checked 2026-09-04 against the pinned schema** (APPSTORE_SHA
+`5c4373d7`, `nextcloudappstore/api/v1/release/info.xsd`):
+
+- The schema has **no** field for this. Its elements are info, id, name, summary,
+  description, version, licence, author, namespace, types, documentation, category,
+  website, discussion, bugs, repository, screenshot, donation, dependencies and the
+  technical registrations. There is no `related`, `works-with`, `recommend` or
+  `suggest`. So it is prose inside `<description>`, there is no "related apps"
+  widget, and **no automatic backlink appears on the other app's page**. Both sides
+  carry their own sentence, which is why BL-F01 exists on the Findling side.
+- `<description>` renders Markdown. Headings, links and bullet lists all work; this
+  app's own store text already uses them and already links out to the n8n guide from
+  a "Resources" section in all three languages. That section is the natural home for
+  the Findling link, next to the prose sentence higher up.
+- Room is generous: the three descriptions of this app are currently about 4400
+  (en), 4900 (de) and 5200 (fr) characters. The Findling gate limits `name` and
+  `summary` to 128 characters and does not limit the description at all. Forbidden
+  in prose either way: em dash, en dash, emoji (gate), plus backticks and tables
+  (project rule).
+
+**Release ordering, and this is the trap:** the store text comes out of the
+`info.xml` of the uploaded release. It cannot be edited afterwards, it travels with
+a version. The n8n store text in this repo carries exactly that note, "kommt mit
+0.1.12".
+
+Therefore this connector needs **a release after Findling 1.0.0 is in the store**,
+for no other reason than to carry the cross-link. 0.1.12 is release-ready and is to
+be delivered after the ISV call on 14.09.2026, so if Findling lands later, a link in
+0.1.12 would point at an app page that does not exist yet. Two ways out, to be
+decided when the dates are known: let the cross-link wait for 0.1.13, or link to the
+GitHub repository instead of the store page, which is valid at any time. Do not
+silently ship a dead store link.
+
 **Why:** Each product closes the other one's biggest gap. Findling without a client
 is a search box; the connector without Findling tells every assistant that contents
 are not indexed. Together they are the retrieval half of a local RAG, and the half
