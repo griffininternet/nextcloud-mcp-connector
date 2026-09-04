@@ -412,12 +412,14 @@ list, not the first page of it: a common word like `ai` answers with 374 apps.
 | `claude` | fourth | fourth, behind `claudebot`, `aiquila` and `ktec_talkbot` |
 | `ai` | buried | 54th of 374 |
 
-One oddity, measured three times and not explained: `chatgpt` in lower case answers with one
-app and it is not this one, while `ChatGPT` answers with two and this app is first. Case does
-not matter for other terms of this app, `tables`, `talk` and `nextcloud` each answer the same
-in both spellings, and the word is present in the catalogue text in both the summary and the
-description. So this is a store side asymmetry, not a gap in the manifest, and no wording
-change here can close it.
+**The `chatgpt` case oddity is gone, and it was never a store asymmetry.** This file used to
+record that `chatgpt` in lower case answered with one app and not this one, while `ChatGPT`
+answered with two and this app was first. Re-measured on 2026-09-04: both spellings answer
+with `mcp_connector` first and `integration_openai` second. The ranking source explains why
+the old reading could never have been the whole truth: the filters are Django `icontains`,
+which is `ILIKE` in Postgres and case insensitive by construction, so no wording and no
+spelling can produce that split. The 2026-08-22 observation was almost certainly the `+`
+against `%20` trap described above, caught on one query and not on the other.
 
 Two conclusions that outlast this release. First, the summary is the highest value real
 estate in the manifest: it is short, it is indexed, and it is the only place where the words
@@ -428,6 +430,77 @@ capability belongs in the summary or the description on the day it ships, not la
 The categories are the other half. The store has an `ai` category, this app was in
 `integration` only, so nobody browsing AI ever saw it. `info.xsd` allows `category`
 unbounded; since 0.1.7 the app is in `ai`, `integration` and `tools`.
+
+## How the ranking actually works, read out of the source
+
+Read on 2026-09-04 out of `nextcloud/appstore` and `nextcloud/server`, and checked against
+the live pages: a rebuild of the rules below reproduces `/categories/ai`, `/categories/search`
+and the queries `mcp`, `n8n`, `agentic ai`, `ocr` and `rag` place for place. Guessing here was
+expensive once, so this section names the file for every claim.
+
+**There are two surfaces and they rank differently.** The website is where people read; the
+app store inside a Nextcloud is where people install. Optimising one does nothing for the
+other.
+
+| | apps.nextcloud.com | in-instance store, Nextcloud 32+ |
+|---|---|---|
+| category order | `-is_featured`, `-rating_num_recent`, `-last_release` | alphabetical by display name |
+| searched fields | id, name, summary, description | id, name, **summary only** |
+| languages searched | every translation at once | the instance language alone |
+| incompatible apps | shown | hidden by default |
+
+Website category pages, `core/models.py`, `AppManager.search_relevant`:
+
+```python
+if not terms:
+    return queryset.order_by("-is_featured", "-rating_num_recent", "-last_release")
+```
+
+`rating_num_recent` is zero for 811 of the 812 apps in the store, because `core/rating.py`
+returns `(0.5, 0)` below `RATING_THRESHOLD = 5` ratings inside `RATING_RECENT_DAY_RANGE = 90`
+days. So the second key is dead in practice and a category page is "featured first, then
+newest release". This app sits in `ai` at place 6 of 26 today, behind two featured apps and
+three that released more recently.
+
+Website search: six buckets in a fixed order, id exact, name exact, id, name, summary,
+description, concatenated, each sorted internally by `-rating_overall, -last_release`. The
+match is a substring and every term of a multi word query must land in the **same** field.
+
+**Ceilings worth knowing before chasing a term.** `n8n` cannot be won: `n8n_sync` holds the
+string in its ID and the id bucket outranks the summary bucket, so place 2 is the maximum.
+`ai`, `ki`, `rag` and `workflow` cannot be won either, because a substring match on a foreign
+ID beats us: `rag` answers with `storageusage` first, `ai` with `rainloop`. What is winnable
+and nearly unoccupied: `agentic`, `automation`, `openwebui`, next to the `mcp`,
+`model context protocol` and `chatgpt` this app already leads.
+
+In-instance store, `apps/appstore/lib/Controller/ApiController.php` and
+`src/composables/useFilteredApps.ts`:
+
+```php
+private function sortApps(array $a, array $b): int { return $a['name'] <=> $b['name']; }
+```
+
+```ts
+return app.name.toLocaleLowerCase().includes(needle)
+    || app.id.toLocaleLowerCase().includes(needle)
+    || app.summary.toLocaleLowerCase().includes(needle)
+```
+
+Three consequences for this manifest. The description is **not** searched there, which is why
+a capability that matters has to reach the summary. The summary is read in the instance
+language only, which is why the German and the French one carry the same keywords. And
+`max-version` is a visibility switch rather than a ranking factor: this app declares
+`max-version="34"`, so on the day Nextcloud 35 ships it disappears from every NC 35 instance
+until a release raises it.
+
+**What does not enter the ranking at all:** downloads (not public, `AppDownloadStatsView` is
+owner only), screenshots, GitHub activity, the age of the app or the number of releases.
+
+**The one lever that outranks everything except the featured flag** is five ratings inside 90
+days, which lifts an app above every non featured competitor for the whole window. For scale:
+the entire store took 58 ratings in the last 90 days and no single app took more than three.
+`is_featured` itself is a boolean in the Django admin with no application path, so it is not
+something this repository can work towards directly.
 
 What cannot be promised: a position. Presence in the result set follows from the text and
 is under our control. The order does not: it depends on the store's ranking and on what

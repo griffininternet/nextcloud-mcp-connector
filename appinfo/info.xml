@@ -14,10 +14,31 @@
 	  - found this app first, "mcp server" did not find it at all, because the word server
 	  - appeared nowhere, and "chatgpt" did not either. Both are true of this app and both are
 	  - in the text now. The schema allows 128 characters here.
+	  -
+	  - "n8n" and "agents" joined them on 2026-09-04, and the reason is sharper than "more
+	  - words is better". The ranking of the store search was read out of its source that
+	  - day: nextcloudappstore/core/models.py, AppManager.search_relevant, builds six buckets
+	  - in a fixed order, id exact, name exact, id, name, SUMMARY, description, and hands
+	  - them back concatenated. A word in the summary therefore outranks the same word in the
+	  - description by a whole bucket, whatever else is true. The n8n paragraph in the
+	  - description below is the explanation and stays; this line is what makes the app
+	  - findable at all.
+	  -
+	  - Two measured limits, so that nobody chases them later. A search for "n8n" cannot put
+	  - this app first: n8n_sync carries the string in its ID and the id bucket sits two
+	  - above the summary one, so place 2 of 2 is the ceiling. And "ai", "ki", "rag" and
+	  - "workflow" are not winnable at all, because the match is a substring and not a word:
+	  - "rag" answers with storageusage first, "ai" with rainloop.
+	  -
+	  - The second reader of this line is the app store inside a Nextcloud, and it is the one
+	  - that installs. apps/appstore/src/composables/useFilteredApps.ts filters on id, name
+	  - and summary only, so the description is not searched there at all, and it reads the
+	  - summary of the instance language alone. That is why the German and the French line
+	  - carry the words too instead of leaning on the English one.
 	  -->
-	<summary>MCP server for Nextcloud: connect Claude, ChatGPT and other AI assistants over the Model Context Protocol.</summary>
-	<summary lang="de">MCP Server für Nextcloud: verbindet Claude, ChatGPT und andere KI-Assistenten über das Model Context Protocol.</summary>
-	<summary lang="fr">Serveur MCP pour Nextcloud : connecte Claude, ChatGPT et d'autres assistants IA via le Model Context Protocol.</summary>
+	<summary>MCP server for Nextcloud: connect Claude, ChatGPT, n8n and other AI assistants and agents over the Model Context Protocol.</summary>
+	<summary lang="de">MCP Server für Nextcloud: verbindet Claude, ChatGPT, n8n und andere KI-Assistenten und Agenten über das Model Context Protocol.</summary>
+	<summary lang="fr">Serveur MCP pour Nextcloud : connecte Claude, ChatGPT, n8n et d'autres assistants et agents IA via le Model Context Protocol.</summary>
 	<!--
 	  - The three descriptions are written on the smaller common denominator of the two
 	  - pipelines that render them, and the paragraphs are separated by blank lines on
