@@ -55,6 +55,11 @@ everybody, a whole group or a whole team at once is never sent.
 Step by step setup for Claude Desktop, Claude Code and remote HTTP clients, including the three
 errors that actually happen: **[docs/client-setup.md](docs/client-setup.md)**.
 
+Automation platforms are clients too. n8n reaches all of these tools through its MCP Client
+node, with one OAuth connection per person instead of one shared administrator credential, and
+Nextcloud's own webhook app gives the trigger side without any community node:
+**[docs/n8n-setup.md](docs/n8n-setup.md)**.
+
 ### OAuth 2.1
 
 Installed as a Nextcloud ExApp, this server is also its own OAuth 2.1 authorization server, to
