@@ -205,7 +205,8 @@ new objects but can never modify or remove existing ones.
 |------|------------|--------------|
 | `files_search` | read | Search files and folders by name via WebDAV search; contents are not indexed |
 | `files_list` | read | List the direct children of a folder, with sizes and modification times |
-| `files_read` | read | Read the content of a single file |
+| `files_read` | read | Read the content of a single text file |
+| `files_extract_text` | read | Safely extract text from a Word `.docx` file; large results are paged |
 | `files_upload` | create-only | Upload a new file; an existing path is refused, never overwritten |
 | `calendar_list_events` | read | List events in an explicit time range, with an explicit time zone |
 | `calendar_create_event` | create-only | Create a new event; existing events are never changed |
