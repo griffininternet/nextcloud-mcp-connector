@@ -29,7 +29,7 @@ def _docx(document_xml: str) -> bytes:
 def _xml(body: str) -> str:
     return (
         '<?xml version="1.0"?>'
-        '<w:document '
+        "<w:document "
         'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
         f"<w:body>{body}</w:body></w:document>"
     )
@@ -80,7 +80,7 @@ def test_extracts_paragraphs_breaks_tabs_and_tables_in_order() -> None:
 
 
 def test_rejects_non_zip_and_missing_document_body() -> None:
-    with pytest.raises(ToolError, match="valid .docx"):
+    with pytest.raises(ToolError, match=r"valid \.docx"):
         docx_text.extract_docx(b"not a zip")
     out = BytesIO()
     with ZipFile(out, "w") as archive:
@@ -98,16 +98,12 @@ def test_rejects_excessive_uncompressed_archive(monkeypatch: pytest.MonkeyPatch)
 
 @pytest.mark.anyio
 async def test_tool_downloads_and_returns_extracted_text(clients: NcClients) -> None:
-    data = _docx(
-        _xml("<w:p><w:r><w:t>Aching joints protocol</w:t></w:r></w:p>")
-    )
+    data = _docx(_xml("<w:p><w:r><w:t>Aching joints protocol</w:t></w:r></w:p>"))
     with respx.mock(assert_all_called=True) as mock:
         mock.route(method="PROPFIND", url=URL).mock(
             return_value=httpx.Response(207, text=_stat(len(data)))
         )
-        mock.route(method="GET", url=URL).mock(
-            return_value=httpx.Response(200, content=data)
-        )
+        mock.route(method="GET", url=URL).mock(return_value=httpx.Response(200, content=data))
         result = await docx_text.extract(clients, PATH)
 
     assert result["content"] == "Aching joints protocol"
@@ -123,9 +119,7 @@ async def test_extracted_text_paginates_by_utf8_bytes(clients: NcClients) -> Non
         mock.route(method="PROPFIND", url=URL).mock(
             return_value=httpx.Response(207, text=_stat(len(data)))
         )
-        mock.route(method="GET", url=URL).mock(
-            return_value=httpx.Response(200, content=data)
-        )
+        mock.route(method="GET", url=URL).mock(return_value=httpx.Response(200, content=data))
         first = await docx_text.extract(clients, PATH, max_bytes=4)
 
     assert first["content"] == "abc"
@@ -140,9 +134,7 @@ async def test_rejects_wrong_mimetype_before_get(clients: NcClients) -> None:
         "application/octet-stream",
     )
     with respx.mock as mock:
-        mock.route(method="PROPFIND", url=URL).mock(
-            return_value=httpx.Response(207, text=body)
-        )
+        mock.route(method="PROPFIND", url=URL).mock(return_value=httpx.Response(207, text=body))
         get = mock.route(method="GET", url=URL)
         with pytest.raises(ToolError, match="not a supported Word document"):
             await docx_text.extract(clients, PATH)
