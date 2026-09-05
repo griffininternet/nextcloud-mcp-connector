@@ -79,7 +79,9 @@ async def extract(
     if not extracted_size:
         raise ToolError(
             message=f"{target} contains no readable document text.",
-            hint="Open it in Nextcloud to check whether it contains only images or embedded objects.",
+            hint=(
+                "Open it in Nextcloud to check whether it contains only images or embedded objects."
+            ),
         )
     if offset >= extracted_size:
         raise ToolError(
@@ -188,9 +190,7 @@ def _table_lines(table: etree._Element) -> list[str]:
         cells: list[str] = []
         for cell in row.iterchildren(tag=_TAG_TC):
             paragraphs = [
-                text
-                for paragraph in cell.iter(tag=_TAG_P)
-                if (text := _paragraph_text(paragraph))
+                text for paragraph in cell.iter(tag=_TAG_P) if (text := _paragraph_text(paragraph))
             ]
             cells.append(" ".join(paragraphs))
         if any(cells):
