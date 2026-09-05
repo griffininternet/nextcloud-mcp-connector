@@ -19,6 +19,7 @@
 files_search
 files_list
 files_read
+files_extract_text
 files_upload
 calendar_list_events
 calendar_create_event

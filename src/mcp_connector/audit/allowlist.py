@@ -47,6 +47,7 @@ PARAM_ALLOWLIST: Mapping[str, frozenset[str]] = {
     "deck_browse": frozenset({"board_id", "level", "limit", "stack_id"}),
     "deck_create_card": frozenset({"board_id", "duedate", "stack_id"}),
     "fetch": frozenset({"id"}),
+    "files_extract_text": frozenset({"offset", "path"}),
     "files_list": frozenset({"cursor", "limit", "path"}),
     "files_read": frozenset({"offset", "path"}),
     "files_search": frozenset({"cursor", "folder", "limit", "query"}),
