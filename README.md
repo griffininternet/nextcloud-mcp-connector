@@ -16,7 +16,7 @@ Two more properties follow from the same idea:
 
 - **The assistant never sees more than you do.** Every request runs with your own Nextcloud
   credentials, so Nextcloud permissions apply unchanged.
-- **A deliberately small tool set.** The 21 tools are curated so that this server fits next to
+- **A deliberately small tool set.** The 22 tools are curated so that this server fits next to
   your other MCP servers, even in clients with a hard tool limit.
 
 License: AGPL-3.0-or-later. App id, package names and repository name are frozen, see
@@ -27,7 +27,7 @@ License: AGPL-3.0-or-later. App id, package names and repository name are frozen
 Version 0.1.11. The app is listed in the Nextcloud App Store and installable as a Nextcloud ExApp
 through AppAPI. What is in place today, and where each of these claims is written down:
 
-- All 21 tools of the v1 set are implemented, and the tool table below is no longer maintained
+- All 22 tools of the v1 set are implemented, and the tool table below is no longer maintained
   by hand: a contract test reads the live tool registry and fails if a name or a permission
   level in the table disagrees with it.
 - OAuth 2.1 sign in is verified end to end against the two hosted connectors it was built for,
